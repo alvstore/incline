@@ -4,6 +4,7 @@ export interface PTSessionRow {
   id: string;
   scheduled_at: string;
   member_name?: string | null;
+  trainer_id?: string | null;
   duration_minutes?: number | null;
   status: string;
 }

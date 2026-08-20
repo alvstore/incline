@@ -79,7 +79,15 @@ export default function PTSessionsPage() {
 
   // Session KPIs must cover every trainer in the branch — reading only the
   // first trainer made the dashboard show 0 sessions while packages existed.
-  const trainerIds = useMemo(() => (trainers || []).map((t: any) => t.id).filter(Boolean), [trainers]);
+  const isTrainer = roles.some(r => r.role === 'trainer');
+  const trainerIds = useMemo(() => {
+    if (isTrainer && !canManage && trainers) {
+      const myTrainer = trainers.find((t: any) => t.user_id === user?.id);
+      return myTrainer ? [myTrainer.id] : [];
+    }
+    return (trainers || []).map((t: any) => t.id).filter(Boolean);
+  }, [trainers, isTrainer, canManage, user?.id]);
+  
   const { data: sessions, isLoading: sessionsLoading } = useTrainerSessions(trainerIds, { startDate: new Date() });
 
   const filteredPackages = (packages || []).filter((pkg: any) => (showInactive ? true : pkg.is_active !== false));
@@ -92,6 +100,9 @@ export default function PTSessionsPage() {
   const trainerRevenue = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; clients: number }>();
     activePackages?.forEach((pkg: any) => {
+      // If trainer, only include own revenue
+      if (isTrainer && !canManage && pkg.trainer?.user_id !== user?.id) return;
+      
       const id = pkg.trainer_id || 'unknown';
       const existing = map.get(id) || { name: pkg.trainer_name || 'Unassigned', revenue: 0, clients: 0 };
       existing.revenue += pkg.price_paid || 0;
@@ -99,7 +110,7 @@ export default function PTSessionsPage() {
       map.set(id, existing);
     });
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [activePackages]);
+  }, [activePackages, isTrainer, canManage, user?.id]);
 
   const totalRevenue = trainerRevenue.reduce((sum, t) => sum + t.revenue, 0);
 

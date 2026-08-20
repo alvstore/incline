@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { avatarColor, initialsOf, type PTMemberPackageRow } from './ptTypes';
+import { useAuth } from '@/contexts/AuthContext';
 
 type SortKey = 'member' | 'progress' | 'expiry';
 
@@ -104,26 +105,36 @@ export function ClientsTable({
   const [sort, setSort] = useState<SortKey>('expiry');
   const [asc, setAsc] = useState(true);
   const [page, setPage] = useState(0);
+  const { user, roles } = useAuth();
+  const isTrainer = roles.some(r => r.role === 'trainer');
+  const isAdmin = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
 
   const filtered = useMemo(() => {
+    // If user is a trainer and NOT an admin/manager, filter rows to only show their own.
+    // The data comes from fetchActiveMemberPackages which includes trainer_id (user_id).
+    let base = rows;
+    if (isTrainer && !isAdmin && user?.id) {
+      base = rows.filter(r => (r as any).trainer?.user_id === user.id);
+    }
+
     const q = term.trim().toLowerCase();
-    const base = q
-      ? rows.filter((r) =>
+    const searched = q
+      ? base.filter((r) =>
           [r.member_name, r.member_code, r.trainer_name, r.package_name]
             .filter(Boolean)
             .join(' ')
             .toLowerCase()
             .includes(q),
         )
-      : rows;
+      : base;
 
     const dir = asc ? 1 : -1;
-    return [...base].sort((a, b) => {
+    return [...searched].sort((a, b) => {
       if (sort === 'member') return dir * (a.member_name || '').localeCompare(b.member_name || '');
       if (sort === 'progress') return dir * (progressOf(a).pct - progressOf(b).pct);
       return dir * (new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
     });
-  }, [rows, term, sort, asc]);
+  }, [rows, term, sort, asc, isTrainer, isAdmin, user?.id]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -177,9 +188,7 @@ export function ClientsTable({
     <Card className="overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
       <div className="flex flex-wrap items-center gap-3 p-4">
         <div className="relative min-w-[220px] flex-1">
-          <Label htmlFor="pt-client-search" className="sr-only">
-            Search clients
-          </Label>
+          <span className="sr-only">Search clients</span>
           <Search
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
