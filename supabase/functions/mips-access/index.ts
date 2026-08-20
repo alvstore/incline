@@ -59,9 +59,10 @@ function authHeaders(token: string): Record<string, string> {
   };
 }
 
-async function lookupPerson(baseUrl: string, token: string, personSn: string, personType: "person" | "employee" = "person"): Promise<any | null> {
-  const endpoint = personType === "employee" ? "employee" : "person";
-  const res = await fetch(`${baseUrl}/personInfo/${endpoint}/list?personSn=${personSn}&pageNum=1&pageSize=5`, {
+async function lookupPerson(baseUrl: string, token: string, personSn: string): Promise<any | null> {
+  // All persons (members, employees, trainers) are found via person/list.
+  // We search by personSn which is unique across the catalog.
+  const res = await fetch(`${baseUrl}/personInfo/person/list?personSn=${personSn}&pageNum=1&pageSize=5`, {
     method: "GET",
     headers: authHeaders(token),
   });
