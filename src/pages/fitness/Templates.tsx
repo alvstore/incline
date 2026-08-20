@@ -1,46 +1,67 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { Library, Dumbbell, Apple, Search, ArrowLeft } from 'lucide-react';
+import { Library, Dumbbell, Apple, Search } from 'lucide-react';
 import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { signAttachmentUrl } from '@/lib/documents/signAttachment';
+
+interface PlanTemplateRow {
+  id: string;
+  name: string;
+  type: 'workout' | 'diet';
+  description: string | null;
+  goal: string | null;
+  difficulty: string | null;
+  source_kind: string | null;
+  pdf_url: string | null;
+  pdf_filename: string | null;
+  created_at: string;
+}
 
 export default function Templates() {
-  const [planType, setPlanType] = useState<"workout" | "diet">("workout");
-  const [search, setSearch] = useState("");
-  const queryClient = useQueryClient();
+  const [planType, setPlanType] = useState<'workout' | 'diet'>('workout');
+  const [search, setSearch] = useState('');
 
-  const { data: templates, isLoading } = useQuery({
+  const { data: templates, isLoading, isError } = useQuery({
     queryKey: ['fitness-templates', planType],
-    queryFn: async () => {
+    queryFn: async (): Promise<PlanTemplateRow[]> => {
       const { data, error } = await supabase
-        .from('templates' as any)
-        .select('*')
-        .eq('type', 'document')
-        .eq('category', planType === 'workout' ? 'workout' : 'diet')
+        .from('fitness_plan_templates')
+        .select('id,name,type,description,goal,difficulty,source_kind,pdf_url,pdf_filename,created_at')
+        .eq('type', planType)
+        .eq('is_active', true)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as any[];
-    }
+      return (data ?? []) as PlanTemplateRow[];
+    },
   });
 
-  const filtered = (templates ?? []).filter(t => 
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    (t.description ?? '').toLowerCase().includes(search.toLowerCase())
+  const filtered = (templates ?? []).filter(
+    (t) =>
+      t.name.toLowerCase().includes(search.toLowerCase()) ||
+      (t.description ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (t.goal ?? '').toLowerCase().includes(search.toLowerCase()),
   );
 
-  const handleDownload = (url: string) => {
-    if (!url) {
-      toast.error("No file available for this template");
+  const handleOpen = async (template: PlanTemplateRow) => {
+    if (!template.pdf_url) {
+      toast.error('No PDF attached to this template');
       return;
     }
-    window.open(url, '_blank');
+    try {
+      const signed = await signAttachmentUrl(template.pdf_url);
+      if (!signed) throw new Error('Could not create a download link');
+      window.open(signed, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open the PDF');
+    }
   };
 
   return (
@@ -52,12 +73,13 @@ export default function Templates() {
           <div>
             <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
               <Library className="h-5 w-5 text-primary" />
-              {`400 — https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/attachments/fitness-plans/f363e15d-6bb9-4aff-9e1e-7f279bbc1e5d/1787119020353-Workout-Plan-FAT_LOSS_PROGRAM.pdf`}
+              Plan Templates
             </h2>
             <p className="text-sm text-muted-foreground">
-              Browse, preview, and assign workout & diet templates.
+              Browse, preview, and assign workout &amp; diet templates.
             </p>
           </div>
+
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-xl bg-muted/50 p-1 gap-1">
               <Button
