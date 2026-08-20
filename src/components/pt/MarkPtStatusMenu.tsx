@@ -165,10 +165,10 @@ export function MarkPtStatusMenu({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending === 'holiday'
-                ? 'Logs a holiday entry. Does not consume a session or create a gym check-in.'
+                ? 'Logs a holiday entry. Does not consume a session.'
                 : pending === 'absent'
-                  ? 'Logs an absent session. Consumes one session on session-based packs. No gym check-in.'
-                  : 'Logs the session and creates today\'s gym check-in if the member has not checked in.'}
+                  ? 'Logs an absent session. Consumes one session. No attendance check required for absence.'
+                  : 'Logs completion. Verification: Member and Trainer MUST have checked in to the gym on the selected date.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-2">
