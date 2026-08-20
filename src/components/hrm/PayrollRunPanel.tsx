@@ -284,12 +284,21 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         </TableCell>
                         <TableCell className="text-right font-bold">₹{Number(it.final_net).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="ghost"
-                            disabled={['processed','paid'].includes(it.status)}
-                            onClick={() => setAdjustItem({ ...it })}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button size="sm" variant="ghost"
+                              disabled={['processed','paid'].includes(it.status)}
+                              onClick={() => { setPreviewItem(it); setPreviewDrawerOpen(true); }}
+                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                            </Button>
+                            <Button size="sm" variant="ghost"
+                              disabled={['processed','paid'].includes(it.status) || !isAdmin}
+                              onClick={() => { setAdjustItem(it); setAdjustDrawerOpen(true); }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
