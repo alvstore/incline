@@ -111,6 +111,8 @@ export function MarkPtStatusMenu({
         code.includes('package_expired') || code.includes('Package expired') ? 'This monthly plan has expired' :
         code.includes('package_not_active') ? 'Package is not active' :
         code.includes('not_authorized') ? 'You are not allowed to mark this session' :
+        code.includes('insufficient_gym_attendance') ? 'Cheating blocked: Member or Trainer were not checked in to the gym on this date.' :
+        code.includes('session_date_too_old') ? 'Session is too old to record manually (max 7 days).' :
         code || 'Could not log session'
       );
     },
