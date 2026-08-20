@@ -17,7 +17,10 @@ type Filter = 'all' | 'important' | 'expiring';
 
 export default function MemberAnnouncements() {
   const { member, isLoading: memberLoading } = useMemberData();
-  const branchName = member?.branch?.name || 'your branch';
+  const { trainer, isLoading: trainerLoading } = useTrainerData();
+  const actor = member || trainer;
+  
+  const branchName = actor?.branch?.name || 'your branch';
   const [filter, setFilter] = useState<Filter>('all');
   const [active, setActive] = useState<any | null>(null);
 
@@ -26,8 +29,6 @@ export default function MemberAnnouncements() {
     enabled: !!actor,
     queryFn: async () => {
       const nowIso = new Date().toISOString();
-      // Fetch broadly, then filter in JS — chained PostgREST .or() calls
-      // override each other and silently drop matches.
       const { data, error } = await supabase
         .from('announcements')
         .select('*')
@@ -90,9 +91,6 @@ export default function MemberAnnouncements() {
       )}
     </div>
   );
-
-  const { trainer, isLoading: trainerLoading } = useTrainerData();
-  const actor = member || trainer;
 
   if (memberLoading || trainerLoading) {
     return (
