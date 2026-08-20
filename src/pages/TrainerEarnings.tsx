@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/ui/stat-card';
@@ -18,7 +18,7 @@ import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
 export default function TrainerEarnings() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { trainer, isLoading: trainerLoading } = useTrainerData();
   const [selectedMonth, setSelectedMonth] = useState(0);
 
@@ -88,13 +88,41 @@ export default function TrainerEarnings() {
   const sessionRate = trainer?.hourly_rate || 500;
   const totalSessionsCompleted = completedSessions.length;
   const estimatedEarnings = totalSessionsCompleted * sessionRate;
+  
+  // Dual Shift Logic: Count days with 2+ attendance records
+  const { data: attendance = [] } = useQuery({
+    queryKey: ['trainer-attendance-august', user?.id, selectedMonth],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('staff_attendance')
+        .select('*')
+        .eq('user_id', user!.id)
+        .gte('shift_date', monthStart.split('T')[0])
+        .lte('shift_date', monthEnd.split('T')[0]);
+      return data || [];
+    },
+  });
+
+  const dualShiftDays = useMemo(() => {
+    const counts: Record<string, number> = {};
+    attendance.forEach(a => {
+      counts[a.shift_date] = (counts[a.shift_date] || 0) + 1;
+    });
+    return Object.values(counts).filter(c => c >= 2).length;
+  }, [attendance]);
+
   const totalCommissions = commissions.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
-  const baseSalary = (trainer as any)?.salary || 0;
-  // Payroll Audit FIX: Total pay = Base Salary + (Completed Sessions × Hourly Rate) + Commissions
-  const grossPay = baseSalary + estimatedEarnings + totalCommissions;
+  const baseSalary = Number((trainer as any)?.fixed_salary || 0);
+  const dailyRate = baseSalary / 30;
+  const dualShiftBonus = dualShiftDays * dailyRate;
+
+  // Payroll Audit FIX: Total pay = Base Salary + Dual Shift Bonus + (Completed Sessions × Hourly Rate) + Commissions
+  const grossPay = baseSalary + dualShiftBonus + estimatedEarnings + totalCommissions;
   // PF is 12% of Base Salary only
   const pfDeduction = Math.round(baseSalary * 0.12);
   const netPay = grossPay - pfDeduction;
+
 
   const isLoading = trainerLoading || sessionsLoading;
 
@@ -109,8 +137,19 @@ export default function TrainerEarnings() {
       period_label: format(monthDate, 'MMMM yyyy'),
       period_start: monthStart.split('T')[0],
       period_end: monthEnd.split('T')[0],
-      attendance: { present: totalSessionsCompleted, payable_days: totalSessionsCompleted, total_days: 26, monthly_salary: baseSalary },
-      earnings: { base: baseSalary, pt_commission: estimatedEarnings + totalCommissions, ot: 0, bonus: 0 },
+      attendance: { 
+        present: attendance.length, 
+        payable_days: 26 + dualShiftDays, 
+        total_days: 26, 
+        monthly_salary: baseSalary 
+      },
+      earnings: { 
+        base: baseSalary, 
+        pt_commission: estimatedEarnings + totalCommissions, 
+        ot: dualShiftBonus, 
+        bonus: 0 
+      },
+
       deductions: { deductions: pfDeduction, advance: 0, penalty: 0 },
       gross: grossPay,
       net: netPay,
@@ -187,7 +226,7 @@ export default function TrainerEarnings() {
                   ₹{netPay.toLocaleString()}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Base: ₹{baseSalary.toLocaleString()} + Sessions: ₹{estimatedEarnings.toLocaleString()} + Commission: ₹{totalCommissions.toLocaleString()} − PF: ₹{pfDeduction.toLocaleString()}
+                  Base: ₹{baseSalary.toLocaleString()} + Dual Shifts ({dualShiftDays}): ₹{dualShiftBonus.toLocaleString()} + Sessions: ₹{estimatedEarnings.toLocaleString()} + Commission: ₹{totalCommissions.toLocaleString()} − PF: ₹{pfDeduction.toLocaleString()}
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2">

@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedStaff } from '@/hooks/useUnifiedStaff';
+import { useMemberData } from '@/hooks/useMemberData';
+
+
 import { useBranchContext } from '@/contexts/BranchContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,7 +26,11 @@ import { format } from 'date-fns';
 
 export default function ProfilePage() {
   const { profile, user, roles, refreshProfile } = useAuth();
+  const { data: staffList } = useUnifiedStaff();
+  const { member } = useMemberData();
   const { branches } = useBranchContext();
+
+
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
@@ -264,7 +272,67 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
+            {/* HR / Staff Information (Read-only for Trainers/Staff) */}
+            {(roles.some(r => ['trainer', 'staff', 'manager'].includes(r.role))) && (
+              <Card className="shadow-lg shadow-primary/5 rounded-2xl border-0">
+                <CardHeader>
+                  <CardTitle className="text-lg">Staff Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(() => {
+                    const staff = staffList?.find(s => s.user_id === user?.id);
+                    if (!staff) return <p className="text-sm text-muted-foreground">No HR records found.</p>;
+                    
+                    const trainerData = staff.trainer;
+                    const employeeData = staff.employee;
+                    
+                    return (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <Label className="text-muted-foreground">Staff Code</Label>
+                          <p className="text-sm font-medium mt-1">{staff.code || '—'}</p>
+                        </div>
+                        <div>
+                          <Label className="text-muted-foreground">Base Salary</Label>
+                          <p className="text-sm font-medium mt-1">₹{(staff.salary || 0).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <Label className="text-muted-foreground">Salary Type</Label>
+                          <p className="text-sm font-medium mt-1 capitalize">{trainerData?.salary_type || employeeData?.salary_type || 'Fixed'}</p>
+                        </div>
+                        {trainerData && (
+                          <div>
+                            <Label className="text-muted-foreground">PT Share %</Label>
+                            <p className="text-sm font-medium mt-1">{trainerData.pt_share_percentage}%</p>
+                          </div>
+                        )}
+                        <div>
+                          <Label className="text-muted-foreground">Government ID (Aadhaar)</Label>
+                          <p className="text-sm font-medium mt-1">
+                            {trainerData?.government_id_number 
+                              ? `XXXX XXXX ${trainerData.government_id_number.slice(-4)}`
+                              : employeeData?.aadhaar_last4 
+                                ? `XXXX XXXX ${employeeData.aadhaar_last4}`
+                                : '—'}
+                          </p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <Label className="text-muted-foreground">Address</Label>
+                          <p className="text-sm font-medium mt-1">
+                            {staff.profile?.address ? `${staff.profile.address}${staff.profile.city ? `, ${staff.profile.city}` : ''}${staff.profile.state ? `, ${staff.profile.state}` : ''}` : '—'}
+                          </p>
+                        </div>
+
+
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Activity Timeline */}
+
             <Card className="shadow-lg shadow-primary/5 rounded-2xl border-0">
               <CardHeader>
                 <CardTitle className="text-lg">Recent Activity</CardTitle>
