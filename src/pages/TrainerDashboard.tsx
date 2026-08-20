@@ -40,7 +40,7 @@ export default function TrainerDashboard() {
         .lte('scheduled_at', monthEnd);
 
       const completedCount = sessions?.length || 0;
-      const sessionRate = (trainer as any)?.hourly_rate || 0;
+      const sessionRate = (trainer as any)?.hourly_rate || 500;
       const sessionsEarn = completedCount * sessionRate;
 
       let commissionsTotal = 0;
