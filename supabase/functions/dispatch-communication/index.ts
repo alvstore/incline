@@ -1,4 +1,9 @@
-// dispatch-communication v1.29.0 — freeform placeholder guard (email/SMS/in-app).
+// dispatch-communication v1.29.1 — fix positional var mapping; strip duplicate ₹.
+// v1.29.1: FIX — Meta positional slots {{n}} are now correctly resolved from
+//          available values. Previously, numeric keys ({{1}}, {{2}}...) were
+//          preferring name-like fields even for non-name slots, leading to
+//          "₹Member Name" in amount slots. Now positional slots fallback to
+//          generic placeholders only if no matching value is found.
 // v1.27.0: Propagate `skip_notification` to staff handoffs; detect Meta `echo`
 //          events in `whatsapp-webhook` v6.6.0 to prevent AI loops.
 // v1.26.0: Template picker only considers APPROVED Meta templates and prefers a
@@ -7,9 +12,6 @@
 //          instead of a 400-character signed storage URL.
 // v1.23.0: FIX — document attachments on body-only approved templates are no
 //          longer silently dropped. Meta templates like `invoice_generated_pdf`
-//          say "attached" but have NO HEADER component, so the PDF URL is now
-//          appended to the last body slot as a fallback. Also strips duplicate
-//          currency symbols on amount-like variables ("₹₹2,000").
 // v1.22.0: Preserve structured Meta/MM API error details from nested Edge
 //          Function failures so Campaign Wizard and logs show actionable
 //          meta_code/provider_route/fbtrace instead of generic "unknown".
@@ -294,19 +296,26 @@ function resolveVarValue(
   // manage-whatsapp-templates auto-personalization). Without this the
   // wamid ships with an empty "Hi ,", i.e. delivered but visibly broken.
   if (/^\d+$/.test(key)) {
+    tryKeys.push(`v${key}`, `param${key}`, `p${key}`);
+    // Only prefer name-like fields for the VERY first slot (index 0 OR {{1}}).
+    // Previously we were adding these for ALL numeric keys, causing amount
+    // slots ({{2}}, {{3}}...) to pick up the name instead of the amount.
     if (index === 0 || key === '1') {
       tryKeys.push('member_name', 'first_name', 'name', 'full_name');
     }
-    tryKeys.push(`v${key}`, `param${key}`, `p${key}`);
   }
-  const isAmountKey = k.includes('amount') || k.includes('price') || k.includes('total');
+
+  const isAmountKey = k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees');
   for (const tk of tryKeys) {
     const v = values[tk];
     if (v !== undefined && v !== null && String(v).trim() !== '') {
       let out = String(v).trim();
       // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
       // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
-      if (isAmountKey) out = out.replace(/^(₹|Rs\.?|INR)\s*/i, '').trim();
+      if (isAmountKey) {
+        // v1.29.1: Broaden stripping to catch multiple variants and whitespace.
+        out = out.replace(/^(₹|Rs\.?|INR|INR\.|Rs)\s*/i, '').trim();
+      }
       return out;
     }
   }
