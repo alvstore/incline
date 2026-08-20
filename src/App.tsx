@@ -212,7 +212,7 @@ function RoutedContent() {
 
           {/* ==================== MEMBER ROUTES ==================== */}
           <Route path="/member-dashboard" element={<ProtectedRoute requiredRoles={['member']}><MemberDashboard /></ProtectedRoute>} />
-          <Route path="/my-attendance" element={<ProtectedRoute requiredRoles={['member']}><MyAttendance /></ProtectedRoute>} />
+          <Route path="/my-attendance" element={<ProtectedRoute requiredRoles={['member', 'trainer']}><MyAttendance /></ProtectedRoute>} />
           <Route path="/my-progress" element={<ProtectedRoute requiredRoles={['member']}><MyProgress /></ProtectedRoute>} />
           <Route path="/book" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
           <Route path="/my-classes" element={<Navigate to="/book" replace />} />
@@ -222,7 +222,7 @@ function RoutedContent() {
           <Route path="/my-invoices" element={<ProtectedRoute requiredRoles={['member']}><MyInvoices /></ProtectedRoute>} />
           <Route path="/my-requests" element={<ProtectedRoute requiredRoles={['member']}><MemberRequests /></ProtectedRoute>} />
           <Route path="/member-store" element={<ProtectedRoute requiredRoles={['member']}><MemberStore /></ProtectedRoute>} />
-          <Route path="/member-announcements" element={<ProtectedRoute requiredRoles={['member']}><MemberAnnouncements /></ProtectedRoute>} />
+          <Route path="/member-announcements" element={<ProtectedRoute requiredRoles={['member', 'trainer']}><MemberAnnouncements /></ProtectedRoute>} />
           <Route path="/member-feedback" element={<ProtectedRoute requiredRoles={['member']}><MemberFeedback /></ProtectedRoute>} />
           <Route path="/my-workout" element={<ProtectedRoute requiredRoles={['member']}><MyWorkout /></ProtectedRoute>} />
           <Route path="/my-diet" element={<ProtectedRoute requiredRoles={['member']}><MyDiet /></ProtectedRoute>} />

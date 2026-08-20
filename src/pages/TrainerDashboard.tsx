@@ -57,9 +57,10 @@ export default function TrainerDashboard() {
 
       return {
         completedSessions: completedCount,
-        estimated: baseSalary + sessionsEarn + commissionsTotal,
+        baseSalary,
         sessionsEarn,
         commissionsTotal,
+        estimated: baseSalary + sessionsEarn + commissionsTotal,
       };
     },
   });
