@@ -79,7 +79,15 @@ export default function PTSessionsPage() {
 
   // Session KPIs must cover every trainer in the branch — reading only the
   // first trainer made the dashboard show 0 sessions while packages existed.
-  const trainerIds = useMemo(() => (trainers || []).map((t: any) => t.id).filter(Boolean), [trainers]);
+  const isTrainer = roles.some(r => r.role === 'trainer');
+  const trainerIds = useMemo(() => {
+    if (isTrainer && !canManage && trainers) {
+      const myTrainer = trainers.find((t: any) => t.user_id === user?.id);
+      return myTrainer ? [myTrainer.id] : [];
+    }
+    return (trainers || []).map((t: any) => t.id).filter(Boolean);
+  }, [trainers, isTrainer, canManage, user?.id]);
+  
   const { data: sessions, isLoading: sessionsLoading } = useTrainerSessions(trainerIds, { startDate: new Date() });
 
   const filteredPackages = (packages || []).filter((pkg: any) => (showInactive ? true : pkg.is_active !== false));
