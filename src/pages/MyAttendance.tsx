@@ -115,9 +115,18 @@ export default function MyAttendance() {
   if (!member) {
     return (
       <AppLayout>
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
-          <AlertCircle className="h-12 w-12 text-amber-500" />
-          <h2 className="text-xl font-semibold">No member profile found</h2>
+        <div className="flex min-h-[50vh] items-center justify-center px-4">
+          <Card className="w-full max-w-lg rounded-2xl border-border/60 shadow-lg">
+            <CardContent className="space-y-4 p-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/10">
+                <AlertCircle className="h-7 w-7 text-warning" aria-hidden="true" />
+              </div>
+              <h1 className="text-xl font-bold">No member profile found</h1>
+              <p className="text-sm text-muted-foreground">
+                Your account is not linked to a member profile yet. Please contact the front desk.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </AppLayout>
     );
