@@ -38,7 +38,8 @@ import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
 
 export default function PTSessionsPage() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
+  const canManage = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
   const { effectiveBranchId, branchFilter } = useBranchContext();
   const [isCreatePackageOpen, setIsCreatePackageOpen] = useState(false);
   const [isEditPackageOpen, setIsEditPackageOpen] = useState(false);
