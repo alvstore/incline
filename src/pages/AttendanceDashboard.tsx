@@ -942,12 +942,30 @@ export default function AttendanceDashboard() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="mb-4 hidden">
-                <TabsTrigger value="members">Members</TabsTrigger>
-                <TabsTrigger value="pt">PT Sessions</TabsTrigger>
-                <TabsTrigger value="staff-record">Staff Check-in</TabsTrigger>
-                <TabsTrigger value="staff-log">Staff Log</TabsTrigger>
-                <TabsTrigger value="history">History</TabsTrigger>
+              <TabsList className="bg-muted/50 rounded-xl p-1 h-auto flex-wrap mb-4">
+                {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
+                  <TabsTrigger value="members" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                    <Users className="h-3.5 w-3.5" />Members
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="pt" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                  <Dumbbell className="h-3.5 w-3.5" />PT Clients
+                </TabsTrigger>
+                {hasAnyRole(['owner', 'admin', 'manager']) && (
+                  <TabsTrigger value="staff-record" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                    <UserCheck className="h-3.5 w-3.5" />Record Staff
+                  </TabsTrigger>
+                )}
+                {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
+                  <>
+                    <TabsTrigger value="staff-log" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                      <Clock className="h-3.5 w-3.5" />Staff Log
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                      <History className="h-3.5 w-3.5" />History
+                    </TabsTrigger>
+                  </>
+                )}
               </TabsList>
 
               {/* PT Sessions Tab */}
