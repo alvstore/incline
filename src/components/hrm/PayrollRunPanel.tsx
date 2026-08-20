@@ -165,30 +165,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const adjustMut = useMutation({
-    mutationFn: async ({ item, reason }: { item: any; reason: string }) => {
-      const patch = {
-        final_base: Number(item.final_base) || 0,
-        final_pt_commission: Number(item.final_pt_commission) || 0,
-        final_ot: Number(item.final_ot) || 0,
-        final_bonus: Number(item.final_bonus) || 0,
-        final_deductions: Number(item.final_deductions) || 0,
-        final_advance: Number(item.final_advance) || 0,
-        final_penalty: Number(item.final_penalty) || 0,
-      };
-      const { error } = await supabase.rpc('payroll_adjust_item', {
-        p_item_id: item.id, p_patch: patch as any, p_reason: reason,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Adjustment saved');
-      setAdjustItem(null);
-      setAdjustDrawerOpen(false);
-      qc.invalidateQueries({ queryKey: ['payroll-items'] });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+  // Removed adjustMut since it's now handled inside PayrollAdjustmentDrawer
+
 
   const toggleId = (id: string) => setSelectedIds((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   const toggleAll = (status: Status) => {
