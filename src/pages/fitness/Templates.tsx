@@ -92,7 +92,7 @@ export default function Templates() {
               Plan Templates
             </h2>
             <p className="text-sm text-muted-foreground">
-              Browse, preview, and assign workout &amp; diet templates.
+              Browse, preview, and assign workout & diet templates.
             </p>
           </div>
 
