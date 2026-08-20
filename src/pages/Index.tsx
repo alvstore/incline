@@ -5,7 +5,7 @@ const Index = () => {
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="text-center">
         <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+        <p className="text-xl text-muted-foreground">'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            can you trigger backup for now and make it download</p>
       </div>
     </div>
   );
