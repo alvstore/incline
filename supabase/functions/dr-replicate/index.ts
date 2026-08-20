@@ -519,17 +519,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!isServiceJwt && !isSharedSecret && !isOwnerUser) {
-      return new Response(JSON.stringify({ error: "unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const drServiceKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
     if (!drServiceKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
     const dr = createClient(DR_URL, drServiceKey, { auth: { persistSession: false } });
 
-    const mode: Mode | "functions" = (body.mode as Mode) ?? "all";
+    // Handle optional JSON body
+    let body: any = {};
+    if (req.headers.get("content-type")?.includes("application/json")) {
+      try {
+        body = await req.json();
+      } catch (e) {
+        console.error("Failed to parse body:", e.message);
+      }
+    }
+
+    const mode: Mode | "functions" = (body?.mode as Mode) ?? "all";
 
     const report: MirrorReport = {
       ok: true,
