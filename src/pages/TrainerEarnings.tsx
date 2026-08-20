@@ -126,7 +126,6 @@ export default function TrainerEarnings() {
         .gte('shift_date', monthStart.split('T')[0])
         .lte('shift_date', monthEnd.split('T')[0]);
       
-      // Dedupe by date for pro-rata (a trainer might have multiple check-ins in one day)
       const uniqueDays = new Set((data || []).map(a => a.shift_date));
       return Array.from(uniqueDays);
     },
@@ -154,6 +153,10 @@ export default function TrainerEarnings() {
 
   const handleDownloadOfficialPayslip = () => {
     if (!officialPayroll || !brand) return;
+    
+    // Safety check for metadata stored in JSONB
+    const att: any = officialPayroll.calc_attendance || {};
+    
     const blob = buildPayslipPdf({
       employee_name: profile?.full_name || 'Trainer',
       employee_code: (trainer as any)?.employee_code || trainer.id.slice(0, 8),
@@ -162,24 +165,24 @@ export default function TrainerEarnings() {
       period_start: monthStart.split('T')[0],
       period_end: monthEnd.split('T')[0],
       attendance: { 
-        present: officialPayroll.days_present || daysPresent, 
-        payable_days: officialPayroll.payable_days || daysPresent, 
+        present: Number(att.present || (officialPayroll as any).days_present || daysPresent), 
+        payable_days: Number(att.payable_days || (officialPayroll as any).payable_days || daysPresent), 
         total_days: totalDaysInMonth, 
-        monthly_salary: officialPayroll.calc_base || baseSalary 
+        monthly_salary: Number(officialPayroll.calc_base || baseSalary) 
       },
       earnings: { 
-        base: officialPayroll.final_base || proRatedBase, 
-        pt_commission: (officialPayroll.final_pt_commission || estimatedCommission) + (officialPayroll.final_bonus || totalCommissions), 
-        ot: officialPayroll.final_ot || 0, 
+        base: Number(officialPayroll.final_base || proRatedBase), 
+        pt_commission: Number(officialPayroll.final_pt_commission || estimatedCommission) + Number(officialPayroll.final_bonus || totalCommissions), 
+        ot: Number(officialPayroll.final_ot || 0), 
         bonus: 0 
       },
       deductions: { 
-        deductions: officialPayroll.final_deductions || (pfDeduction + esiDeduction), 
-        advance: officialPayroll.final_advance || 0, 
-        penalty: officialPayroll.final_penalty || 0 
+        deductions: Number(officialPayroll.final_deductions || (pfDeduction + esiDeduction)), 
+        advance: Number(officialPayroll.final_advance || 0), 
+        penalty: Number(officialPayroll.final_penalty || 0) 
       },
-      gross: officialPayroll.final_gross || (proRatedBase + estimatedCommission + totalCommissions),
-      net: officialPayroll.final_net || estimatedNet,
+      gross: Number(officialPayroll.final_gross || (proRatedBase + estimatedCommission + totalCommissions)),
+      net: Number(officialPayroll.final_net || estimatedNet),
     }, brand);
     downloadBlob(blob, `Official_Payslip_${format(monthDate, 'yyyy-MM')}.pdf`);
   };
@@ -273,9 +276,9 @@ export default function TrainerEarnings() {
                   <span>Base: ₹{(isOfficial ? officialPayroll.final_base : proRatedBase).toLocaleString()}</span>
                   <span>• Sessions: ₹{(isOfficial ? officialPayroll.final_pt_commission : estimatedCommission).toLocaleString()}</span>
                   {totalCommissions > 0 && <span>• Sales: ₹{totalCommissions.toLocaleString()}</span>}
-                  {(pfDeduction > 0 || officialPayroll?.final_deductions > 0) && (
+                  {(pfDeduction > 0 || (officialPayroll?.final_deductions > 0)) && (
                     <span className="text-destructive">
-                      • PF: ₹{(isOfficial ? officialPayroll.final_deductions : pfDeduction).toLocaleString()}
+                      • Statutory Deductions: ₹{(isOfficial ? officialPayroll.final_deductions : (pfDeduction + esiDeduction)).toLocaleString()}
                     </span>
                   )}
                 </div>
