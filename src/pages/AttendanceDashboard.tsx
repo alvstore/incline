@@ -589,7 +589,7 @@ export default function AttendanceDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {canForceEntry && (
+            {isAdmin && canForceEntry && (
               <Button variant="outline" className="gap-2 border-warning text-warning hover:bg-warning/10" onClick={() => setForceEntryOpen(true)}>
                 <ShieldAlert className="h-4 w-4" />
                 Force Entry
