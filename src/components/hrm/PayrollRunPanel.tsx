@@ -127,13 +127,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Pending salary advance for the staff member being adjusted — so payroll
-  // can recover it in this run instead of tracking it on paper.
-  const { data: pendingAdvance = 0 } = useQuery({
-    queryKey: ['pending-advance', adjustItem?.user_id],
-    queryFn: () => pendingAdvanceForUser(adjustItem.user_id),
-    enabled: !!adjustItem?.user_id,
-  });
 
   const payMut = useMutation({
     mutationFn: async () => {
