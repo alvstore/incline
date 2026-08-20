@@ -1,4 +1,4 @@
-// dispatch-communication v1.27.0
+// dispatch-communication v1.29.0 — freeform placeholder guard (email/SMS/in-app).
 // v1.27.0: Propagate `skip_notification` to staff handoffs; detect Meta `echo`
 //          events in `whatsapp-webhook` v6.6.0 to prevent AI loops.
 // v1.26.0: Template picker only considers APPROVED Meta templates and prefers a

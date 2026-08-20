@@ -1,4 +1,4 @@
-// send-reminders v2.2 — skip payment reminders when invoice is paid / void / zero balance.
+// send-reminders v2.3 — channel-correct template resolution + local variable substitution.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
