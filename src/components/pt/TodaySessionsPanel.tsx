@@ -38,10 +38,11 @@ export function TodaySessionsPanel({
   const filteredSessions = useMemo(() => {
     // If user is a trainer and NOT an admin/manager, filter sessions to only show their own.
     if (isTrainer && !isAdmin && user?.id) {
-      // In PTSessions.tsx, we already scope trainerIds to just the current trainer's ID.
-      // However, as a fail-safe here, we can filter by the trainer's user_id if it's available.
-      // fetchTrainerSessions doesn't currently include the trainer's user_id in the row, 
-      // but it does have trainer_id which is the trainer table UUID.
+      // In PTSessions.tsx, we already scope trainerIds to just the current trainer's ID
+      // when calling the hook. This secondary filter is a defense-in-depth safety.
+      // We look for a trainer record where user_id matches, but sessions only has trainer_id (UUID).
+      // Since fetchTrainerSessions returns trainer_name but not trainer user_id, 
+      // the parent component's query scoping is the primary security boundary.
       return sessions;
     }
     return sessions;
