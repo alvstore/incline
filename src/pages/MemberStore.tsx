@@ -34,7 +34,7 @@ interface AppliedDiscount {
 export default function MemberStore() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { member, activeMembership, isLoading: memberLoading } = useMemberData();
+  const { actor, member, activeMembership, isLoading: memberLoading } = useMemberData();
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -46,18 +46,18 @@ export default function MemberStore() {
   
 
   // Wallet data
-  const { data: wallet } = useWallet(member?.id || '');
+  const { data: wallet } = useWallet(actor?.id || '');
   const walletBalance = wallet?.balance || 0;
 
   // Fetch unclaimed referral rewards
   const { data: unclaimedRewards = [] } = useQuery({
-    queryKey: ['unclaimed-rewards', member?.id],
-    enabled: !!member?.id,
+    queryKey: ['unclaimed-rewards', actor?.id],
+    enabled: !!actor?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('referral_rewards')
         .select('*')
-        .eq('member_id', member!.id)
+        .eq('member_id', actor!.id)
         .eq('is_claimed', false);
       if (error) throw error;
       return data || [];
@@ -66,8 +66,8 @@ export default function MemberStore() {
 
   // Fetch products
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['store-products', member?.branch_id],
-    enabled: !!member,
+    queryKey: ['store-products', actor?.branch_id],
+    enabled: !!actor,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
