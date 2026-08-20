@@ -34,7 +34,7 @@ interface AppliedDiscount {
 export default function MemberStore() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { actor, isLoading: actorLoading } = useUnifiedActor();
+  const { actor, member, activeMembership, isLoading: actorLoading } = useUnifiedActor();
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -499,10 +499,10 @@ export default function MemberStore() {
 
         {/* Recovery & add-ons */}
         <AddOnShowcase
-          memberId={member.id}
-          memberName={(member as any).profiles?.full_name}
+          memberId={actor.id}
+          memberName={(actor as any).profiles?.full_name || (actor as any).full_name}
           membershipId={activeMembership?.id ?? null}
-          branchId={member.branch_id}
+          branchId={actor.branch_id}
         />
 
 
