@@ -34,14 +34,14 @@ export default function MyAttendance() {
     queryKey: ['my-attendance', actor?.id, range, bounds.start?.toISOString() ?? 'all'],
     enabled: !!actor,
     queryFn: async () => {
-      const isTrainer = !!trainer && !member;
+      const isTrainer = !!trainer;
       const table = isTrainer ? 'staff_attendance' : 'member_attendance';
-      const idColumn = isTrainer ? 'staff_id' : 'member_id';
+      const idColumn = isTrainer ? 'user_id' : 'member_id';
 
       let query = supabase
         .from(table as any)
         .select('id, check_in, check_out')
-        .eq(idColumn, actor!.id)
+        .eq(idColumn, isTrainer ? actor.user_id : actor.id)
         .order('check_in', { ascending: false });
 
       if (bounds.start) {
