@@ -1196,7 +1196,9 @@ GENERAL RULES:
   const leadAlreadyEngaged = !!(leadCtx && leadCtx.status && leadCtx.status !== "new");
   const inPostCaptureNurture = !memberCtx.isMember && (fullyCaptured || leadAlreadyEngaged);
 
+  // v9.0.0 — STRICT MEMBER GUARD: If resolved as a member, skip the funnel entirely.
   const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+
 
   // v4.0.0 — Deterministic onboarding short-circuit. The LLM occasionally
   // stalls or emits malformed JSON when a lead replies in free text to an
@@ -2242,6 +2244,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
       .in("phone", variants)
       .limit(1)
       .maybeSingle();
+    
     if (profile?.id) {
       const { data: member } = await supabase
         .from("members")
@@ -2250,14 +2253,16 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      
       if (member) {
+        console.log(`[AI:${platform}] member resolved via profiles.phone check for ${senderId}`);
         memberMatch = member;
         memberPhone = (profile as any).phone || undefined;
         memberEmail = (profile as any).email || undefined;
       }
     }
-
   }
+
 
   if (!memberMatch) {
     let leadContext = "";
