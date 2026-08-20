@@ -89,9 +89,10 @@ export default function TrainerEarnings() {
   const totalSessionsCompleted = completedSessions.length;
   const estimatedEarnings = totalSessionsCompleted * sessionRate;
   
-  // Dual Shift Logic: Count days with 2+ attendance records
+  // Dual Shift Logic: Sync with roster (staff_shifts)
+  // Trainers are required to do dual shifts as per roster; there is NO bonus for dual shift.
   const { data: attendance = [] } = useQuery({
-    queryKey: ['trainer-attendance-august', user?.id, selectedMonth],
+    queryKey: ['trainer-attendance', user?.id, selectedMonth],
     enabled: !!user?.id,
     queryFn: async () => {
       const { data } = await supabase
@@ -104,24 +105,15 @@ export default function TrainerEarnings() {
     },
   });
 
-  const dualShiftDays = useMemo(() => {
-    const counts: Record<string, number> = {};
-    attendance.forEach(a => {
-      counts[a.shift_date] = (counts[a.shift_date] || 0) + 1;
-    });
-    return Object.values(counts).filter(c => c >= 2).length;
-  }, [attendance]);
-
   const totalCommissions = commissions.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
   const baseSalary = Number((trainer as any)?.fixed_salary || 0);
-  const dailyRate = baseSalary / 30;
-  const dualShiftBonus = dualShiftDays * dailyRate;
 
-  // Payroll Audit FIX: Total pay = Base Salary + Dual Shift Bonus + (Completed Sessions × Hourly Rate) + Commissions
-  const grossPay = baseSalary + dualShiftBonus + estimatedEarnings + totalCommissions;
+  // Payroll Calculation: Total pay = Base Salary + (Completed Sessions × Hourly Rate) + Commissions
+  const grossPay = baseSalary + estimatedEarnings + totalCommissions;
   // PF is 12% of Base Salary only
   const pfDeduction = Math.round(baseSalary * 0.12);
   const netPay = grossPay - pfDeduction;
+
 
 
   const isLoading = trainerLoading || sessionsLoading;
@@ -139,14 +131,14 @@ export default function TrainerEarnings() {
       period_end: monthEnd.split('T')[0],
       attendance: { 
         present: attendance.length, 
-        payable_days: 26 + dualShiftDays, 
+        payable_days: 26, 
         total_days: 26, 
         monthly_salary: baseSalary 
       },
       earnings: { 
         base: baseSalary, 
         pt_commission: estimatedEarnings + totalCommissions, 
-        ot: dualShiftBonus, 
+        ot: 0, 
         bonus: 0 
       },
 
@@ -226,7 +218,7 @@ export default function TrainerEarnings() {
                   ₹{netPay.toLocaleString()}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Base: ₹{baseSalary.toLocaleString()} + Dual Shifts ({dualShiftDays}): ₹{dualShiftBonus.toLocaleString()} + Sessions: ₹{estimatedEarnings.toLocaleString()} + Commission: ₹{totalCommissions.toLocaleString()} − PF: ₹{pfDeduction.toLocaleString()}
+                  Base: ₹{baseSalary.toLocaleString()} + Sessions: ₹{estimatedEarnings.toLocaleString()} + Commission: ₹{totalCommissions.toLocaleString()} − PF: ₹{pfDeduction.toLocaleString()}
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2">
@@ -301,8 +293,9 @@ export default function TrainerEarnings() {
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium mb-1">Earnings Calculation</p>
                 <p>
-                  Earnings shown are estimates based on completed sessions and base salary. Final payment may vary based on
+                  Earnings shown are estimates based on completed sessions and base salary as per staff roster. Final payment may vary based on
                   commission structure, deductions, and company policies. Download your payslip for detailed breakdown.
+
                 </p>
               </div>
             </div>
