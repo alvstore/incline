@@ -16,7 +16,7 @@ import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseS
 import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye } from 'lucide-react';
 import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
 import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
 
