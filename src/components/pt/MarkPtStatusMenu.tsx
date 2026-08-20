@@ -166,14 +166,30 @@ export function MarkPtStatusMenu({
                   : 'Logs the session and creates today\'s gym check-in if the member has not checked in.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Notes (optional)</label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Focus: legs · 4 sets squat …"
-              rows={3}
-            />
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Session Date</label>
+              <input 
+                type="date"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={sessionDate}
+                max={new Date().toISOString().split('T')[0]}
+                min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                onChange={(e) => setSessionDate(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Both Member and Trainer must have checked in to the gym on this date.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Notes (optional)</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Focus: legs · 4 sets squat …"
+                rows={3}
+              />
+            </div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
