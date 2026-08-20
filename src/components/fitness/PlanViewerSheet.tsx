@@ -16,7 +16,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target } from 'lucide-react';
+import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target, Plus } from 'lucide-react';
 import { normalizeDietPlan } from '@/lib/planNormalizer';
 
 
@@ -38,10 +38,13 @@ interface PlanViewerSheetProps {
     source_kind?: 'structured' | 'pdf';
     pdf_url?: string | null;
     pdf_filename?: string | null;
+    template_id?: string | null;
   } | null;
   onDownload?: () => void;
+  onAssign?: () => void;
   footerExtras?: React.ReactNode;
 }
+
 
 /** Right-side drawer that renders a workout or diet plan in human-friendly form. */
 export function PlanViewerSheet({
@@ -49,8 +52,10 @@ export function PlanViewerSheet({
   onOpenChange,
   plan,
   onDownload,
+  onAssign,
   footerExtras,
 }: PlanViewerSheetProps) {
+
   const weeks = useMemo(() => {
     if (!plan) return [];
     const w = plan.data?.weeks;
@@ -249,13 +254,22 @@ export function PlanViewerSheet({
           )}
         </ScrollArea>
 
-        <SheetFooter className="px-6 py-4 border-t bg-muted/30 flex-row gap-2 sm:justify-between">
-          <Button variant="outline" onClick={onDownload} className="gap-1.5">
-            <Download className="h-4 w-4" />
-            Download PDF
-          </Button>
+        <SheetFooter className="px-6 py-4 border-t bg-muted/30 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onDownload} className="gap-1.5 h-9">
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
+            {onAssign && (
+              <Button onClick={onAssign} className="gap-1.5 h-9 bg-primary hover:bg-primary/90">
+                <Plus className="h-4 w-4" />
+                Assign Plan
+              </Button>
+            )}
+          </div>
           {footerExtras}
         </SheetFooter>
+
       </SheetContent>
     </Sheet>
   );

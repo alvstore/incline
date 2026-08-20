@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { Library, Dumbbell, Apple, Search } from 'lucide-react';
+import { Library, Dumbbell, Apple, Search, Plus, UserPlus } from 'lucide-react';
 import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { signAttachmentUrl } from '@/lib/documents/signAttachment';
 import { PlanViewerSheet } from '@/components/fitness/PlanViewerSheet';
+import { AssignPlanDrawer } from '@/components/fitness/AssignPlanDrawer';
+
 
 interface PlanTemplateRow {
   id: string;
@@ -24,8 +26,11 @@ interface PlanTemplateRow {
   content: unknown;
   pdf_url: string | null;
   pdf_filename: string | null;
+  pdf_size_bytes?: number | null;
+  is_common?: boolean | null;
   created_at: string;
 }
+
 
 
 export default function Templates() {
@@ -33,6 +38,8 @@ export default function Templates() {
   const [search, setSearch] = useState('');
 
   const [preview, setPreview] = useState<PlanTemplateRow | null>(null);
+  const [assignTarget, setAssignTarget] = useState<PlanTemplateRow | null>(null);
+
 
   const { data: templates, isLoading, isError } = useQuery({
     queryKey: ['fitness-templates', planType],
@@ -40,7 +47,8 @@ export default function Templates() {
       const { data, error } = await supabase
         .from('fitness_plan_templates')
         .select(
-          'id,name,type,description,goal,difficulty,source_kind,content,pdf_url,pdf_filename,created_at',
+          'id,name,type,description,goal,difficulty,source_kind,content,pdf_url,pdf_filename,pdf_size_bytes,is_common,created_at',
+
         )
         .eq('type', planType)
         .eq('is_active', true)
@@ -150,10 +158,32 @@ export default function Templates() {
                   </p>
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-4 border-t border-border/50">
                     <span>Added {new Date(t.created_at).toLocaleDateString()}</span>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg group-hover:bg-primary group-hover:text-primary-foreground">
-                      {t.pdf_url ? 'View PDF' : 'View plan'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs rounded-lg group-hover:bg-primary/10 group-hover:text-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpen(t);
+                        }}
+                      >
+                        {t.pdf_url ? 'View PDF' : 'View'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs rounded-lg group-hover:bg-primary group-hover:text-primary-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssignTarget(t);
+                        }}
+                      >
+                        <UserPlus className="h-3 w-3 mr-1" /> Assign
+                      </Button>
+                    </div>
                   </div>
+
                 </CardContent>
               </Card>
             ))}
@@ -163,6 +193,12 @@ export default function Templates() {
         <PlanViewerSheet
           open={Boolean(preview)}
           onOpenChange={(o) => !o && setPreview(null)}
+          onAssign={() => {
+            if (preview) {
+              setAssignTarget(preview);
+              setPreview(null);
+            }
+          }}
           plan={
             preview
               ? {
@@ -172,12 +208,37 @@ export default function Templates() {
                   description: preview.description,
                   data: preview.content,
                   template_name: preview.name,
-                  source_kind: 'structured',
+                  template_id: preview.id,
+                  source_kind: preview.source_kind as any || 'structured',
+                  pdf_url: preview.pdf_url,
+                  pdf_filename: preview.pdf_filename,
+                }
+              : null
+          }
+        />
+
+        <AssignPlanDrawer
+          open={Boolean(assignTarget)}
+          onOpenChange={(o) => !o && setAssignTarget(null)}
+          plan={
+            assignTarget
+              ? {
+                  name: assignTarget.name,
+                  type: assignTarget.type,
+                  description: assignTarget.description || undefined,
+                  content: assignTarget.content,
+                  template_id: assignTarget.id,
+                  is_common: assignTarget.is_common ?? false,
+                  source_kind: (assignTarget.source_kind as any) || 'structured',
+                  pdf_url: assignTarget.pdf_url,
+                  pdf_filename: assignTarget.pdf_filename,
+                  pdf_size_bytes: assignTarget.pdf_size_bytes,
                 }
               : null
           }
         />
       </div>
+
 
     </AppLayout>
   );

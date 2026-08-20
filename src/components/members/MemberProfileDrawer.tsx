@@ -15,8 +15,9 @@ import {
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
-  ChevronLeft, ChevronRight, Pencil, KeyRound
+  ChevronLeft, ChevronRight, Pencil, KeyRound, Library
 } from 'lucide-react';
+
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -2254,8 +2255,24 @@ export function MemberProfileDrawer({
             </TabsContent>
 
             <TabsContent value="plans" className="space-y-4 mt-4">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Library className="h-4 w-4 text-primary" />
+                  Assigned Plans
+                </h3>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-8 text-xs gap-1.5"
+                  onClick={() => navigate("/fitness/templates")}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Assign New Plan
+                </Button>
+              </div>
               <MemberPlanProgressBlock memberId={member.id} />
             </TabsContent>
+
 
             <TabsContent value="activity" className="space-y-4 mt-4">
               <Card>
