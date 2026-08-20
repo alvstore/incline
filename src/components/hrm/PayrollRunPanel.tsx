@@ -310,67 +310,17 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         )}
       </CardContent>
 
-      {/* Adjustment dialog */}
-      <Dialog open={!!adjustItem} onOpenChange={(o) => { if (!o) { setAdjustItem(null); setAdjustReason(''); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adjust Payroll — {adjustItem?.profile?.full_name}</DialogTitle>
-            <DialogDescription>
-              Calculated net was <strong>₹{Number(adjustItem?.calc_net || 0).toLocaleString()}</strong>. Provide a reason for any change.
-            </DialogDescription>
-          </DialogHeader>
-          {adjustItem && (
-            <div className="grid grid-cols-2 gap-3">
-              {pendingAdvance > 0 && (
-                <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl bg-warning/10 px-3 py-2">
-                  <div className="flex items-center gap-2 text-sm text-warning">
-                    <HandCoins className="h-4 w-4" />
-                    <span>Outstanding salary advance: <strong>₹{pendingAdvance.toLocaleString('en-IN')}</strong></span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-lg"
-                    onClick={() => setAdjustItem({ ...adjustItem, final_advance: pendingAdvance })}
-                  >
-                    Recover in this run
-                  </Button>
-                </div>
-              )}
-              {[
-                ['final_base', 'Base'],
-                ['final_pt_commission', 'PT Commission'],
-                ['final_ot', 'Overtime'],
-                ['final_bonus', 'Bonus'],
-                ['final_deductions', 'Deductions'],
-                ['final_advance', 'Advance'],
-                ['final_penalty', 'Penalty'],
-              ].map(([k, label]) => (
-                <div key={k} className="space-y-1">
-                  <Label className="text-xs">{label}</Label>
-                  <Input
-                    type="number"
-                    value={adjustItem[k] ?? 0}
-                    onChange={(e) => setAdjustItem({ ...adjustItem, [k]: e.target.value })}
-                  />
-                </div>
-              ))}
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">Reason <span className="text-destructive">*</span></Label>
-                <Input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="Required for audit" />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustItem(null)}>Cancel</Button>
-            <Button onClick={() => adjustMut.mutate()} disabled={!adjustReason.trim() || adjustMut.isPending}>
-              {adjustMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Adjustment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PayrollAdjustmentDrawer 
+        open={adjustDrawerOpen} 
+        onOpenChange={setAdjustDrawerOpen} 
+        item={adjustItem} 
+      />
+
+      <PayrollProcessPreviewDrawer
+        open={previewDrawerOpen}
+        onOpenChange={setPreviewDrawerOpen}
+        item={previewItem}
+      />
 
       {/* Pay dialog */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
