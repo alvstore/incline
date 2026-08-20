@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Download, FileText, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useSignedAttachment } from '@/lib/documents/signAttachment';
+
 
 /** Page-level skeleton matching the plan page layout. */
 export function PlanPageSkeleton() {
@@ -61,7 +63,7 @@ export function PlanEmptyState({
   );
 }
 
-/** Shared PDF-backed plan viewer card. */
+/** Shared PDF-backed plan viewer card. Always renders a freshly signed link. */
 export function PlanPdfCard({
   url,
   filename,
@@ -71,6 +73,8 @@ export function PlanPdfCard({
   filename?: string | null;
   fallbackTitle: string;
 }) {
+  const { url: signedUrl, isLoading } = useSignedAttachment(url);
+
   return (
     <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
@@ -85,18 +89,33 @@ export function PlanPdfCard({
             </CardDescription>
           </div>
         </div>
-        <Button asChild size="sm" variant="outline">
-          <a href={url} target="_blank" rel="noopener noreferrer" download>
+        <Button asChild size="sm" variant="outline" disabled={!signedUrl}>
+          <a
+            href={signedUrl ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            download
+            aria-label="Download plan PDF"
+          >
             <Download className="mr-1.5 h-4 w-4" /> Download
           </a>
         </Button>
       </CardHeader>
       <CardContent className="p-0">
-        <iframe src={url} title={filename || fallbackTitle} className="h-[80vh] w-full border-0" />
+        {isLoading || !signedUrl ? (
+          <Skeleton className="h-[80vh] w-full rounded-none" />
+        ) : (
+          <iframe
+            src={signedUrl}
+            title={filename || fallbackTitle}
+            className="h-[80vh] w-full border-0"
+          />
+        )}
       </CardContent>
     </Card>
   );
 }
+
 
 /** Shared tips card. */
 export function PlanTipsCard({ title, tips }: { title: string; tips: string[] }) {

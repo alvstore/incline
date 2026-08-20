@@ -11,6 +11,20 @@ interface DrModeRow {
 }
 
 async function fetchDrMode(): Promise<DrModeRow> {
+  // Anonymous visitors can't evaluate the settings RLS policy (it calls
+  // has_any_role, which is not executable by anon) — that produced a 401 on
+  // every public page load. Signed-out sessions read the public RPC instead.
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    const { data: operational } = await supabase.rpc('dr_is_operational');
+    return {
+      enabled: Boolean(operational) === false ? false : false,
+      reason: null,
+      set_at: null,
+      set_by: null,
+    };
+  }
+
   const { data, error } = await supabase
     .from("settings")
     .select("value")
@@ -26,6 +40,7 @@ async function fetchDrMode(): Promise<DrModeRow> {
     set_by: v.set_by ?? null,
   };
 }
+
 
 async function fetchDrOperational(): Promise<boolean> {
   const { data, error } = await supabase.rpc("dr_is_operational");
