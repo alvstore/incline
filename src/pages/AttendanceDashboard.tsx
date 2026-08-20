@@ -648,9 +648,9 @@ export default function AttendanceDashboard() {
           </div>
         )}
 
-        {/* Rapid-Entry Search Bar */}
-        <div className="space-y-2">
-          {canRecordStaff && (
+        {/* Rapid-Entry Search Bar (Management Roles Only) */}
+        {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
+          <div className="space-y-2">
             <div className="inline-flex items-center gap-1 p-1 rounded-full bg-muted/60 border">
               <button
                 type="button"
@@ -666,13 +666,15 @@ export default function AttendanceDashboard() {
               >
                 <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Sessions
               </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
-              </button>
+              {hasAnyRole(['owner', 'admin', 'manager']) && (
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { setActiveTab('staff-log'); setSearchQuery(''); }}
@@ -688,7 +690,6 @@ export default function AttendanceDashboard() {
                 <History className="inline h-3.5 w-3.5 mr-1" />History
               </button>
             </div>
-          )}
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Scan className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
