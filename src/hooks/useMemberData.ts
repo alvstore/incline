@@ -218,6 +218,7 @@ export function useMemberData() {
     : 0;
 
   return {
+    actor: member,
     member,
     activeMembership,
     ptPackages,
@@ -227,6 +228,23 @@ export function useMemberData() {
     measurements,
     daysRemaining,
     isLoading: memberLoading || membershipLoading,
+  };
+}
+
+export function useUnifiedActor() {
+  const { member, isLoading: memberLoading, activeMembership, daysRemaining } = useMemberData();
+  const { trainer, isLoading: trainerLoading } = useTrainerData();
+
+  const actor = member || trainer;
+  const isLoading = memberLoading || trainerLoading;
+
+  return {
+    actor,
+    member,
+    trainer,
+    activeMembership,
+    daysRemaining,
+    isLoading
   };
 }
 
