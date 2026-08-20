@@ -408,36 +408,38 @@ export default function PTSessionsPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Analytics live below the operational surface, collapsed by default. */}
-        <Collapsible open={insightsOpen} onOpenChange={setInsightsOpen}>
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full justify-between rounded-2xl bg-card py-6 text-left shadow-sm hover:bg-muted/50"
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <BarChart3 className="h-4 w-4 text-primary" aria-hidden />
-                Insights &amp; revenue
-              </span>
-              <ChevronDown
-                className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', insightsOpen && 'rotate-180')}
-                aria-hidden
+        {/* Analytics live below the operational surface, collapsed by default. Only visible to management. */}
+        {canManage && (
+          <Collapsible open={insightsOpen} onOpenChange={setInsightsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-between rounded-2xl bg-card py-6 text-left shadow-sm hover:bg-muted/50"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <BarChart3 className="h-4 w-4 text-primary" aria-hidden />
+                  Insights &amp; revenue
+                </span>
+                <ChevronDown
+                  className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', insightsOpen && 'rotate-180')}
+                  aria-hidden
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <InsightsPanel
+                trainerRevenue={trainerRevenue}
+                packageTypeSplit={packageTypeSplit}
+                totalRevenue={totalRevenue}
+                completedCount={completedCount}
+                scheduledCount={scheduledCount}
+                cancelledCount={cancelledCount}
+                canManage={canManage}
+                onCreatePackage={() => setIsCreatePackageOpen(true)}
               />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-4">
-            <InsightsPanel
-              trainerRevenue={trainerRevenue}
-              packageTypeSplit={packageTypeSplit}
-              totalRevenue={totalRevenue}
-              completedCount={completedCount}
-              scheduledCount={scheduledCount}
-              cancelledCount={cancelledCount}
-              canManage={canManage}
-              onCreatePackage={() => setIsCreatePackageOpen(true)}
-            />
-          </CollapsibleContent>
-        </Collapsible>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </div>
 
       <AddPTPackageDrawer open={isCreatePackageOpen} onOpenChange={setIsCreatePackageOpen} branchId={branchId} />
