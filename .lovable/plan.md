@@ -1,31 +1,42 @@
-# Trainer Dashboard & Security Audit Implementation
+# Plan: Trainer Dashboard & Security Audit
 
-Audit and hardening of the Trainer role to ensure proper workflow, data scoping, and access to essential features.
+Hardening the application for Trainers by strictly scoping access to assigned clients, tasks, and branch resources.
+
+## User Review Required
+
+> [!IMPORTANT]
+> - Trainers will no longer see "New Task" button; they can only manage tasks assigned to them.
+> - Trainers will only see PT Clients assigned to them in the Coaching Studio.
+> - The "Member Store" will be fixed for Trainer roles to ensure they can access it like members.
+
+- **Tasks**: Confirm if trainers should *ever* be allowed to create tasks for themselves (currently blocking creation entirely).
+- **PT Sessions**: Confirm if trainers should see the "Today's Sessions" tab (currently restricting to assigned clients).
 
 ## Proposed Changes
 
-### 1. Task Management for Trainers
-- **Router Access**: Added `trainer` role to the `/tasks` route protection in `App.tsx`.
-- **Navigation**: Added "Tasks" to the `trainerMenuConfig` in `menu.ts` under the "Work" section.
-- **Workflow**: Trainers can now view assigned tasks, update statuses, and collaborate on branch-level tasks.
+### Work & Tasks
+- **Hardening**: Modify `TasksHeader.tsx` to hide the "New Task" button for trainers.
+- **Workflow**: Ensure the `/tasks` route remains accessible but scoped via existing RLS.
 
-### 2. PT Sessions UI Refinement
-- **Scoped Visibility**: Restrict "Today's Sessions", "Packages", and "Insights & Revenue" to management roles (`owner`, `admin`, `manager`) in `PTSessions.tsx`.
-- **Primary View**: Trainers will default to the "Clients" tab, showing only their assigned PT clients.
-- **Revenue Privacy**: Hidden financial insights from the trainer view to comply with internal privacy standards.
+### Training & PT Studio
+- **Access Control**: Restrict `PTSessionsPage` so trainers only see the "Clients" tab by default, and only for their assigned clients.
+- **Privacy**: Hide "Insights & Revenue" (Analytics) from trainers in the Coaching Studio.
 
-### 3. Member Store for Trainers
-- **Access Granted**: Added "Store" to the `trainerMenuConfig` to allow trainers to purchase products.
-- **Unified Identity**: Updated `MemberStore.tsx` to use the new `useUnifiedActor` hook, enabling the checkout process to recognize trainers as valid purchasers (linked to their branch and user profile).
-- **Error Handling**: Standardized the "No profile found" state to account for trainers without synced biometric/profile data.
+### Client Management
+- **Progress Recording**: Update `MyClients.tsx` to ensure "Record Progress" (Measurements) works for both General and PT clients.
+- **Navigation**: Ensure trainers can see and record progress for clients who purchased packages from them.
 
-### 4. Architecture & Security
-- **Unified Hook**: Created `useUnifiedActor` in `useMemberData.ts` to provide a single interface for member or trainer profile resolution across the app.
-- **Data Scoping**: Verified that `ptService.ts` correctly filters active packages by `trainerId` when accessed by non-management roles.
+### Services & Store
+- **Identity Resolution**: Fix the `useUnifiedActor` hook to ensure trainers are recognized correctly as valid actors for the `MemberStore`.
+- **Route Fix**: Audit and fix the `/member-store` link in the sidebar for trainers.
 
 ## Technical Details
-- Modified `src/App.tsx` to include `trainer` in `/tasks` `ProtectedRoute`.
-- Updated `src/config/menu.ts` for navigation visibility.
-- Refactored `src/hooks/useMemberData.ts` to include `useUnifiedActor`.
-- Hardened `src/pages/PTSessions.tsx` with role-based tab rendering.
-- Fixed profile-linking logic in `src/pages/MemberStore.tsx`.
+
+### Frontend Changes
+- **src/components/tasks/TasksHeader.tsx**: Add RBAC check for the "New Task" button.
+- **src/pages/PTSessions.tsx**: Update `Tabs` and `InsightsPanel` visibility based on `canManage`.
+- **src/pages/MyClients.tsx**: Verify measurement triggers for all client types.
+- **src/hooks/useMemberData.ts**: Harden `useUnifiedActor` to prevent identity resolution failures when a user has both trainer and staff/admin roles.
+
+### Security & RLS
+- **PII Protection**: Verify that the `search_members` and `member_measurements` policies allow trainers to read data for their assigned clients only.
