@@ -342,11 +342,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const redirectTo = `${window.location.origin}/auth/reset-password`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    if (!error) return { error: null };
 
-    // Built-in auth mailer failed (rate limit / SMTP issue) — fall back to our
-    // own mail engine so the member still receives the reset link.
+    // Primary: our own mail engine. The built-in auth mailer reports success
+    // even when the message is silently dropped, so it can't be trusted as the
+    // first attempt — and our engine records the send in the email log.
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
         'request-password-reset',
@@ -354,10 +353,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       if (!fnError && data?.ok) return { error: null };
     } catch {
-      /* fall through to the original error */
+      /* fall through to the built-in mailer */
     }
-    return { error: error as Error };
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    return { error: (error as Error) ?? null };
   };
+
 
 
   const updatePassword = async (password: string) => {
