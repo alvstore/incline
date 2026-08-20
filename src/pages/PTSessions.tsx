@@ -193,7 +193,7 @@ export default function PTSessionsPage() {
     }
   };
 
-  const canManage = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
+  // canManage declared at top level
 
   return (
     <AppLayout>
