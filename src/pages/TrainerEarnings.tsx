@@ -154,7 +154,7 @@ export default function TrainerEarnings() {
   const handleDownloadOfficialPayslip = () => {
     if (!officialPayroll || !brand) return;
     
-    // Safety check for metadata stored in JSONB if raw columns are missing (though we verified they exist in psql)
+    // Safety check for metadata stored in JSONB
     const att: any = officialPayroll.calc_attendance || {};
     
     const blob = buildPayslipPdf({
@@ -165,8 +165,8 @@ export default function TrainerEarnings() {
       period_start: monthStart.split('T')[0],
       period_end: monthEnd.split('T')[0],
       attendance: { 
-        present: Number(att.present || officialPayroll.days_present || daysPresent), 
-        payable_days: Number(att.payable_days || officialPayroll.payable_days || daysPresent), 
+        present: Number(att.present || (officialPayroll as any).days_present || daysPresent), 
+        payable_days: Number(att.payable_days || (officialPayroll as any).payable_days || daysPresent), 
         total_days: totalDaysInMonth, 
         monthly_salary: Number(officialPayroll.calc_base || baseSalary) 
       },
