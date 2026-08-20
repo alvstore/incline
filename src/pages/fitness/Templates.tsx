@@ -151,7 +151,7 @@ export default function Templates() {
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-4 border-t border-border/50">
                     <span>Added {new Date(t.created_at).toLocaleDateString()}</span>
                     <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg group-hover:bg-primary group-hover:text-primary-foreground">
-                      {t.pdf_url ? 'View PDF' : 'No PDF'}
+                      {t.pdf_url ? 'View PDF' : 'View plan'}
                     </Button>
                   </div>
                 </CardContent>
@@ -160,7 +160,25 @@ export default function Templates() {
           </div>
         )}
 
+        <PlanViewerSheet
+          open={Boolean(preview)}
+          onOpenChange={(o) => !o && setPreview(null)}
+          plan={
+            preview
+              ? {
+                  id: preview.id,
+                  name: preview.name,
+                  type: preview.type,
+                  description: preview.description,
+                  data: preview.content,
+                  template_name: preview.name,
+                  source_kind: 'structured',
+                }
+              : null
+          }
+        />
       </div>
+
     </AppLayout>
   );
 }
