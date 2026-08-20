@@ -211,7 +211,10 @@ export async function fetchMemberPTPackages(
 // so admins can complete or cancel them from the PT dashboard.
 export async function fetchActiveMemberPackages(
   branchId?: string,
-  opts?: { statuses?: Array<Database['public']['Enums']['pt_package_status']> },
+  opts?: { 
+    statuses?: Array<Database['public']['Enums']['pt_package_status']>,
+    trainerId?: string
+  },
 ): Promise<MemberPTPackageWithDetails[]> {
   const statuses = opts?.statuses ?? ['active'];
   let query = supabase
@@ -227,6 +230,10 @@ export async function fetchActiveMemberPackages(
 
   if (branchId) {
     query = query.eq("branch_id", branchId);
+  }
+
+  if (opts?.trainerId) {
+    query = query.filter('trainer.user_id', 'eq', opts.trainerId);
   }
 
   const { data, error } = await query;

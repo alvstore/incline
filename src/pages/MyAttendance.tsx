@@ -34,14 +34,14 @@ export default function MyAttendance() {
     queryKey: ['my-attendance', actor?.id, range, bounds.start?.toISOString() ?? 'all'],
     enabled: !!actor,
     queryFn: async () => {
-      const isTrainer = !!trainer && !member;
+      const isTrainer = !!trainer;
       const table = isTrainer ? 'staff_attendance' : 'member_attendance';
-      const idColumn = isTrainer ? 'staff_id' : 'member_id';
+      const idColumn = isTrainer ? 'user_id' : 'member_id';
 
       let query = supabase
         .from(table as any)
         .select('id, check_in, check_out')
-        .eq(idColumn, actor!.id)
+        .eq(idColumn, isTrainer ? actor.user_id : actor.id)
         .order('check_in', { ascending: false });
 
       if (bounds.start) {
@@ -56,7 +56,7 @@ export default function MyAttendance() {
 
   const checkOutMutation = useMutation({
     mutationFn: async (attendanceId: string) => {
-      const isTrainer = !!trainer && !member;
+      const isTrainer = !!trainer;
       const table = isTrainer ? 'staff_attendance' : 'member_attendance';
       
       const { error } = await supabase
@@ -126,16 +126,26 @@ export default function MyAttendance() {
   if (!actor) {
     return (
       <AppLayout>
-        <div className="flex min-h-[50vh] items-center justify-center px-4">
+        <div className="flex min-h-[50vh] items-center justify-center px-4 text-center">
           <Card className="w-full max-w-lg rounded-2xl border-border/60 shadow-lg">
-            <CardContent className="space-y-4 p-8 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/10">
-                <AlertCircle className="h-7 w-7 text-warning" aria-hidden="true" />
+            <CardContent className="space-y-6 p-10">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-warning/10">
+                <AlertCircle className="h-10 w-10 text-warning" aria-hidden="true" />
               </div>
-              <h1 className="text-xl font-bold">No member profile found</h1>
-              <p className="text-sm text-muted-foreground">
-                Your account is not linked to a member profile yet. Please contact the front desk.
-              </p>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold tracking-tight">No profile found</h1>
+                <p className="text-muted-foreground">
+                  Your account is not linked to a member or trainer profile yet. 
+                  Please contact the front desk to sync your biometric ID.
+                </p>
+              </div>
+              <Button 
+                variant="outline" 
+                className="rounded-xl"
+                onClick={() => window.location.href = '/'}
+              >
+                Return to Home
+              </Button>
             </CardContent>
           </Card>
         </div>

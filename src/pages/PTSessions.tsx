@@ -38,7 +38,8 @@ import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
 
 export default function PTSessionsPage() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
+  const canManage = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
   const { effectiveBranchId, branchFilter } = useBranchContext();
   const [isCreatePackageOpen, setIsCreatePackageOpen] = useState(false);
   const [isEditPackageOpen, setIsEditPackageOpen] = useState(false);
@@ -65,7 +66,9 @@ export default function PTSessionsPage() {
   const queryBranchId = branchFilter || undefined;
   const { data: packages, isLoading: packagesLoading } = usePTPackages(queryBranchId, showInactive);
   const { data: trainers } = useTrainers(queryBranchId || branchId);
-  const { data: activePackages, isLoading: activeLoading } = useActiveMemberPackages(queryBranchId);
+  const { data: activePackages, isLoading: activeLoading } = useActiveMemberPackages(queryBranchId, { 
+    trainerId: roles.some(r => r.role === 'trainer') && !canManage ? user?.id : undefined 
+  });
   const { data: pendingPackages } = useActiveMemberPackages(queryBranchId, { statuses: ['pending_payment'] });
   const scheduleSession = useSchedulePTSession();
   const completeSession = useCompletePTSession();
@@ -190,7 +193,7 @@ export default function PTSessionsPage() {
     }
   };
 
-  const canManage = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
+  // canManage declared at top level
 
   return (
     <AppLayout>
