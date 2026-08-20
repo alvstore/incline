@@ -116,6 +116,11 @@ export default function Templates() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-2xl" />)}
           </div>
+        ) : isError ? (
+          <div className="text-center py-12 bg-white rounded-2xl border border-dashed">
+            <Library className="h-10 w-10 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-600">Could not load templates. Please try again.</p>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-dashed">
             <Library className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
@@ -124,19 +129,21 @@ export default function Templates() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map(t => (
-              <Card key={t.id} className="rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden border-border/50 group" onClick={() => handleDownload(t.pdf_url)}>
+              <Card key={t.id} className="rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden border-border/50 group" onClick={() => handleOpen(t)}>
                 <CardContent className="p-5">
-                  <div className="flex justify-between items-start mb-2">
+                  <div className="flex justify-between items-start mb-2 gap-2">
                     <h3 className="font-semibold text-lg line-clamp-1">{t.name}</h3>
-                    <Badge variant="secondary" className="capitalize">{t.category}</Badge>
+                    <Badge variant="secondary" className="capitalize shrink-0">
+                      {t.difficulty || t.type}
+                    </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-4 h-10">
-                    {t.description || "No description provided."}
+                    {t.description || t.goal || 'No description provided.'}
                   </p>
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-4 border-t border-border/50">
                     <span>Added {new Date(t.created_at).toLocaleDateString()}</span>
                     <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg group-hover:bg-primary group-hover:text-primary-foreground">
-                      View PDF
+                      {t.pdf_url ? 'View PDF' : 'No PDF'}
                     </Button>
                   </div>
                 </CardContent>
@@ -144,6 +151,7 @@ export default function Templates() {
             ))}
           </div>
         )}
+
       </div>
     </AppLayout>
   );
