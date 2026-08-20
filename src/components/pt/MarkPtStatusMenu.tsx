@@ -35,6 +35,7 @@ export function MarkPtStatusMenu({
   const qc = useQueryClient();
   const [pending, setPending] = useState<PtSessionStatusInput | null>(null);
   const [notes, setNotes] = useState('');
+  const [sessionDate, setSessionDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const CACHE_KEYS: readonly (readonly unknown[])[] = [
     ['my-pt-clients'],
