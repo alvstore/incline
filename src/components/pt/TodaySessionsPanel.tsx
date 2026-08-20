@@ -55,7 +55,7 @@ export function TodaySessionsPanel({
       ),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSessions]);
+  }, [filteredSessions, now]);
 
   if (loading) {
     return (
