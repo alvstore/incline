@@ -1,6 +1,7 @@
 import { Plus, Search, LayoutGrid, List, CalendarDays, Command } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 export type TaskView = 'board' | 'list' | 'calendar';
@@ -21,6 +22,7 @@ const VIEWS: { id: TaskView; label: string; icon: React.ComponentType<{ classNam
 ];
 
 export function TasksHeader({ view, onViewChange, search, onSearchChange, subtitle, onNew }: Props) {
+  const { roles } = useAuth();
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -34,13 +36,15 @@ export function TasksHeader({ view, onViewChange, search, onSearchChange, subtit
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button
-            onClick={onNew}
-            className="bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-lg hover:shadow-xl hover:from-primary hover:to-primary rounded-xl"
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Task
-          </Button>
+          {roles.some((r) => ['owner', 'admin', 'manager', 'staff'].includes(r.role)) && (
+            <Button
+              onClick={onNew}
+              className="bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-lg hover:shadow-xl hover:from-primary hover:to-primary rounded-xl"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Task
+            </Button>
+          )}
         </div>
       </div>
 

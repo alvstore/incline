@@ -293,12 +293,20 @@ export default function MyClients() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setMeasurementDrawer({ open: true, memberId: client.member_id, memberName: clientName })}
+                                >
+                                  <Ruler className="h-4 w-4 mr-1" />
+                                  Record
+                                </Button>
                                 <MarkPtStatusMenu
                                   memberPackageId={client.id}
                                   trainerId={trainer!.id}
                                   memberName={clientName}
                                 />
-                                <Button variant="ghost" size="sm" asChild>
+                                <Button variant="ghost" size="sm" asChild title="View in Coaching Studio">
                                   <Link to={`/pt-sessions?member=${client.member_id}`}>
                                     <Eye className="h-4 w-4" />
                                   </Link>
