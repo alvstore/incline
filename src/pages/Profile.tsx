@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnifiedStaff } from '@/hooks/useUnifiedStaff';
+import { useMemberData } from '@/hooks/useMemberData';
+
 
 import { useBranchContext } from '@/contexts/BranchContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +27,9 @@ import { format } from 'date-fns';
 export default function ProfilePage() {
   const { profile, user, roles, refreshProfile } = useAuth();
   const { data: staffList } = useUnifiedStaff();
+  const { member } = useMemberData();
   const { branches } = useBranchContext();
+
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -315,9 +319,10 @@ export default function ProfilePage() {
                         <div className="sm:col-span-2">
                           <Label className="text-muted-foreground">Address</Label>
                           <p className="text-sm font-medium mt-1">
-                            {profile?.address ? `${profile.address}${profile.city ? `, ${profile.city}` : ''}${profile.state ? `, ${profile.state}` : ''}` : '—'}
+                            {member?.address ? `${member.address}${member.city ? `, ${member.city}` : ''}${member.state ? `, ${member.state}` : ''}` : '—'}
                           </p>
                         </div>
+
                       </div>
                     );
                   })()}

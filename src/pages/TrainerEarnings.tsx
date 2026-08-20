@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/ui/stat-card';
@@ -18,7 +18,7 @@ import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
 export default function TrainerEarnings() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { trainer, isLoading: trainerLoading } = useTrainerData();
   const [selectedMonth, setSelectedMonth] = useState(0);
 
