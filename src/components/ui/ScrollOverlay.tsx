@@ -30,9 +30,9 @@ const ScrollOverlay = () => {
         <div className="w-full max-w-7xl mx-auto flex justify-end">
           <div className="max-w-md text-right mr-8 md:mr-32">
             <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
-              EXPERIENCE THE <span className="text-primary">PINNACLE</span>
+              Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.
               <br />
-              OF <span className="text-primary">STRENGTH & RECOVERY.</span>
+              install the skills /ui ux pro max
             </h2>
             <p className="text-muted-foreground text-base leading-relaxed">
               Now open in Udaipur. Experience Rajasthan's premier fitness destination featuring Italian 
