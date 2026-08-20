@@ -13,7 +13,10 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins } from 'lucide-react';
+import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye } from 'lucide-react';
+import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
+import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
 
@@ -33,10 +36,16 @@ interface Props {
 
 export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const qc = useQueryClient();
+  const { hasAnyRole } = useAuth();
+  const isAdmin = hasAnyRole(['admin', 'owner', 'manager']);
+  
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adjustItem, setAdjustItem] = useState<any | null>(null);
-  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustDrawerOpen, setAdjustDrawerOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<any | null>(null);
+  const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
+  
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [payRef, setPayRef] = useState('');
   const [payOpen, setPayOpen] = useState(false);
@@ -118,13 +127,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Pending salary advance for the staff member being adjusted — so payroll
-  // can recover it in this run instead of tracking it on paper.
-  const { data: pendingAdvance = 0 } = useQuery({
-    queryKey: ['pending-advance', adjustItem?.user_id],
-    queryFn: () => pendingAdvanceForUser(adjustItem.user_id),
-    enabled: !!adjustItem?.user_id,
-  });
 
   const payMut = useMutation({
     mutationFn: async () => {
@@ -156,30 +158,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const adjustMut = useMutation({
-    mutationFn: async () => {
-      if (!adjustItem) return;
-      const patch = {
-        final_base: Number(adjustItem.final_base) || 0,
-        final_pt_commission: Number(adjustItem.final_pt_commission) || 0,
-        final_ot: Number(adjustItem.final_ot) || 0,
-        final_bonus: Number(adjustItem.final_bonus) || 0,
-        final_deductions: Number(adjustItem.final_deductions) || 0,
-        final_advance: Number(adjustItem.final_advance) || 0,
-        final_penalty: Number(adjustItem.final_penalty) || 0,
-      };
-      const { error } = await supabase.rpc('payroll_adjust_item', {
-        p_item_id: adjustItem.id, p_patch: patch as any, p_reason: adjustReason,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Adjustment saved');
-      setAdjustItem(null); setAdjustReason('');
-      qc.invalidateQueries({ queryKey: ['payroll-items'] });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+  // Removed adjustMut since it's now handled inside PayrollAdjustmentDrawer
+
 
   const toggleId = (id: string) => setSelectedIds((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   const toggleAll = (status: Status) => {
@@ -275,12 +255,21 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         </TableCell>
                         <TableCell className="text-right font-bold">₹{Number(it.final_net).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="ghost"
-                            disabled={['processed','paid'].includes(it.status)}
-                            onClick={() => setAdjustItem({ ...it })}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button size="sm" variant="ghost"
+                              disabled={['processed','paid'].includes(it.status)}
+                              onClick={() => { setPreviewItem(it); setPreviewDrawerOpen(true); }}
+                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                            </Button>
+                            <Button size="sm" variant="ghost"
+                              disabled={['processed','paid'].includes(it.status) || !isAdmin}
+                              onClick={() => { setAdjustItem(it); setAdjustDrawerOpen(true); }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -292,67 +281,17 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         )}
       </CardContent>
 
-      {/* Adjustment dialog */}
-      <Dialog open={!!adjustItem} onOpenChange={(o) => { if (!o) { setAdjustItem(null); setAdjustReason(''); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adjust Payroll — {adjustItem?.profile?.full_name}</DialogTitle>
-            <DialogDescription>
-              Calculated net was <strong>₹{Number(adjustItem?.calc_net || 0).toLocaleString()}</strong>. Provide a reason for any change.
-            </DialogDescription>
-          </DialogHeader>
-          {adjustItem && (
-            <div className="grid grid-cols-2 gap-3">
-              {pendingAdvance > 0 && (
-                <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl bg-warning/10 px-3 py-2">
-                  <div className="flex items-center gap-2 text-sm text-warning">
-                    <HandCoins className="h-4 w-4" />
-                    <span>Outstanding salary advance: <strong>₹{pendingAdvance.toLocaleString('en-IN')}</strong></span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-lg"
-                    onClick={() => setAdjustItem({ ...adjustItem, final_advance: pendingAdvance })}
-                  >
-                    Recover in this run
-                  </Button>
-                </div>
-              )}
-              {[
-                ['final_base', 'Base'],
-                ['final_pt_commission', 'PT Commission'],
-                ['final_ot', 'Overtime'],
-                ['final_bonus', 'Bonus'],
-                ['final_deductions', 'Deductions'],
-                ['final_advance', 'Advance'],
-                ['final_penalty', 'Penalty'],
-              ].map(([k, label]) => (
-                <div key={k} className="space-y-1">
-                  <Label className="text-xs">{label}</Label>
-                  <Input
-                    type="number"
-                    value={adjustItem[k] ?? 0}
-                    onChange={(e) => setAdjustItem({ ...adjustItem, [k]: e.target.value })}
-                  />
-                </div>
-              ))}
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">Reason <span className="text-destructive">*</span></Label>
-                <Input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="Required for audit" />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustItem(null)}>Cancel</Button>
-            <Button onClick={() => adjustMut.mutate()} disabled={!adjustReason.trim() || adjustMut.isPending}>
-              {adjustMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Adjustment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PayrollAdjustmentDrawer 
+        open={adjustDrawerOpen} 
+        onOpenChange={setAdjustDrawerOpen} 
+        item={adjustItem} 
+      />
+
+      <PayrollProcessPreviewDrawer
+        open={previewDrawerOpen}
+        onOpenChange={setPreviewDrawerOpen}
+        item={previewItem}
+      />
 
       {/* Pay dialog */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
