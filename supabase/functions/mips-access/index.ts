@@ -443,7 +443,7 @@ async function applyStaffAction(
   const baseUrl = getBaseUrl(mipsBaseUrl);
   const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
 
-  const existing = await lookupPerson(baseUrl, token, personSn);
+  const existing = await lookupPerson(baseUrl, token, personSn, "employee");
   if (!existing) {
     await supabase
       .from(tableName)
@@ -452,14 +452,14 @@ async function applyStaffAction(
     return {
       success: true,
       action: action === "revoke_staff" ? "revoke" : "restore",
-      message: "Person not found in MIPS, status updated locally",
+      message: "Person not found in MIPS employee catalog, status updated locally",
     };
   }
 
   const newValidTimeEnd = action === "revoke_staff" ? REVOKED_DATE : PERMANENT_END;
   const updatedPerson = { ...existing, validTimeEnd: newValidTimeEnd };
 
-  const putRes = await fetch(`${baseUrl}/personInfo/person`, {
+  const putRes = await fetch(`${baseUrl}/personInfo/employee`, {
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(updatedPerson),
