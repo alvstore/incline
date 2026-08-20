@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v1.4.0 — Full 1:1 mirror PRIMARY → DR with chunk-safe row sync.
+// v1.5.0 — Full 1:1 mirror PRIMARY → DR with chunk-safe row sync & Edge Function parity (metadata only).
 //
 // Passes (controlled via body.mode):
 //   "all"      → schema-snapshot + auth + storage + rows  (default; nightly cron)
@@ -25,7 +25,7 @@ type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
 
 interface MirrorReport {
   ok: boolean;
-  version: "1.4.0";
+  version: "1.5.0";
   mode: Mode;
   startedAt: string;
   finishedAt?: string;
@@ -529,8 +529,7 @@ Deno.serve(async (req) => {
     if (!drServiceKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
     const dr = createClient(DR_URL, drServiceKey, { auth: { persistSession: false } });
 
-    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
-    const mode: Mode = (body.mode as Mode) ?? "all";
+    const mode: Mode | "functions" = (body.mode as Mode) ?? "all";
 
     const report: MirrorReport = {
       ok: true,
