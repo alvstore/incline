@@ -42,6 +42,7 @@ export default function TrainerDashboard() {
       const completedCount = sessions?.length || 0;
       const sessionRate = (trainer as any)?.hourly_rate || 500;
       const sessionsEarn = completedCount * sessionRate;
+      const baseSalary = (trainer as any)?.salary || 0;
 
       let commissionsTotal = 0;
       try {
@@ -56,7 +57,7 @@ export default function TrainerDashboard() {
 
       return {
         completedSessions: completedCount,
-        estimated: sessionsEarn + commissionsTotal,
+        estimated: baseSalary + sessionsEarn + commissionsTotal,
         sessionsEarn,
         commissionsTotal,
       };
