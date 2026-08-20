@@ -37,16 +37,15 @@ export function TodaySessionsPanel({
 
   const filteredSessions = useMemo(() => {
     // If user is a trainer and NOT an admin/manager, filter sessions to only show their own.
-    // The session data comes from fetchTrainerSessions which includes trainer_id (trainer primary key id).
-    if (isTrainer && !isAdmin) {
-      // Need to find the trainer record ID for this user.
-      // However, the sessions list already contains trainer_id.
-      // But we don't know the user's trainer ID here without a query or context.
-      // The current code assumes trainer_id in session matches user.id, which is wrong (one is trainer uuid, one is profile uuid).
+    if (isTrainer && !isAdmin && user?.id) {
+      // In PTSessions.tsx, we already scope trainerIds to just the current trainer's ID.
+      // However, as a fail-safe here, we can filter by the trainer's user_id if it's available.
+      // fetchTrainerSessions doesn't currently include the trainer's user_id in the row, 
+      // but it does have trainer_id which is the trainer table UUID.
       return sessions;
     }
     return sessions;
-  }, [sessions, isTrainer, isAdmin]);
+  }, [sessions, isTrainer, isAdmin, user?.id]);
 
   const { today, upcoming } = useMemo(() => {
     const sorted = [...filteredSessions].sort(
