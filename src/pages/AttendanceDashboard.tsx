@@ -119,6 +119,15 @@ export default function AttendanceDashboard() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const tabParam = url.searchParams.get('tab');
+    
+    // Safety check for trainer role: if they try to access a protected tab, redirect to personal attendance
+    if (actorRoles.includes('trainer') && !actorRoles.includes('staff') && !actorRoles.includes('manager') && !actorRoles.includes('admin') && !actorRoles.includes('owner')) {
+      if (tabParam !== 'pt' && activeTab !== 'pt') {
+        window.location.href = '/my-attendance';
+        return;
+      }
+    }
+
     if (tabParam && ['members','staff-record','staff-log','pt','history'].includes(tabParam)) {
       setActiveTab(tabParam);
       url.searchParams.delete('tab');
@@ -134,7 +143,7 @@ export default function AttendanceDashboard() {
       url.searchParams.delete('checkin');
       window.history.replaceState({}, '', url.toString());
     }
-  }, []);
+  }, [actorRoles, activeTab]);
 
   // Staff search results for top bar
   const [staffSearchResults, setStaffSearchResults] = useState<any[]>([]);
