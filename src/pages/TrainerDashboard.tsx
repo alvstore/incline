@@ -110,7 +110,33 @@ export default function TrainerDashboard() {
         </div>
 
         {/* Duty Status — clock in / clock out */}
-        <DutyStatusCard userId={trainer.user_id} />
+        <div className="grid gap-6 md:grid-cols-2">
+          <DutyStatusCard userId={trainer.user_id} />
+          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-gradient-to-br from-indigo-50 to-white overflow-hidden">
+            <CardContent className="py-6 flex flex-col justify-center h-full gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-indigo-100 text-indigo-600">
+                  <Clock className="h-6 w-6" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-800">MIPS Integrated</h4>
+                  <p className="text-xs text-slate-500">Real-time turnstile synchronization active</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Branch Status</span>
+                  <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">Online</Badge>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">MIPS Hardware</span>
+                  <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50">Active</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
 
         {/* My weekly shift strip with Late badges */}
         <MyShiftWeekCard userId={trainer.user_id} />
