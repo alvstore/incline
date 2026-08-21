@@ -625,22 +625,24 @@ Deno.serve(async (req) => {
   }
 
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "fallback_sync_secret";
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
-  // ---- AUTH GATE (v2.8.1) ----
-  // Allow: service-role bearer, automation-brain system-call, hardware-sync-secret, or authenticated manager/admin/owner JWT.
+  // ---- AUTH GATE (v2.8.2) ----
   const authHeader = req.headers.get("Authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
-  const HARDWARE_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET");
+
+  console.log(`[AUTH] bearer_match=${bearer === SERVICE_KEY}, apikey_match=${apikey === SERVICE_KEY}, sysCall=${sysCall}, syncSecret_match=${syncSecret === SYNC_SECRET}`);
 
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
-    (syncSecret && syncSecret === HARDWARE_SYNC_SECRET);
+    (syncSecret && syncSecret === SYNC_SECRET);
+
 
   if (!isService) {
     if (!bearer) {
