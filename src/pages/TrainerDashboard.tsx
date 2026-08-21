@@ -119,8 +119,8 @@ export default function TrainerDashboard() {
                   <Clock className="h-6 w-6" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-slate-800">MIPS Integrated</h4>
-                  <p className="text-xs text-slate-500">Real-time turnstile synchronization active</p>
+                  <h4 className="font-bold text-slate-800">3.IPS Integrated</h4>
+                  <p className="text-xs text-slate-500">Real-time turnstile synchronisation active</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -130,7 +130,7 @@ export default function TrainerDashboard() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">MIPS Hardware</span>
-                  <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50">Active</Badge>
+                  <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50">Active why we are showing this.</Badge>
                 </div>
               </div>
             </CardContent>
@@ -139,6 +139,7 @@ export default function TrainerDashboard() {
 
 
         {/* My weekly shift strip with Late badges */}
+        {/* 2 My shift this week this is not looking good. please audit and enhance ui/ux. */}
         <MyShiftWeekCard userId={trainer.user_id} />
 
         {/* Primary Stats */}
@@ -528,22 +529,36 @@ function DutyStatusCard({ userId }: { userId: string }) {
         )}
 
         <div className="flex flex-wrap gap-3 pt-1">
-          {/* Manual punch is disabled if there's an open MIPS check-in (enforce check-out via MIPS or manager override) */}
-          <Button
-            size="lg"
-            disabled={punch.isPending || !!(isMipsPunch && openPunch)}
-            onClick={onPunch}
-            className={cn(
-              "rounded-xl px-8 shadow-md transition-all active:scale-95",
-              openPunch
-                ? 'bg-red-500 hover:bg-red-600 text-white'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-            )}
-          >
-            {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
-              openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
-            {openPunch ? (isMipsPunch ? 'MIPS Active' : 'Manual Clock Out') : 'Manual Clock In'}
-          </Button>
+          {/* Manual Clock In - not required. handled by MIPS checking will handle by mips only checkout button if trainer has been passed through turnstile. */}
+          {(!openPunch || !isMipsPunch) && (
+            <Button
+              size="lg"
+              disabled={punch.isPending || !!(isMipsPunch && openPunch)}
+              onClick={onPunch}
+              className={cn(
+                "rounded-xl px-8 shadow-md transition-all active:scale-95",
+                openPunch
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+              )}
+            >
+              {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
+                openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
+              {openPunch ? (isMipsPunch ? 'MIPS Active' : 'Manual Clock Out') : 'Manual Clock In'}
+            </Button>
+          )}
+
+          {openPunch && isMipsPunch && (
+            <Button
+              size="lg"
+              disabled={punch.isPending}
+              onClick={onPunch}
+              className="rounded-xl px-8 shadow-md transition-all active:scale-95 bg-red-500 hover:bg-red-600 text-white"
+            >
+              {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Square className="h-4 w-4 mr-2 fill-current" />}
+              Manual Clock Out
+            </Button>
+          )}
 
           
           {isMipsPunch && openPunch && (
