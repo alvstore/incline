@@ -245,6 +245,48 @@ function stripBraces(raw: string): string {
   return raw.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim();
 }
 
+/** v1.30.0: labels like "variable_2", "param3", "p_1", "{{2}}", "2" carry no
+ *  meaning — they are auto-generated placeholders, not a real mapping. */
+function isGenericLabel(label: string): boolean {
+  const l = stripBraces(String(label || '')).trim().toLowerCase();
+  if (!l) return true;
+  return /^(variable|var|param|parameter|p|v|slot|field)[\s_-]*\d+$/.test(l) || /^\d+$/.test(l);
+}
+
+/** v1.30.0: derive a semantic key for each positional {{n}} slot from the copy
+ *  immediately preceding it in the template body. Meta bodies read like
+ *  "Hi {{1}}, … Name: {{2}}, Interest: {{3}}, Source: {{4}}" or
+ *  "outstanding amount of ₹{{2}}" — that context is the only mapping we have
+ *  when the CRM stored generic labels. */
+function inferSlotSemantics(content: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const body = String(content || '');
+  const re = /\{\{\s*([^}]+?)\s*\}\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(body)) !== null) {
+    const slot = match[1].trim();
+    if (!/^\d+$/.test(slot)) continue;
+    const before = body.slice(Math.max(0, match.index - 60), match.index).toLowerCase();
+    // Nearest label wins: check the tail of the preceding copy.
+    const tail = before.replace(/\s+/g, ' ');
+    let key = '';
+    if (/(₹|rs\.?|inr)\s*$/.test(tail)) key = 'amount_due';
+    else if (/(amount|outstanding|balance|due|total|fees|price)[^a-z]*$/.test(tail)) key = 'amount_due';
+    else if (/(interest|looking for|plan)[^a-z]*$/.test(tail)) key = 'plan_interest';
+    else if (/(source|channel|via)[^a-z]*$/.test(tail)) key = 'lead_source';
+    else if (/(invoice|receipt|reference|ref)[^a-z]*$/.test(tail)) key = 'invoice_number';
+    else if (/(trainer|coach)[^a-z]*$/.test(tail)) key = 'trainer_name';
+    else if (/(branch|club|studio|centre|center)[^a-z]*$/.test(tail)) key = 'branch_name';
+    else if (/(date|on|expires|expiry|valid till|till|by)[^a-z]*$/.test(tail)) key = 'date';
+    else if (/(time|at)[^a-z]*$/.test(tail)) key = 'time';
+    else if (/(link|url|download)[^a-z]*$/.test(tail)) key = 'document_link';
+    else if (/(name)[^a-z]*$/.test(tail)) key = 'lead_name';
+    else if (/(hi|hello|hey|dear)[^a-z]*$/.test(tail)) key = 'recipient_name';
+    if (key) out[slot] = key;
+  }
+  return out;
+}
+
 function orderedTemplateKeys(content: string, variables: unknown): string[] {
   const configured = Array.isArray(variables)
     ? variables.map((v) => stripBraces(String(v))).filter(Boolean)
@@ -258,9 +300,17 @@ function orderedTemplateKeys(content: string, variables: unknown): string[] {
   // positional (`Hi {{1}}`). Treat configured[n] as the label for {{n+1}}
   // instead of adding BOTH keys — otherwise a one-slot Meta template receives
   // two body params and fails with 132000.
-  if (configured.length > 0 && placeholders.every((key) => /^\d+$/.test(key))) {
+  if (placeholders.length > 0 && placeholders.every((key) => /^\d+$/.test(key))) {
     const maxSlot = placeholders.reduce((max, key) => Math.max(max, Number(key)), 0);
-    if (maxSlot <= configured.length) return configured.slice(0, maxSlot);
+    const semantics = inferSlotSemantics(content);
+    const useConfigured = configured.length >= maxSlot && !configured.every((c) => isGenericLabel(c));
+    const keys: string[] = [];
+    for (let slot = 1; slot <= maxSlot; slot++) {
+      const label = configured[slot - 1];
+      if (useConfigured && label && !isGenericLabel(label)) keys.push(label);
+      else keys.push(semantics[String(slot)] || String(slot));
+    }
+    if (keys.length > 0) return keys;
   }
 
   const keys: string[] = [...configured];
@@ -269,6 +319,7 @@ function orderedTemplateKeys(content: string, variables: unknown): string[] {
   }
   return keys;
 }
+
 
 /** Resolve a value for a template variable key with broad alias support. */
 function resolveVarValue(
