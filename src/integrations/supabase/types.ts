@@ -1869,6 +1869,7 @@ export type Database = {
           freeze_min_days: number | null
           id: string
           late_fee_rate: number | null
+          mips_sync_secret: string | null
           overdue_grace_days: number
           tax_rate: number | null
           updated_at: string
@@ -1888,6 +1889,7 @@ export type Database = {
           freeze_min_days?: number | null
           id?: string
           late_fee_rate?: number | null
+          mips_sync_secret?: string | null
           overdue_grace_days?: number
           tax_rate?: number | null
           updated_at?: string
@@ -1907,6 +1909,7 @@ export type Database = {
           freeze_min_days?: number | null
           id?: string
           late_fee_rate?: number | null
+          mips_sync_secret?: string | null
           overdue_grace_days?: number
           tax_rate?: number | null
           updated_at?: string
