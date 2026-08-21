@@ -402,6 +402,8 @@ function safeFallbackForKey(key: string, index: number): string {
     // For other positional slots, \"—\" is a safer generic placeholder.
     return '—';
   }
+  if (k.includes('interest')) return 'Not specified';
+  if (k.includes('source')) return 'Direct';
   if (k.includes('plan')) return 'your plan';
   if (k.includes('trainer')) return 'your trainer';
   if (k.includes('branch')) return 'our club';
