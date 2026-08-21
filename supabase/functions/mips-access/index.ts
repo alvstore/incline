@@ -634,12 +634,14 @@ Deno.serve(async (req) => {
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
-  const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "HARDCODED_SYNC_SECRET_PLACEHOLDER";
   
+  console.log(`[AUTH-LOG] syncSecret_header=${syncSecret}`);
+
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
     (syncSecret && syncSecret === "HARDCODED_SYNC_SECRET_PLACEHOLDER");
+
 
 
   if (!isService) {
