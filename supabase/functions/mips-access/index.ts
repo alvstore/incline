@@ -116,9 +116,12 @@ type ActionResult = {
   action: "revoke" | "restore";
   error?: string;
   message?: string;
+  verified?: boolean;
+  observed_valid_time_end?: string | null;
   new_valid_time_end?: string;
   mips_person_id?: number;
 };
+
 
 // Core per-member revoke/restore. Used directly by action=revoke/restore
 // and looped over by action=sweep_expired.
