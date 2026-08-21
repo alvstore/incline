@@ -544,6 +544,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
               openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
             {openPunch ? (isMipsPunch ? 'MIPS Active' : 'Manual Clock Out') : 'Manual Clock In'}
           </Button>
+
           
           {isMipsPunch && openPunch && (
             <p className="text-sm text-slate-500 self-center italic">
