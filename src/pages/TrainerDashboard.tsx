@@ -123,6 +123,7 @@ export default function TrainerDashboard() {
             icon={Users}
             description="Assigned to you"
             variant="default"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
           />
           <StatCard
             title="PT Clients"
@@ -130,6 +131,7 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Active packages"
             variant="warning"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
           />
           <StatCard
             title="Today's Sessions"
@@ -137,6 +139,7 @@ export default function TrainerDashboard() {
             icon={Calendar}
             description={`${completedToday} done · ${pendingToday} pending`}
             variant="accent"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
           />
           <StatCard
             title="My Classes"
@@ -144,60 +147,31 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Upcoming"
             variant="success"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
           />
           <Link to="/trainer-earnings" aria-label="View detailed earnings">
             <StatCard
-              title="My Earnings (This Month)"
+              title="My Earnings"
               value={`₹${(monthEarnings?.estimated || 0).toLocaleString()}`}
               icon={Wallet}
-              description={
-                monthEarnings
-                  ? `Base salary + sessions + commissions`
-                  : 'View detailed breakdown'
-              }
+              description="This Month"
               variant="info"
+              className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
             />
           </Link>
         </div>
 
         {/* Quick Actions */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Link to="/my-clients">
-            <Card className="rounded-2xl hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <Users className="h-8 w-8 text-accent" />
-                <span className="font-medium">View My Clients</span>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/pt-sessions">
-            <Card className="rounded-2xl hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <Calendar className="h-8 w-8 text-success" />
-                <span className="font-medium">Manage Sessions</span>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/trainer-plan-builder">
-            <Card className="rounded-2xl hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <Dumbbell className="h-8 w-8 text-warning" />
-                <span className="font-medium">Create Fitness Plan</span>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/trainer-earnings">
-            <Card className="rounded-2xl hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <Wallet className="h-8 w-8 text-info" />
-                <span className="font-medium">My Earnings</span>
-              </CardContent>
-            </Card>
-          </Link>
+          <QuickActionLink to="/my-clients" icon={Users} label="My Clients" tone="indigo" />
+          <QuickActionLink to="/pt-sessions" icon={Calendar} label="Manage Sessions" tone="emerald" />
+          <QuickActionLink to="/trainer-plan-builder" icon={TrendingUp} label="Fitness Plan" tone="amber" />
+          <QuickActionLink to="/member-store" icon={Wallet} label="Member Store" tone="violet" />
         </div>
 
         {/* Mark Today's PT Sessions — works for session-based AND monthly packs */}
         <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />
+
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Today's Sessions */}
