@@ -9,6 +9,7 @@ import { useTrainerData } from '@/hooks/useMemberData';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
   Calendar, Clock, Users, Dumbbell, TrendingUp,
   CheckCircle, AlertCircle, User, Wallet, Sun, Moon, Play, Square, Loader2,
@@ -510,7 +511,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
           {/* Manual punch is disabled if there's an open MIPS check-in (enforce check-out via MIPS or manager override) */}
           <Button
             size="lg"
-            disabled={punch.isPending || (isMipsPunch && openPunch)}
+            disabled={punch.isPending || !!(isMipsPunch && openPunch)}
             onClick={onPunch}
             className={cn(
               "rounded-xl px-8 shadow-md transition-all active:scale-95",
