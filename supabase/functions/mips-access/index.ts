@@ -255,8 +255,17 @@ async function applyMemberAction(
     newValidTimeEnd = REVOKED_DATE;
   }
 
-  const updatedPerson = { ...existing, validTimeEnd: newValidTimeEnd };
-  console.log(`[MIPS-ACCESS] Updating ${personSn} (${existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action})`);
+  const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
+  const updatedPerson = {
+    ...(detail || existing),
+    personId: existing.personId,
+    personSn,
+    validTimeEnd: newValidTimeEnd,
+    expiredType: 0,
+  };
+  console.log(
+    `[MIPS-ACCESS] Updating ${personSn} (${updatedPerson.name || existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action}, full_record=${!!detail})`,
+  );
 
 
   const putRes = await fetch(`${baseUrl}/personInfo/person`, {
@@ -286,13 +295,15 @@ async function applyMemberAction(
   let verified = false;
   let observedValidTimeEnd: string | null = null;
   try {
-    const after = await lookupPerson(baseUrl, token, personSn);
+    const after = (await fetchPersonDetail(baseUrl, token, existing.personId)) ||
+      (await lookupPerson(baseUrl, token, personSn));
     observedValidTimeEnd = after?.validTimeEnd ? String(after.validTimeEnd) : null;
     const norm = (v: string | null) => String(v || "").trim().slice(0, 10);
     verified = norm(observedValidTimeEnd) === norm(newValidTimeEnd);
   } catch (e) {
     console.warn("Read-back verification failed:", e);
   }
+
 
   if (!verified) {
     console.error(
