@@ -254,6 +254,44 @@ async function applyMemberAction(
     console.warn("Device dispatch failed (non-fatal):", e);
   }
 
+  // v2.7.0 — READ-BACK VERIFICATION. MIPS can answer 200 and silently keep the
+  // old validity (e.g. the record is managed under a different person/employee
+  // entry), which is exactly how an overdue member kept turnstile access.
+  // Never report success unless the server actually echoes the new date.
+  let verified = false;
+  let observedValidTimeEnd: string | null = null;
+  try {
+    const after = await lookupPerson(baseUrl, token, personSn);
+    observedValidTimeEnd = after?.validTimeEnd ? String(after.validTimeEnd) : null;
+    const norm = (v: string | null) => String(v || "").trim().slice(0, 10);
+    verified = norm(observedValidTimeEnd) === norm(newValidTimeEnd);
+  } catch (e) {
+    console.warn("Read-back verification failed:", e);
+  }
+
+  if (!verified) {
+    console.error(
+      `[MIPS-ACCESS] MISMATCH for ${personSn}: pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd}`,
+    );
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "mips_access",
+        p_severity: "error",
+        p_message: `MIPS validity mismatch for ${personSn}: pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"}`,
+        p_context: {
+          member_id,
+          person_sn: personSn,
+          action,
+          pushed_valid_time_end: newValidTimeEnd,
+          observed_valid_time_end: observedValidTimeEnd,
+        },
+      });
+    } catch (e) {
+      console.warn("log_error_event failed (non-fatal):", e);
+    }
+  }
+
+
   const newStatus = action === "revoke" ? "revoked" : "active";
   await supabase
     .from("members")
