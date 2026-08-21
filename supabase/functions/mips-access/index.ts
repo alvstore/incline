@@ -559,7 +559,15 @@ async function applyStaffAction(
   }
 
   const newValidTimeEnd = action === "revoke_staff" ? REVOKED_DATE : PERMANENT_END;
-  const updatedPerson = { ...existing, validTimeEnd: newValidTimeEnd };
+  const staffDetail = await fetchPersonDetail(baseUrl, token, existing.personId);
+  const updatedPerson = {
+    ...(staffDetail || existing),
+    personId: existing.personId,
+    personSn,
+    validTimeEnd: newValidTimeEnd,
+    expiredType: 0,
+  };
+
 
   // Use the canonical person endpoint for updates as discovered.
   const putRes = await fetch(`${baseUrl}/personInfo/person`, {
