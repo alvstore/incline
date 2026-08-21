@@ -1,3 +1,6 @@
+// v2.7.0 — read-back verification: after PUT /personInfo/person we re-read the
+//          person and only report success when the server echoes the pushed
+//          validTimeEnd. Mismatches are logged via log_error_event.
 // v2.6.1 — credential-scoped token cache prevents stale/cross-branch sessions.
 // v2.6.2 — sweep now includes overdue/pending invoice revokes with strict grace period.
 // v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
@@ -116,9 +119,12 @@ type ActionResult = {
   action: "revoke" | "restore";
   error?: string;
   message?: string;
+  verified?: boolean;
+  observed_valid_time_end?: string | null;
   new_valid_time_end?: string;
   mips_person_id?: number;
 };
+
 
 // Core per-member revoke/restore. Used directly by action=revoke/restore
 // and looped over by action=sweep_expired.
@@ -254,6 +260,44 @@ async function applyMemberAction(
     console.warn("Device dispatch failed (non-fatal):", e);
   }
 
+  // v2.7.0 — READ-BACK VERIFICATION. MIPS can answer 200 and silently keep the
+  // old validity (e.g. the record is managed under a different person/employee
+  // entry), which is exactly how an overdue member kept turnstile access.
+  // Never report success unless the server actually echoes the new date.
+  let verified = false;
+  let observedValidTimeEnd: string | null = null;
+  try {
+    const after = await lookupPerson(baseUrl, token, personSn);
+    observedValidTimeEnd = after?.validTimeEnd ? String(after.validTimeEnd) : null;
+    const norm = (v: string | null) => String(v || "").trim().slice(0, 10);
+    verified = norm(observedValidTimeEnd) === norm(newValidTimeEnd);
+  } catch (e) {
+    console.warn("Read-back verification failed:", e);
+  }
+
+  if (!verified) {
+    console.error(
+      `[MIPS-ACCESS] MISMATCH for ${personSn}: pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd}`,
+    );
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "mips_access",
+        p_severity: "error",
+        p_message: `MIPS validity mismatch for ${personSn}: pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"}`,
+        p_context: {
+          member_id,
+          person_sn: personSn,
+          action,
+          pushed_valid_time_end: newValidTimeEnd,
+          observed_valid_time_end: observedValidTimeEnd,
+        },
+      });
+    } catch (e) {
+      console.warn("log_error_event failed (non-fatal):", e);
+    }
+  }
+
+
   const newStatus = action === "revoke" ? "revoked" : "active";
   await supabase
     .from("members")
@@ -267,18 +311,27 @@ async function applyMemberAction(
     device_sn: "CRM-SYSTEM",
     event_type: `hardware_${action}`,
     result: action === "revoke" ? "member_denied" : "member",
-    message: `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}`,
+    message: `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}` +
+      (verified ? " (verified)" : ` (UNVERIFIED — server reports ${observedValidTimeEnd ?? "unknown"})`),
     member_id: member_id,
     branch_id: effectiveBranchId,
   });
 
   return {
-    success: true,
+    success: verified,
     action,
+    verified,
+    observed_valid_time_end: observedValidTimeEnd,
     new_valid_time_end: newValidTimeEnd,
     mips_person_id: existing.personId,
-    message: `Hardware access ${action}d successfully`,
+    error: verified
+      ? undefined
+      : `MIPS did not apply validTimeEnd (pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"})`,
+    message: verified
+      ? `Hardware access ${action}d successfully`
+      : `Hardware access ${action} pushed but NOT confirmed by MIPS`,
   };
+
 }
 
 async function sweepExpired(supabase: any) {
