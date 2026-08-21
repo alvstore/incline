@@ -358,11 +358,22 @@ async function sweepExpired(supabase: any) {
     }
   };
 
-  // 1. Active hardware but no active membership
+  // Statuses that must NOT have live hardware validity. We re-push for every one
+  // of them (not just "active"), because a member flipped to blocked_overdue in the
+  // CRM whose MIPS push silently failed would otherwise never be retried.
+  const NEEDS_REVOKE_STATUSES = [
+    "active",
+    "blocked_overdue",
+    "blocked_member_status",
+    "frozen",
+    "expired",
+  ];
+
+  // 1. Hardware validity present but no active membership
   const { data: activeHardwareMembers, error: queryError } = await supabase
     .from("members")
-    .select("id, member_code, mips_person_sn, mips_person_id, branch_id")
-    .eq("hardware_access_status", "active")
+    .select("id, member_code, mips_person_sn, mips_person_id, branch_id, hardware_access_status")
+    .in("hardware_access_status", NEEDS_REVOKE_STATUSES)
     .not("mips_person_sn", "is", null);
   if (queryError) throw queryError;
 
@@ -380,12 +391,12 @@ async function sweepExpired(supabase: any) {
     }
   }
 
-  // 2. Frozen memberships with active hardware
+  // 2. Frozen memberships with hardware validity
   const { data: frozenMembers } = await supabase
     .from("memberships")
     .select("member_id, members!inner(id, member_code, hardware_access_status, mips_person_sn, branch_id)")
     .eq("status", "frozen")
-    .eq("members.hardware_access_status", "active");
+    .in("members.hardware_access_status", NEEDS_REVOKE_STATUSES);
   for (const ms of frozenMembers || []) {
     const m = (ms as any).members;
     if (!m?.mips_person_sn) continue;
@@ -394,14 +405,15 @@ async function sweepExpired(supabase: any) {
   }
 
   // 3. Overdue dues (payment due date passed + branch grace period)
-  // Also check for any members with "pending" or "overdue" invoices that should be revoked.
   const { data: duesBlocked, error: duesError } = await supabase.rpc("members_blocked_for_dues");
   if (duesError) {
     errors.push(`dues_check: ${duesError.message}`);
   }
   for (const row of duesBlocked || []) {
     if (!row.mips_person_sn) continue;
-    if (row.hardware_access_status !== "active") continue;
+    // Re-push for every non-"none" status. Skipping non-active members is the bug
+    // that let already-flagged overdue members keep their MIPS validity window.
+    if (row.hardware_access_status === "none") continue;
     if (revoked.includes(row.member_code || row.member_id)) continue;
     await safeRevoke(
       { id: row.member_id, member_code: row.member_code, branch_id: row.branch_id },
@@ -409,6 +421,7 @@ async function sweepExpired(supabase: any) {
       "dues",
     );
   }
+
 
   // 4. Restore: dues cleared and membership still live
   const { data: restorable, error: restoreError } = await supabase.rpc("members_restorable_after_dues");
