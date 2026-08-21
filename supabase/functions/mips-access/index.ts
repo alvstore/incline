@@ -637,12 +637,13 @@ Deno.serve(async (req) => {
   
   // We explicitly log for ONE turn to see what we are comparing
   const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "HARDCODED_SYNC_SECRET_PLACEHOLDER";
-  console.log(`[AUTH-LOG] provided=${syncSecret}, expected=${ENV_SYNC_SECRET}`);
+  console.log(`[AUTH-LOG] provided=${syncSecret}, expected=${ENV_SYNC_SECRET}, env_exists=${!!Deno.env.get("HARDWARE_SYNC_SECRET")}`);
 
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
     (syncSecret && syncSecret === ENV_SYNC_SECRET);
+
 
 
 
