@@ -298,14 +298,19 @@ async function applyMemberAction(
   }
 
 
+  // Only mark the member as fully revoked when MIPS actually confirmed the new
+  // validity. An unverified push keeps the previous status so the sweep retries.
   const newStatus = action === "revoke" ? "revoked" : "active";
-  await supabase
-    .from("members")
-    .update({
-      hardware_access_status: newStatus,
-      hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
-    })
-    .eq("id", member_id);
+  if (verified) {
+    await supabase
+      .from("members")
+      .update({
+        hardware_access_status: newStatus,
+        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
+      })
+      .eq("id", member_id);
+  }
+
 
   await supabase.from("access_logs").insert({
     device_sn: "CRM-SYSTEM",
