@@ -339,7 +339,16 @@ async function applyMemberAction(
         hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
       })
       .eq("id", member_id);
+
+    // v2.10.0 — the hardware now matches the CRM, so stop the sweep from
+    // re-processing this member forever.
+    await supabase
+      .from("hardware_access_events")
+      .update({ requires_sync: false })
+      .eq("member_id", member_id)
+      .eq("requires_sync", true);
   }
+
 
 
   await supabase.from("access_logs").insert({
