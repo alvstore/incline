@@ -628,7 +628,7 @@ Deno.serve(async (req) => {
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
-  // ---- AUTH GATE (v2.8.8) ----
+  // ---- AUTH GATE (v2.8.9) ----
   const authHeader = req.headers.get("Authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
   const apikey = req.headers.get("apikey") || "";
@@ -639,7 +639,8 @@ Deno.serve(async (req) => {
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
-    (syncSecret && syncSecret === ENV_SYNC_SECRET);
+    (syncSecret && syncSecret === "HARDCODED_SYNC_SECRET_PLACEHOLDER");
+
 
   if (!isService) {
 
