@@ -35,6 +35,8 @@ export default function MemberStore() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { actor, member, activeMembership, isLoading: actorLoading } = useUnifiedActor();
+  const actorName = (actor as any)?.full_name || (actor as any)?.profiles?.full_name || 'Member';
+
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -66,7 +68,7 @@ export default function MemberStore() {
 
   // Fetch products
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['store-products', actor?.branch_id],
+    queryKey: ['store-products', actor?.branch_id, (actor as any)?.role],
     enabled: !!actor,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -84,6 +86,7 @@ export default function MemberStore() {
         ...product,
         inventory: product.inventory?.filter((inv: any) => inv.branch_id === actor!.branch_id) || []
       }));
+
 
     },
   });
@@ -501,7 +504,7 @@ export default function MemberStore() {
         {/* Recovery & add-ons */}
         <AddOnShowcase
           memberId={actor.id}
-          memberName={(actor as any).profiles?.full_name || (actor as any).full_name}
+          memberName={actorName}
           membershipId={activeMembership?.id ?? null}
           branchId={actor.branch_id}
         />

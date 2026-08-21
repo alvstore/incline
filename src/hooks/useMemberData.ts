@@ -235,11 +235,12 @@ export function useUnifiedActor() {
   const { member, isLoading: memberLoading, activeMembership, daysRemaining } = useMemberData();
   const { trainer, isLoading: trainerLoading } = useTrainerData();
 
-  const actor = member || trainer;
+  const actor = member || (trainer ? { ...trainer, role: 'trainer' } : null);
   // Deep audit: Use trainer's branch_id if member profile is missing
   if (actor && !actor.branch_id && trainer?.branch_id) {
-    actor.branch_id = trainer.branch_id;
+    (actor as any).branch_id = trainer.branch_id;
   }
+
 
   const isLoading = memberLoading || trainerLoading;
 
