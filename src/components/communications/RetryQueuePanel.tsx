@@ -134,15 +134,16 @@ export function RetryQueuePanel() {
 
   const clearExhausted = useMutation({
     mutationFn: async () => {
-      // Bulk-delete EVERY exhausted row in DB (fixes the "keeps coming back after clearing 100" loop).
+      // Bulk-delete every dead row in DB (exhausted + already-cancelled).
       const { data, error } = await supabase
         .from('communication_retry_queue')
         .delete()
-        .eq('status', 'exhausted')
+        .in('status', ['exhausted', 'cancelled'])
         .select('id');
       if (error) throw error;
       return (data ?? []).length;
     },
+
     onSuccess: (n) => {
       if (n === 0) toast.info('Nothing to clear');
       else toast.success(`Cleared ${n} exhausted message${n === 1 ? '' : 's'}`);
