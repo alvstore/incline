@@ -6,7 +6,7 @@ const Index = () => {
       <div className="text-center">
         <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
         <p className="text-xl text-muted-foreground">
-          {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            https://theincline.in/pt-sessions\n2 My shift this week this is not looking good. please audit and enhance ui/ux.\n\n3.IPS Integrated\n\nReal-time turnstile synchronisation active\n\nBranch Status\n\nOnline\n\nMIPS Hardware\n\nActive why we are showing this. \nManual Clock In - not required.  handled by MIPS checking will handle by mips only checkout button if trainer has been passed through turnstile.`}
+          {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            please scan attached image for template issue and message is incomplete. \n\nHi —, a new lead has been generated. Name: —, Interest: —, Source: —. Please reach out to them at the earliest to schedule a tour.\n\n\nwhy there are \"-\" instead of variables.`}
         </p>
       </div>
     </div>
