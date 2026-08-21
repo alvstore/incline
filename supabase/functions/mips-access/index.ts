@@ -305,18 +305,27 @@ async function applyMemberAction(
     device_sn: "CRM-SYSTEM",
     event_type: `hardware_${action}`,
     result: action === "revoke" ? "member_denied" : "member",
-    message: `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}`,
+    message: `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}` +
+      (verified ? " (verified)" : ` (UNVERIFIED — server reports ${observedValidTimeEnd ?? "unknown"})`),
     member_id: member_id,
     branch_id: effectiveBranchId,
   });
 
   return {
-    success: true,
+    success: verified,
     action,
+    verified,
+    observed_valid_time_end: observedValidTimeEnd,
     new_valid_time_end: newValidTimeEnd,
     mips_person_id: existing.personId,
-    message: `Hardware access ${action}d successfully`,
+    error: verified
+      ? undefined
+      : `MIPS did not apply validTimeEnd (pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"})`,
+    message: verified
+      ? `Hardware access ${action}d successfully`
+      : `Hardware access ${action} pushed but NOT confirmed by MIPS`,
   };
+
 }
 
 async function sweepExpired(supabase: any) {
