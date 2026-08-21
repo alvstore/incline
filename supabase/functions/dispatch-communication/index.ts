@@ -1,4 +1,10 @@
-// dispatch-communication v1.29.1 — fix positional var mapping; strip duplicate ₹.
+// dispatch-communication v1.30.0 — semantic positional slot resolution.
+// v1.30.0: FIX — templates whose `variables` column stores generic labels
+//          ("variable_1".."variable_4") produced an all-dashes body ("Hi —,
+//          Name: —, Interest: —"). Generic labels are now treated as UNLABELLED
+//          and each positional {{n}} slot derives a semantic key from the words
+//          preceding it in the template body (Hi/Name:/Interest:/Source:/₹…),
+//          so the payload's named vars (lead_name, plan_interest, …) resolve.
 // v1.29.1: FIX — Meta positional slots {{n}} are now correctly resolved from
 //          available values. Previously, numeric keys ({{1}}, {{2}}...) were
 //          preferring name-like fields even for non-name slots, leading to
