@@ -1859,7 +1859,7 @@ export type Database = {
           advance_booking_days: number | null
           auto_attendance_checkout: boolean | null
           block_access_on_overdue: boolean
-          branch_id: string
+          branch_id: string | null
           cancellation_fee_rate: number | null
           checkout_after_hours: number | null
           created_at: string
@@ -1879,7 +1879,7 @@ export type Database = {
           advance_booking_days?: number | null
           auto_attendance_checkout?: boolean | null
           block_access_on_overdue?: boolean
-          branch_id: string
+          branch_id?: string | null
           cancellation_fee_rate?: number | null
           checkout_after_hours?: number | null
           created_at?: string
@@ -1899,7 +1899,7 @@ export type Database = {
           advance_booking_days?: number | null
           auto_attendance_checkout?: boolean | null
           block_access_on_overdue?: boolean
-          branch_id?: string
+          branch_id?: string | null
           cancellation_fee_rate?: number | null
           checkout_after_hours?: number | null
           created_at?: string
