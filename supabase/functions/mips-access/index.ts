@@ -1,4 +1,7 @@
+// v2.10.0 — restore path: targeted per-member restore from the access trigger,
+//          and requires_sync flags are cleared once the hardware confirms.
 // v2.7.0 — read-back verification: after PUT /personInfo/person we re-read the
+
 //          person and only report success when the server echoes the pushed
 //          validTimeEnd. Mismatches are logged via log_error_event.
 // v2.6.1 — credential-scoped token cache prevents stale/cross-branch sessions.
