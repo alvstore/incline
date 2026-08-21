@@ -66,7 +66,7 @@ export default function MemberStore() {
 
   // Fetch products
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['store-products', actor?.branch_id, actor?.role],
+    queryKey: ['store-products', actor?.branch_id],
     enabled: !!actor,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -82,8 +82,9 @@ export default function MemberStore() {
       
       return (data || []).map(product => ({
         ...product,
-        inventory: product.inventory?.filter((inv: any) => inv.branch_id === actor!.branch_id || !inv.branch_id) || []
+        inventory: product.inventory?.filter((inv: any) => inv.branch_id === actor!.branch_id) || []
       }));
+
 
     },
   });
