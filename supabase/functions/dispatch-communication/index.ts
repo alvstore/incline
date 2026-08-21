@@ -337,7 +337,12 @@ function resolveVarValue(
   ];
   // Common aliases
   const k = key.toLowerCase();
-  if (k.includes('member') || k === 'name' || k.includes('lead_name')) tryKeys.push('member_name', 'name', 'full_name', 'lead_name');
+  // v1.30.0: recipient/greeting slot — internal alerts address staff, member
+  // journeys address the member. Prefer the most specific key available.
+  if (k === 'recipient_name' || k === 'recipient') tryKeys.push('recipient_name', 'staff_name', 'first_name', 'member_name', 'name', 'full_name', 'contact_name', 'lead_name');
+  if (k.includes('staff')) tryKeys.push('staff_name', 'assignee_name', 'recipient_name');
+  if (k.includes('lead_name')) tryKeys.push('lead_name', 'full_name', 'contact_name', 'name', 'member_name');
+  if (k.includes('member') || k === 'name' || k === 'first_name' || k === 'full_name') tryKeys.push('member_name', 'name', 'full_name', 'first_name', 'lead_name', 'contact_name');
   if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name', 'plan');
   if (k.includes('trainer')) tryKeys.push('trainer_name');
   if (k.includes('interest')) tryKeys.push('interest', 'plan_interest', 'interest_name');
