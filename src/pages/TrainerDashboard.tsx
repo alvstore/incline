@@ -312,9 +312,29 @@ export default function TrainerDashboard() {
   );
 }
 
-// ===========================================================================
-// Duty Status widget — inline
-// ===========================================================================
+function QuickActionLink({ to, icon: Icon, label, tone }: { to: string; icon: any; label: string; tone: string }) {
+  const tones: Record<string, string> = {
+    indigo: 'text-indigo-600 bg-indigo-50',
+    emerald: 'text-emerald-600 bg-emerald-50',
+    amber: 'text-amber-600 bg-amber-50',
+    violet: 'text-violet-600 bg-violet-50',
+  };
+
+  return (
+    <Link to={to} className="group">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden h-full">
+        <CardContent className="flex flex-col items-center justify-center py-8 gap-3">
+          <div className={cn("p-4 rounded-2xl transition-transform group-hover:scale-110 duration-300", tones[tone])}>
+            <Icon className="h-8 w-8" />
+          </div>
+          <span className="font-bold text-slate-700">{label}</span>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+
 
 type ShiftBlock = { kind: 'morning' | 'evening' | 'night'; start: string; end: string };
 
