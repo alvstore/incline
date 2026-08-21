@@ -1,4 +1,7 @@
+// v2.10.0 — restore path: targeted per-member restore from the access trigger,
+//          and requires_sync flags are cleared once the hardware confirms.
 // v2.7.0 — read-back verification: after PUT /personInfo/person we re-read the
+
 //          person and only report success when the server echoes the pushed
 //          validTimeEnd. Mismatches are logged via log_error_event.
 // v2.6.1 — credential-scoped token cache prevents stale/cross-branch sessions.
@@ -339,7 +342,16 @@ async function applyMemberAction(
         hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
       })
       .eq("id", member_id);
+
+    // v2.10.0 — the hardware now matches the CRM, so stop the sweep from
+    // re-processing this member forever.
+    await supabase
+      .from("hardware_access_events")
+      .update({ requires_sync: false })
+      .eq("member_id", member_id)
+      .eq("requires_sync", true);
   }
+
 
 
   await supabase.from("access_logs").insert({

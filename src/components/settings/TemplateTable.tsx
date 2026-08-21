@@ -160,14 +160,8 @@ export function TemplateTable({
             </div>
           )}
         </div>
-        
-        {templates.length > 0 && (
-          <Button onClick={onCreate} size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200 shrink-0">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Template
-          </Button>
-        )}
       </div>
+
 
       {rows.length === 0 ? (
         <div className="py-12 text-center rounded-2xl bg-muted/30">
