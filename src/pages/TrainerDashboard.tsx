@@ -191,7 +191,7 @@ export default function TrainerDashboard() {
         {/* Quick Actions */}
         <div className="grid gap-4 md:grid-cols-4">
           <QuickActionLink to="/my-clients" icon={Users} label="My Clients" tone="indigo" />
-          <QuickActionLink to="/pt-sessions" icon={Calendar} label="Manage Sessions" tone="emerald" />
+          <QuickActionLink to="/pt-sessions" icon={Calendar} label="https://theincline.in/pt-sessions" tone="emerald" />
           <QuickActionLink to="/trainer-plan-builder" icon={TrendingUp} label="Fitness Plan" tone="amber" />
           <QuickActionLink to="/member-store" icon={Wallet} label="Member Store" tone="violet" />
         </div>
