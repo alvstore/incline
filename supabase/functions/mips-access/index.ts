@@ -629,20 +629,19 @@ Deno.serve(async (req) => {
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
-  // ---- AUTH GATE (v2.8.2) ----
+  // ---- AUTH GATE (v2.8.3) ----
   const authHeader = req.headers.get("Authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
-  const SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "fallback_sync_secret";
-
-  console.log(`[AUTH-DEBUG] bearer_len=${bearer.length}, apikey_len=${apikey.length}, sysCall=${sysCall}, syncSecret=${syncSecret}, SYNC_SECRET_SET=${!!Deno.env.get("HARDWARE_SYNC_SECRET")}`);
+  const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "fallback_sync_secret";
 
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
-    (syncSecret && syncSecret === SYNC_SECRET);
+    (syncSecret && syncSecret === ENV_SYNC_SECRET);
+
 
 
 
