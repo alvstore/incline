@@ -635,6 +635,7 @@ Deno.serve(async (req) => {
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
+  const SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "fallback_sync_secret";
 
   console.log(`[AUTH] bearer_match=${bearer === SERVICE_KEY}, apikey_match=${apikey === SERVICE_KEY}, sysCall=${sysCall}, syncSecret_match=${syncSecret === SYNC_SECRET}`);
 
@@ -642,6 +643,7 @@ Deno.serve(async (req) => {
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
     (syncSecret && syncSecret === SYNC_SECRET);
+
 
 
   if (!isService) {
