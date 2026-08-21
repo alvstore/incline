@@ -75,6 +75,25 @@ async function lookupPerson(baseUrl: string, token: string, personSn: string): P
   return rows.find((r: any) => r.personSn === personSn) || null;
 }
 
+// v2.8.0 — /personInfo/person/list returns a TRIMMED projection (no `name`,
+// `deptId`, `validTimeBegin`...). PUT-ing that partial row back is accepted with
+// code 200 but MIPS silently discards the validity change — this is the bug that
+// let overdue members keep turnstile access. Always PUT the FULL detail record.
+async function fetchPersonDetail(baseUrl: string, token: string, personId: number): Promise<any | null> {
+  try {
+    const res = await fetch(`${baseUrl}/personInfo/person/${personId}`, {
+      method: "GET",
+      headers: authHeaders(token),
+    });
+    const json = await res.json();
+    return json?.data || null;
+  } catch (e) {
+    console.warn("fetchPersonDetail failed:", e);
+    return null;
+  }
+}
+
+
 async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string) {
   let deviceIds: number[] = [];
   try {
