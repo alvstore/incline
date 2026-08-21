@@ -629,24 +629,21 @@ Deno.serve(async (req) => {
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
-  // ---- AUTH GATE (v2.8.3) ----
+  // ---- AUTH GATE (v2.8.4) ----
   const authHeader = req.headers.get("Authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
-  const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "fallback_sync_secret";
+  const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "HARDCODED_SYNC_SECRET_PLACEHOLDER";
 
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
     (syncSecret && syncSecret === ENV_SYNC_SECRET);
 
-
-
-
-
   if (!isService) {
+
     if (!bearer) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
