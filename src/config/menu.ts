@@ -83,7 +83,7 @@ export const trainerMenuConfig: MenuSection[] = [
   {
     title: 'Services',
     items: [
-      { label: 'Store', href: '/member-store', icon: ShoppingBag, roles: ['trainer'] },
+      { label: 'Member Store', href: '/member-store', icon: ShoppingBag, roles: ['trainer'] },
       { label: 'My Earnings', href: '/trainer-earnings', icon: Wallet, roles: ['trainer'] },
     ],
   },
