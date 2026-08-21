@@ -338,7 +338,7 @@ export default function TrainerDashboard() {
 }
 
 // ===========================================================================
-// Duty Status widget — inline (no new files per spec)
+// Duty Status widget — inline
 // ===========================================================================
 
 type ShiftBlock = { kind: 'morning' | 'evening' | 'night'; start: string; end: string };
@@ -361,14 +361,11 @@ function pickCurrentBlock(shift: any): ShiftBlock['kind'] {
   const es = timeToMin(shift?.evening_start);
   const ee = timeToMin(shift?.evening_end);
 
-  // Overnight morning block (e.g. 21:00 → 06:00)
   if (ms != null && me != null && me < ms) {
     if (now >= ms || now <= me + 60) return 'night';
   }
-  // Within ±120 min of morning
   if (ms != null && me != null && now >= ms - 120 && now <= me + 60) return 'morning';
   if (es != null && ee != null && now >= es - 120 && now <= ee + 60) return 'evening';
-  // Default: closer of the two
   if (ms != null && es != null) {
     return Math.abs(now - ms) < Math.abs(now - es) ? 'morning' : 'evening';
   }
@@ -406,7 +403,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
       const end = new Date(); end.setHours(23, 59, 59, 999);
       const { data, error } = await supabase
         .from('staff_attendance')
-        .select('id, check_in, check_out, shift_type, total_hours')
+        .select('id, check_in, check_out, shift_type, total_hours, source')
         .eq('user_id', userId)
         .gte('check_in', start.toISOString())
         .lte('check_in', end.toISOString())
@@ -438,8 +435,8 @@ function DutyStatusCard({ userId }: { userId: string }) {
 
   if (shiftLoading || punchLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow/50">
-        <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+        <CardContent className="py-6 flex items-center gap-3 text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading duty status…
         </CardContent>
       </Card>
@@ -461,18 +458,18 @@ function DutyStatusCard({ userId }: { userId: string }) {
     ? Math.max(0, Math.round((Date.now() - new Date(openPunch.check_in).getTime()) / 60000))
     : 0;
 
-  // Subtle re-render on tick
-  void tick;
+  // Check if current punch is from MIPS
+  const isMipsPunch = openPunch?.source === 'mips';
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow/50 overflow-hidden">
-      <div className="bg-gradient-to-r from-primary to-primary px-6 py-4 text-primary-foreground">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 overflow-hidden">
+      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-wider opacity-80">Duty Status</p>
-            <h3 className="text-lg font-semibold">
-              {isOff ? "Today is your weekly off" :
-                openPunch ? `On duty · ${labelFor(openPunch.shift_type)} shift` : 'Off duty'}
+            <p className="text-xs uppercase tracking-wider opacity-80 font-semibold">Duty Status</p>
+            <h3 className="text-lg font-bold">
+              {isOff ? "Weekly Off" :
+                openPunch ? `On Duty · ${labelFor(openPunch.shift_type)}` : 'Off Duty'}
             </h3>
           </div>
           <Clock className="h-6 w-6 opacity-80" />
@@ -484,56 +481,58 @@ function DutyStatusCard({ userId }: { userId: string }) {
             label="Morning"
             icon={Sun}
             tone="emerald"
-            text={isOff ? 'Off' : hasMorning ? `${fmt(shift?.morning_start)} → ${fmt(shift?.morning_end)}${overnight ? ' (overnight)' : ''}` : 'Not scheduled'}
+            text={isOff ? 'Off' : hasMorning ? `${fmt(shift?.morning_start)} → ${fmt(shift?.morning_end)}` : 'No shift'}
           />
           <BlockPill
             label="Evening"
             icon={Moon}
             tone="indigo"
-            text={isOff ? 'Off' : hasEvening ? `${fmt(shift?.evening_start)} → ${fmt(shift?.evening_end)}` : 'Not scheduled'}
+            text={isOff ? 'Off' : hasEvening ? `${fmt(shift?.evening_start)} → ${fmt(shift?.evening_end)}` : 'No shift'}
           />
         </div>
 
         {openPunch && (
-          <div className="rounded-xl bg-success/10 text-success px-4 py-2.5 text-sm flex items-center justify-between">
-            <span>
-              Clocked in at <strong>{format(new Date(openPunch.check_in), 'HH:mm')}</strong>
-              {' · '}{Math.floor(elapsedMin / 60)}h {elapsedMin % 60}m elapsed
+          <div className="rounded-xl bg-emerald-50 text-emerald-700 px-4 py-3 text-sm flex items-center justify-between border border-emerald-100">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>
+                Clocked in at <strong>{format(new Date(openPunch.check_in), 'HH:mm')}</strong>
+                {isMipsPunch && <Badge variant="outline" className="ml-2 text-[10px] py-0 border-emerald-200 text-emerald-600 bg-white">MIPS</Badge>}
+              </span>
+            </div>
+            <span className="font-bold tabular-nums">
+              {Math.floor(elapsedMin / 60)}h {elapsedMin % 60}m
             </span>
           </div>
         )}
 
-        {(punches || []).filter((p: any) => p.check_out).length > 0 && (
-          <div className="text-xs text-muted-foreground">
-            Today's completed punches:{' '}
-            {(punches || []).filter((p: any) => p.check_out).map((p: any) => (
-              <span key={p.id} className="mr-2">
-                {labelFor(p.shift_type)} ({Number(p.total_hours || 0).toFixed(2)}h)
-              </span>
-            ))}
-          </div>
-        )}
-
         <div className="flex flex-wrap gap-3 pt-1">
-          {/* Synchronized with MIPS: only manual override button shown for edge cases */}
+          {/* Manual punch is disabled if there's an open MIPS check-in (enforce check-out via MIPS or manager override) */}
           <Button
             size="lg"
-            disabled={punch.isPending}
+            disabled={punch.isPending || (isMipsPunch && openPunch)}
             onClick={onPunch}
-            className={openPunch
-              ? 'bg-destructive hover:bg-destructive text-primary-foreground'
-              : 'bg-gradient-to-r from-primary to-primary hover:opacity-90 text-primary-foreground'}
+            className={cn(
+              "rounded-xl px-8 shadow-md transition-all active:scale-95",
+              openPunch
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+            )}
           >
             {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
               openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
-            {openPunch ? `Manual Clock Out` : `Manual Clock In`}
+            {openPunch ? (isMipsPunch ? 'MIPS Active' : 'Manual Clock Out') : 'Manual Clock In'}
           </Button>
-          {isOff && !openPunch && (
-            <p className="text-sm text-muted-foreground self-center">Enjoy your rest day — no shift scheduled.</p>
+          
+          {isMipsPunch && openPunch && (
+            <p className="text-sm text-slate-500 self-center italic">
+              Check-out via MIPS turnstile
+            </p>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          Attendance is primary synchronized via Biometric MIPS. Use manual punch only if the turnstile is unreachable.
+        
+        <p className="text-[10px] text-slate-400">
+          Attendance is primarily synchronized via Biometric MIPS. Use manual punch only if the turnstile is unreachable or for special shift overrides.
         </p>
       </CardContent>
     </Card>
@@ -548,15 +547,16 @@ function BlockPill({
   label, icon: Icon, tone, text,
 }: { label: string; icon: any; tone: 'emerald' | 'indigo'; text: string }) {
   const cls = tone === 'emerald'
-    ? 'bg-success/10 text-success border-success/15'
-    : 'bg-primary/10 text-primary border-primary/15';
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    : 'bg-indigo-50 text-indigo-700 border-indigo-100';
   return (
-    <div className={`rounded-xl border p-3 ${cls}`}>
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-80">
-        <Icon className="h-3.5 w-3.5" /> {label}
+    <div className={cn("rounded-xl border p-3 flex flex-col gap-1 shadow-sm", cls)}>
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider opacity-70">
+        <Icon className="h-3 w-3" /> {label}
       </div>
-      <div className="text-sm font-medium mt-1">{text}</div>
+      <div className="text-sm font-bold tracking-tight">{text}</div>
     </div>
   );
 }
+
 
