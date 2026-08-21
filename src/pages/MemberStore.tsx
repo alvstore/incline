@@ -66,7 +66,7 @@ export default function MemberStore() {
 
   // Fetch products
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['store-products', actor?.branch_id],
+    queryKey: ['store-products', actor?.branch_id, (actor as any)?.role],
     enabled: !!actor,
     queryFn: async () => {
       const { data, error } = await supabase
