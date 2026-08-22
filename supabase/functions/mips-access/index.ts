@@ -648,10 +648,22 @@ Deno.serve(async (req) => {
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
   const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "HARDCODED_SYNC_SECRET_PLACEHOLDER";
 
-  const isService =
+  let isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
     (syncSecret && syncSecret === ENV_SYNC_SECRET);
+
+  // v2.10.0 — DB-backed secret: the access trigger signs its call with
+  // branch_settings.mips_sync_secret, which can legitimately differ from the
+  // edge-function env secret. Accept either.
+  if (!isService && syncSecret) {
+    const { data: secretRows } = await supabase
+      .from("branch_settings")
+      .select("mips_sync_secret")
+      .not("mips_sync_secret", "is", null);
+    isService = (secretRows || []).some((r: any) => r.mips_sync_secret === syncSecret);
+  }
+
 
 
 
