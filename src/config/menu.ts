@@ -73,7 +73,7 @@ export const trainerMenuConfig: MenuSection[] = [
     title: 'Training',
     items: [
       { label: 'My Clients', href: '/my-clients', icon: Users, roles: ['trainer'] },
-      { label: 'PT Packages', href: '/pt-sessions', icon: Dumbbell, roles: ['trainer'] },
+
       
       { label: 'Schedule Session', href: '/schedule-session', icon: Calendar, roles: ['trainer'] },
       { label: 'My Classes', href: '/classes', icon: Calendar, roles: ['trainer'] },
@@ -98,7 +98,7 @@ export const trainerMenuConfig: MenuSection[] = [
   {
     title: 'Account',
     items: [
-      { label: 'Preferences', href: '/settings?tab=appearance', icon: Settings, roles: ['trainer'] },
+      { label: 'Preferences', href: '/trainer-preferences', icon: Settings, roles: ['trainer'] },
     ],
   },
 ];

@@ -104,6 +104,8 @@ const MemberReferrals = lazy(() => import("./pages/MemberReferrals"));
 const TrainerDashboard = lazy(() => import("./pages/TrainerDashboard"));
 const MyClients = lazy(() => import("./pages/MyClients"));
 const TrainerEarnings = lazy(() => import("./pages/TrainerEarnings"));
+const TrainerPreferences = lazy(() => import("./pages/TrainerPreferences"));
+
 const ScheduleSession = lazy(() => import("./pages/ScheduleSession"));
 const MealCatalogPage = lazy(() => import("./pages/MealCatalog"));
 
@@ -221,7 +223,7 @@ function RoutedContent() {
           <Route path="/my-referrals" element={<ProtectedRoute requiredRoles={['member']}><MemberReferrals /></ProtectedRoute>} />
           <Route path="/my-invoices" element={<ProtectedRoute requiredRoles={['member']}><MyInvoices /></ProtectedRoute>} />
           <Route path="/my-requests" element={<ProtectedRoute requiredRoles={['member']}><MemberRequests /></ProtectedRoute>} />
-          <Route path="/member-store" element={<ProtectedRoute requiredRoles={['member']}><MemberStore /></ProtectedRoute>} />
+          <Route path="/member-store" element={<ProtectedRoute requiredRoles={['member', 'trainer']}><MemberStore /></ProtectedRoute>} />
           <Route path="/member-announcements" element={<ProtectedRoute requiredRoles={['member', 'trainer']}><MemberAnnouncements /></ProtectedRoute>} />
           <Route path="/member-feedback" element={<ProtectedRoute requiredRoles={['member']}><MemberFeedback /></ProtectedRoute>} />
           <Route path="/my-workout" element={<ProtectedRoute requiredRoles={['member']}><MyWorkout /></ProtectedRoute>} />
@@ -234,7 +236,9 @@ function RoutedContent() {
           <Route path="/trainer-dashboard" element={<ProtectedRoute requiredRoles={['trainer']}><TrainerDashboard /></ProtectedRoute>} />
           <Route path="/my-clients" element={<ProtectedRoute requiredRoles={['trainer']}><MyClients /></ProtectedRoute>} />
           <Route path="/trainer-earnings" element={<ProtectedRoute requiredRoles={['trainer']}><TrainerEarnings /></ProtectedRoute>} />
+          <Route path="/trainer-preferences" element={<ProtectedRoute requiredRoles={['trainer']}><TrainerPreferences /></ProtectedRoute>} />
           <Route path="/schedule-session" element={<ProtectedRoute requiredRoles={['trainer']}><ScheduleSession /></ProtectedRoute>} />
+
 
           {/* ==================== STAFF ROUTES ==================== */}
           <Route path="/staff-dashboard" element={<ProtectedRoute requiredRoles={['staff']}><StaffDashboard /></ProtectedRoute>} />
@@ -250,7 +254,9 @@ function RoutedContent() {
           <Route path="/invoices" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><InvoicesPage /></ProtectedRoute>} />
           <Route path="/payments" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><PaymentsPage /></ProtectedRoute>} />
           <Route path="/classes" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><ClassesPage /></ProtectedRoute>} />
-          <Route path="/pt-sessions" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'trainer', 'staff']}><PTSessionsPage /></ProtectedRoute>} />
+          {/* PT Packages is an admin/front-desk console — trainers work from /my-clients */}
+          <Route path="/pt-sessions" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><PTSessionsPage /></ProtectedRoute>} />
+
           {/* New plan creation flow */}
           <Route path="/fitness/create" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'trainer']}><CreateModePickerPage /></ProtectedRoute>} />
           <Route path="/fitness/create/ai" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><CreateAIPage /></ProtectedRoute>} />

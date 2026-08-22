@@ -34,8 +34,12 @@ interface AppliedDiscount {
 export default function MemberStore() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { actor, member, activeMembership, isLoading: actorLoading } = useUnifiedActor();
-  const actorName = (actor as any)?.full_name || (actor as any)?.profiles?.full_name || 'Member';
+  const { actor, member, trainer, activeMembership, isLoading: actorLoading } = useUnifiedActor();
+  // Trainers / coaches have no member record — they buy as an on-floor staff sale.
+  const isStaffBuyer = !member && !!trainer;
+  const buyerBranchId = member?.branch_id ?? (trainer as any)?.branch_id ?? null;
+  const actorName = (actor as any)?.full_name || (actor as any)?.profiles?.full_name || (isStaffBuyer ? 'Trainer' : 'Member');
+
 
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -144,7 +148,7 @@ export default function MemberStore() {
       const { validateCoupon, couponReasonLabel } = await import('@/services/couponService');
       const result = await validateCoupon({
         code: promoCode.trim().toUpperCase(),
-        branchId: member?.branch_id ?? null,
+        branchId: buyerBranchId,
         subtotal: cartTotal,
       });
       if (!result.success) {
@@ -196,14 +200,15 @@ export default function MemberStore() {
     promoCode: appliedDiscount?.code,
     walletApplied: useWalletBalance ? walletDeduction : 0,
   });
-  const checkoutIdemKey = useStableIdempotencyKey(member?.id, 'member_store_checkout', cartSignature);
+  const checkoutIdemKey = useStableIdempotencyKey(member?.id ?? (trainer as any)?.id, 'member_store_checkout', cartSignature);
 
   // Atomic checkout via create_pos_sale RPC (handles wallet, promo usage, invoice, items, GST in one transaction).
   // For amounts due online, we then hand off to the configured payment gateway via the
-  // create-razorpay-link edge function so members never have to "pay at the front desk".
+  // create-razorpay-link edge function so buyers never have to "pay at the front desk".
   const checkout = useMutation({
     mutationFn: async () => {
-      if (!member || cart.length === 0) throw new Error('Cart is empty');
+      if ((!member && !isStaffBuyer) || cart.length === 0) throw new Error('Cart is empty');
+      if (!buyerBranchId) throw new Error('No branch linked to your profile');
 
       // create_pos_sale computes subtotal from each item's `total`, and writes
       // `name` into invoice_items.description — both fields are required.
@@ -224,11 +229,14 @@ export default function MemberStore() {
       const paymentMethod = isAwaiting ? 'upi' : 'wallet';
 
       const { data, error } = await supabase.rpc('create_pos_sale', {
-        p_branch_id: member.branch_id,
-        p_member_id: member.id,
+        p_branch_id: buyerBranchId,
+        p_member_id: member?.id ?? null,
         p_items: items,
         p_payment_method: paymentMethod,
-        p_sold_by: member.user_id ?? null,
+        p_sold_by: member?.user_id ?? (trainer as any)?.user_id ?? null,
+        p_guest_name: isStaffBuyer ? actorName : null,
+        p_guest_phone: isStaffBuyer ? ((actor as any)?.profile?.phone ?? null) : null,
+
         p_awaiting_payment: isAwaiting,
         p_discount_amount: discountAmount,
         p_discount_code_id: appliedDiscount?.id ?? null,
@@ -268,8 +276,9 @@ export default function MemberStore() {
         }, 800);
       } else {
         toast.success('Order placed & paid via wallet!');
-        navigate('/my-invoices');
+        navigate(isStaffBuyer ? '/trainer-dashboard' : '/my-invoices');
       }
+
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to place order');
@@ -286,7 +295,7 @@ export default function MemberStore() {
     );
   }
 
-  if (!member) {
+  if (!member && !isStaffBuyer) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
@@ -296,6 +305,7 @@ export default function MemberStore() {
       </AppLayout>
     );
   }
+
 
   const getStockDisplay = (product: any) => {
     const hasInventory = product.inventory && product.inventory.length > 0;
@@ -502,12 +512,15 @@ export default function MemberStore() {
         )}
 
         {/* Recovery & add-ons */}
-        <AddOnShowcase
-          memberId={actor.id}
-          memberName={actorName}
-          membershipId={activeMembership?.id ?? null}
-          branchId={actor.branch_id}
-        />
+        {!isStaffBuyer && (
+          <AddOnShowcase
+            memberId={actor.id}
+            memberName={actorName}
+            membershipId={activeMembership?.id ?? null}
+            branchId={actor.branch_id}
+          />
+        )}
+
 
 
         {/* Search + categories */}
