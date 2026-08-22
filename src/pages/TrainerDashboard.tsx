@@ -467,9 +467,28 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
         .lte('check_in', end.toISOString())
         .order('check_in', { ascending: true });
       if (error) throw error;
-      return data || [];
+      // Sub-2-minute closed rows are punch noise (double taps / mis-syncs),
+      // not shifts — hide them so the card reads honestly.
+      return (data || []).filter((p: any) => {
+        if (!p.check_out) return true;
+        const mins = (new Date(p.check_out).getTime() - new Date(p.check_in).getTime()) / 60000;
+        return mins >= 2;
+      });
     },
     refetchInterval: 30_000,
+  });
+
+  // Turnstile truth: staff_attendance rows can be auto-closed while the person
+  // is still in the building, so presence is derived from the biometric feed.
+  const { data: presence } = useQuery({
+    queryKey: ['my-duty-presence', userId],
+    enabled: !!userId,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_my_duty_presence' as never);
+      if (error) throw error;
+      return data as unknown as { last_seen_at: string | null; gate: string | null; scans_today: number };
+    },
   });
 
   const [tick, setTick] = useState(0);
@@ -477,6 +496,7 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
     const i = setInterval(() => setTick((x) => x + 1), 30_000);
     return () => clearInterval(i);
   }, []);
+
 
   const punch = useMutation({
     mutationFn: async (shiftType: string) => {
