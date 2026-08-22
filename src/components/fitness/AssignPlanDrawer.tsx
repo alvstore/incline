@@ -125,7 +125,26 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
 
   const [rotationInterval, setRotationInterval] = useState(0);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
+  // A member can already hold an active plan of the same type (assigned by
+  // staff). Default to replacing it so two conflicting plans never run at once.
+  const [conflictMode, setConflictMode] = useState<'replace' | 'keep'>('replace');
   const queryClient = useQueryClient();
+
+  const selectedIds = useMemo(() => selected.map((m) => m.id), [selected]);
+
+  const { data: conflicts = [], isLoading: conflictsLoading } = useQuery({
+    queryKey: ['fitness-plan-conflicts', plan?.type, selectedIds],
+    enabled: open && !!plan && selectedIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_active_fitness_plan_conflicts' as never, {
+        p_member_ids: selectedIds,
+        p_plan_type: plan!.type,
+      } as never);
+      if (error) throw error;
+      return (data || []) as unknown as PlanConflict[];
+    },
+  });
+
 
   const isWorkout = plan?.type === 'workout';
 
