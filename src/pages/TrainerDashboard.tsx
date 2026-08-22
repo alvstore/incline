@@ -91,66 +91,61 @@ export default function TrainerDashboard() {
   const completedToday = todaySessions.filter(s => s.status === 'completed').length;
   const pendingToday = todaySessions.filter(s => s.status === 'scheduled').length;
 
+  const completedToday = todaySessions.filter(s => s.status === 'completed').length;
+  const pendingToday = todaySessions.filter(s => s.status === 'scheduled').length;
+  const firstName = profile?.full_name?.split(' ')[0] || 'Trainer';
+  const totalClients = generalClients.length + ptClients.length;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Welcome, {profile?.full_name?.split(' ')[0] || 'Trainer'}!
-            </h1>
-            <p className="text-muted-foreground">
-              {trainer.branch?.name} • {trainer.specializations?.[0] || 'Personal Trainer'}
-            </p>
+        {/* ── Hero band ─────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-7 text-white shadow-lg shadow-indigo-500/20">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-white/5 blur-3xl" />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/70">{greeting}</p>
+              <h1 className="mt-1 truncate text-3xl font-bold tracking-tight">{firstName}</h1>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/80">
+                <span>{trainer.branch?.name ?? 'Incline'}</span>
+                <span aria-hidden="true">·</span>
+                <span>{trainer.specializations?.[0] || 'Personal Trainer'}</span>
+                <Badge
+                  className={cn(
+                    'rounded-full border-0 px-2.5 py-0.5 text-[11px] font-medium',
+                    trainer.is_active ? 'bg-emerald-400/20 text-emerald-50' : 'bg-white/20 text-white',
+                  )}
+                >
+                  {trainer.is_active ? 'Active' : 'Inactive'}
+                </Badge>
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 sm:gap-5">
+              <HeroStat label="Clients" value={totalClients} />
+              <HeroStat label="Today" value={`${completedToday}/${todaySessions.length}`} />
+              <HeroStat label="Earnings" value={`₹${(monthEarnings?.estimated || 0).toLocaleString('en-IN')}`} />
+            </div>
           </div>
-          <Badge variant="default" className="w-fit">
-            {trainer.is_active ? 'Active' : 'Inactive'}
-          </Badge>
-        </div>
+        </section>
 
-        {/* Duty Status — clock in / clock out */}
-        <div className="grid gap-6 md:grid-cols-2">
+        {/* ── Duty + week roster ────────────────────────────────────── */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <DutyStatusCard userId={trainer.user_id} />
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-gradient-to-br from-indigo-50 to-white overflow-hidden">
-            <CardContent className="py-6 flex flex-col justify-center h-full gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-indigo-100 text-indigo-600">
-                  <Clock className="h-6 w-6" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-800">3.IPS Integrated</h4>
-                  <p className="text-xs text-slate-500">Real-time turnstile synchronisation active</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Branch Status</span>
-                  <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">Online</Badge>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">MIPS Hardware</span>
-                  <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50">Active why we are showing this.</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <MyShiftWeekCard userId={trainer.user_id} />
         </div>
 
-
-        {/* My weekly shift strip with Late badges */}
-        {/* 2 My shift this week this is not looking good. please audit and enhance ui/ux. */}
-        <MyShiftWeekCard userId={trainer.user_id} />
-
-        {/* Primary Stats */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
+        {/* ── KPI row ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           <StatCard
             title="General Clients"
             value={generalClients.length}
             icon={Users}
             description="Assigned to you"
             variant="default"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
           />
           <StatCard
             title="PT Clients"
@@ -158,7 +153,7 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Active packages"
             variant="warning"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
           />
           <StatCard
             title="Today's Sessions"
@@ -166,7 +161,7 @@ export default function TrainerDashboard() {
             icon={Calendar}
             description={`${completedToday} done · ${pendingToday} pending`}
             variant="accent"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
           />
           <StatCard
             title="My Classes"
@@ -174,116 +169,137 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Upcoming"
             variant="success"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50"
+            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
           />
-          <Link to="/trainer-earnings" aria-label="View detailed earnings">
+          <Link to="/trainer-earnings" aria-label="View detailed earnings" className="cursor-pointer">
             <StatCard
               title="My Earnings"
-              value={`₹${(monthEarnings?.estimated || 0).toLocaleString()}`}
+              value={`₹${(monthEarnings?.estimated || 0).toLocaleString('en-IN')}`}
               icon={Wallet}
-              description="This Month"
+              description="This month"
               variant="info"
-              className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
+              className="h-full rounded-2xl border-0 bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-xl"
             />
           </Link>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <QuickActionLink to="/my-clients" icon={Users} label="My Clients" tone="indigo" />
-          <QuickActionLink to="/pt-sessions" icon={Calendar} label="https://theincline.in/pt-sessions" tone="emerald" />
-          <QuickActionLink to="/trainer-plan-builder" icon={TrendingUp} label="Fitness Plan" tone="amber" />
-          <QuickActionLink to="/member-store" icon={Wallet} label="Member Store" tone="violet" />
+        {/* ── Quick actions ─────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <QuickActionLink to="/my-clients" icon={Users} label="My Clients" hint="Roster & progress" tone="indigo" />
+          <QuickActionLink to="/pt-sessions" icon={Calendar} label="PT Sessions" hint="Log & schedule" tone="emerald" />
+          <QuickActionLink to="/trainer-plan-builder" icon={TrendingUp} label="Fitness Plans" hint="Build & assign" tone="amber" />
+          <QuickActionLink to="/member-store" icon={Wallet} label="Member Store" hint="Sell add-ons" tone="violet" />
         </div>
 
         {/* Mark Today's PT Sessions — works for session-based AND monthly packs */}
         <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />
 
-
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           {/* Today's Sessions */}
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Today's Sessions
+          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                  <Clock className="h-4 w-4" />
+                </span>
+                Today's sessions
               </CardTitle>
             </CardHeader>
             <CardContent>
               {todaySessions.length === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No sessions scheduled for today</p>
-                </div>
+                <EmptyState icon={Calendar} text="No sessions scheduled for today" />
               ) : (
-                <div className="space-y-3">
-                  {todaySessions.map((session: any) => (
-                    <div key={session.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        {session.status === 'completed' ? (
-                          <CheckCircle className="h-5 w-5 text-success" />
-                        ) : (
-                          <Clock className="h-5 w-5 text-warning" />
-                        )}
-                        <div>
-                          <p className="font-medium">{session.member?.profiles?.full_name || session.member?.member_code}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {format(new Date(session.scheduled_at), 'HH:mm')} • {session.duration_minutes} min
-                          </p>
+                <ol className="relative space-y-3 border-l border-dashed border-slate-200 pl-5">
+                  {todaySessions.map((session: any) => {
+                    const done = session.status === 'completed';
+                    return (
+                      <li key={session.id} className="relative">
+                        <span
+                          className={cn(
+                            'absolute -left-[27px] top-3 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-background',
+                            done ? 'bg-emerald-500' : 'bg-amber-400',
+                          )}
+                          aria-hidden="true"
+                        />
+                        <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3 transition-colors duration-150 hover:bg-muted">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">
+                              {session.member?.profiles?.full_name || session.member?.member_code}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(session.scheduled_at), 'HH:mm')} · {session.duration_minutes} min
+                            </p>
+                          </div>
+                          <Badge
+                            className={cn(
+                              'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                              done
+                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                                : 'bg-amber-100 text-amber-700 hover:bg-amber-100',
+                            )}
+                          >
+                            {done ? 'Completed' : session.status}
+                          </Badge>
                         </div>
-                      </div>
-                      <Badge variant={session.status === 'completed' ? 'default' : 'secondary'}>
-                        {session.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
+                      </li>
+                    );
+                  })}
+                </ol>
               )}
             </CardContent>
           </Card>
 
           {/* My Clients */}
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                My Clients
+          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                  <Users className="h-4 w-4" />
+                </span>
+                My clients
               </CardTitle>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/my-clients">View All</Link>
+              <Button variant="ghost" size="sm" className="rounded-lg" asChild>
+                <Link to="/my-clients">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
               {generalClients.length === 0 && ptClients.length === 0 ? (
-                <div className="text-center py-8">
-                  <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No clients assigned</p>
-                </div>
+                <EmptyState icon={Users} text="No clients assigned yet" />
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {generalClients.slice(0, 3).map((client: any) => (
-                    <div key={client.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center">
-                          <User className="h-5 w-5 text-accent" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{client.profile?.full_name || client.member_code}</p>
-                          <p className="text-sm text-muted-foreground">General Training</p>
+                    <div
+                      key={client.id}
+                      className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-muted/60"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                          <User className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {client.profile?.full_name || client.member_code}
+                          </p>
+                          <p className="text-xs text-muted-foreground">General training</p>
                         </div>
                       </div>
-                      <Badge variant="outline">General</Badge>
+                      <Badge variant="outline" className="shrink-0 rounded-full text-xs">General</Badge>
                     </div>
                   ))}
                   {ptClients.slice(0, 3).map((client: any) => (
-                    <div key={client.id} className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
-                          <Dumbbell className="h-5 w-5 text-warning" />
-                        </div>
+                    <div
+                      key={client.id}
+                      className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-muted/60"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                          <Dumbbell className="h-5 w-5" />
+                        </span>
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{client.member?.profile?.full_name || client.member?.member_code}</p>
-                          <p className="text-xs text-muted-foreground truncate">{client.package?.name}</p>
+                          <p className="truncate text-sm font-semibold">
+                            {client.member?.profile?.full_name || client.member?.member_code}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{client.package?.name}</p>
                         </div>
                       </div>
                       <PtPackageBadge
@@ -300,33 +316,33 @@ export default function TrainerDashboard() {
           </Card>
 
           {/* Upcoming Classes */}
-          <Card className="border-border/50 md:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Dumbbell className="h-5 w-5" />
-                My Upcoming Classes
+          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 lg:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                  <Dumbbell className="h-4 w-4" />
+                </span>
+                My upcoming classes
               </CardTitle>
             </CardHeader>
             <CardContent>
               {myClasses.length === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No upcoming classes assigned</p>
-                </div>
+                <EmptyState icon={Calendar} text="No upcoming classes assigned" />
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   {myClasses.slice(0, 4).map((classItem: any) => (
-                    <div key={classItem.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{classItem.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(classItem.scheduled_at), 'EEE, dd MMM • HH:mm')}
+                    <div
+                      key={classItem.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-4 transition-colors duration-150 hover:bg-muted"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{classItem.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(classItem.scheduled_at), 'EEE, dd MMM · HH:mm')}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          Capacity: {classItem.capacity}
-                        </p>
+                        <p className="text-xs text-muted-foreground">Capacity {classItem.capacity}</p>
                       </div>
-                      <Badge variant="outline">{classItem.class_type}</Badge>
+                      <Badge variant="outline" className="shrink-0 rounded-full text-xs">{classItem.class_type}</Badge>
                     </div>
                   ))}
                 </div>
@@ -339,7 +355,27 @@ export default function TrainerDashboard() {
   );
 }
 
-function QuickActionLink({ to, icon: Icon, label, tone }: { to: string; icon: any; label: string; tone: string }) {
+function HeroStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl bg-white/10 px-3 py-2 text-center backdrop-blur-sm sm:px-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-0.5 truncate text-lg font-bold tabular-nums sm:text-xl">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, text }: { icon: any; text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <span className="mb-3 rounded-full bg-muted p-3 text-muted-foreground">
+        <Icon className="h-6 w-6" />
+      </span>
+      <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+function QuickActionLink({ to, icon: Icon, label, hint, tone }: { to: string; icon: any; label: string; hint?: string; tone: string }) {
   const tones: Record<string, string> = {
     indigo: 'text-indigo-600 bg-indigo-50',
     emerald: 'text-emerald-600 bg-emerald-50',
@@ -348,13 +384,16 @@ function QuickActionLink({ to, icon: Icon, label, tone }: { to: string; icon: an
   };
 
   return (
-    <Link to={to} className="group">
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden h-full">
-        <CardContent className="flex flex-col items-center justify-center py-8 gap-3">
-          <div className={cn("p-4 rounded-2xl transition-transform group-hover:scale-110 duration-300", tones[tone])}>
-            <Icon className="h-8 w-8" />
-          </div>
-          <span className="font-bold text-slate-700">{label}</span>
+    <Link to={to} className="group cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label={label}>
+      <Card className="h-full overflow-hidden rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+        <CardContent className="flex items-center gap-3 p-4">
+          <span className={cn('shrink-0 rounded-xl p-3 transition-transform duration-200 group-hover:scale-105', tones[tone])}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-foreground">{label}</span>
+            {hint && <span className="block truncate text-xs text-muted-foreground">{hint}</span>}
+          </span>
         </CardContent>
       </Card>
     </Link>
