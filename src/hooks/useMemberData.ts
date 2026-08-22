@@ -388,13 +388,25 @@ export function useTrainerData() {
     },
   });
 
+  // A member who bought PT from this trainer is a *personal training* client —
+  // never list them in the General roster as well (that double-counted the
+  // roster and made the same person appear twice).
+  const ptMemberIds = new Set(
+    (ptClients as any[]).map((c: any) => c.member_id).filter(Boolean),
+  );
+  const generalOnlyClients = (generalClients as any[]).filter(
+    (m: any) => !ptMemberIds.has(m.id),
+  );
+
   return {
     trainer,
-    generalClients,
+    generalClients: generalOnlyClients,
     ptClients,
+    ptMemberIds,
     clients: ptClients, // backward compat
     todaySessions,
     myClasses,
     isLoading: trainerLoading,
   };
 }
+
