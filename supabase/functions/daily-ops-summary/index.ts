@@ -292,8 +292,11 @@ Deno.serve(async (req) => {
     // quiet hours. Only genuine errors should fail the run.
     const ACCEPTABLE_STATUSES = [
       "sent",
+      "sending",
       "delivered",
       "queued",
+      "pending",
+      "scheduled",
       "sent_via_sms_fallback",
       "deduped",
       "suppressed",
