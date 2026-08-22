@@ -90,9 +90,6 @@ export default function TrainerDashboard() {
 
   const completedToday = todaySessions.filter(s => s.status === 'completed').length;
   const pendingToday = todaySessions.filter(s => s.status === 'scheduled').length;
-
-  const completedToday = todaySessions.filter(s => s.status === 'completed').length;
-  const pendingToday = todaySessions.filter(s => s.status === 'scheduled').length;
   const firstName = profile?.full_name?.split(' ')[0] || 'Trainer';
   const totalClients = generalClients.length + ptClients.length;
   const hour = new Date().getHours();
