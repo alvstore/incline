@@ -206,9 +206,12 @@ async function handleIncomingEvent(req: Request) {
   try { objectTypeForLog = JSON.parse(bodyText)?.object || "unknown"; } catch {}
 
   if (!sigCheck.accepted) {
-    const reason = !sigHeader
-      ? "missing_signature_header"
-      : "signature_mismatch_likely_wrong_app_secret";
+    const reason = sigCheck.secretsTried === 0
+      ? "no_app_secret_configured"
+      : !sigHeader
+        ? "missing_signature_header"
+        : "signature_mismatch_likely_wrong_app_secret";
+
     console.error(
       `[meta-webhook] REJECTED object=${objectTypeForLog} sig=${sigHeader ? "present" : "missing"} reason=${reason} secrets_tried=${sigCheck.secretsTried}`,
     );
