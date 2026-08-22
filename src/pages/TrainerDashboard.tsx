@@ -130,7 +130,7 @@ export default function TrainerDashboard() {
 
         {/* ── Duty + week roster ────────────────────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <DutyStatusCard userId={trainer.user_id} />
+          <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
           <MyShiftWeekCard userId={trainer.user_id} />
         </div>
 
