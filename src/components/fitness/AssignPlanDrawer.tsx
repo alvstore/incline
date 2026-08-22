@@ -432,7 +432,58 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                 </ScrollArea>
               </div>
 
+              {/* Existing active plans of the same type (assigned by staff or
+                  another trainer) — never silently stack two live plans. */}
+              {conflicts.length > 0 && (
+                <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {conflicts.length} member{conflicts.length === 1 ? '' : 's'} already have an active {plan?.type} plan
+                      </p>
+                      <ul className="space-y-0.5 text-xs text-muted-foreground">
+                        {conflicts.slice(0, 5).map((c) => (
+                          <li key={c.plan_id}>
+                            <span className="font-medium text-foreground">{c.member_name}</span> — {c.plan_name}
+                            {c.valid_until ? ` · until ${safeFmt(c.valid_until)}` : ''} · by {c.assigned_by}
+                          </li>
+                        ))}
+                        {conflicts.length > 5 && <li>+{conflicts.length - 5} more</li>}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(['replace', 'keep'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={conflictMode === mode}
+                        onClick={() => setConflictMode(mode)}
+                        className={`min-h-[44px] cursor-pointer rounded-xl border px-3.5 py-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                          conflictMode === mode
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-background hover:bg-muted'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold leading-tight">
+                          {mode === 'replace' ? 'Replace existing' : 'Keep both'}
+                        </span>
+                        <span className={`block text-[10px] leading-tight ${conflictMode === mode ? 'opacity-80' : 'text-muted-foreground'}`}>
+                          {mode === 'replace' ? 'End the old plan today' : 'Member sees both plans'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {conflictsLoading && selected.length > 0 && (
+                <p className="text-xs text-muted-foreground">Checking existing plans…</p>
+              )}
+
               <Separator />
+
 
               {/* Duration presets — staff pick a length, we compute the dates */}
               <div className="rounded-2xl border bg-card p-4 space-y-3 shadow-sm">
