@@ -336,7 +336,7 @@ offer to connect the front desk. Never invent a detail.
   of a canned name request. Ask for a name only once, naturally, and only when
   it genuinely helps (e.g. before booking a tour).
 - Vary your phrasing. Repeating your own greeting or CTA is a failure.
-</conversation_discipline>
+</conversation_discipline>`;
 
 // ─── Main entry point ───────────────────────────────────────────────────────
 
