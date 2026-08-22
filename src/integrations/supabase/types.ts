@@ -1869,7 +1869,6 @@ export type Database = {
           freeze_min_days: number | null
           id: string
           late_fee_rate: number | null
-          mips_sync_secret: string | null
           overdue_grace_days: number
           tax_rate: number | null
           updated_at: string
@@ -1889,7 +1888,6 @@ export type Database = {
           freeze_min_days?: number | null
           id?: string
           late_fee_rate?: number | null
-          mips_sync_secret?: string | null
           overdue_grace_days?: number
           tax_rate?: number | null
           updated_at?: string
@@ -1909,7 +1907,6 @@ export type Database = {
           freeze_min_days?: number | null
           id?: string
           late_fee_rate?: number | null
-          mips_sync_secret?: string | null
           overdue_grace_days?: number
           tax_rate?: number | null
           updated_at?: string
@@ -1921,6 +1918,38 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: true
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      branch_sync_secrets: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          mips_sync_secret: string
+          settings_id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          mips_sync_secret: string
+          settings_id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          mips_sync_secret?: string
+          settings_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_sync_secrets_settings_id_fkey"
+            columns: ["settings_id"]
+            isOneToOne: true
+            referencedRelation: "branch_settings"
             referencedColumns: ["id"]
           },
         ]
@@ -14927,6 +14956,24 @@ export type Database = {
           government_id_number: string
           government_id_type: string
           id: string
+        }[]
+      }
+      get_trainer_pt_billing: {
+        Args: { _trainer_id?: string }
+        Returns: {
+          amount_paid: number
+          balance_due: number
+          invoice_number: string
+          member_code: string
+          member_id: string
+          member_name: string
+          package_name: string
+          package_row_id: string
+          package_type: string
+          payment_due_date: string
+          payment_state: string
+          price_paid: number
+          sold_on: string
         }[]
       }
       get_upcoming_birthdays: {
