@@ -16190,6 +16190,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      user_scope_branch_ids: { Args: { p_user_id: string }; Returns: string[] }
       user_visible_branch_ids: {
         Args: { p_user_id: string }
         Returns: string[]
