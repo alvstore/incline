@@ -627,36 +627,36 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
 
 
         {/* Attendance is captured at the MIPS turnstile. Manual punching is a
-            fallback only — clock-out stays available, clock-in is demoted. */}
+            fallback only, and only when no scan was seen at all. */}
         <div className="flex flex-wrap items-center gap-3 pt-1">
           {openPunch ? (
             <Button
               size="lg"
               disabled={punch.isPending}
               onClick={onPunch}
-              className="rounded-xl bg-red-500 px-8 text-white shadow-md transition-all hover:bg-red-600 active:scale-95"
+              className="rounded-xl bg-destructive px-8 text-destructive-foreground shadow-md transition-all hover:bg-destructive/90 active:scale-95"
             >
               {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4 fill-current" />}
               Clock out
             </Button>
-          ) : (
+          ) : !seenRecently ? (
             <Button
               variant="ghost"
               size="sm"
               disabled={punch.isPending || isOff}
               onClick={onPunch}
-              className="rounded-xl text-slate-500 hover:text-slate-700"
+              className="rounded-xl text-muted-foreground hover:text-foreground"
             >
               {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
               Punch in manually
             </Button>
-          )}
+          ) : null}
           {openPunch && isMipsPunch && (
-            <p className="self-center text-sm italic text-slate-500">Check-out normally happens at the turnstile</p>
+            <p className="self-center text-sm italic text-muted-foreground">Check-out normally happens at the turnstile</p>
           )}
         </div>
 
-        <p className="text-[10px] text-slate-400">
+        <p className="text-[10px] text-muted-foreground">
           Attendance is synchronized from the biometric MIPS turnstile. Manual punch is only a fallback.
         </p>
 
@@ -671,10 +671,10 @@ function labelFor(t: string) {
 
 function BlockPill({
   label, icon: Icon, tone, text,
-}: { label: string; icon: any; tone: 'emerald' | 'indigo'; text: string }) {
-  const cls = tone === 'emerald'
-    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-    : 'bg-indigo-50 text-indigo-700 border-indigo-100';
+}: { label: string; icon: any; tone: 'success' | 'primary'; text: string }) {
+  const cls = tone === 'success'
+    ? 'bg-success/10 text-success border-success/20'
+    : 'bg-primary/10 text-primary border-primary/20';
   return (
     <div className={cn("rounded-xl border p-3 flex flex-col gap-1 shadow-sm", cls)}>
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider opacity-70">
@@ -684,5 +684,6 @@ function BlockPill({
     </div>
   );
 }
+
 
 
