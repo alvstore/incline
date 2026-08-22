@@ -166,7 +166,16 @@ async function handleEvent(req: Request) {
     ),
   );
 
-  if (signatureSecrets.length > 0) {
+  // Fail closed: if no signing secret is configured for the target integration,
+  // we cannot prove the payload came from Meta — reject instead of trusting it.
+  if (signatureSecrets.length === 0) {
+    console.error("[whatsapp-webhook] REJECTED — no webhook signing secret configured for phone_number_ids:", phoneNumberIds.join(","));
+    return new Response(JSON.stringify({ error: "Webhook signing secret not configured" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  {
     const signatureHeader = req.headers.get("x-hub-signature-256") ?? req.headers.get("x-hub-signature");
     if (!signatureHeader) {
       return new Response(JSON.stringify({ error: "Missing webhook signature" }), {
@@ -180,6 +189,7 @@ async function handleEvent(req: Request) {
       });
     }
   }
+
 
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
   if (entries.length === 0) {

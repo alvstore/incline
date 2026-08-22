@@ -25,6 +25,24 @@ function mapDlrStatus(s: string): string | null {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  // Fail closed: shared-secret token required (append ?token=<SMS_WEBHOOK_SECRET>
+  // to the DLR URL configured with the SMS provider, or send X-Webhook-Token).
+  {
+    const expected = Deno.env.get('SMS_WEBHOOK_SECRET') || '';
+    const provided =
+      new URL(req.url).searchParams.get('token') ||
+      req.headers.get('x-webhook-token') ||
+      '';
+    if (!expected || provided !== expected) {
+      console.error('[sms-webhook] REJECTED — missing or invalid webhook token');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
