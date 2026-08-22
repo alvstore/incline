@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/table';
 import {
   Edit, Trash2, Send, Eye, FileText, Image as ImageIcon, Video as VideoIcon,
-  CheckCircle, Clock, XCircle, PauseCircle, Search, Plus,
+  CheckCircle, Clock, XCircle, PauseCircle, Search,
 } from 'lucide-react';
 
 export interface TemplateRow {
