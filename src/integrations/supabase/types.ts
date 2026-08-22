@@ -14700,6 +14700,18 @@ export type Database = {
       }
       generate_renewal_invoices: { Args: never; Returns: undefined }
       generate_trainer_code: { Args: { p_branch_id: string }; Returns: string }
+      get_active_fitness_plan_conflicts: {
+        Args: { p_member_ids: string[]; p_plan_type: string }
+        Returns: {
+          assigned_by: string
+          member_id: string
+          member_name: string
+          plan_id: string
+          plan_name: string
+          valid_from: string
+          valid_until: string
+        }[]
+      }
       get_ai_purpose: {
         Args: { _branch_id?: string; _purpose: string }
         Returns: {
@@ -14867,6 +14879,7 @@ export type Database = {
         }[]
       }
       get_member_id: { Args: { _user_id: string }; Returns: string }
+      get_my_duty_presence: { Args: never; Returns: Json }
       get_my_trainers: {
         Args: never
         Returns: {
@@ -14948,6 +14961,16 @@ export type Database = {
           person_id: string
           person_kind: string
           role_label: string
+        }[]
+      }
+      get_trainer_client_visits: {
+        Args: { p_days?: number }
+        Returns: {
+          first_seen: string
+          last_seen: string
+          member_id: string
+          scan_count: number
+          visit_date: string
         }[]
       }
       get_trainer_government_id: {
@@ -16099,6 +16122,10 @@ export type Database = {
       start_membership_now: {
         Args: { p_membership_id: string; p_reason?: string }
         Returns: Json
+      }
+      supersede_fitness_plans: {
+        Args: { p_plan_ids: string[] }
+        Returns: number
       }
       touch_presence: { Args: never; Returns: undefined }
       trainer_can_view_member: {

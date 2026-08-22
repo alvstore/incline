@@ -40,7 +40,7 @@ function Rail({
     <div
       className={cn(
         'flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-[10px] font-medium leading-none',
-        tone === 'am' ? 'bg-amber-500/10 text-amber-600' : 'bg-indigo-500/10 text-indigo-600',
+        tone === 'am' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary',
       )}
     >
       <Icon className="h-2.5 w-2.5 shrink-0" />
@@ -58,11 +58,11 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
   const lateDays = week.filter((d) => d.is_late).length;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
       <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+            <span className="rounded-full bg-primary/10 p-2 text-primary">
               <CalendarIcon className="h-4 w-4" />
             </span>
             My shift this week
@@ -72,11 +72,11 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          <Badge className="rounded-full border-0 bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100">
+          <Badge className="rounded-full border-0 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10">
             {totalHours ? `${totalHours.toFixed(totalHours % 1 ? 1 : 0)}h rostered` : 'No hours'}
           </Badge>
           {offDays > 0 && (
-            <Badge className="rounded-full border-0 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+            <Badge className="rounded-full border-0 bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted">
               {offDays} off
             </Badge>
           )}
@@ -105,7 +105,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                   className={cn(
                     'flex min-h-[7rem] flex-col gap-1.5 rounded-xl p-2.5 transition-all duration-200',
                     isToday
-                      ? 'bg-gradient-to-b from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20'
+                      ? 'bg-gradient-to-b from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20'
                       : 'bg-muted/40 hover:bg-muted/70',
                     d.is_off && !isToday && 'opacity-60',
                   )}
@@ -130,7 +130,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                     <span
                       className={cn(
                         'mt-1 w-fit rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
-                        isToday ? 'bg-white/15 text-white' : 'bg-slate-200/70 text-slate-600',
+                        isToday ? 'bg-background/15 text-primary-foreground' : 'bg-muted text-muted-foreground',
                       )}
                     >
                       Weekly off
@@ -180,7 +180,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                       <span
                         className={cn(
                           'inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                          isToday ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700',
+                          isToday ? 'bg-background/20 text-primary-foreground' : 'bg-success/10 text-success',
                         )}
                       >
                         <CheckCircle2 className="h-2.5 w-2.5" /> {format(new Date(d.first_check_in), 'h:mm a')}

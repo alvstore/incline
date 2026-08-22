@@ -99,7 +99,7 @@ export default function TrainerDashboard() {
     <AppLayout>
       <div className="space-y-6">
         {/* ── Hero band ─────────────────────────────────────────────── */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-7 text-white shadow-lg shadow-indigo-500/20">
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/80 px-6 py-7 text-primary-foreground shadow-lg shadow-primary/20">
           <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-white/5 blur-3xl" />
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -113,7 +113,7 @@ export default function TrainerDashboard() {
                 <Badge
                   className={cn(
                     'rounded-full border-0 px-2.5 py-0.5 text-[11px] font-medium',
-                    trainer.is_active ? 'bg-emerald-400/20 text-emerald-50' : 'bg-white/20 text-white',
+                    trainer.is_active ? 'bg-success/20 text-primary-foreground' : 'bg-white/20 text-white',
                   )}
                 >
                   {trainer.is_active ? 'Active' : 'Inactive'}
@@ -142,7 +142,7 @@ export default function TrainerDashboard() {
             icon={Users}
             description="Assigned to you"
             variant="default"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
           />
           <StatCard
             title="PT Clients"
@@ -150,7 +150,7 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Active packages"
             variant="warning"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
           />
           <StatCard
             title="Today's Sessions"
@@ -158,7 +158,7 @@ export default function TrainerDashboard() {
             icon={Calendar}
             description={`${completedToday} done · ${pendingToday} pending`}
             variant="accent"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
           />
           <StatCard
             title="My Classes"
@@ -166,7 +166,7 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Upcoming"
             variant="success"
-            className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
           />
           <Link to="/trainer-earnings" aria-label="View detailed earnings" className="cursor-pointer">
             <StatCard
@@ -175,7 +175,7 @@ export default function TrainerDashboard() {
               icon={Wallet}
               description="This month"
               variant="info"
-              className="h-full rounded-2xl border-0 bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-xl"
+              className="h-full rounded-2xl border-0 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-200 hover:shadow-xl"
             />
           </Link>
         </div>
@@ -193,10 +193,10 @@ export default function TrainerDashboard() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Today's Sessions */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                <span className="rounded-full bg-primary/10 p-2 text-primary">
                   <Clock className="h-4 w-4" />
                 </span>
                 Today's sessions
@@ -206,7 +206,7 @@ export default function TrainerDashboard() {
               {todaySessions.length === 0 ? (
                 <EmptyState icon={Calendar} text="No sessions scheduled for today" />
               ) : (
-                <ol className="relative space-y-3 border-l border-dashed border-slate-200 pl-5">
+                <ol className="relative space-y-3 border-l border-dashed border-border pl-5">
                   {todaySessions.map((session: any) => {
                     const done = session.status === 'completed';
                     return (
@@ -214,7 +214,7 @@ export default function TrainerDashboard() {
                         <span
                           className={cn(
                             'absolute -left-[27px] top-3 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-background',
-                            done ? 'bg-emerald-500' : 'bg-amber-400',
+                            done ? 'bg-success' : 'bg-warning',
                           )}
                           aria-hidden="true"
                         />
@@ -231,7 +231,7 @@ export default function TrainerDashboard() {
                             className={cn(
                               'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
                               done
-                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                                ? 'bg-success/10 text-success hover:bg-success/10'
                                 : 'bg-amber-100 text-amber-700 hover:bg-amber-100',
                             )}
                           >
@@ -247,10 +247,10 @@ export default function TrainerDashboard() {
           </Card>
 
           {/* My Clients */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                <span className="rounded-full bg-primary/10 p-2 text-primary">
                   <Users className="h-4 w-4" />
                 </span>
                 My clients
@@ -270,7 +270,7 @@ export default function TrainerDashboard() {
                       className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-muted/60"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                           <User className="h-5 w-5" />
                         </span>
                         <div className="min-w-0">
@@ -313,10 +313,10 @@ export default function TrainerDashboard() {
           </Card>
 
           {/* Upcoming Classes */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 lg:col-span-2">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5 lg:col-span-2">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                <span className="rounded-full bg-primary/10 p-2 text-primary">
                   <Dumbbell className="h-4 w-4" />
                 </span>
                 My upcoming classes
@@ -374,15 +374,15 @@ function EmptyState({ icon: Icon, text }: { icon: any; text: string }) {
 
 function QuickActionLink({ to, icon: Icon, label, hint, tone }: { to: string; icon: any; label: string; hint?: string; tone: string }) {
   const tones: Record<string, string> = {
-    indigo: 'text-indigo-600 bg-indigo-50',
-    emerald: 'text-emerald-600 bg-emerald-50',
+    indigo: 'text-primary bg-primary/10',
+    emerald: 'text-success bg-success/10',
     amber: 'text-amber-600 bg-amber-50',
-    violet: 'text-violet-600 bg-violet-50',
+    violet: 'text-primary bg-primary/10',
   };
 
   return (
-    <Link to={to} className="group cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label={label}>
-      <Card className="h-full overflow-hidden rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Link to={to} className="group cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary" aria-label={label}>
+      <Card className="h-full overflow-hidden rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
         <CardContent className="flex items-center gap-3 p-4">
           <span className={cn('shrink-0 rounded-xl p-3 transition-transform duration-200 group-hover:scale-105', tones[tone])}>
             <Icon className="h-5 w-5" />
@@ -467,9 +467,28 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
         .lte('check_in', end.toISOString())
         .order('check_in', { ascending: true });
       if (error) throw error;
-      return data || [];
+      // Sub-2-minute closed rows are punch noise (double taps / mis-syncs),
+      // not shifts — hide them so the card reads honestly.
+      return (data || []).filter((p: any) => {
+        if (!p.check_out) return true;
+        const mins = (new Date(p.check_out).getTime() - new Date(p.check_in).getTime()) / 60000;
+        return mins >= 2;
+      });
     },
     refetchInterval: 30_000,
+  });
+
+  // Turnstile truth: staff_attendance rows can be auto-closed while the person
+  // is still in the building, so presence is derived from the biometric feed.
+  const { data: presence } = useQuery({
+    queryKey: ['my-duty-presence', userId],
+    enabled: !!userId,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_my_duty_presence' as never);
+      if (error) throw error;
+      return data as unknown as { last_seen_at: string | null; gate: string | null; scans_today: number };
+    },
   });
 
   const [tick, setTick] = useState(0);
@@ -477,6 +496,7 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
     const i = setInterval(() => setTick((x) => x + 1), 30_000);
     return () => clearInterval(i);
   }, []);
+
 
   const punch = useMutation({
     mutationFn: async (shiftType: string) => {
@@ -504,8 +524,8 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
 
   if (shiftLoading || punchLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
-        <CardContent className="py-6 flex items-center gap-3 text-slate-500">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
+        <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading duty status…
         </CardContent>
       </Card>
@@ -515,7 +535,6 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   const isOff = !!shift?.is_weekly_off;
   const hasMorning = !!shift?.morning_start && !!shift?.morning_end;
   const hasEvening = !!shift?.evening_start && !!shift?.evening_end;
-  const overnight = hasMorning && timeToMin(shift?.morning_end)! < timeToMin(shift?.morning_start)!;
 
   const openPunch = (punches || []).find((p: any) => !p.check_out);
   const suggested: ShiftBlock['kind'] = openPunch
@@ -530,15 +549,26 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   // Check if current punch is from MIPS
   const isMipsPunch = openPunch?.source === 'mips';
 
+  // Turnstile presence wins over an auto-closed payroll row.
+  const lastSeenAt = presence?.last_seen_at ? new Date(presence.last_seen_at) : null;
+  const minsSinceScan = lastSeenAt
+    ? Math.max(0, Math.round((Date.now() - lastSeenAt.getTime()) / 60000))
+    : null;
+  const seenRecently = minsSinceScan !== null && minsSinceScan <= 90;
+  const onDuty = !!openPunch || seenRecently;
+
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 text-white">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5 overflow-hidden">
+      <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-4 text-primary-foreground">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider opacity-80 font-semibold">Duty Status</p>
             <h3 className="text-lg font-bold">
-              {isOff ? "Weekly Off" :
-                openPunch ? `On Duty · ${labelFor(openPunch.shift_type)}` : 'Off Duty'}
+              {isOff && !onDuty
+                ? 'Weekly Off'
+                : onDuty
+                  ? `On Duty${openPunch ? ` · ${labelFor(openPunch.shift_type)}` : ' · Turnstile'}`
+                  : 'Off Duty'}
             </h3>
           </div>
           <Clock className="h-6 w-6 opacity-80" />
@@ -549,24 +579,24 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
           <BlockPill
             label="Morning"
             icon={Sun}
-            tone="emerald"
+            tone="success"
             text={isOff ? 'Off' : hasMorning ? `${fmt(shift?.morning_start)} → ${fmt(shift?.morning_end)}` : 'No shift'}
           />
           <BlockPill
             label="Evening"
             icon={Moon}
-            tone="indigo"
+            tone="primary"
             text={isOff ? 'Off' : hasEvening ? `${fmt(shift?.evening_start)} → ${fmt(shift?.evening_end)}` : 'No shift'}
           />
         </div>
 
         {openPunch && (
-          <div className="rounded-xl bg-emerald-50 text-emerald-700 px-4 py-3 text-sm flex items-center justify-between border border-emerald-100">
+          <div className="rounded-xl bg-success/10 text-success px-4 py-3 text-sm flex items-center justify-between border border-success/20">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4" />
               <span>
                 Clocked in at <strong>{format(new Date(openPunch.check_in), 'HH:mm')}</strong>
-                {isMipsPunch && <Badge variant="outline" className="ml-2 text-[10px] py-0 border-emerald-200 text-emerald-600 bg-white">MIPS</Badge>}
+                {isMipsPunch && <Badge variant="outline" className="ml-2 text-[10px] py-0 border-success/30 text-success bg-background">MIPS</Badge>}
               </span>
             </div>
             <span className="font-bold tabular-nums">
@@ -575,37 +605,58 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
           </div>
         )}
 
+        {!openPunch && lastSeenAt && (
+          <div
+            className={cn(
+              'rounded-xl px-4 py-3 text-sm flex items-center justify-between border',
+              seenRecently
+                ? 'bg-success/10 text-success border-success/20'
+                : 'bg-muted text-muted-foreground border-border',
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>
+                Last seen <strong>{format(lastSeenAt, 'HH:mm')}</strong>
+                {presence?.gate ? ` at ${presence.gate}` : ''}
+              </span>
+            </div>
+            <Badge variant="outline" className="text-[10px] py-0">Turnstile</Badge>
+          </div>
+        )}
+
+
         {/* Attendance is captured at the MIPS turnstile. Manual punching is a
-            fallback only — clock-out stays available, clock-in is demoted. */}
+            fallback only, and only when no scan was seen at all. */}
         <div className="flex flex-wrap items-center gap-3 pt-1">
           {openPunch ? (
             <Button
               size="lg"
               disabled={punch.isPending}
               onClick={onPunch}
-              className="rounded-xl bg-red-500 px-8 text-white shadow-md transition-all hover:bg-red-600 active:scale-95"
+              className="rounded-xl bg-destructive px-8 text-destructive-foreground shadow-md transition-all hover:bg-destructive/90 active:scale-95"
             >
               {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4 fill-current" />}
               Clock out
             </Button>
-          ) : (
+          ) : !seenRecently ? (
             <Button
               variant="ghost"
               size="sm"
               disabled={punch.isPending || isOff}
               onClick={onPunch}
-              className="rounded-xl text-slate-500 hover:text-slate-700"
+              className="rounded-xl text-muted-foreground hover:text-foreground"
             >
               {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
               Punch in manually
             </Button>
-          )}
+          ) : null}
           {openPunch && isMipsPunch && (
-            <p className="self-center text-sm italic text-slate-500">Check-out normally happens at the turnstile</p>
+            <p className="self-center text-sm italic text-muted-foreground">Check-out normally happens at the turnstile</p>
           )}
         </div>
 
-        <p className="text-[10px] text-slate-400">
+        <p className="text-[10px] text-muted-foreground">
           Attendance is synchronized from the biometric MIPS turnstile. Manual punch is only a fallback.
         </p>
 
@@ -620,10 +671,10 @@ function labelFor(t: string) {
 
 function BlockPill({
   label, icon: Icon, tone, text,
-}: { label: string; icon: any; tone: 'emerald' | 'indigo'; text: string }) {
-  const cls = tone === 'emerald'
-    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-    : 'bg-indigo-50 text-indigo-700 border-indigo-100';
+}: { label: string; icon: any; tone: 'success' | 'primary'; text: string }) {
+  const cls = tone === 'success'
+    ? 'bg-success/10 text-success border-success/20'
+    : 'bg-primary/10 text-primary border-primary/20';
   return (
     <div className={cn("rounded-xl border p-3 flex flex-col gap-1 shadow-sm", cls)}>
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider opacity-70">
@@ -633,5 +684,6 @@ function BlockPill({
     </div>
   );
 }
+
 
 

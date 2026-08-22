@@ -29,10 +29,12 @@ import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementD
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
 import { TrainerBillingTab } from '@/components/pt/TrainerBillingTab';
+import { ClientVisitRhythm } from '@/components/pt/ClientVisitRhythm';
+import { useTrainerClientVisits } from '@/hooks/useTrainerClientVisits';
 import { inr, paymentStateMeta, useTrainerBilling } from '@/hooks/useTrainerBilling';
 
 const cardShell =
-  'rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none';
+  'rounded-2xl border-0 bg-card shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
 
 export default function MyClients() {
   const { trainer, generalClients, ptClients, isLoading: trainerLoading } = useTrainerData();
@@ -40,11 +42,13 @@ export default function MyClients() {
   const [progressDrawer, setProgressDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
 
   const { data: billingRows = [] } = useTrainerBilling(trainer?.id, !!trainer);
+  const { data: visits = {}, isLoading: visitsLoading } = useTrainerClientVisits(!!trainer, 7);
   const billingByPackage = useMemo(() => {
     const map: Record<string, (typeof billingRows)[number]> = {};
     billingRows.forEach((r) => { map[r.package_row_id] = r; });
     return map;
   }, [billingRows]);
+
 
   // Session history for PT clients
   const { data: sessionStats = {} } = useQuery({
@@ -108,7 +112,7 @@ export default function MyClients() {
     <AppLayout>
       <div className="space-y-6">
         {/* Hero */}
-        <section className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-primary-foreground shadow-lg">
+        <section className="rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Clients</h1>
@@ -181,7 +185,7 @@ export default function MyClients() {
                                 <h2 className="truncate font-semibold text-foreground">{clientName}</h2>
                                 <p className="truncate text-xs text-muted-foreground">{client.member_code}</p>
                               </div>
-                              <Badge className="rounded-full border-0 bg-indigo-100 text-xs text-indigo-700">
+                              <Badge className="rounded-full border-0 bg-primary/10 text-xs text-primary">
                                 General
                               </Badge>
                             </div>
@@ -224,7 +228,10 @@ export default function MyClients() {
                           </div>
                         )}
 
+                        <ClientVisitRhythm summary={visits[client.id]} loading={visitsLoading} />
+
                         <div className="mt-4 grid grid-cols-3 gap-2">
+
                           <Button variant="secondary" size="sm" asChild className="min-h-[44px] gap-1">
                             <Link to="/trainer-plan-builder">
                               <Dumbbell className="h-4 w-4" aria-hidden />
@@ -301,7 +308,7 @@ export default function MyClients() {
                                 </p>
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <Badge className="rounded-full border-0 bg-violet-100 text-xs text-violet-700">
+                                <Badge className="rounded-full border-0 bg-primary/10 text-xs text-primary">
                                   {pkgType === 'monthly' ? 'Monthly' : 'Sessions'}
                                 </Badge>
                                 {payMeta && (
@@ -315,7 +322,7 @@ export default function MyClients() {
                             </div>
 
                             {billing?.payment_due_date && billing.balance_due > 0 && (
-                              <p className="mt-1 text-xs font-medium text-red-600">
+                              <p className="mt-1 text-xs font-medium text-destructive">
                                 Payment due {format(new Date(billing.payment_due_date), 'dd MMM yyyy')}
                               </p>
                             )}
@@ -338,7 +345,7 @@ export default function MyClients() {
                                 aria-valuemax={100}
                                 aria-label={`${clientName} session progress`}
                               >
-                                <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${pct}%` }} />
+                                <div className="h-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }} />
                               </div>
                             </div>
                           ) : (
@@ -349,7 +356,7 @@ export default function MyClients() {
                               </span>
                               {daysLeft !== null && (
                                 <Badge
-                                  className={`rounded-full border-0 text-xs ${daysLeft <= 7 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}
+                                  className={`rounded-full border-0 text-xs ${daysLeft <= 7 ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}
                                 >
                                   {daysLeft > 0 ? `${daysLeft}d left` : 'Expired'}
                                 </Badge>
@@ -358,7 +365,10 @@ export default function MyClients() {
                           )}
                         </div>
 
+                        <ClientVisitRhythm summary={visits[client.member_id]} loading={visitsLoading} />
+
                         <div className="mt-4 flex flex-wrap items-center gap-2">
+
                           <Button
                             variant="secondary"
                             size="sm"

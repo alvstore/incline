@@ -40,6 +40,8 @@ import {
 } from '@/lib/fitness/planRotation';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
 import { SchedulePreviewStrip } from '@/components/fitness/SchedulePreviewStrip';
+import { supabase } from '@/integrations/supabase/client';
+
 
 
 import { toast } from 'sonner';
@@ -56,6 +58,17 @@ interface MemberLite {
   member_code: string;
   full_name: string;
 }
+
+interface PlanConflict {
+  plan_id: string;
+  member_id: string;
+  member_name: string;
+  plan_name: string;
+  valid_from: string | null;
+  valid_until: string | null;
+  assigned_by: string;
+}
+
 
 interface AssignPlanDrawerProps {
   open: boolean;
@@ -125,7 +138,26 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
 
   const [rotationInterval, setRotationInterval] = useState(0);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
+  // A member can already hold an active plan of the same type (assigned by
+  // staff). Default to replacing it so two conflicting plans never run at once.
+  const [conflictMode, setConflictMode] = useState<'replace' | 'keep'>('replace');
   const queryClient = useQueryClient();
+
+  const selectedIds = useMemo(() => selected.map((m) => m.id), [selected]);
+
+  const { data: conflicts = [], isLoading: conflictsLoading } = useQuery({
+    queryKey: ['fitness-plan-conflicts', plan?.type, selectedIds],
+    enabled: open && !!plan && selectedIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_active_fitness_plan_conflicts' as never, {
+        p_member_ids: selectedIds,
+        p_plan_type: plan!.type,
+      } as never);
+      if (error) throw error;
+      return (data || []) as unknown as PlanConflict[];
+    },
+  });
+
 
   const isWorkout = plan?.type === 'workout';
 
@@ -170,7 +202,9 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   useEffect(() => {
     if (open) {
       setResults(null);
+      setConflictMode('replace');
       setSearchQuery('');
+
       setIsCommon(!!plan?.is_common);
       setStartDate(todayISO());
       setShowStartPicker(false);
@@ -217,7 +251,17 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
 
   const assignMutation = useMutation({
     mutationFn: async () => {
+      // Close conflicting active plans first so the member is never left with
+      // two live plans of the same type.
+      if (conflictMode === 'replace' && conflicts.length > 0) {
+        const { error } = await supabase.rpc('supersede_fitness_plans' as never, {
+          p_plan_ids: conflicts.map((c) => c.plan_id),
+        } as never);
+        if (error) throw error;
+      }
+
       const data = await assignPlanToMembers({
+
         member_ids: selected.map((m) => m.id),
         plan_name: plan!.name,
         plan_type: plan!.type,
@@ -388,7 +432,58 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                 </ScrollArea>
               </div>
 
+              {/* Existing active plans of the same type (assigned by staff or
+                  another trainer) — never silently stack two live plans. */}
+              {conflicts.length > 0 && (
+                <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {conflicts.length} member{conflicts.length === 1 ? '' : 's'} already have an active {plan?.type} plan
+                      </p>
+                      <ul className="space-y-0.5 text-xs text-muted-foreground">
+                        {conflicts.slice(0, 5).map((c) => (
+                          <li key={c.plan_id}>
+                            <span className="font-medium text-foreground">{c.member_name}</span> — {c.plan_name}
+                            {c.valid_until ? ` · until ${safeFmt(c.valid_until)}` : ''} · by {c.assigned_by}
+                          </li>
+                        ))}
+                        {conflicts.length > 5 && <li>+{conflicts.length - 5} more</li>}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(['replace', 'keep'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={conflictMode === mode}
+                        onClick={() => setConflictMode(mode)}
+                        className={`min-h-[44px] cursor-pointer rounded-xl border px-3.5 py-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                          conflictMode === mode
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-background hover:bg-muted'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold leading-tight">
+                          {mode === 'replace' ? 'Replace existing' : 'Keep both'}
+                        </span>
+                        <span className={`block text-[10px] leading-tight ${conflictMode === mode ? 'opacity-80' : 'text-muted-foreground'}`}>
+                          {mode === 'replace' ? 'End the old plan today' : 'Member sees both plans'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {conflictsLoading && selected.length > 0 && (
+                <p className="text-xs text-muted-foreground">Checking existing plans…</p>
+              )}
+
               <Separator />
+
 
               {/* Duration presets — staff pick a length, we compute the dates */}
               <div className="rounded-2xl border bg-card p-4 space-y-3 shadow-sm">
