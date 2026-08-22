@@ -1,3 +1,5 @@
+// v1.3.0 — block_contact / unblock_contact: CRM do-not-contact + bot pause,
+//          plus WhatsApp Cloud API block_users/unblock_users.
 // v1.2.0 — IG avatar persistence: backfill and single-refresh actions now
 //          download Meta CDN images into Storage (avatars/meta/instagram/…),
 //          flag consent-blocked contacts, and a new `refresh_all_ig_avatars`
@@ -888,6 +890,93 @@ async function handleRefreshIgProfile(body: any) {
   return json({ success: true, name: res.name, avatar_url: storedUrl, source });
 }
 
+// ──────────────── BLOCK / UNBLOCK CONTACT ────────────────
+// CRM side: do_not_contact + AI paused (always applied).
+// Meta side: WhatsApp Cloud API block_users / unblock_users (best effort —
+// IG/Messenger have no equivalent endpoint, so those stay CRM-side only).
+async function resolveWhatsAppCreds(branchId: string | null) {
+  let integration: any = null;
+  if (branchId) {
+    const { data } = await supabase
+      .from("integration_settings")
+      .select("config, credentials")
+      .eq("branch_id", branchId)
+      .eq("integration_type", "whatsapp")
+      .eq("is_active", true)
+      .limit(1).maybeSingle();
+    integration = data;
+  }
+  if (!integration) {
+    const { data } = await supabase
+      .from("integration_settings")
+      .select("config, credentials")
+      .is("branch_id", null)
+      .eq("integration_type", "whatsapp")
+      .eq("is_active", true)
+      .limit(1).maybeSingle();
+    integration = data;
+  }
+  return {
+    accessToken: integration?.credentials?.access_token as string | undefined,
+    phoneNumberId: integration?.config?.phone_number_id as string | undefined,
+  };
+}
+
+async function handleBlockContact(body: any, block: boolean) {
+  const phone: string = String(body?.phone_number || "").trim();
+  const branchId: string | null = body?.branch_id || null;
+  const platform: string = body?.platform || "whatsapp";
+  const reason: string | null = body?.reason || null;
+  if (!phone) return json({ error: "phone_number is required" }, 400);
+
+  // 1) CRM suppression (single source of truth for outbound)
+  const rpc = block ? "mark_do_not_contact" : "clear_do_not_contact";
+  const args: Record<string, unknown> = block
+    ? { p_phone: phone, p_branch_id: branchId, p_reason: reason ?? "Blocked from CRM", p_until: null, p_source: "crm_block" }
+    : { p_phone: phone, p_branch_id: branchId };
+  const { error: rpcErr } = await supabase.rpc(rpc, args);
+  if (rpcErr) return json({ success: false, error: rpcErr.message }, 500);
+
+  // 2) Pause the AI agent for this thread so nothing auto-replies
+  await supabase
+    .from("whatsapp_chat_settings")
+    .update({
+      bot_active: !block,
+      bot_paused_until: block ? "2099-01-01T00:00:00Z" : null,
+      bot_paused_reason: block ? (reason ?? "Contact blocked") : null,
+    })
+    .eq("phone_number", phone);
+
+  // 3) Meta side (WhatsApp only)
+  let metaResult: Record<string, unknown> = { attempted: false };
+  if (platform === "whatsapp") {
+    const { accessToken, phoneNumberId } = await resolveWhatsAppCreds(branchId);
+    if (accessToken && phoneNumberId) {
+      const waId = phone.replace(/[^0-9]/g, "");
+      try {
+        const res = await fetch(
+          `${META_API_BASE}/${phoneNumberId}/${block ? "block_users" : "unblock_users"}`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ messaging_product: "whatsapp", block_users: [{ user: waId }] }),
+          },
+        );
+        const payload = await res.json().catch(() => ({}));
+        metaResult = { attempted: true, ok: res.ok, status: res.status, payload };
+      } catch (e) {
+        metaResult = { attempted: true, ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    } else {
+      metaResult = { attempted: false, reason: "WhatsApp credentials not configured" };
+    }
+  } else {
+    metaResult = { attempted: false, reason: `${platform} has no Meta block endpoint — CRM suppression applied` };
+  }
+
+  return json({ success: true, blocked: block, meta: metaResult });
+}
+
 // ──────────────── AUTH GATE ────────────────
 // All meta-admin actions require an authenticated owner/admin user.
 async function assertOwnerOrAdmin(req: Request): Promise<Response | null> {
@@ -935,6 +1024,8 @@ Deno.serve(async (req) => {
       case "list_ig_accounts":     return await handleListIgAccounts(body);
       case "list_ig_media":        return await handleListIgMedia(body);
       case "test_ig_comment_match":return await handleTestIgCommentMatch(body);
+      case "block_contact":        return await handleBlockContact(body, true);
+      case "unblock_contact":      return await handleBlockContact(body, false);
       default:
         return json({ error: `Unknown action: ${action}.` }, 400);
     }

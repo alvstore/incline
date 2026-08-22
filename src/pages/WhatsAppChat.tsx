@@ -85,6 +85,7 @@ interface ChatContact {
   platform?: string;
   external_username?: string | null;
   assigned_staff?: { full_name: string; avatar_url: string | null } | null;
+  do_not_contact?: boolean;
 }
 
 interface MessageMediaMeta {
@@ -127,6 +128,7 @@ interface ChatSettingsRow {
   contact_name: string | null;
   contact_avatar_url: string | null;
   external_username?: string | null;
+  do_not_contact?: boolean | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -267,6 +269,7 @@ export default function WhatsAppChatPage() {
   const [clearChatConfirmOpen, setClearChatConfirmOpen] = useState(false);
   // Transfer to staff
   const [transferStaffOpen, setTransferStaffOpen] = useState(false);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   // Right context panel — collapsed by default to maximise chat view area
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
 
@@ -331,7 +334,7 @@ export default function WhatsAppChatPage() {
       if (!selectedBranch || selectedBranch === 'all') return [];
       const { data, error } = await supabase
         .from('whatsapp_chat_settings')
-        .select('phone_number, bot_active, is_unread, assigned_to, contact_name, contact_avatar_url, external_username')
+        .select('phone_number, bot_active, is_unread, assigned_to, contact_name, contact_avatar_url, external_username, do_not_contact')
         .eq('branch_id', selectedBranch);
       if (error) throw error;
       return (data ?? []) as ChatSettingsRow[];
@@ -405,6 +408,40 @@ export default function WhatsAppChatPage() {
   chatSettings.forEach(s => settingsMap.set(s.phone_number, s));
 
   // Contacts query — builds a unique contact list from whatsapp_messages
+  // Block / unblock a contact: CRM suppression + Meta-side block (WhatsApp only).
+  const blockContactMutation = useMutation({
+    mutationFn: async (block: boolean) => {
+      if (!selectedContact) throw new Error('No contact selected');
+      const { data, error } = await supabase.functions.invoke('meta-admin', {
+        body: {
+          action: block ? 'block_contact' : 'unblock_contact',
+          phone_number: selectedContact.phone_number,
+          platform: selectedContact.platform || 'whatsapp',
+          branch_id: selectedBranch && selectedBranch !== 'all' ? selectedBranch : null,
+          reason: 'Blocked from CRM chat',
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data as { meta?: { attempted?: boolean; ok?: boolean } };
+    },
+    onSuccess: (data, block) => {
+      setBlockConfirmOpen(false);
+      setSelectedContact(c => (c ? { ...c, do_not_contact: block } : c));
+      const metaOk = data?.meta?.attempted ? data.meta.ok : null;
+      toast.success(
+        block
+          ? metaOk === false
+            ? 'Blocked in CRM — WhatsApp block failed, check integration'
+            : 'Contact blocked'
+          : 'Contact unblocked',
+      );
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-chat-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to update block state'),
+  });
+
   const { data: contacts = [] } = useQuery<ChatContact[]>({
     queryKey: ['whatsapp-contacts', selectedBranch],
     queryFn: async (): Promise<ChatContact[]> => {
@@ -484,6 +521,7 @@ export default function WhatsAppChatPage() {
       is_unread: s?.is_unread ?? false,
       bot_active: s?.bot_active ?? true,
       external_username: s?.external_username ?? null,
+      do_not_contact: s?.do_not_contact ?? false,
       identity_source: ident?.source ?? 'unknown',
       lead_id: ident?.lead_id ?? null,
       contact_id: ident?.contact_id ?? null,
@@ -1384,8 +1422,12 @@ export default function WhatsAppChatPage() {
                           <UserPlus className="h-4 w-4 mr-2" /> Transfer to Staff
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" disabled>
-                          <Ban className="h-4 w-4 mr-2" /> Block Contact
+                        <DropdownMenuItem
+                          className={selectedContact.do_not_contact ? 'text-emerald-600' : 'text-destructive'}
+                          onClick={() => setBlockConfirmOpen(true)}
+                        >
+                          <Ban className="h-4 w-4 mr-2" />
+                          {selectedContact.do_not_contact ? 'Unblock Contact' : 'Block Contact'}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1967,6 +2009,41 @@ export default function WhatsAppChatPage() {
             </Button>
             <Button variant="destructive" onClick={handleClearChat}>
               Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Block / Unblock Contact (destructive confirmation) ─────────────── */}
+      <Dialog open={blockConfirmOpen} onOpenChange={setBlockConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className={`flex items-center gap-2 ${selectedContact?.do_not_contact ? 'text-emerald-600' : 'text-destructive'}`}>
+              <Ban className="h-5 w-5" />
+              {selectedContact?.do_not_contact ? 'Unblock contact' : 'Block contact'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedContact?.do_not_contact ? (
+                <>This removes the do-not-contact flag, re-enables the AI agent for this thread
+                {selectedContact?.platform === 'whatsapp' ? ' and unblocks the number on WhatsApp' : ''}.</>
+              ) : (
+                <>All outbound messages to this contact will be suppressed and the AI agent is paused for
+                this thread.{selectedContact?.platform === 'whatsapp'
+                  ? ' The number is also blocked on WhatsApp, so their inbound messages stop reaching us.'
+                  : ' Instagram and Messenger have no block API, so only outbound suppression applies.'}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setBlockConfirmOpen(false)}>Cancel</Button>
+            <Button
+              variant={selectedContact?.do_not_contact ? 'default' : 'destructive'}
+              onClick={() => blockContactMutation.mutate(!selectedContact?.do_not_contact)}
+              disabled={blockContactMutation.isPending}
+            >
+              {blockContactMutation.isPending
+                ? 'Working…'
+                : selectedContact?.do_not_contact ? 'Unblock' : 'Block contact'}
             </Button>
           </DialogFooter>
         </DialogContent>
