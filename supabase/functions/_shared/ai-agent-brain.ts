@@ -1794,6 +1794,62 @@ export function ensureMapsLink(text: string): string {
   return `${text.trimEnd()}\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`;
 }
 
+/**
+ * v10.0.0 — CONSECUTIVE-DUPLICATE BLOCKER.
+ * Drops sentences from the outbound reply that we already sent in one of the
+ * last few outbound turns, so the bot never parrots itself. If every sentence
+ * is a duplicate we return a short, warm re-open line instead of going silent.
+ */
+const DUPLICATE_LOOKBACK_TURNS = 3;
+
+function normaliseSentence(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitSentences(text: string): string[] {
+  return String(text || "")
+    .split(/(?<=[.!?۔])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function blockConsecutiveDuplicate(
+  replyText: string,
+  history: Array<{ role: string; content: string }>,
+): string {
+  if (!replyText) return replyText;
+
+  const recentOutbound = (history || [])
+    .filter((m) => m && m.role !== "user")
+    .slice(-DUPLICATE_LOOKBACK_TURNS);
+  if (recentOutbound.length === 0) return replyText;
+
+  const seen = new Set<string>();
+  for (const m of recentOutbound) {
+    for (const s of splitSentences(String(m.content || ""))) {
+      const n = normaliseSentence(s);
+      if (n.length >= 12) seen.add(n);
+    }
+  }
+  if (seen.size === 0) return replyText;
+
+  const sentences = splitSentences(replyText);
+  const kept = sentences.filter((s) => {
+    const n = normaliseSentence(s);
+    return n.length < 12 || !seen.has(n);
+  });
+
+  if (kept.length === 0) {
+    return "Sorry — I think I repeated myself there. Tell me what you'd like to know and I'll help right away ✨";
+  }
+  if (kept.length === sentences.length) return replyText;
+  return kept.join(" ").trim();
+}
+
 
 
 function detectRepeatedAskLoop(

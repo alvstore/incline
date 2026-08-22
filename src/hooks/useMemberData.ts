@@ -2,22 +2,30 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { hydrateMeasurementPhotoUrls } from '@/lib/measurements/photoSigning';
+import { fetchMyTrainers, trainersById } from '@/lib/members/myTrainers';
 
 export function useMemberData() {
   const { user } = useAuth();
 
+  // Trainers linked to this member (RLS-safe, via get_my_trainers RPC).
+  const { data: myTrainers = [] } = useQuery({
+    queryKey: ['my-trainers', user?.id],
+    enabled: !!user,
+    queryFn: fetchMyTrainers,
+    staleTime: 5 * 60 * 1000,
+  });
+  const trainerMap = trainersById(myTrainers);
+
   // Get linked member record for current user
   const { data: member, isLoading: memberLoading } = useQuery({
-    queryKey: ['my-member', user?.id],
+    queryKey: ['my-member', user?.id, myTrainers.length],
     enabled: !!user,
     queryFn: async () => {
-      // Simplified query - fetch trainer profile separately to avoid nested relationship issues
       const { data, error } = await supabase
         .from('members')
         .select(`
           *,
-          branch:branches(id, name, code),
-          assigned_trainer:trainers!assigned_trainer_id(id, user_id)
+          branch:branches(id, name, code)
         `)
         .eq('user_id', user!.id)
         .maybeSingle();
@@ -28,21 +36,21 @@ export function useMemberData() {
       }
       
       if (!data) return null;
-      
-      // If there's an assigned trainer, fetch their profile separately
-      if (data.assigned_trainer?.user_id) {
-        const { data: trainerProfile } = await supabase
-          .from('profiles')
-          .select('full_name, avatar_url')
-          .eq('id', data.assigned_trainer.user_id)
-          .maybeSingle();
-        
-        (data as any).assigned_trainer.profile = trainerProfile;
-      }
-      
-      return data;
+
+      // Attach the assigned trainer's display info from the RPC map.
+      const assigned = data.assigned_trainer_id ? trainerMap[data.assigned_trainer_id] : undefined;
+      const assignedTrainer = assigned
+        ? {
+            id: assigned.trainer_id,
+            profile: { full_name: assigned.full_name, avatar_url: assigned.avatar_url },
+          }
+        : null;
+
+      return { ...data, assigned_trainer: assignedTrainer };
+
     },
   });
+
 
   // Get active membership
   const { data: activeMembership, isLoading: membershipLoading } = useQuery({
@@ -68,39 +76,37 @@ export function useMemberData() {
 
   // Get PT packages
   const { data: ptPackages = [] } = useQuery({
-    queryKey: ['my-pt-packages', member?.id],
+    queryKey: ['my-pt-packages', member?.id, myTrainers.length],
     enabled: !!member,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('member_pt_packages')
         .select(`
           *,
-          package:pt_packages(name, total_sessions),
-          trainer:trainers(id, user_id)
+          package:pt_packages(name, total_sessions)
         `)
         .eq('member_id', member!.id)
         .in('status', ['active', 'expired']);
       
       if (error) throw error;
-      
-      // Fetch trainer profiles separately
-      const packagesWithProfiles = await Promise.all(
-        (data || []).map(async (pkg: any) => {
-          if (pkg.trainer?.user_id) {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('full_name, avatar_url')
-              .eq('id', pkg.trainer.user_id)
-              .maybeSingle();
-            return { ...pkg, trainer: { ...pkg.trainer, profile: profileData } };
-          }
-          return pkg;
-        })
-      );
-      
-      return packagesWithProfiles;
+
+      // Trainer display info comes from the RLS-safe RPC map.
+      return (data || []).map((pkg: any) => {
+        const t = pkg.trainer_id ? trainerMap[pkg.trainer_id] : undefined;
+        return {
+          ...pkg,
+          trainer: t
+            ? {
+                id: t.trainer_id,
+                profile: { full_name: t.full_name, avatar_url: t.avatar_url },
+                profiles: { full_name: t.full_name, avatar_url: t.avatar_url },
+              }
+            : null,
+        };
+      });
     },
   });
+
 
   // Get recent attendance
   const { data: recentAttendance = [] } = useQuery({
@@ -138,7 +144,7 @@ export function useMemberData() {
 
   // Get upcoming classes
   const { data: upcomingClasses = [] } = useQuery({
-    queryKey: ['my-upcoming-classes', member?.id],
+    queryKey: ['my-upcoming-classes', member?.id, myTrainers.length],
     enabled: !!member,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -154,42 +160,29 @@ export function useMemberData() {
       
       if (error) throw error;
       
-      // Filter for future classes and fetch trainer profiles
       const now = new Date();
       const futureBookings = (data || []).filter((b: any) => 
         b.class?.scheduled_at && new Date(b.class.scheduled_at) >= now
       ).slice(0, 5);
       
-      // Fetch trainer profiles for each class
-      const bookingsWithTrainers = await Promise.all(
-        futureBookings.map(async (booking: any) => {
-          if (booking.class?.trainer_id) {
-            const { data: trainer } = await (supabase as any)
-              .from('trainers_directory')
-              .select('id, user_id')
-              .eq('id', booking.class.trainer_id)
-              .maybeSingle();
-            
-            if (trainer?.user_id) {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', trainer.user_id)
-                .maybeSingle();
-              
-              return {
-                ...booking,
-                class: { ...booking.class, trainer: { ...trainer, profile } }
-              };
-            }
-          }
-          return booking;
-        })
-      );
-      
-      return bookingsWithTrainers;
+      return futureBookings.map((booking: any) => {
+        const t = booking.class?.trainer_id ? trainerMap[booking.class.trainer_id] : undefined;
+        if (!t) return booking;
+        return {
+          ...booking,
+          class: {
+            ...booking.class,
+            trainer: {
+              id: t.trainer_id,
+              profile: { full_name: t.full_name },
+              profiles: { full_name: t.full_name },
+            },
+          },
+        };
+      });
     },
   });
+
 
   // Get measurements
   const { data: measurements = [] } = useQuery({
@@ -222,6 +215,8 @@ export function useMemberData() {
     member,
     activeMembership,
     ptPackages,
+    myTrainers,
+    trainerMap,
     recentAttendance,
     pendingInvoices,
     upcomingClasses,

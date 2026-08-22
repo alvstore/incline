@@ -13,7 +13,7 @@ import { Dumbbell, Calendar, User, AlertCircle, Loader2, CheckCircle, Clock, Sho
 import { format } from 'date-fns';
 
 export default function MyPTSessions() {
-  const { member, ptPackages, isLoading: memberLoading } = useMemberData();
+  const { member, ptPackages, trainerMap, isLoading: memberLoading } = useMemberData();
   const [purchaseOpen, setPurchaseOpen] = useState(false);
 
   // Get member's PT package IDs first
@@ -21,7 +21,7 @@ export default function MyPTSessions() {
 
   // Fetch PT sessions
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
-    queryKey: ['my-pt-sessions', member?.id, ptPackageIds],
+    queryKey: ['my-pt-sessions', member?.id, ptPackageIds, Object.keys(trainerMap).length],
     enabled: !!member && ptPackageIds.length > 0,
     queryFn: async (): Promise<any[]> => {
       const { data, error } = await supabase
@@ -31,37 +31,20 @@ export default function MyPTSessions() {
         .order('scheduled_at', { ascending: false });
 
       if (error) throw error;
-      
-      // Fetch trainer info separately to avoid deep type recursion
-      const trainerIds = [...new Set((data || []).map(s => s.trainer_id).filter(Boolean))] as string[];
-      const trainersMap: Record<string, { profiles?: { full_name: string } }> = {};
-      
-      if (trainerIds.length > 0) {
-        const { data: trainers } = await (supabase as any)
-          .from('trainers_directory')
-          .select('id, user_id')
-          .in('id', trainerIds);
-        
-        if (trainers) {
-          const userIds = trainers.map(t => t.user_id).filter(Boolean) as string[];
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', userIds);
-          
-          trainers.forEach(t => {
-            const profile = profiles?.find(p => p.id === t.user_id);
-            trainersMap[t.id] = { profiles: profile || undefined };
-          });
-        }
-      }
-      
-      return (data || []).map(session => ({
-        ...session,
-        trainer: trainersMap[session.trainer_id || ''] || null
-      }));
+
+      // Trainer display info comes from the RLS-safe get_my_trainers RPC map.
+      return (data || []).map(session => {
+        const t = session.trainer_id ? trainerMap[session.trainer_id] : undefined;
+        return {
+          ...session,
+          trainer: t
+            ? { profiles: { full_name: t.full_name }, profile: { full_name: t.full_name } }
+            : null,
+        };
+      });
     },
   });
+
 
   if (memberLoading || sessionsLoading) {
     return (
