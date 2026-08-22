@@ -228,7 +228,10 @@ export default function MyClients() {
                           </div>
                         )}
 
+                        <ClientVisitRhythm summary={visits[client.id]} loading={visitsLoading} />
+
                         <div className="mt-4 grid grid-cols-3 gap-2">
+
                           <Button variant="secondary" size="sm" asChild className="min-h-[44px] gap-1">
                             <Link to="/trainer-plan-builder">
                               <Dumbbell className="h-4 w-4" aria-hidden />
