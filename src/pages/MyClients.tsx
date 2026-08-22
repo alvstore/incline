@@ -29,10 +29,12 @@ import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementD
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
 import { TrainerBillingTab } from '@/components/pt/TrainerBillingTab';
+import { ClientVisitRhythm } from '@/components/pt/ClientVisitRhythm';
+import { useTrainerClientVisits } from '@/hooks/useTrainerClientVisits';
 import { inr, paymentStateMeta, useTrainerBilling } from '@/hooks/useTrainerBilling';
 
 const cardShell =
-  'rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none';
+  'rounded-2xl border-0 bg-card shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
 
 export default function MyClients() {
   const { trainer, generalClients, ptClients, isLoading: trainerLoading } = useTrainerData();
@@ -40,11 +42,13 @@ export default function MyClients() {
   const [progressDrawer, setProgressDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
 
   const { data: billingRows = [] } = useTrainerBilling(trainer?.id, !!trainer);
+  const { data: visits = {}, isLoading: visitsLoading } = useTrainerClientVisits(!!trainer, 7);
   const billingByPackage = useMemo(() => {
     const map: Record<string, (typeof billingRows)[number]> = {};
     billingRows.forEach((r) => { map[r.package_row_id] = r; });
     return map;
   }, [billingRows]);
+
 
   // Session history for PT clients
   const { data: sessionStats = {} } = useQuery({
