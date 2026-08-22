@@ -653,16 +653,17 @@ Deno.serve(async (req) => {
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
     (syncSecret && syncSecret === ENV_SYNC_SECRET);
 
-  // v2.10.0 — DB-backed secret: the access trigger signs its call with
-  // branch_settings.mips_sync_secret, which can legitimately differ from the
-  // edge-function env secret. Accept either.
+  // v2.11.0 — DB-backed secret now lives in the service-role-only table
+  // branch_sync_secrets (moved out of branch_settings so branch managers can
+  // no longer read it). Accept either the env secret or a stored one.
   if (!isService && syncSecret) {
     const { data: secretRows } = await supabase
-      .from("branch_settings")
+      .from("branch_sync_secrets")
       .select("mips_sync_secret")
       .not("mips_sync_secret", "is", null);
     isService = (secretRows || []).some((r: any) => r.mips_sync_secret === syncSecret);
   }
+
 
 
 

@@ -130,7 +130,7 @@ export default function TrainerDashboard() {
 
         {/* ── Duty + week roster ────────────────────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <DutyStatusCard userId={trainer.user_id} />
+          <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
           <MyShiftWeekCard userId={trainer.user_id} />
         </div>
 
@@ -432,7 +432,7 @@ function pickCurrentBlock(shift: any): ShiftBlock['kind'] {
   return 'morning';
 }
 
-function DutyStatusCard({ userId }: { userId: string }) {
+function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: string | null }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const weekday = new Date().getDay();
@@ -480,7 +480,12 @@ function DutyStatusCard({ userId }: { userId: string }) {
 
   const punch = useMutation({
     mutationFn: async (shiftType: string) => {
-      const { data, error } = await supabase.rpc('punch_duty', { p_shift_type: shiftType });
+      // Always pass the branch explicitly — server-side fallback resolves it
+      // from the trainer/employee record when omitted.
+      const { data, error } = await supabase.rpc('punch_duty', {
+        p_shift_type: shiftType,
+        p_branch_id: branchId ?? undefined,
+      } as never);
       if (error) throw error;
       return data;
     },
@@ -488,8 +493,14 @@ function DutyStatusCard({ userId }: { userId: string }) {
       toast({ title: 'Duty updated' });
       qc.invalidateQueries({ queryKey: ['my-attendance', userId, todayDate] });
     },
-    onError: (e: any) => toast({ title: 'Punch failed', description: e.message, variant: 'destructive' }),
+    onError: (e: any) =>
+      toast({
+        title: 'Punch failed',
+        description: e?.message || 'Could not record your punch. Please try again.',
+        variant: 'destructive',
+      }),
   });
+
 
   if (shiftLoading || punchLoading) {
     return (
@@ -586,7 +597,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
               className="rounded-xl text-slate-500 hover:text-slate-700"
             >
               {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
-              Turnstile unreachable? Punch manually
+              Punch in manually
             </Button>
           )}
           {openPunch && isMipsPunch && (
