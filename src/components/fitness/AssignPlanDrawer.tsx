@@ -40,6 +40,8 @@ import {
 } from '@/lib/fitness/planRotation';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
 import { SchedulePreviewStrip } from '@/components/fitness/SchedulePreviewStrip';
+import { supabase } from '@/integrations/supabase/client';
+
 
 
 import { toast } from 'sonner';
