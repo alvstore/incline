@@ -1670,22 +1670,12 @@ function enforceOutboundInteractiveGuards(input: {
     }],
   });
 
-  const askNextMissing = (): string => {
-    if (!knownName) return "Sure — may I have your name first? ✨";
-    const firstName = realName.split(/\s+/)[0];
-    if (!knownEmail) {
-      return firstName
-        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
-        : "Could you share your email so we can send your tour details?";
-    }
-    const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-    if (!knownGoal) return goalListJson(firstName);
-    const knownPlan = !!memory?.facts?.plan_interest;
-    if (!knownPlan) return planListJson(firstName);
-    return embargoPivotLine(firstName);
-  };
-
-
+  // v10.0.0 — the old askNextMissing() ladder is gone. When an interactive
+  // payload has to be dropped we degrade to the model's OWN body text instead
+  // of overwriting a good reply with the canned "may I have your name first?"
+  // line. That rewriter was the second half of the deadlock.
+  const plainFallback = (): string => bodyText;
+  void goalListJson; void planListJson; void knownEmail; void realName;
 
   // Look at last 6 outbound messages for the same body text
   const recentOutbound = history.filter((m) => m.role === "assistant").slice(-6);
@@ -1704,24 +1694,27 @@ function enforceOutboundInteractiveGuards(input: {
     return false;
   }).length;
 
-  // (1) Duplicate interactive — fall back to plain text
+  // (1) Duplicate interactive — degrade to the plain body so we never send the
+  //     identical list twice in a row.
   if (sameBodyCount >= 1) {
     console.log(`[AI:guards] dropping duplicate interactive — bodyText="${bodyText.slice(0, 60)}"`);
-    return askNextMissing();
+    return plainFallback();
   }
 
-  // (2) Hard gate — interactive before name + email is captured
-  if (leadCaptureEnabled && (!knownName || !knownEmail)) {
-    console.log(`[AI:guards] stripping interactive — hard gate (name=${knownName}, email=${knownEmail})`);
-    return askNextMissing();
+  // (2) Interactive lists are only meaningful once we know who we're talking
+  //     to; without a name we keep the model's wording as plain text (no gate).
+  if (leadCaptureEnabled && !knownName) {
+    console.log(`[AI:guards] flattening interactive to text — name not yet known`);
+    return plainFallback();
   }
 
   // (3) FOUNDER'S PHASE — only PT-package / day-pass interactives are forbidden.
   //     Duration/goal interactives are explicitly allowed (v3.6.0).
   if (/pt\s*package|personal\s*training\s*package|day\s*pass|session\s*pack/i.test(bodyText)) {
     console.log(`[AI:guards] dropping forbidden PT/day-pass interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
-    return askNextMissing();
+    return plainFallback();
   }
+
 
   return replyText;
 }
