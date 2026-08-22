@@ -104,7 +104,7 @@ const DeviceManagement = () => {
           </TabsContent>
 
           <TabsContent value="live-feed">
-            <LiveAccessLog branchId={branchFilter || undefined} limit={50} />
+            <LiveAccessLog branchId={branchFilter || undefined} limit={400} />
           </TabsContent>
         </Tabs>
 

@@ -13,6 +13,21 @@ interface BirthdayWidgetProps {
   className?: string;
 }
 
+const personTypeBadge: Record<string, { label: string; className: string }> = {
+  trainer: { label: 'Trainer', className: 'bg-violet-100 text-violet-700' },
+  staff: { label: 'Staff', className: 'bg-sky-100 text-sky-700' },
+};
+
+function PersonTypeBadge({ type }: { type?: string }) {
+  const cfg = type ? personTypeBadge[type] : undefined;
+  if (!cfg) return null;
+  return (
+    <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', cfg.className)}>
+      {cfg.label}
+    </span>
+  );
+}
+
 function initials(name?: string | null): string {
   if (!name) return '?';
   return name
@@ -91,9 +106,12 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {m.full_name ?? 'Unnamed member'}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {m.full_name ?? 'Unnamed member'}
+                      </p>
+                      <PersonTypeBadge type={m.person_type} />
+                    </div>
                     <p className="text-xs text-muted-foreground">Turning {m.turning_age}</p>
                   </div>
                   <Button
@@ -128,9 +146,12 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {m.full_name ?? 'Unnamed member'}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {m.full_name ?? 'Unnamed member'}
+                        </p>
+                        <PersonTypeBadge type={m.person_type} />
+                      </div>
                       <p className="text-[11px] text-muted-foreground">
                         {format(parseISO(m.birthday_date), 'MMM d')} · in {m.days_until}d
                       </p>

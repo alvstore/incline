@@ -22,6 +22,8 @@ export interface BirthdayMember {
   birthday_date: string;
   days_until: number;
   turning_age: number;
+  /** member | trainer | staff — the widget labels non-members */
+  person_type?: 'member' | 'trainer' | 'staff';
 }
 
 export interface BirthdayBuckets {
