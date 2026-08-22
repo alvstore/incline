@@ -630,7 +630,34 @@ async function sendAiReply(
   inboundMessageId?: string,
 ) {
   try {
+  // ── Hard duplicate guard (v3) ────────────────────────────────────────────
+  // Structurally prevents the "same sentence three times" failure mode: if the
+  // exact same body was already sent to this contact in the last 24h, suppress.
+  try {
+    const dupSince = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const { data: dupRows } = await supabase
+      .from("whatsapp_messages")
+      .select("id")
+      .eq("phone_number", inboundMsg.phone_number)
+      .eq("direction", "outbound")
+      .eq("content", replyText)
+      .gte("created_at", dupSince)
+      .limit(1);
+    if (dupRows && dupRows.length > 0) {
+      console.warn("[sendAiReply] duplicate body suppressed for", inboundMsg.phone_number);
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_brain",
+        p_severity: "warning",
+        p_message: `Duplicate AI reply suppressed for ${inboundMsg.phone_number}`,
+        p_context: { phone: inboundMsg.phone_number, snippet: String(replyText).slice(0, 160) },
+      }).then(() => {}, () => {});
+      return;
+    }
+  } catch (_e) { /* never block a send on the guard itself */ }
+
   let interactivePayload: any = null;
+
+
 
   // Extract interactive JSON from mixed prose — handles nested JSON via brace-balanced scan.
   // v2 — fixes a bug where the prior regex `[^{}]*` could not match nested objects
