@@ -524,8 +524,8 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
 
   if (shiftLoading || punchLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
-        <CardContent className="py-6 flex items-center gap-3 text-slate-500">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
+        <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading duty status…
         </CardContent>
       </Card>
@@ -535,7 +535,6 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   const isOff = !!shift?.is_weekly_off;
   const hasMorning = !!shift?.morning_start && !!shift?.morning_end;
   const hasEvening = !!shift?.evening_start && !!shift?.evening_end;
-  const overnight = hasMorning && timeToMin(shift?.morning_end)! < timeToMin(shift?.morning_start)!;
 
   const openPunch = (punches || []).find((p: any) => !p.check_out);
   const suggested: ShiftBlock['kind'] = openPunch
@@ -550,15 +549,26 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   // Check if current punch is from MIPS
   const isMipsPunch = openPunch?.source === 'mips';
 
+  // Turnstile presence wins over an auto-closed payroll row.
+  const lastSeenAt = presence?.last_seen_at ? new Date(presence.last_seen_at) : null;
+  const minsSinceScan = lastSeenAt
+    ? Math.max(0, Math.round((Date.now() - lastSeenAt.getTime()) / 60000))
+    : null;
+  const seenRecently = minsSinceScan !== null && minsSinceScan <= 90;
+  const onDuty = !!openPunch || seenRecently;
+
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 text-white">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5 overflow-hidden">
+      <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-4 text-primary-foreground">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider opacity-80 font-semibold">Duty Status</p>
             <h3 className="text-lg font-bold">
-              {isOff ? "Weekly Off" :
-                openPunch ? `On Duty · ${labelFor(openPunch.shift_type)}` : 'Off Duty'}
+              {isOff && !onDuty
+                ? 'Weekly Off'
+                : onDuty
+                  ? `On Duty${openPunch ? ` · ${labelFor(openPunch.shift_type)}` : ' · Turnstile'}`
+                  : 'Off Duty'}
             </h3>
           </div>
           <Clock className="h-6 w-6 opacity-80" />
@@ -569,24 +579,24 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
           <BlockPill
             label="Morning"
             icon={Sun}
-            tone="emerald"
+            tone="success"
             text={isOff ? 'Off' : hasMorning ? `${fmt(shift?.morning_start)} → ${fmt(shift?.morning_end)}` : 'No shift'}
           />
           <BlockPill
             label="Evening"
             icon={Moon}
-            tone="indigo"
+            tone="primary"
             text={isOff ? 'Off' : hasEvening ? `${fmt(shift?.evening_start)} → ${fmt(shift?.evening_end)}` : 'No shift'}
           />
         </div>
 
         {openPunch && (
-          <div className="rounded-xl bg-emerald-50 text-emerald-700 px-4 py-3 text-sm flex items-center justify-between border border-emerald-100">
+          <div className="rounded-xl bg-success/10 text-success px-4 py-3 text-sm flex items-center justify-between border border-success/20">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4" />
               <span>
                 Clocked in at <strong>{format(new Date(openPunch.check_in), 'HH:mm')}</strong>
-                {isMipsPunch && <Badge variant="outline" className="ml-2 text-[10px] py-0 border-emerald-200 text-emerald-600 bg-white">MIPS</Badge>}
+                {isMipsPunch && <Badge variant="outline" className="ml-2 text-[10px] py-0 border-success/30 text-success bg-background">MIPS</Badge>}
               </span>
             </div>
             <span className="font-bold tabular-nums">
@@ -594,6 +604,27 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
             </span>
           </div>
         )}
+
+        {!openPunch && lastSeenAt && (
+          <div
+            className={cn(
+              'rounded-xl px-4 py-3 text-sm flex items-center justify-between border',
+              seenRecently
+                ? 'bg-success/10 text-success border-success/20'
+                : 'bg-muted text-muted-foreground border-border',
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>
+                Last seen <strong>{format(lastSeenAt, 'HH:mm')}</strong>
+                {presence?.gate ? ` at ${presence.gate}` : ''}
+              </span>
+            </div>
+            <Badge variant="outline" className="text-[10px] py-0">Turnstile</Badge>
+          </div>
+        )}
+
 
         {/* Attendance is captured at the MIPS turnstile. Manual punching is a
             fallback only — clock-out stays available, clock-in is demoted. */}
