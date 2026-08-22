@@ -464,13 +464,12 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     if (selectedTemplate) {
       updateMutation.mutate({ id: selectedTemplate.id, ...templateData });
     } else {
-      if (!branch) {
-        toast.error('Please select a branch before creating a template');
-        return;
-      }
-      templateData.branch_id = branch;
+      // WhatsApp/Meta integration is often configured globally (branch_id IS NULL).
+      // When viewing "All branches", save the template globally instead of blocking.
+      templateData.branch_id = branch ?? null;
       createMutation.mutate(templateData);
     }
+
   };
 
   const insertVariable = (variable: string) => {
