@@ -362,7 +362,10 @@ export default function MyClients() {
                           )}
                         </div>
 
+                        <ClientVisitRhythm summary={visits[client.member_id]} loading={visitsLoading} />
+
                         <div className="mt-4 flex flex-wrap items-center gap-2">
+
                           <Button
                             variant="secondary"
                             size="sm"
