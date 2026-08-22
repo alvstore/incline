@@ -90,9 +90,64 @@ export function computeStreaks(days: Set<string>): { current: number; best: numb
   return { current, best };
 }
 
+export interface DayVisit {
+  key: string;
+  date: string;
+  firstIn: string;
+  lastOut: string | null;
+  /** punches collapsed into this day, oldest first */
+  punches: VisitRecord[];
+  /** minutes between first in and last out (or last in when still open) */
+  minutes: number;
+  open: boolean;
+}
+
+/**
+ * The turnstile writes one row per scan, so a single gym visit can appear as
+ * several rows. Collapse every scan of a calendar day into one visit row with
+ * the punch trail kept for detail.
+ */
+export function consolidateVisits(records: VisitRecord[]): DayVisit[] {
+  const byDay = new Map<string, VisitRecord[]>();
+  for (const r of records) {
+    const k = format(new Date(r.check_in), 'yyyy-MM-dd');
+    byDay.set(k, [...(byDay.get(k) || []), r]);
+  }
+
+  const days: DayVisit[] = [];
+  for (const [key, rows] of byDay) {
+    const punches = [...rows].sort(
+      (a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime(),
+    );
+    const firstIn = punches[0].check_in;
+    const outs = punches.map((p) => p.check_out).filter(Boolean) as string[];
+    const open = punches.some((p) => !p.check_out);
+    const lastOut = outs.length
+      ? outs.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))
+      : null;
+    const endMs = open
+      ? new Date(punches[punches.length - 1].check_in).getTime()
+      : lastOut
+        ? new Date(lastOut).getTime()
+        : new Date(firstIn).getTime();
+    days.push({
+      key,
+      date: firstIn,
+      firstIn,
+      lastOut,
+      punches,
+      minutes: Math.max(0, Math.round((endMs - new Date(firstIn).getTime()) / 60000)),
+      open,
+    });
+  }
+
+  return days.sort((a, b) => new Date(b.firstIn).getTime() - new Date(a.firstIn).getTime());
+}
+
 export function formatDuration(minutes: number): string {
   if (!minutes || minutes <= 0) return '—';
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
 }
+
