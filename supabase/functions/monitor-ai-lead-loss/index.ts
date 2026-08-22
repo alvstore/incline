@@ -145,7 +145,8 @@ async function createFrontDeskTask(row: StuckRow) {
         `Received: ${row.created_at}`,
       status: "pending",
       priority: "high",
-      due_date: new Date(Date.now() + 2 * 3600_000).toISOString(),
+      due_date: new Date().toISOString().slice(0, 10), // `due_date` is a DATE column
+      sla_hours: 2,
     });
   } catch (e) {
     console.warn("[monitor-ai-lead-loss] task insert failed:", (e as Error).message);
