@@ -32,7 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { inr, paymentStateMeta, useTrainerBilling } from '@/hooks/useTrainerBilling';
 
 const cardShell =
-  'rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none';
+  'rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 dark:shadow-none';
 
 export default function ScheduleSession() {
   const { trainer, clients, isLoading } = useTrainerData();
@@ -140,7 +140,7 @@ export default function ScheduleSession() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <section className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-primary-foreground shadow-lg">
+        <section className="rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
             <Plus className="h-7 w-7" aria-hidden />
             Schedule PT Session
@@ -281,7 +281,7 @@ export default function ScheduleSession() {
           {/* Summary + roster */}
           <div className="space-y-6">
             {selectedClient && selectedDate && (
-              <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-primary-foreground shadow-lg">
+              <div className="rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-5 text-primary-foreground shadow-lg">
                 <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-80">
                   <CheckCircle2 className="h-4 w-4" aria-hidden /> Session summary
                 </p>
@@ -332,7 +332,7 @@ export default function ScheduleSession() {
                             onClick={() => setSelectedClient(client.member_id)}
                             aria-pressed={selected}
                             className={`w-full min-h-[44px] cursor-pointer rounded-xl p-3 text-left transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring ${
-                              selected ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10' : 'hover:bg-muted/60'
+                              selected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60'
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -344,7 +344,7 @@ export default function ScheduleSession() {
                               </div>
                               <Badge
                                 className={`shrink-0 rounded-full border-0 text-xs ${
-                                  left > 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                                  left > 3 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
                                 }`}
                               >
                                 {left} left
