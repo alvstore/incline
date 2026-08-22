@@ -249,7 +249,17 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
 
   const assignMutation = useMutation({
     mutationFn: async () => {
+      // Close conflicting active plans first so the member is never left with
+      // two live plans of the same type.
+      if (conflictMode === 'replace' && conflicts.length > 0) {
+        const { error } = await supabase.rpc('supersede_fitness_plans' as never, {
+          p_plan_ids: conflicts.map((c) => c.plan_id),
+        } as never);
+        if (error) throw error;
+      }
+
       const data = await assignPlanToMembers({
+
         member_ids: selected.map((m) => m.id),
         plan_name: plan!.name,
         plan_type: plan!.type,
