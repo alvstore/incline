@@ -1200,139 +1200,21 @@ GENERAL RULES:
   const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
 
 
-  // v4.0.0 — Deterministic onboarding short-circuit. The LLM occasionally
-  // stalls or emits malformed JSON when a lead replies in free text to an
-  // interactive prompt (e.g. "Weight loss and body maintained" instead of
-  // tapping the goal list). Once auto-learn has captured the missing fact,
-  // we force the next deterministic step so the funnel never stops.
+  // v10.0.0 — DETERMINISTIC ASK-LADDER REMOVED.
+  // Until v9 a pre-LLM short-circuit answered every lead turn with a canned
+  // "may I have your name first? ✨" whenever the name was missing. It never
+  // reached the model, so any user reply that wasn't a bare name produced the
+  // exact same line — the conversational deadlock. Every inbound message now
+  // flows: context resolve → prompt build → LLM → light safety sanitizers.
+  // The funnel survives as *guidance* in the prompt (KNOWN SO FAR / ADVANCE
+  // RULE below) plus structured extraction on every turn, never as a hard gate.
   if (shouldCaptureLead) {
-    const _fn =
-      memory?.profile?.first_name ||
-      firstNameOf(memory?.profile?.full_name) ||
-      "";
-
-    // v4.1.0 — extend per-field short-circuit (was only annual-step).
-    // Each captured field forces the NEXT deterministic step without an LLM
-    // call so a stalled/timed-out Gemini turn cannot drop the funnel.
-    // v4.4.0 — Answer-and-pivot: if the user asked a Hinglish question
-    // (location/pricing/timeline), prepend the canned answer before re-asking.
-    const _pivot = intentPivotPrefix(ctx.messageContent);
-
-    // v4.8.0 — the capture prompt never wins over a real question, and no
-    // single field is ever asked more than twice. When a step is deferred we
-    // fall through to the LLM, which answers naturally and nudges softly.
-    const _userAsked = userAskedSomething(ctx.messageContent);
-    const _defer = (asks: number) => asks >= 2 || (_userAsked && !_pivot);
-
-
-    // Step 1: nothing captured → ask name, but soften per turn count (v4.6.0).
-    if (!hasName) {
-      const askTurns = countPriorNameAsks(history);
-      const userLast = String(ctx.messageContent || "").trim();
-      const userIsAck = ACK_RE.test(userLast);
-
-      // Pure acknowledgements after we already asked once → don't re-ask.
-      if (askTurns >= 1 && userIsAck) {
-        console.log(`[AI:guards] skipping name-ask on ack (turn=${askTurns})`);
-        return {
-          replyText: "Anytime ✨ I'm here whenever you'd like to continue.",
-          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-        };
-      }
-
-      let body: string;
-      if (askTurns === 0) {
-        body = "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨";
-      } else if (askTurns === 1) {
-        body = "…and may I have your name so I can help better? ✨";
-      } else if (askTurns === 2) {
-        body = "No problem — whenever you'd like to share your name, I can line up a VIP tour of the club. Meanwhile, anything specific I can help with? ✨";
-      } else {
-        // Turn 4+: stop pushing for the name. Let the pivot answer carry the
-        // reply; if there's no pivot, send a neutral assist line.
-        console.log(`[AI:guards] giving_up_name_ask (turn=${askTurns}) — pivot=${_pivot ? "yes" : "no"}`);
-        body = _pivot ? "" : "Happy to help with anything specific — equipment, recovery suite, location, or our Founding Member list ✨";
-        return {
-          replyText: `${_pivot}${body}`.trim(),
-          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-        };
-      }
-
-      if (askTurns > 0) console.log(`[AI:guards] name-ask softened — turn=${askTurns}`);
-      return {
-        replyText: `${_pivot}${body}`,
-        leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-      };
-    }
-
-
-    // Step 2: name captured, no email → ask email (plain text)
-    if (hasName && !hasEmail && !_defer(countPriorAsks(history, EMAIL_ASK_DETECT_RE))) {
-      return {
-        replyText: _fn
-          ? `${_pivot}Thanks, ${_fn} — what's the best email to send your tour details to? ✨`
-          : `${_pivot}Could you share your email so we can send your tour details? ✨`,
-        leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-      };
-    }
-
-    // Step 3: name+email captured, no goal → ask goal (interactive list)
-    if (hasName && hasEmail && !hasGoal && !_defer(countPriorAsks(history, GOAL_ASK_DETECT_RE))) {
-      const baseBody = _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?";
-      const reply = JSON.stringify({
-        type: "interactive_list",
-        body: `${_pivot}${baseBody}`,
-        button: "Choose goal",
-        sections: [{
-          title: "Fitness Goal",
-          rows: [
-            { id: "weight_loss", title: "Weight Loss" },
-            { id: "muscle_gain", title: "Muscle Gain" },
-            { id: "endurance", title: "Endurance" },
-            { id: "general", title: "Flexibility / General" },
-          ],
-        }],
-      });
-      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
-    }
-
-    if (hasName && hasEmail && hasGoal && !hasPlanInterest && !_defer(countPriorAsks(history, PLAN_ASK_DETECT_RE))) {
-      // v1.2.0 — if we have an UNconfirmed plan_interest (e.g. LLM previously
-      // inferred "annual" from "Founding"), soften the prompt to a confirm ask
-      // so the user explicitly taps one of the four durations.
-      const bodyText = hasUnconfirmedPlanInterest
-        ? (_fn
-            ? `Just to confirm, ${_fn} — which duration works best for you?`
-            : "Just to confirm — which duration works best for you?")
-        : (_fn
-            ? `Perfect, ${_fn} — which membership duration are you thinking about?`
-            : "Which membership duration are you thinking about?");
-      const reply = JSON.stringify({
-        type: "interactive_list",
-        body: `${_pivot}${bodyText}`,
-        button: "Choose duration",
-        sections: [{
-          title: "Membership Duration",
-          rows: [
-            { id: "monthly", title: "Monthly" },
-            { id: "quarterly", title: "Quarterly" },
-            { id: "half_yearly", title: "Half-Yearly" },
-            { id: "annual", title: "Annual — Founding Member" },
-          ],
-        }],
-      });
-      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
-    }
-    if (hasName && hasEmail && hasGoal && hasPlanInterest && !chatSettings?.captured_lead_id) {
-      const plan = String(memory?.facts?.plan_interest || "").toLowerCase();
-      const isAnnual = /annual|yearly|12\s*month/.test(plan);
-      // Unified embargo pivot — annual and non-annual both route to the same
-      // SSOT line so wording never drifts. Personalization via embargoPivotLine.
-      const reply = `${_pivot}${embargoPivotLine(_fn)}`;
-      void isAnnual; // intent still captured for CRM segmentation; copy is unified.
-      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
-    }
+    console.log(
+      `[AI:${ctx.platform}] lead-capture guidance ON (name=${hasName} email=${hasEmail} goal=${hasGoal} plan=${hasPlanInterest}) — no deterministic gate`,
+    );
   }
+  void hasUnconfirmedPlanInterest;
+
 
 
   if (inPostCaptureNurture) {
@@ -1574,15 +1456,20 @@ ANSWER-FIRST RULE (highest priority in this block):
   replyText = correctSocialHandles(replyText);
   replyText = ensureMapsLink(replyText);
 
-  // 9e. REPEATED-ASK COOLDOWN (v6.1.0). If we've already sent the same
+  // 9d.2 CONSECUTIVE-DUPLICATE BLOCKER (v10.0.0). If this reply repeats a
+  //      sentence we already sent in the previous outbound turn, rephrase it
+  //      rather than parroting. Never goes silent.
+  replyText = blockConsecutiveDuplicate(replyText, history);
+
+  // 9e. REPEATED-ASK COOLDOWN (v6.1.0, v10.0.0). If we've already sent the same
   //     onboarding ask (name / email / goal / plan) 2+ times in the last 6
-  //     outbound turns without a valid answer, stop looping — hand off to
-  //     staff and go silent. This is what saved the Vera thread from 9
-  //     identical "Founding Member invite" prompts.
+  //     outbound turns without a valid answer, stop looping — hand the thread
+  //     to staff. v10: we no longer go SILENT (users read that as a dead bot);
+  //     we send one warm handoff line and then pause.
   {
     const cooldown = detectRepeatedAskLoop(replyText, history);
     if (cooldown.looping) {
-      console.log(`[AI:${ctx.platform}] repeated-ask loop detected (${cooldown.askKind} sent ${cooldown.count}x) — escalating to staff, going silent`);
+      console.log(`[AI:${ctx.platform}] repeated-ask loop detected (${cooldown.askKind} sent ${cooldown.count}x) — escalating to staff`);
       try {
         await supabase
           .from("whatsapp_chat_settings")
@@ -1614,9 +1501,16 @@ ANSWER-FIRST RULE (highest priority in this block):
           }),
         }).catch(() => {});
       } catch { /* noop */ }
-      return skip(`ask_loop_${cooldown.askKind}`);
+      return {
+        replyText: "Apologies — let me get a teammate on this instead of going in circles. Our front desk will reach out to you shortly ✨",
+        leadCaptured: false,
+        leadId: null,
+        handoffTriggered: true,
+        skipped: false,
+      };
     }
   }
+
 
 
 
@@ -1788,22 +1682,12 @@ function enforceOutboundInteractiveGuards(input: {
     }],
   });
 
-  const askNextMissing = (): string => {
-    if (!knownName) return "Sure — may I have your name first? ✨";
-    const firstName = realName.split(/\s+/)[0];
-    if (!knownEmail) {
-      return firstName
-        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
-        : "Could you share your email so we can send your tour details?";
-    }
-    const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-    if (!knownGoal) return goalListJson(firstName);
-    const knownPlan = !!memory?.facts?.plan_interest;
-    if (!knownPlan) return planListJson(firstName);
-    return embargoPivotLine(firstName);
-  };
-
-
+  // v10.0.0 — the old askNextMissing() ladder is gone. When an interactive
+  // payload has to be dropped we degrade to the model's OWN body text instead
+  // of overwriting a good reply with the canned "may I have your name first?"
+  // line. That rewriter was the second half of the deadlock.
+  const plainFallback = (): string => bodyText;
+  void goalListJson; void planListJson; void knownEmail; void realName;
 
   // Look at last 6 outbound messages for the same body text
   const recentOutbound = history.filter((m) => m.role === "assistant").slice(-6);
@@ -1822,24 +1706,27 @@ function enforceOutboundInteractiveGuards(input: {
     return false;
   }).length;
 
-  // (1) Duplicate interactive — fall back to plain text
+  // (1) Duplicate interactive — degrade to the plain body so we never send the
+  //     identical list twice in a row.
   if (sameBodyCount >= 1) {
     console.log(`[AI:guards] dropping duplicate interactive — bodyText="${bodyText.slice(0, 60)}"`);
-    return askNextMissing();
+    return plainFallback();
   }
 
-  // (2) Hard gate — interactive before name + email is captured
-  if (leadCaptureEnabled && (!knownName || !knownEmail)) {
-    console.log(`[AI:guards] stripping interactive — hard gate (name=${knownName}, email=${knownEmail})`);
-    return askNextMissing();
+  // (2) Interactive lists are only meaningful once we know who we're talking
+  //     to; without a name we keep the model's wording as plain text (no gate).
+  if (leadCaptureEnabled && !knownName) {
+    console.log(`[AI:guards] flattening interactive to text — name not yet known`);
+    return plainFallback();
   }
 
   // (3) FOUNDER'S PHASE — only PT-package / day-pass interactives are forbidden.
   //     Duration/goal interactives are explicitly allowed (v3.6.0).
   if (/pt\s*package|personal\s*training\s*package|day\s*pass|session\s*pack/i.test(bodyText)) {
     console.log(`[AI:guards] dropping forbidden PT/day-pass interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
-    return askNextMissing();
+    return plainFallback();
   }
+
 
   return replyText;
 }
