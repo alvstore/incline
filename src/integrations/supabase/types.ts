@@ -15188,6 +15188,12 @@ export type Database = {
         Returns: number
       }
       normalize_phone_in: { Args: { p: string }; Returns: string }
+      notification_recipients: {
+        Args: { p_branch_id: string; p_category?: string }
+        Returns: {
+          user_id: string
+        }[]
+      }
       notify_member: {
         Args: {
           p_branch_id: string

@@ -183,7 +183,7 @@ export default function TrainerDashboard() {
         {/* ── Quick actions ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <QuickActionLink to="/my-clients" icon={Users} label="My Clients" hint="Roster & progress" tone="indigo" />
-          <QuickActionLink to="/pt-sessions" icon={Calendar} label="PT Sessions" hint="Log & schedule" tone="emerald" />
+          <QuickActionLink to="/schedule-session" icon={Calendar} label="Schedule Session" hint="Book a PT slot" tone="emerald" />
           <QuickActionLink to="/trainer-plan-builder" icon={TrendingUp} label="Fitness Plans" hint="Build & assign" tone="amber" />
           <QuickActionLink to="/member-store" icon={Wallet} label="Member Store" hint="Sell add-ons" tone="violet" />
         </div>
@@ -564,49 +564,40 @@ function DutyStatusCard({ userId }: { userId: string }) {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3 pt-1">
-          {/* Manual Clock In - not required. handled by MIPS checking will handle by mips only checkout button if trainer has been passed through turnstile. */}
-          {(!openPunch || !isMipsPunch) && (
-            <Button
-              size="lg"
-              disabled={punch.isPending || !!(isMipsPunch && openPunch)}
-              onClick={onPunch}
-              className={cn(
-                "rounded-xl px-8 shadow-md transition-all active:scale-95",
-                openPunch
-                  ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-              )}
-            >
-              {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
-                openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
-              {openPunch ? (isMipsPunch ? 'MIPS Active' : 'Manual Clock Out') : 'Manual Clock In'}
-            </Button>
-          )}
-
-          {openPunch && isMipsPunch && (
+        {/* Attendance is captured at the MIPS turnstile. Manual punching is a
+            fallback only — clock-out stays available, clock-in is demoted. */}
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          {openPunch ? (
             <Button
               size="lg"
               disabled={punch.isPending}
               onClick={onPunch}
-              className="rounded-xl px-8 shadow-md transition-all active:scale-95 bg-red-500 hover:bg-red-600 text-white"
+              className="rounded-xl bg-red-500 px-8 text-white shadow-md transition-all hover:bg-red-600 active:scale-95"
             >
-              {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Square className="h-4 w-4 mr-2 fill-current" />}
-              Manual Clock Out
+              {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4 fill-current" />}
+              Clock out
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={punch.isPending || isOff}
+              onClick={onPunch}
+              className="rounded-xl text-slate-500 hover:text-slate-700"
+            >
+              {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
+              Turnstile unreachable? Punch manually
             </Button>
           )}
-
-          
-          {isMipsPunch && openPunch && (
-            <p className="text-sm text-slate-500 self-center italic">
-              Check-out via MIPS turnstile
-            </p>
+          {openPunch && isMipsPunch && (
+            <p className="self-center text-sm italic text-slate-500">Check-out normally happens at the turnstile</p>
           )}
         </div>
-        
+
         <p className="text-[10px] text-slate-400">
-          Attendance is primarily synchronized via Biometric MIPS. Use manual punch only if the turnstile is unreachable or for special shift overrides.
+          Attendance is synchronized from the biometric MIPS turnstile. Manual punch is only a fallback.
         </p>
+
       </CardContent>
     </Card>
   );

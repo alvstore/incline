@@ -652,19 +652,15 @@ Deno.serve(async (req) => {
             .eq("member_id", member.member_id)
             .gt("stage_level", 0);
 
-          const { data: branchStaff } = await adminClient
-            .from("staff_branches")
-            .select("user_id")
-            .eq("branch_id", branch.id);
-          const branchStaffIds = (branchStaff || []).map((s: any) => s.user_id);
+          // Canonical recipient resolver — owners/admins/branch managers +
+          // front-desk staff. Trainers are excluded (they only get their own
+          // coaching notifications).
+          const { data: recipientRows } = await adminClient
+            .rpc("notification_recipients", { p_branch_id: branch.id, p_category: "retention" });
+          const recipientIds = Array.from(
+            new Set(((recipientRows as any[]) || []).map((r: any) => r.user_id ?? r)),
+          ).filter(Boolean);
 
-          const { data: ownersAdmins } = await adminClient
-            .from("user_roles")
-            .select("user_id")
-            .in("role", ["owner", "admin"]);
-          const ownerAdminIds = (ownersAdmins || []).map((r: any) => r.user_id);
-
-          const recipientIds = Array.from(new Set([...branchStaffIds, ...ownerAdminIds]));
           for (const uid of recipientIds) {
             notifications.push({
               user_id: uid, branch_id: branch.id,

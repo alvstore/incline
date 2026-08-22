@@ -306,11 +306,16 @@ export default function MyClients() {
                                   trainerId={trainer!.id}
                                   memberName={clientName}
                                 />
-                                <Button variant="ghost" size="sm" asChild title="View in Coaching Studio">
-                                  <Link to={`/pt-sessions?member=${client.member_id}`}>
-                                    <Eye className="h-4 w-4" />
-                                  </Link>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label={`View progress for ${clientName}`}
+                                  title="View progress"
+                                  onClick={() => setProgressDrawer({ open: true, memberId: client.member_id, memberName: clientName })}
+                                >
+                                  <Eye className="h-4 w-4" />
                                 </Button>
+
                               </div>
                             </td>
                           </tr>
