@@ -597,7 +597,7 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
               className="rounded-xl text-slate-500 hover:text-slate-700"
             >
               {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
-              Turnstile unreachable? Punch manually
+              Punch in manually
             </Button>
           )}
           {openPunch && isMipsPunch && (
