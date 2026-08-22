@@ -1456,15 +1456,20 @@ ANSWER-FIRST RULE (highest priority in this block):
   replyText = correctSocialHandles(replyText);
   replyText = ensureMapsLink(replyText);
 
-  // 9e. REPEATED-ASK COOLDOWN (v6.1.0). If we've already sent the same
+  // 9d.2 CONSECUTIVE-DUPLICATE BLOCKER (v10.0.0). If this reply repeats a
+  //      sentence we already sent in the previous outbound turn, rephrase it
+  //      rather than parroting. Never goes silent.
+  replyText = blockConsecutiveDuplicate(replyText, history);
+
+  // 9e. REPEATED-ASK COOLDOWN (v6.1.0, v10.0.0). If we've already sent the same
   //     onboarding ask (name / email / goal / plan) 2+ times in the last 6
-  //     outbound turns without a valid answer, stop looping — hand off to
-  //     staff and go silent. This is what saved the Vera thread from 9
-  //     identical "Founding Member invite" prompts.
+  //     outbound turns without a valid answer, stop looping — hand the thread
+  //     to staff. v10: we no longer go SILENT (users read that as a dead bot);
+  //     we send one warm handoff line and then pause.
   {
     const cooldown = detectRepeatedAskLoop(replyText, history);
     if (cooldown.looping) {
-      console.log(`[AI:${ctx.platform}] repeated-ask loop detected (${cooldown.askKind} sent ${cooldown.count}x) — escalating to staff, going silent`);
+      console.log(`[AI:${ctx.platform}] repeated-ask loop detected (${cooldown.askKind} sent ${cooldown.count}x) — escalating to staff`);
       try {
         await supabase
           .from("whatsapp_chat_settings")
@@ -1496,9 +1501,16 @@ ANSWER-FIRST RULE (highest priority in this block):
           }),
         }).catch(() => {});
       } catch { /* noop */ }
-      return skip(`ask_loop_${cooldown.askKind}`);
+      return {
+        replyText: "Apologies — let me get a teammate on this instead of going in circles. Our front desk will reach out to you shortly ✨",
+        leadCaptured: false,
+        leadId: null,
+        handoffTriggered: true,
+        skipped: false,
+      };
     }
   }
+
 
 
 
