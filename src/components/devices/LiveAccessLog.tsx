@@ -286,8 +286,8 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
   const staffCheckOutMutation = useMutation({
     mutationFn: async (profileId: string) => {
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-      const { data: existing, error: fetchErr } = await supabase
-        .from("staff_attendance")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing, error: fetchErr } = await (supabase.from("staff_attendance") as any)
         .select("id, check_out")
         .eq("user_id", profileId)
         .eq("date", today)
