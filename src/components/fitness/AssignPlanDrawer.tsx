@@ -202,7 +202,9 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   useEffect(() => {
     if (open) {
       setResults(null);
+      setConflictMode('replace');
       setSearchQuery('');
+
       setIsCommon(!!plan?.is_common);
       setStartDate(todayISO());
       setShowStartPicker(false);
