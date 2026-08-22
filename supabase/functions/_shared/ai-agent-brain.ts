@@ -1987,41 +1987,26 @@ function sanitizeFoundersPhaseText(input: {
   return out;
 }
 
-// Deterministic fallback when the model returns no text. Mirrors the
-// onboarding sequence (Name → Email → Goal → Plan) so a missing field always
-// gets re-asked instead of leaving the user with silence.
+// Fallback when the model returns no text. The old version re-asked the
+// onboarding ladder (name → email → goal → plan), which produced the
+// "Sure — may I have your name first? ✨" loop whenever the model was silent.
+// It now returns ONE warm, non-interrogative holding line; the caller's
+// duplicate blocker prevents it from repeating.
 function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string | null {
   const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
   const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
   const firstName = realName ? realName.split(/\s+/)[0] : "";
-  const knownName = !!realName;
-  const knownEmail = !!memory?.profile?.email;
-  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-  const knownPlan = !!memory?.facts?.plan_interest;
 
   if (leadCaptureEnabled) {
-    if (!knownName) return "Sure — may I have your name first? ✨";
-    if (!knownEmail) {
-      return firstName
-        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
-        : "Could you share your email so we can send your tour details? ✨";
-    }
-    if (!knownGoal) {
-      return firstName
-        ? `Got it, ${firstName} — what's your main fitness goal? ✨`
-        : "What's your main fitness goal? ✨";
-    }
-    if (!knownPlan) {
-      return firstName
-        ? `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`
-        : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
-    }
+    return firstName
+      ? `Happy to help, ${firstName} ✨ ${tourCtaLine(firstName)}`
+      : `Happy to help ✨ ${tourCtaLine()}`;
   }
-  // Default: acknowledge + tour CTA.
   return firstName
-    ? `Noted, ${firstName} ✨ ${tourCtaLine(firstName)}`
-    : `Noted ✨ ${tourCtaLine()}`;
+    ? `Noted, ${firstName} ✨ Anything else I can help you with?`
+    : `Noted ✨ Anything else I can help you with?`;
 }
+
 
 
 
