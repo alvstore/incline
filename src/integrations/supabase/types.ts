@@ -14838,6 +14838,17 @@ export type Database = {
         }[]
       }
       get_member_id: { Args: { _user_id: string }; Returns: string }
+      get_my_trainers: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          full_name: string
+          relation: string
+          specializations: string[]
+          trainer_code: string
+          trainer_id: string
+        }[]
+      }
       get_online_users: {
         Args: { stale_minutes?: number }
         Returns: {
