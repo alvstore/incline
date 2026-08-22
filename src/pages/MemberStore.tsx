@@ -512,12 +512,15 @@ export default function MemberStore() {
         )}
 
         {/* Recovery & add-ons */}
-        <AddOnShowcase
-          memberId={actor.id}
-          memberName={actorName}
-          membershipId={activeMembership?.id ?? null}
-          branchId={actor.branch_id}
-        />
+        {!isStaffBuyer && (
+          <AddOnShowcase
+            memberId={actor.id}
+            memberName={actorName}
+            membershipId={activeMembership?.id ?? null}
+            branchId={actor.branch_id}
+          />
+        )}
+
 
 
         {/* Search + categories */}
