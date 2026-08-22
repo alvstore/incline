@@ -341,8 +341,10 @@ async function verifyAgainstAnyAppSecret(
 ): Promise<{ accepted: boolean; skipped: boolean; secretsTried: number; matchedPrefix?: string }> {
   const secrets = await getActiveAppSecrets();
   if (secrets.length === 0) {
-    return { accepted: true, skipped: true, secretsTried: 0 };
+    // Fail closed: without a configured app secret we cannot verify authenticity.
+    return { accepted: false, skipped: false, secretsTried: 0 };
   }
+
   if (!sigHeader) return { accepted: false, skipped: false, secretsTried: secrets.length };
   for (const s of secrets) {
     if (await verifyXHubSignature(rawBody, sigHeader, s)) {
