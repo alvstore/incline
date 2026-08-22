@@ -1200,139 +1200,21 @@ GENERAL RULES:
   const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
 
 
-  // v4.0.0 — Deterministic onboarding short-circuit. The LLM occasionally
-  // stalls or emits malformed JSON when a lead replies in free text to an
-  // interactive prompt (e.g. "Weight loss and body maintained" instead of
-  // tapping the goal list). Once auto-learn has captured the missing fact,
-  // we force the next deterministic step so the funnel never stops.
+  // v10.0.0 — DETERMINISTIC ASK-LADDER REMOVED.
+  // Until v9 a pre-LLM short-circuit answered every lead turn with a canned
+  // "may I have your name first? ✨" whenever the name was missing. It never
+  // reached the model, so any user reply that wasn't a bare name produced the
+  // exact same line — the conversational deadlock. Every inbound message now
+  // flows: context resolve → prompt build → LLM → light safety sanitizers.
+  // The funnel survives as *guidance* in the prompt (KNOWN SO FAR / ADVANCE
+  // RULE below) plus structured extraction on every turn, never as a hard gate.
   if (shouldCaptureLead) {
-    const _fn =
-      memory?.profile?.first_name ||
-      firstNameOf(memory?.profile?.full_name) ||
-      "";
-
-    // v4.1.0 — extend per-field short-circuit (was only annual-step).
-    // Each captured field forces the NEXT deterministic step without an LLM
-    // call so a stalled/timed-out Gemini turn cannot drop the funnel.
-    // v4.4.0 — Answer-and-pivot: if the user asked a Hinglish question
-    // (location/pricing/timeline), prepend the canned answer before re-asking.
-    const _pivot = intentPivotPrefix(ctx.messageContent);
-
-    // v4.8.0 — the capture prompt never wins over a real question, and no
-    // single field is ever asked more than twice. When a step is deferred we
-    // fall through to the LLM, which answers naturally and nudges softly.
-    const _userAsked = userAskedSomething(ctx.messageContent);
-    const _defer = (asks: number) => asks >= 2 || (_userAsked && !_pivot);
-
-
-    // Step 1: nothing captured → ask name, but soften per turn count (v4.6.0).
-    if (!hasName) {
-      const askTurns = countPriorNameAsks(history);
-      const userLast = String(ctx.messageContent || "").trim();
-      const userIsAck = ACK_RE.test(userLast);
-
-      // Pure acknowledgements after we already asked once → don't re-ask.
-      if (askTurns >= 1 && userIsAck) {
-        console.log(`[AI:guards] skipping name-ask on ack (turn=${askTurns})`);
-        return {
-          replyText: "Anytime ✨ I'm here whenever you'd like to continue.",
-          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-        };
-      }
-
-      let body: string;
-      if (askTurns === 0) {
-        body = "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨";
-      } else if (askTurns === 1) {
-        body = "…and may I have your name so I can help better? ✨";
-      } else if (askTurns === 2) {
-        body = "No problem — whenever you'd like to share your name, I can line up a VIP tour of the club. Meanwhile, anything specific I can help with? ✨";
-      } else {
-        // Turn 4+: stop pushing for the name. Let the pivot answer carry the
-        // reply; if there's no pivot, send a neutral assist line.
-        console.log(`[AI:guards] giving_up_name_ask (turn=${askTurns}) — pivot=${_pivot ? "yes" : "no"}`);
-        body = _pivot ? "" : "Happy to help with anything specific — equipment, recovery suite, location, or our Founding Member list ✨";
-        return {
-          replyText: `${_pivot}${body}`.trim(),
-          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-        };
-      }
-
-      if (askTurns > 0) console.log(`[AI:guards] name-ask softened — turn=${askTurns}`);
-      return {
-        replyText: `${_pivot}${body}`,
-        leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-      };
-    }
-
-
-    // Step 2: name captured, no email → ask email (plain text)
-    if (hasName && !hasEmail && !_defer(countPriorAsks(history, EMAIL_ASK_DETECT_RE))) {
-      return {
-        replyText: _fn
-          ? `${_pivot}Thanks, ${_fn} — what's the best email to send your tour details to? ✨`
-          : `${_pivot}Could you share your email so we can send your tour details? ✨`,
-        leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
-      };
-    }
-
-    // Step 3: name+email captured, no goal → ask goal (interactive list)
-    if (hasName && hasEmail && !hasGoal && !_defer(countPriorAsks(history, GOAL_ASK_DETECT_RE))) {
-      const baseBody = _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?";
-      const reply = JSON.stringify({
-        type: "interactive_list",
-        body: `${_pivot}${baseBody}`,
-        button: "Choose goal",
-        sections: [{
-          title: "Fitness Goal",
-          rows: [
-            { id: "weight_loss", title: "Weight Loss" },
-            { id: "muscle_gain", title: "Muscle Gain" },
-            { id: "endurance", title: "Endurance" },
-            { id: "general", title: "Flexibility / General" },
-          ],
-        }],
-      });
-      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
-    }
-
-    if (hasName && hasEmail && hasGoal && !hasPlanInterest && !_defer(countPriorAsks(history, PLAN_ASK_DETECT_RE))) {
-      // v1.2.0 — if we have an UNconfirmed plan_interest (e.g. LLM previously
-      // inferred "annual" from "Founding"), soften the prompt to a confirm ask
-      // so the user explicitly taps one of the four durations.
-      const bodyText = hasUnconfirmedPlanInterest
-        ? (_fn
-            ? `Just to confirm, ${_fn} — which duration works best for you?`
-            : "Just to confirm — which duration works best for you?")
-        : (_fn
-            ? `Perfect, ${_fn} — which membership duration are you thinking about?`
-            : "Which membership duration are you thinking about?");
-      const reply = JSON.stringify({
-        type: "interactive_list",
-        body: `${_pivot}${bodyText}`,
-        button: "Choose duration",
-        sections: [{
-          title: "Membership Duration",
-          rows: [
-            { id: "monthly", title: "Monthly" },
-            { id: "quarterly", title: "Quarterly" },
-            { id: "half_yearly", title: "Half-Yearly" },
-            { id: "annual", title: "Annual — Founding Member" },
-          ],
-        }],
-      });
-      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
-    }
-    if (hasName && hasEmail && hasGoal && hasPlanInterest && !chatSettings?.captured_lead_id) {
-      const plan = String(memory?.facts?.plan_interest || "").toLowerCase();
-      const isAnnual = /annual|yearly|12\s*month/.test(plan);
-      // Unified embargo pivot — annual and non-annual both route to the same
-      // SSOT line so wording never drifts. Personalization via embargoPivotLine.
-      const reply = `${_pivot}${embargoPivotLine(_fn)}`;
-      void isAnnual; // intent still captured for CRM segmentation; copy is unified.
-      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
-    }
+    console.log(
+      `[AI:${ctx.platform}] lead-capture guidance ON (name=${hasName} email=${hasEmail} goal=${hasGoal} plan=${hasPlanInterest}) — no deterministic gate`,
+    );
   }
+  void hasUnconfirmedPlanInterest;
+
 
 
   if (inPostCaptureNurture) {
