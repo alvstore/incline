@@ -57,6 +57,17 @@ interface MemberLite {
   full_name: string;
 }
 
+interface PlanConflict {
+  plan_id: string;
+  member_id: string;
+  member_name: string;
+  plan_name: string;
+  valid_from: string | null;
+  valid_until: string | null;
+  assigned_by: string;
+}
+
+
 interface AssignPlanDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
