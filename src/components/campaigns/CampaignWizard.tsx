@@ -489,6 +489,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     }
     // Track the editing row so any "Submit to Meta" resubmission updates it
     // instead of creating a duplicate draft (issue #1).
+    setVarOverrides(
+      (c as any).template_variables && typeof (c as any).template_variables === 'object'
+        ? Object.fromEntries(
+            Object.entries((c as any).template_variables as Record<string, unknown>)
+              .filter(([k]) => !/^(v|param)\d+$/.test(k))
+              .map(([k, v]) => [k, String(v ?? '')]),
+          )
+        : {},
+    );
     setDraftCampaignId(c.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingCampaign?.id]);
