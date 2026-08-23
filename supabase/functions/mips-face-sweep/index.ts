@@ -145,10 +145,10 @@ Deno.serve(async (req) => {
           .select("id, mips_person_sn, full_name:member_code")
           .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
         supabase.from("employees")
-          .select("id, mips_person_sn, full_name")
+          .select("id, mips_person_sn, full_name:employee_code")
           .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
         supabase.from("trainers")
-          .select("id, mips_person_sn, full_name")
+          .select("id, mips_person_sn, full_name:trainer_code")
           .eq("branch_id", branchId).eq("is_active", true)
           .not("mips_person_id", "is", null).or(photoFilter).limit(1000),
       ]);

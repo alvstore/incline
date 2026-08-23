@@ -248,7 +248,11 @@ serve(async (req: Request) => {
       if (event === "payment_link.paid") {
         const plinkEntity = payload.payload?.payment_link?.entity;
         const paymentEntity = payload.payload?.payment?.entity;
-        const referenceId = plinkEntity?.reference_id;
+        // reference_id may carry a "<invoiceId>|<timestamp>" uniqueness suffix.
+        const rawReferenceId: string | undefined = plinkEntity?.reference_id;
+        const referenceId = rawReferenceId
+          ? String(rawReferenceId).split("|")[0]
+          : (plinkEntity?.notes?.invoice_id as string | undefined);
         const rzpAmount = (paymentEntity?.amount || plinkEntity?.amount || 0) / 100;
         const paymentId = paymentEntity?.id || plinkEntity?.id;
         const capturedAt = paymentEntity?.created_at ? new Date(paymentEntity.created_at * 1000).toISOString() : new Date().toISOString();

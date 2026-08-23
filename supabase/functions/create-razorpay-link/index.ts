@@ -1,3 +1,4 @@
+// v2.1.0 — Reuses an existing active link for the invoice; unique reference_id per attempt.
 // v2.0.0 — Convenience fee is quoted and charged at the gateway only; the invoice is never mutated.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -148,11 +149,41 @@ serve(async (req: Request) => {
     const amountInPaise = Math.round(chargeAmount * 100);
     const authHeader = btoa(`${keyId}:${keySecret}`);
 
+    // Reuse an already-created link for the same invoice + amount instead of
+    // asking Razorpay for a duplicate (which fails with a reference_id clash).
+    const { data: existingTxn } = await supabase
+      .from("payment_transactions")
+      .select("gateway_order_id, amount, webhook_data")
+      .eq("invoice_id", invoiceId)
+      .eq("gateway", "razorpay")
+      .eq("status", "created")
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const reusable = (existingTxn ?? []).find(
+      (t: any) => Number(t.amount) === chargeAmount && t.webhook_data?.short_url,
+    );
+    if (reusable) {
+      console.log("Reusing existing Razorpay link for invoice:", invoiceId);
+      return new Response(
+        JSON.stringify({
+          short_url: reusable.webhook_data.short_url,
+          plink_id: reusable.gateway_order_id,
+          amount: chargeAmount,
+          baseAmount: amount,
+          convenienceFee: feeQuote,
+          reused: true,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const razorpayPayload: any = {
       amount: amountInPaise,
       currency: "INR",
       accept_partial: false,
-      reference_id: invoiceId,
+      // Unique per attempt; the webhook parses the invoice UUID before the "|".
+      reference_id: `${invoiceId}|${Date.now()}`,
       description: surcharge > 0
         ? `Payment for Invoice ${invoice.invoice_number || invoiceId} (incl. ₹${surcharge} online convenience fee)`
         : `Payment for Invoice ${invoice.invoice_number || invoiceId}`,
