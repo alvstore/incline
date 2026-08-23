@@ -1160,9 +1160,13 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         const errText = String(error || '');
         const isTransient =
           status === 'failed' &&
-          (/rate limit exceeded/i.test(errText) ||
+          (/rate\s*limit/i.test(errText) ||          // covers "rate limit exceeded" AND SMTP "Ratelimit ... exceeded"
+            /throttl/i.test(errText) ||
+            /\b4\.7\.1\b|\b451\b|\b421\b|\b452\b/.test(errText) || // transient SMTP 4xx
+            /too many (messages|emails|requests)/i.test(errText) ||
             /timeout_25s/i.test(errText) ||
             /fetch_failed/i.test(errText));
+
         const priorTransients = Number(
           String(r.error || '').match(/transient_requeued\((\d+)\)/i)?.[1] || 0,
         );
