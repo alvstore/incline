@@ -905,7 +905,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       // found"); anything else is a transient error and we requeue instead
       // of quietly giving up (which is what left prior chunks stuck).
       const { data: campaign, error: loadErr } = await adminClient.from('campaigns')
-        .select('id, branch_id, channel, template_id, message, subject, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
+        .select('id, branch_id, channel, template_id, template_variables, message, subject, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
         .eq('id', campaign_id).maybeSingle();
       if (loadErr) {
         console.error('[chunk] campaign load error, will retry:', campaign_id, loadErr);
@@ -1001,6 +1001,17 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           first_name: firstName || 'there',
           name: nameFallback,
           '1': nameFallback, v1: nameFallback, param1: nameFallback,
+          // Campaign-wide fixed slot values ({{2}}, {{3}}, …) set in the wizard.
+          ...(campaign.template_variables && typeof campaign.template_variables === 'object'
+            ? Object.fromEntries(
+                Object.entries(campaign.template_variables as Record<string, unknown>)
+                  .filter(([, v]) => typeof v === 'string' && String(v).trim())
+                  .map(([k, v]) => [k, String(v)
+                    .replace(/\{\{\s*first_name\s*\}\}/gi, firstName || 'there')
+                    .replace(/\{\{\s*full_name\s*\}\}/gi, r.full_name || 'there')
+                    .replace(/\{\{\s*member_name\s*\}\}/gi, r.full_name || 'there')]),
+              )
+            : {}),
         };
 
         if (channel === 'whatsapp' && templateId && !String(r.full_name || '').trim()) {
