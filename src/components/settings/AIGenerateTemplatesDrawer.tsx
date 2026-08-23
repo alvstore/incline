@@ -290,7 +290,49 @@ export function AIGenerateTemplatesDrawer({
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {step === 'pick' ? (
             <div className="space-y-4">
+              {!matrixLoading && (
+                <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {channelEvents.length - uncovered.length} of {channelEvents.length} system events
+                    covered
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {brokenTemplates.length > 0
+                      ? `${brokenTemplates.length} approved template(s) no longer exist in Meta — listed below.`
+                      : 'Coverage counts only templates Meta still has approved and live.'}
+                  </p>
+                </div>
+              )}
+
+              {brokenTemplates.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm font-bold text-amber-900">
+                      Missing in Meta — needs recreating
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800">
+                    These events have a CRM template, but Meta dropped the approved template. Select
+                    the event below to generate fresh copy, or re-submit the existing template from the
+                    Templates list (filter “Missing / Stale”).
+                  </p>
+                  <ul className="space-y-1">
+                    {brokenTemplates.map((b) => (
+                      <li
+                        key={`${b.metaName}-${b.event}`}
+                        className="text-xs text-amber-900 bg-white/70 rounded-lg px-2.5 py-1.5"
+                      >
+                        <span className="font-semibold">{b.templateName}</span>
+                        <span className="text-amber-700"> · {b.metaName} · {b.event}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-3">
+
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   Select events to cover ({uncovered.length} gaps)
                 </h3>
