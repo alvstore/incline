@@ -787,6 +787,27 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           } as any) }
         : null;
 
+      // Email / SMS / in-app bodies are sent verbatim, so the dispatcher
+      // rejects any leftover {{token}} (`unresolved_placeholders`). Resolve
+      // them here with the same values a real send would use (auto vars,
+      // manual slot values, class fills, poster URL).
+      const resolveBody = (text: string): string =>
+        text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) => {
+          const k = String(key);
+          const direct = perVars[k] ?? perVars[k.toLowerCase()];
+          if (direct) return String(direct);
+          if (k.toLowerCase() === 'poster_url' && attachment?.url) return attachment.url;
+          if (k.toLowerCase() === 'branch_name') return 'The Incline Life by Incline';
+          return '';
+        }).replace(/[ \t]{2,}/g, ' ').trim();
+
+      const isFreeformChannel = channel !== 'whatsapp' || !templateId;
+      const finalBody = buildFinalMessage();
+      const testBody = isFreeformChannel && channel !== 'whatsapp' ? resolveBody(finalBody) : finalBody;
+      const testSubject = channel === 'email'
+        ? (resolveBody(subject.trim()) || 'Test message')
+        : undefined;
+
       // Call dispatcher DIRECTLY so we get a real per-send result. Going
       // through send-broadcast returns an async 202 ACK (v4.0.0 background
       // mode) with no `sent` count — the wizard used to interpret that as
@@ -799,8 +820,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           recipient: recipientAddress,
           category: 'marketing',
           payload: {
-            subject: channel === 'email' ? (subject.trim() || 'Test message') : undefined,
-            body: buildFinalMessage(),
+            subject: testSubject,
+            body: testBody,
             variables: rcsVars ?? perVars,
           },
           template_id: templateId,
