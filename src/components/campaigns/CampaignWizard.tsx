@@ -892,38 +892,60 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     return body;
   };
 
-  /** Auto-fill event fields + message slots from a scheduled class. */
-  const applyClassSelection = (classId: string) => {
-    setSelectedClassId(classId);
-    const cls = (upcomingClasses as any[]).find((c: any) => c.id === classId);
-    if (!cls) return;
-    const when = formatClassWhen(cls.scheduled_at);
-    const d = new Date(cls.scheduled_at);
-    setEventName(cls.name || '');
+  /** Auto-fill event fields + message slots from one or more scheduled classes. */
+  const applyClassSelections = (ids: string[]) => {
+    setSelectedClassIds(ids);
+    const picked = (upcomingClasses as any[]).filter((c: any) => ids.includes(c.id));
+    if (picked.length === 0) return;
+    const primary = picked[0];
+    const whenList = picked.map((c: any) => formatClassWhen(c.scheduled_at)).filter(Boolean);
+    const when = whenList.join(' · ');
+    const d = new Date(primary.scheduled_at);
+    const names = Array.from(new Set(picked.map((c: any) => c.name).filter(Boolean)));
+    setEventName(names.join(' + '));
     setEventDate(Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10));
     setEventTime(
       Number.isNaN(d.getTime())
         ? ''
         : d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }),
     );
-    const detail = [cls.trainer_name ? `with ${cls.trainer_name}` : '', cls.duration_minutes ? `${cls.duration_minutes} min` : '']
-      .filter(Boolean).join(' · ');
+    const detail = picked
+      .map((c: any) => [
+        c.name,
+        formatClassWhen(c.scheduled_at),
+        c.trainer_name ? `with ${c.trainer_name}` : '',
+        c.duration_minutes ? `${c.duration_minutes} min` : '',
+      ].filter(Boolean).join(' · '))
+      .join('\n');
 
     // Fill named class_* tokens and, for Meta positional templates, the
     // remaining non-auto slots in order (class name → when → details).
-    const queue = [cls.name || '', when, detail || eventVenue || 'Limited spots — book now'];
+    const queue = [names.join(' + '), when, detail || eventVenue || 'Limited spots — book now'];
     const next: Record<string, string> = { ...varOverrides };
     let qi = 0;
     extractTemplateVars(message).forEach((v) => {
       if (isAutoVar(v)) return;
-      if (v.key === 'class_name') { next[v.key] = cls.name || ''; return; }
+      if (v.key === 'class_name') { next[v.key] = names.join(' + '); return; }
       if (v.key === 'class_when') { next[v.key] = when; return; }
-      if (v.key === 'class_trainer') { next[v.key] = cls.trainer_name || ''; return; }
+      if (v.key === 'class_details') { next[v.key] = detail; return; }
+      if (v.key === 'class_trainer') {
+        next[v.key] = Array.from(new Set(picked.map((c: any) => c.trainer_name).filter(Boolean))).join(', ');
+        return;
+      }
       if (v.key === 'class_venue') { next[v.key] = eventVenue || ''; return; }
+      if (v.key === 'poster_url' && attachment?.url) { next[v.key] = attachment.url; return; }
       next[v.key] = queue[Math.min(qi, queue.length - 1)] || '';
       qi += 1;
     });
     setVarOverrides(next);
+  };
+
+  const toggleClass = (classId: string) => {
+    const ids = selectedClassIds.includes(classId)
+      ? selectedClassIds.filter((id) => id !== classId)
+      : [...selectedClassIds, classId];
+    if (ids.length === 0) { setSelectedClassIds([]); return; }
+    applyClassSelections(ids);
   };
 
 
