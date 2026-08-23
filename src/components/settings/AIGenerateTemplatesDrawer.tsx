@@ -74,58 +74,95 @@ export function AIGenerateTemplatesDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Coverage = an APPROVED template exists for the event on this channel.
-  // Reading from `templates` (not only `whatsapp_triggers`) means events that
-  // have a live approved template but no trigger row are no longer reported
-  // as gaps.
-  const { data: coveredEvents = new Set<string>(), isLoading: matrixLoading } = useQuery({
+  // Coverage = an APPROVED template exists for the event on this channel AND,
+  // for WhatsApp, Meta still has that template (not missing / stale in the
+  // catalog mirror). A template Meta has dropped is a real gap, not coverage.
+  const { data: coverage, isLoading: matrixLoading } = useQuery({
     queryKey: ['template-coverage-gaps', channel, effectiveBranchId],
     queryFn: async () => {
       const covered = new Set<string>();
+      const broken: { event: string; templateName: string; metaName: string }[] = [];
 
-      // Coverage = an APPROVED template exists for the event on this channel.
-      // We look at the 'templates' table which contains local mappings.
       const { data: templates, error: tplError } = await supabase
         .from('templates')
-        .select('trigger_event, type, meta_template_status, is_active, meta_template_name')
+        .select('name, trigger_event, type, meta_template_status, is_active, meta_template_name')
         .eq('type', channel);
-      
+
       if (tplError) throw tplError;
 
-      for (const t of templates || []) {
-        // WhatsApp templates are only "covered" if Meta has approved them.
-        // We also check that a meta template name exists to avoid counting drafts.
-        // SMS/Email are covered if they are active.
-        const approved = channel === 'whatsapp'
-          ? (t.meta_template_status || '').toUpperCase() === 'APPROVED' && !!t.meta_template_name
-          : t.is_active !== false;
-        
-        if (approved && t.trigger_event) covered.add(t.trigger_event);
-      }
-
-      // Also check explicit triggers in whatsapp_triggers for cross-check.
-      if (channel === 'whatsapp' && effectiveBranchId) {
-        const { data: triggers, error: trigError } = await supabase
-          .from('whatsapp_triggers')
-          .select('event_name, templates(meta_template_status)')
-          .eq('branch_id', effectiveBranchId);
-        
-        if (trigError) throw trigError;
-        for (const trig of triggers || []) {
-          const status = (trig as any).templates?.meta_template_status;
-          if ((status || '').toUpperCase() === 'APPROVED') covered.add(trig.event_name);
+      // Live Meta catalog mirror — same source the Templates table aligns against.
+      const metaByName = new Map<string, { status: string | null; is_stale: boolean | null }>();
+      if (channel === 'whatsapp') {
+        const { data: metaRows, error: metaErr } = await supabase
+          .from('whatsapp_templates')
+          .select('name, status, is_stale');
+        if (metaErr) throw metaErr;
+        for (const row of metaRows || []) {
+          if (!metaByName.has(row.name)) {
+            metaByName.set(row.name, { status: row.status, is_stale: row.is_stale });
+          }
         }
       }
 
-      return covered;
+      const liveInMeta = (metaName: string | null) => {
+        if (!metaName) return false;
+        const live = metaByName.get(metaName);
+        return !!live && live.is_stale !== true;
+      };
+
+      for (const t of templates || []) {
+        const approved = channel === 'whatsapp'
+          ? (t.meta_template_status || '').toUpperCase() === 'APPROVED' && !!t.meta_template_name
+          : t.is_active !== false;
+
+        if (!approved || !t.trigger_event) continue;
+
+        if (channel === 'whatsapp' && !liveInMeta(t.meta_template_name)) {
+          broken.push({
+            event: t.trigger_event,
+            templateName: t.name,
+            metaName: t.meta_template_name as string,
+          });
+          continue;
+        }
+        covered.add(t.trigger_event);
+      }
+
+      // Cross-check explicit triggers, applying the same live-in-Meta rule.
+      if (channel === 'whatsapp' && effectiveBranchId) {
+        const { data: triggers, error: trigError } = await supabase
+          .from('whatsapp_triggers')
+          .select('event_name, templates(meta_template_status, meta_template_name)')
+          .eq('branch_id', effectiveBranchId);
+
+        if (trigError) throw trigError;
+        for (const trig of triggers || []) {
+          const tpl = (trig as any).templates;
+          const status = (tpl?.meta_template_status || '').toUpperCase();
+          if (status === 'APPROVED' && liveInMeta(tpl?.meta_template_name ?? null)) {
+            covered.add(trig.event_name);
+          }
+        }
+      }
+
+      return { covered, broken: broken.filter((b) => !covered.has(b.event)) };
     },
     enabled: open,
   });
 
-  const uncovered = useMemo(
-    () => SYSTEM_EVENTS.filter((e) => !coveredEvents.has(e.event) && e.channels.includes(channel)),
-    [coveredEvents, channel]
+  const coveredEvents = coverage?.covered ?? new Set<string>();
+  const brokenTemplates = coverage?.broken ?? [];
+
+  const channelEvents = useMemo(
+    () => SYSTEM_EVENTS.filter((e) => e.channels.includes(channel)),
+    [channel]
   );
+
+  const uncovered = useMemo(
+    () => channelEvents.filter((e) => !coveredEvents.has(e.event)),
+    [channelEvents, coveredEvents]
+  );
+
 
   const togglePick = (event: string) => {
     setPicked((prev) => {
@@ -253,7 +290,49 @@ export function AIGenerateTemplatesDrawer({
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {step === 'pick' ? (
             <div className="space-y-4">
+              {!matrixLoading && (
+                <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {channelEvents.length - uncovered.length} of {channelEvents.length} system events
+                    covered
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {brokenTemplates.length > 0
+                      ? `${brokenTemplates.length} approved template(s) no longer exist in Meta — listed below.`
+                      : 'Coverage counts only templates Meta still has approved and live.'}
+                  </p>
+                </div>
+              )}
+
+              {brokenTemplates.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm font-bold text-amber-900">
+                      Missing in Meta — needs recreating
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800">
+                    These events have a CRM template, but Meta dropped the approved template. Select
+                    the event below to generate fresh copy, or re-submit the existing template from the
+                    Templates list (filter “Missing / Stale”).
+                  </p>
+                  <ul className="space-y-1">
+                    {brokenTemplates.map((b) => (
+                      <li
+                        key={`${b.metaName}-${b.event}`}
+                        className="text-xs text-amber-900 bg-white/70 rounded-lg px-2.5 py-1.5"
+                      >
+                        <span className="font-semibold">{b.templateName}</span>
+                        <span className="text-amber-700"> · {b.metaName} · {b.event}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-3">
+
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   Select events to cover ({uncovered.length} gaps)
                 </h3>
