@@ -1279,7 +1279,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             {message.trim().length > 0 && (() => {
               const vars = extractTemplateVars(buildFinalMessage());
               const anyPositional = vars.some((v) => v.positional);
-              const previewText = renderPreview(buildFinalMessage());
+              const fillable = vars.filter((v) => !isAutoVar(v));
+              const missing = fillable.filter((v) => !(varOverrides[v.key] || '').trim());
+              const previewText = renderPreview(buildFinalMessage(), varOverrides);
               return (
                 <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-3 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1290,23 +1292,48 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   </div>
 
                   {vars.length > 0 && (
-                    <div className="rounded-xl bg-card border p-2.5 space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Variables in this message</p>
-                      {vars.map((v) => (
+                    <div className="rounded-xl bg-card border p-2.5 space-y-2">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Variables in this message</p>
+                      {vars.filter(isAutoVar).map((v) => (
                         <div key={v.token} className="flex items-center gap-2 text-[12px]">
                           <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground shrink-0">{v.token}</code>
                           <span className="text-muted-foreground">→</span>
                           <span className="text-foreground truncate"><b>{v.label}</b></span>
-                          <span className="text-muted-foreground text-[11px] truncate">e.g. "{v.sample}"</span>
+                          <span className="text-muted-foreground text-[11px] truncate">auto per recipient</span>
                         </div>
                       ))}
+                      {fillable.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Fill these values — they go out to everyone
+                          </p>
+                          {fillable.map((v) => (
+                            <div key={v.token} className="flex items-center gap-2">
+                              <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground shrink-0 w-14 text-center">{v.token}</code>
+                              <Input
+                                className="rounded-xl h-9 text-sm flex-1"
+                                placeholder={v.positional ? `Value for slot ${v.key}` : v.label}
+                                value={varOverrides[v.key] ?? ''}
+                                onChange={(e) => setVarOverrides((p) => ({ ...p, [v.key]: e.target.value }))}
+                                aria-label={`Value for ${v.token}`}
+                              />
+                            </div>
+                          ))}
+                          {missing.length > 0 && (
+                            <p className="text-[10px] text-destructive leading-relaxed">
+                              {missing.map((m) => m.token).join(', ')} empty — WhatsApp rejects sends with blank slots (template_param_empty).
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {anyPositional && (
-                        <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-                          Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Our sender maps them to the same fields as the named tokens above — nothing else to configure.
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Slot 1 is always the recipient's name; the rest are the values you type above.
                         </p>
                       )}
                     </div>
                   )}
+
 
                   <div className="rounded-xl bg-card border p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">What recipients will see</p>
