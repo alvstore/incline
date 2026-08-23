@@ -1323,28 +1323,50 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               )}
             </div>
 
-            {/* ── Class picker (Event / Class campaigns) ── */}
+            {/* ── Class picker (Event / Class campaigns) — multi-select ── */}
             {isEvent && (
               <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-3 space-y-2">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-primary" /> Pick a scheduled class
-                </Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" /> Pick scheduled class(es)
+                  </Label>
+                  {selectedClassIds.length > 0 && (
+                    <button type="button" onClick={() => setSelectedClassIds([])}
+                      className="cursor-pointer text-[11px] text-muted-foreground hover:text-destructive">
+                      Clear ({selectedClassIds.length})
+                    </button>
+                  )}
+                </div>
                 {upcomingClasses.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">No upcoming classes for this branch — fill the event details manually on the Event step.</p>
                 ) : (
-                  <Select value={selectedClassId || ''} onValueChange={applyClassSelection}>
-                    <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Choose a class to auto-fill…" /></SelectTrigger>
-                    <SelectContent>
-                      {(upcomingClasses as any[]).map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} · {formatClassWhen(c.scheduled_at)}{c.trainer_name ? ` · ${c.trainer_name}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="max-h-52 overflow-y-auto rounded-xl border bg-card divide-y">
+                    {(upcomingClasses as any[]).map((c: any) => {
+                      const on = selectedClassIds.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleClass(c.id)}
+                          className={`w-full cursor-pointer flex items-center gap-2.5 px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${on ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                        >
+                          <span className={`h-4 w-4 shrink-0 rounded-[5px] border flex items-center justify-center ${on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40'}`}>
+                            {on && <Check className="h-3 w-3" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium text-foreground truncate">{c.name}</span>
+                            <span className="block text-[11px] text-muted-foreground truncate">
+                              {formatClassWhen(c.scheduled_at)}{c.trainer_name ? ` · ${c.trainer_name}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  Selecting a class auto-fills the event fields and every <code>{'{{class_*}}'}</code> / positional slot in this channel's message.
+                  Pick one or more sessions (e.g. morning + evening). Every <code>{'{{class_*}}'}</code> / positional slot is filled with the combined list.
                 </p>
               </div>
             )}
