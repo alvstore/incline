@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
     // 5+ minutes and still has pending/dispatching recipients. Guarantees the
     // pipeline recovers if a chunk isolate dies without self-invoking.
     try {
-      const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       const { data: stalled } = await admin
         .from('campaigns')
         .select('id, branch_id, last_progress_at')

@@ -432,6 +432,18 @@ export async function retryFailedRecipients(campaignId: string): Promise<{ accep
   return { accepted: (data as any)?.accepted ?? 0 };
 }
 
+/**
+ * Resume a campaign whose chunk pipeline died mid-flight. Kicks a fresh
+ * `send-broadcast` chunk isolate; `claim_broadcast_batch` reclaims both
+ * pending rows and rows stuck in `dispatching` for >5 minutes.
+ */
+export async function resumeCampaignSending(campaignId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('send-broadcast', {
+    body: { mode: 'chunk', campaign_id: campaignId },
+  });
+  if (error) throw error;
+}
+
 /** Ask the reconciler to refresh this campaign's stats immediately (no cron wait). */
 export async function reconcileCampaignStats(campaignId: string): Promise<void> {
   const { error } = await supabase.functions.invoke('reconcile-campaign-stats', {
@@ -439,6 +451,7 @@ export async function reconcileCampaignStats(campaignId: string): Promise<void> 
   });
   if (error) throw error;
 }
+
 
 // ---------- Recurring automation rule ----------
 export type RecurrencePreset = 'daily' | 'weekly_mon' | 'weekly_fri' | 'monthly_1st' | 'custom';

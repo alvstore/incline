@@ -20,9 +20,11 @@ import {
   type Campaign,
   retryFailedRecipients,
   reconcileCampaignStats,
+  resumeCampaignSending,
   sendCampaignNow,
   resolveCampaignAudience,
 } from '@/services/campaignService';
+
 import { parseCommError } from '@/lib/comms/metaErrorLabels';
 import { formatPhoneDisplay } from '@/lib/contacts/phone';
 
@@ -231,6 +233,17 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     onError: (e: any) => toast.error(e?.message || 'Retry failed'),
   });
 
+  const resumeMut = useMutation({
+    mutationFn: () => resumeCampaignSending(campaign!.id),
+    onSuccess: () => {
+      toast.success('Resuming send from where it stopped');
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      qc.invalidateQueries({ queryKey: ['campaign-recipients', campaign?.id] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Resume failed'),
+  });
+
+
   const reconcileMut = useMutation({
     mutationFn: () => reconcileCampaignStats(campaign!.id),
     onSuccess: () => {
@@ -282,10 +295,18 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     isSending &&
     ((campaign as any).recipients_count ?? 0) === 0 &&
     (Date.now() - new Date(campaign.created_at).getTime()) > 15 * 60_000;
+  // A "stalled" send: recipients exist and some went out, but the chunk isolate
+  // died — no progress written for 5+ minutes. Operators can resume/retry.
+  const lastProgressMs = new Date(
+    (campaign as any).last_progress_at || campaign.created_at,
+  ).getTime();
+  const isStalled =
+    isSending && !isZombieSending && Date.now() - lastProgressMs > 5 * 60_000;
   const isLoading = recLoading || logsLoading;
   const progressPct = counts.total > 0
     ? Math.min(100, Math.round(((counts.sent + counts.failed + counts.skipped) / counts.total) * 100))
     : 0;
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -310,12 +331,25 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
           <Button
             size="sm" variant="outline" className="rounded-xl gap-2"
             onClick={() => retryMut.mutate()}
-            disabled={retryMut.isPending || isSending || counts.failed === 0}
+            disabled={retryMut.isPending || (isSending && !isStalled) || counts.failed === 0}
             title={counts.failed === 0 ? 'No failed recipients' : `Retry ${counts.failed} failed`}
           >
             <RotateCcw className={`h-3.5 w-3.5 ${retryMut.isPending ? 'animate-spin' : ''}`} />
             Retry failed ({counts.failed})
           </Button>
+          {isStalled && (
+            <Button
+              size="sm" variant="outline"
+              className="rounded-xl gap-2 border-amber-500/50 text-amber-700 dark:text-amber-300"
+              onClick={() => resumeMut.mutate()}
+              disabled={resumeMut.isPending}
+              title="Resume the stalled send from where it stopped"
+            >
+              <Send className={`h-3.5 w-3.5 ${resumeMut.isPending ? 'animate-pulse' : ''}`} />
+              Resume sending ({counts.pending})
+            </Button>
+          )}
+
           <Button
             size="sm" className="rounded-xl gap-2 bg-primary hover:bg-primary text-primary-foreground"
             onClick={() => setConfirmRetrigger(true)}
@@ -345,6 +379,15 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
             then re-open the campaign and hit Send again.
           </div>
         )}
+
+        {isStalled && (
+          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+            <strong>Send stalled:</strong> {counts.pending} recipient(s) still queued with no
+            progress for 5+ minutes — the background worker isolate stopped. The watchdog retries
+            automatically every minute; click <em>Resume sending</em> to restart it right now.
+          </div>
+        )}
+
 
         <div className="mt-5 space-y-5">
           {/* KPI strip: 5 tiles */}

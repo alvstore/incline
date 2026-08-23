@@ -46,13 +46,20 @@ Deno.serve(async (req) => {
 
     const { data: campaign, error: cErr } = await admin
       .from('campaigns')
-      .select('id, branch_id, channel, message, subject, template_id, attachment_url, attachment_kind, attachment_filename, audience_filter, status')
+      .select('id, branch_id, channel, message, subject, template_id, attachment_url, attachment_kind, attachment_filename, audience_filter, status, last_progress_at, created_at')
       .eq('id', campaign_id)
       .maybeSingle();
     if (cErr || !campaign) return json(404, { error: 'Campaign not found' });
-    if (campaign.status === 'sending') {
+    // v1.2.0 — a campaign that says "sending" but hasn't written progress in
+    // 5+ minutes has a dead chunk isolate; allow the retry instead of a 409.
+    const lastProgressMs = new Date(
+      (campaign as any).last_progress_at || campaign.created_at,
+    ).getTime();
+    const stalled = Date.now() - lastProgressMs > 5 * 60_000;
+    if (campaign.status === 'sending' && !stalled) {
       return json(409, { error: 'Campaign is already sending — wait for it to finish' });
     }
+
 
     // Load failed recipients (recipient-side status OR joined provider DLR failure).
     const { data: recRows } = await admin
