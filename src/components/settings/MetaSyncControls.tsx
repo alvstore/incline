@@ -184,36 +184,118 @@ export function MetaSyncControls() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 gap-1 rounded-full text-xs border-warning/40 bg-warning/10 text-warning hover:bg-warning/15"
-              aria-label={`${staleTemplates.length} template(s) missing in Meta`}
+              className={`h-7 gap-1 rounded-full text-xs ${
+                brokenStale.length > 0
+                  ? 'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15'
+                  : 'border-slate-200 text-muted-foreground hover:bg-slate-50'
+              }`}
+              aria-label={
+                brokenStale.length > 0
+                  ? `${brokenStale.length} template(s) broken in Meta`
+                  : `${orphanStale.length} orphaned Meta catalog entries`
+              }
             >
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {staleTemplates.length} missing in Meta
+              {brokenStale.length > 0 ? (
+                <>
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {brokenStale.length} broken in Meta
+                </>
+              ) : (
+                <>
+                  <Archive className="h-3.5 w-3.5" />
+                  {orphanStale.length} stale entries
+                </>
+              )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 text-xs space-y-2">
-            <div className="font-semibold text-sm flex items-center gap-1.5 text-warning">
-              <AlertTriangle className="h-4 w-4" /> Templates missing in Meta
-            </div>
-            <p className="text-muted-foreground">
-              These templates were rejected by Meta (error 132001). Re-sync from Meta to refresh, or
-              recreate them in Meta Business Manager.
-            </p>
-            <ul className="max-h-48 overflow-y-auto space-y-1 border-t pt-2">
-              {staleTemplates.map((t) => (
-                <li key={t.id} className="rounded-md bg-warning/10 p-1.5">
-                  <div className="font-medium text-warning">{t.name}</div>
-                  {t.meta_last_error && (
-                    <div className="text-[10px] text-warning truncate" title={t.meta_last_error}>
-                      {t.meta_last_error}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+          <PopoverContent align="end" className="w-96 text-xs space-y-3">
+            {brokenStale.length > 0 && (
+              <div className="space-y-2">
+                <div className="font-semibold text-sm flex items-center gap-1.5 text-warning">
+                  <AlertTriangle className="h-4 w-4" /> Broken — sends will fail
+                </div>
+                <p className="text-muted-foreground">
+                  A CRM template still points at these Meta templates, but Meta no longer has them
+                  (error 132001). Open the template below and re-submit it to Meta.
+                </p>
+                <ul className="max-h-40 overflow-y-auto space-y-1 border-t pt-2">
+                  {brokenStale.map((t) => (
+                    <li key={t.id} className="rounded-md bg-warning/10 p-1.5">
+                      <div className="font-medium text-warning">{t.name}</div>
+                      <div className="text-[10px] text-warning/80">
+                        Used by CRM template “{crmByMetaName.get(t.name)?.name}”
+                      </div>
+                      {t.meta_last_error && (
+                        <div className="text-[10px] text-warning truncate" title={t.meta_last_error}>
+                          {t.meta_last_error}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {orphanStale.length > 0 && (
+              <div className="space-y-2">
+                <div className="font-semibold text-sm flex items-center gap-1.5 text-muted-foreground">
+                  <Archive className="h-4 w-4" /> Orphaned catalog entries ({orphanStale.length})
+                </div>
+                <p className="text-muted-foreground">
+                  Leftovers from an older Meta catalog. No CRM template uses them, so nothing breaks —
+                  clearing them only tidies this local mirror. Meta is not touched.
+                </p>
+                <ul className="max-h-36 overflow-y-auto space-y-1 border-t pt-2">
+                  {orphanStale.map((t) => (
+                    <li key={t.id} className="rounded-md bg-muted/50 p-1.5 text-muted-foreground">
+                      {t.name}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmPurge(true)}
+                  className="w-full h-8 gap-1.5 rounded-xl text-xs"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Clear orphaned entries
+                </Button>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
       )}
+
+      <AlertDialog open={confirmPurge} onOpenChange={setConfirmPurge}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear {orphanStale.length} orphaned entries?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes {orphanStale.length} stale row(s) from the local Meta catalog mirror. No CRM
+              template points at them and nothing is deleted inside Meta. Re-syncing from Meta will
+              bring back anything that still exists there.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-40 overflow-y-auto rounded-xl bg-muted/40 p-3 text-xs space-y-1">
+            {orphanStale.map((t) => (
+              <div key={t.id} className="text-muted-foreground">{t.name}</div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPurging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handlePurgeOrphans();
+              }}
+              disabled={isPurging}
+            >
+              {isPurging ? 'Clearing…' : `Clear ${orphanStale.length}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {lastSynced && (
         <span className="text-[11px] text-muted-foreground hidden md:inline">
           Last synced {lastSynced}
