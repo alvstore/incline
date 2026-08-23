@@ -207,6 +207,31 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
         </div>
       )}
 
+      {kind === 'members_and_staff' && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Membership status</Label>
+            <Select
+              value={filter.member_status || 'all'}
+              onValueChange={(v) => setFilter({ ...filter, member_status: v as any })}
+            >
+              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                <SelectItem value="active">Active members only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-xl border border-dashed bg-muted/30 p-3 flex gap-2 text-[11px] text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>
+              Club-wide reach: members of this branch plus trainers, staff, managers, owners and admins.
+              Leads and cold contacts are intentionally excluded — ideal for class announcements.
+            </span>
+          </div>
+        </div>
+      )}
+
       {kind === 'leads' && (
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Lead status</Label>
