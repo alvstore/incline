@@ -206,7 +206,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
   const [selectedChannels, setSelectedChannels] = useState<CampaignChannel[]>(['whatsapp']);
   const [channelDrafts, setChannelDrafts] = useState<Record<string, ChannelDraft>>({});
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  // Multiple classes can go out in one announcement (e.g. morning + evening
+  // Yoga). The first picked class drives the event fields; every picked class
+  // is listed in the {{class_when}} / {{class_details}} slots.
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<AudienceFilter>({ status: 'active' });
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -784,6 +787,27 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           } as any) }
         : null;
 
+      // Email / SMS / in-app bodies are sent verbatim, so the dispatcher
+      // rejects any leftover {{token}} (`unresolved_placeholders`). Resolve
+      // them here with the same values a real send would use (auto vars,
+      // manual slot values, class fills, poster URL).
+      const resolveBody = (text: string): string =>
+        text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) => {
+          const k = String(key);
+          const direct = perVars[k] ?? perVars[k.toLowerCase()];
+          if (direct) return String(direct);
+          if (k.toLowerCase() === 'poster_url' && attachment?.url) return attachment.url;
+          if (k.toLowerCase() === 'branch_name') return 'The Incline Life by Incline';
+          return '';
+        }).replace(/[ \t]{2,}/g, ' ').trim();
+
+      const isFreeformChannel = channel !== 'whatsapp' || !templateId;
+      const finalBody = buildFinalMessage();
+      const testBody = isFreeformChannel && channel !== 'whatsapp' ? resolveBody(finalBody) : finalBody;
+      const testSubject = channel === 'email'
+        ? (resolveBody(subject.trim()) || 'Test message')
+        : undefined;
+
       // Call dispatcher DIRECTLY so we get a real per-send result. Going
       // through send-broadcast returns an async 202 ACK (v4.0.0 background
       // mode) with no `sent` count — the wizard used to interpret that as
@@ -796,8 +820,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           recipient: recipientAddress,
           category: 'marketing',
           payload: {
-            subject: channel === 'email' ? (subject.trim() || 'Test message') : undefined,
-            body: buildFinalMessage(),
+            subject: testSubject,
+            body: testBody,
             variables: rcsVars ?? perVars,
           },
           template_id: templateId,
@@ -858,7 +882,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
 
   const reset = () => {
     setStep(1); setName(''); setChannel('whatsapp'); setCampaignType('announcement');
-    setSelectedChannels(['whatsapp']); setChannelDrafts({}); setSelectedClassId(null);
+    setSelectedChannels(['whatsapp']); setChannelDrafts({}); setSelectedClassIds([]);
     setFilter({ status: 'active' }); setResolvedMemberIds([]);
     setMessage(''); setSubject(''); setTrigger('send_now'); setScheduledAt('');
     setAttachment(null);
@@ -889,38 +913,60 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     return body;
   };
 
-  /** Auto-fill event fields + message slots from a scheduled class. */
-  const applyClassSelection = (classId: string) => {
-    setSelectedClassId(classId);
-    const cls = (upcomingClasses as any[]).find((c: any) => c.id === classId);
-    if (!cls) return;
-    const when = formatClassWhen(cls.scheduled_at);
-    const d = new Date(cls.scheduled_at);
-    setEventName(cls.name || '');
+  /** Auto-fill event fields + message slots from one or more scheduled classes. */
+  const applyClassSelections = (ids: string[]) => {
+    setSelectedClassIds(ids);
+    const picked = (upcomingClasses as any[]).filter((c: any) => ids.includes(c.id));
+    if (picked.length === 0) return;
+    const primary = picked[0];
+    const whenList = picked.map((c: any) => formatClassWhen(c.scheduled_at)).filter(Boolean);
+    const when = whenList.join(' · ');
+    const d = new Date(primary.scheduled_at);
+    const names = Array.from(new Set(picked.map((c: any) => c.name).filter(Boolean)));
+    setEventName(names.join(' + '));
     setEventDate(Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10));
     setEventTime(
       Number.isNaN(d.getTime())
         ? ''
         : d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }),
     );
-    const detail = [cls.trainer_name ? `with ${cls.trainer_name}` : '', cls.duration_minutes ? `${cls.duration_minutes} min` : '']
-      .filter(Boolean).join(' · ');
+    const detail = picked
+      .map((c: any) => [
+        c.name,
+        formatClassWhen(c.scheduled_at),
+        c.trainer_name ? `with ${c.trainer_name}` : '',
+        c.duration_minutes ? `${c.duration_minutes} min` : '',
+      ].filter(Boolean).join(' · '))
+      .join('\n');
 
     // Fill named class_* tokens and, for Meta positional templates, the
     // remaining non-auto slots in order (class name → when → details).
-    const queue = [cls.name || '', when, detail || eventVenue || 'Limited spots — book now'];
+    const queue = [names.join(' + '), when, detail || eventVenue || 'Limited spots — book now'];
     const next: Record<string, string> = { ...varOverrides };
     let qi = 0;
     extractTemplateVars(message).forEach((v) => {
       if (isAutoVar(v)) return;
-      if (v.key === 'class_name') { next[v.key] = cls.name || ''; return; }
+      if (v.key === 'class_name') { next[v.key] = names.join(' + '); return; }
       if (v.key === 'class_when') { next[v.key] = when; return; }
-      if (v.key === 'class_trainer') { next[v.key] = cls.trainer_name || ''; return; }
+      if (v.key === 'class_details') { next[v.key] = detail; return; }
+      if (v.key === 'class_trainer') {
+        next[v.key] = Array.from(new Set(picked.map((c: any) => c.trainer_name).filter(Boolean))).join(', ');
+        return;
+      }
       if (v.key === 'class_venue') { next[v.key] = eventVenue || ''; return; }
+      if (v.key === 'poster_url' && attachment?.url) { next[v.key] = attachment.url; return; }
       next[v.key] = queue[Math.min(qi, queue.length - 1)] || '';
       qi += 1;
     });
     setVarOverrides(next);
+  };
+
+  const toggleClass = (classId: string) => {
+    const ids = selectedClassIds.includes(classId)
+      ? selectedClassIds.filter((id) => id !== classId)
+      : [...selectedClassIds, classId];
+    if (ids.length === 0) { setSelectedClassIds([]); return; }
+    applyClassSelections(ids);
   };
 
 
@@ -1066,7 +1112,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             time: eventTime || null,
             venue: eventVenue.trim() || null,
             rsvp_url: eventRsvpUrl.trim() || null,
-            class_id: selectedClassId,
+            class_id: selectedClassIds[0] ?? null,
+            class_ids: selectedClassIds,
           } : {},
           template_id: ch === 'whatsapp' && draft.useApprovedTemplate && draft.templateId && !draft.templateId.startsWith('__meta__:') ? draft.templateId : null,
           template_variables: filledVariables(draft.varOverrides),
@@ -1236,7 +1283,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channels</Label>
-                <span className="text-[11px] text-muted-foreground">Tap to add · tap an added channel to edit it</span>
+                <span className="text-[11px] text-muted-foreground">Tap to add · tap the × to remove</span>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {([
@@ -1247,28 +1294,40 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 ] as const).map((c) => {
                   const selected = selectedChannels.includes(c.id as CampaignChannel);
                   const active = channel === c.id;
+                  const canRemove = selected && selectedChannels.length > 1;
                   return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      aria-label={`${c.label} channel`}
-                      aria-pressed={selected}
-                      onClick={() => (selected ? switchChannel(c.id as CampaignChannel) : toggleChannel(c.id as CampaignChannel))}
-                      onDoubleClick={() => toggleChannel(c.id as CampaignChannel)}
-                      className={`relative cursor-pointer rounded-xl p-3 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
-                        active ? 'border-primary bg-primary/10 shadow-md'
-                        : selected ? 'border-primary/40 bg-primary/5'
-                        : 'border-border bg-card hover:border-primary/30'
-                      }`}
-                    >
-                      {selected && (
-                        <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
-                          <Check className="h-2.5 w-2.5" />
-                        </span>
+                    <div key={c.id} className="relative">
+                      <button
+                        type="button"
+                        aria-label={`${c.label} channel`}
+                        aria-pressed={selected}
+                        onClick={() => (selected ? switchChannel(c.id as CampaignChannel) : toggleChannel(c.id as CampaignChannel))}
+                        className={`w-full relative cursor-pointer rounded-xl p-3 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
+                          active ? 'border-primary bg-primary/10 shadow-md'
+                          : selected ? 'border-primary/40 bg-primary/5'
+                          : 'border-border bg-card hover:border-primary/30'
+                        }`}
+                      >
+                        {selected && !canRemove && (
+                          <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                            <Check className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                        <c.icon className={`h-5 w-5 mx-auto ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <p className={`text-xs mt-1 font-medium ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{c.label}</p>
+                      </button>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${c.label} channel`}
+                          title={`Remove ${c.label}`}
+                          onClick={(e) => { e.stopPropagation(); toggleChannel(c.id as CampaignChannel); }}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       )}
-                      <c.icon className={`h-5 w-5 mx-auto ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <p className={`text-xs mt-1 font-medium ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{c.label}</p>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1297,28 +1356,50 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               )}
             </div>
 
-            {/* ── Class picker (Event / Class campaigns) ── */}
+            {/* ── Class picker (Event / Class campaigns) — multi-select ── */}
             {isEvent && (
               <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-3 space-y-2">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-primary" /> Pick a scheduled class
-                </Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" /> Pick scheduled class(es)
+                  </Label>
+                  {selectedClassIds.length > 0 && (
+                    <button type="button" onClick={() => setSelectedClassIds([])}
+                      className="cursor-pointer text-[11px] text-muted-foreground hover:text-destructive">
+                      Clear ({selectedClassIds.length})
+                    </button>
+                  )}
+                </div>
                 {upcomingClasses.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">No upcoming classes for this branch — fill the event details manually on the Event step.</p>
                 ) : (
-                  <Select value={selectedClassId || ''} onValueChange={applyClassSelection}>
-                    <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Choose a class to auto-fill…" /></SelectTrigger>
-                    <SelectContent>
-                      {(upcomingClasses as any[]).map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} · {formatClassWhen(c.scheduled_at)}{c.trainer_name ? ` · ${c.trainer_name}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="max-h-52 overflow-y-auto rounded-xl border bg-card divide-y">
+                    {(upcomingClasses as any[]).map((c: any) => {
+                      const on = selectedClassIds.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleClass(c.id)}
+                          className={`w-full cursor-pointer flex items-center gap-2.5 px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${on ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                        >
+                          <span className={`h-4 w-4 shrink-0 rounded-[5px] border flex items-center justify-center ${on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40'}`}>
+                            {on && <Check className="h-3 w-3" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium text-foreground truncate">{c.name}</span>
+                            <span className="block text-[11px] text-muted-foreground truncate">
+                              {formatClassWhen(c.scheduled_at)}{c.trainer_name ? ` · ${c.trainer_name}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  Selecting a class auto-fills the event fields and every <code>{'{{class_*}}'}</code> / positional slot in this channel's message.
+                  Pick one or more sessions (e.g. morning + evening). Every <code>{'{{class_*}}'}</code> / positional slot is filled with the combined list.
                 </p>
               </div>
             )}

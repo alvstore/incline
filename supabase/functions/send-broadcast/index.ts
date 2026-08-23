@@ -637,13 +637,17 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const personalizedMsg = message
-        .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
-        .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
-        .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
-        .replace(/\{\{\s*member_code\s*\}\}/gi, perVars.member_code)
-        .replace(/\{\{\s*1\s*\}\}/g, perVars['1'])
-        .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
+      const personalizedMsg = finalizeFreeformBody(
+        message
+          .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
+          .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
+          .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
+          .replace(/\{\{\s*member_code\s*\}\}/gi, perVars.member_code)
+          .replace(/\{\{\s*1\s*\}\}/g, perVars['1'])
+          .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m),
+        channel, template_id,
+        { ...perVars, poster_url: attachment_url || '' },
+      );
 
       let recipient = channel === "email" ? profile.email : profile.phone;
       let status: 'sent' | 'failed' | 'skipped' = "failed";
@@ -763,6 +767,24 @@ function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+
+// Non-WhatsApp bodies are sent verbatim, so any {{token}} left after
+// personalization would reach the recipient (and the dispatcher rejects it
+// with `unresolved_placeholders`). Resolve the known extras and drop the rest.
+function finalizeFreeformBody(
+  body: string,
+  channel: string,
+  templateId: string | null | undefined,
+  extras: Record<string, string> = {},
+): string {
+  if (channel === 'whatsapp' && templateId) return body;
+  if (channel === 'whatsapp') return body;
+  return body
+    .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k: string) => extras[k] ?? extras[String(k).toLowerCase()] ?? '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 // Detect Meta pacing / low-quality throttle codes in an error string.
@@ -937,10 +959,19 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
 
       // Adaptive pacing: pick up prior back-off state so a fresh isolate
       // doesn't reset to defaults and immediately re-trip Meta throttles.
+      // v5.1.0 — channel-aware defaults. WhatsApp is the only channel Meta
+      // paces (131049); Email/SMS/RCS get bigger, faster chunks but still go
+      // through the same chunked pipeline (no giant isolate, resumable).
       const pacingState = fallbackPolicy?.pacing_state || {};
-      let effectiveBatchSize = Number(pacingState.batch_size) || batch_size;
-      let effectivePacingMs = Number(pacingState.pacing_ms) || pacing_ms;
+      const channelDefaults = channel === 'whatsapp'
+        ? { batch: batch_size, pace: pacing_ms }
+        : channel === 'email'
+          ? { batch: 40, pace: 400 }
+          : { batch: 25, pace: 800 };
+      let effectiveBatchSize = Number(pacingState.batch_size) || channelDefaults.batch;
+      let effectivePacingMs = Number(pacingState.pacing_ms) || channelDefaults.pace;
       let pacingHits = 0; // chunk-local counter
+
 
 
       const digits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '');
@@ -1024,11 +1055,15 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           continue;
         }
 
-        const personalized = String(campaign.message || '')
-          .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
-          .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
-          .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
-          .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
+        const personalized = finalizeFreeformBody(
+          String(campaign.message || '')
+            .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
+            .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
+            .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
+            .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m),
+          channel, templateId,
+          { ...perVars, poster_url: campaign.attachment_url || '' },
+        );
 
         try {
           const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
