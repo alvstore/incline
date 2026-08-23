@@ -1,4 +1,6 @@
-// process-comm-retry-queue v2.5.0
+// process-comm-retry-queue v2.6.0
+// v2.6.0: Meta 131049 pacing failures are terminal for the current message.
+//          Retrying the identical template/recipient payload worsens quality.
 // v2.5.0: terminal template contract failures never retry; cap each worker run
 //          at 10 rows to avoid nested edge-function compute fan-out.
 // v2.3.0: Soft-terminal Meta codes — 131000 ("something went wrong") is transient
@@ -50,6 +52,7 @@ const TERMINAL_META_CODES = new Set([
   131026, // recipient cannot receive
   131047, // outside 24h window (we already prefer the template path; if we still
           //                     hit this, the template wasn't usable — terminal)
+  131049, // ecosystem engagement pacing — wait for a future intentional send
   131051, // unsupported message type for template
   132000, // template param count mismatch
   132001, // template not found in WABA
@@ -202,7 +205,8 @@ Deno.serve(async (req) => {
         },
         // Fresh dedupe key so the retry doesn't collide with the failed log row
         dedupe_key: `retry:${row.id}:${row.retry_count + 1}`,
-        force: true,
+        // Replays must still honor preferences, DNC and pacing safeguards.
+        force: false,
         attachment: attachment ?? undefined,
         source_caller: "process-comm-retry-queue",
       };

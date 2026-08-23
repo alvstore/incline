@@ -41,8 +41,8 @@ const META_ERROR_MAP: Record<number, { short: string; hint: string }> = {
     hint: 'Last user message is >24h old — must send a template to re-open the session.',
   },
   131049: {
-    short: 'Meta Pacing Limit',
-    hint: 'Meta accepted the template but did not deliver it to maintain healthy ecosystem engagement. This usually happens when the template is sent too frequently or engagement is low. Wait 24h before retrying.',
+    short: 'Paced / Suppressed',
+    hint: 'Meta withheld this template to protect ecosystem engagement. Automatic retry is disabled; wait at least 24 hours before a new intentional send.',
   },
   131051: {
     short: 'Unsupported message type',

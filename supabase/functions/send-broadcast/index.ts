@@ -1,3 +1,4 @@
+// v6.1.0 — Canonical v2 audience resolver; Meta 131049 is terminal per recipient.
 // v6.0.0 — Replaced every from-edge `adminClient.functions.invoke(...)` with a
 //          raw-fetch `invokeEdge` helper (25s AbortController timeout, real
 //          status + body surfaced). The SDK path was silently normalising
@@ -835,8 +836,8 @@ async function handleMaterialize(a: MaterializeArgs): Promise<Response> {
     }));
   } else {
     const filter = (campaign.audience_filter || {}) as any;
-    const { data: resolved, error: rErr } = await adminClient.rpc('resolve_campaign_audience', {
-      p_branch_id: branchId, p_filter: filter,
+    const { data: resolved, error: rErr } = await adminClient.rpc('resolve_campaign_audience_v2', {
+      p_branch_id: branchId, p_filter: filter, p_window_hours: 24,
     });
     if (rErr) {
       await adminClient.from('campaigns').update({
@@ -1072,11 +1073,10 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
                   error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
                 }
               } else {
-                // No fallback allowed: keep the row as pending so the next
-                // chunk (post-cooldown) retries it. Pacing is a rate problem,
-                // not a terminal failure.
+                // 131049 is terminal for this payload. A future intentional
+                // campaign may try after cooldown; this row must not loop.
                 status = 'failed';
-                error = `paced_${pacingCode}_will_retry`;
+                error = `paced_${pacingCode}_terminal`;
               }
             }
           }

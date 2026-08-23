@@ -90,9 +90,10 @@ Deno.serve(async (req) => {
         return json({ ok: true, dispatched: 0, note: "no_recipients" });
       }
     } else {
-      const { data: recipients, error: rErr } = await admin.rpc("resolve_campaign_audience" as any, {
+      const { data: recipients, error: rErr } = await admin.rpc("resolve_campaign_audience_v2" as any, {
         p_branch_id: c.branch_id,
         p_filter: filter,
+        p_window_hours: 24,
       });
       if (rErr) {
         await admin.from("campaigns").update({ last_run_error: rErr.message }).eq("id", c.id);

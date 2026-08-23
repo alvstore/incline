@@ -30,7 +30,7 @@ const stageMeta: Record<Stage, { icon: any; dotBg: string; dotRing: string; text
 // staff don't have to look them up. Format we expect: "131047: Re-engagement message".
 const META_ERROR_HINTS: Record<string, string> = {
   '131047': 'Outside the 24h customer-service window — Meta requires an approved template message. Submit one in Settings → Communication Templates.',
-  '131049': 'Meta Pacing Limit — This message was blocked to maintain healthy ecosystem engagement. Meta recommends waiting 24h before retrying marketing templates to this recipient.',
+  '131049': 'Paced / Suppressed — Meta withheld this message to protect ecosystem engagement. Automatic retry is disabled; wait at least 24 hours before a new intentional send.',
   '131026': 'Recipient has not opted in to receive WhatsApp messages.',
   '131051': 'Unsupported message type for this conversation.',
   '132001': 'Template name does not exist or is not approved in this language.',

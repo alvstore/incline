@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ChevronDown, ChevronRight, Search, MessageSquare, Mail, Phone, Bell,
-  CheckCircle2, XCircle, Clock, Send, Eye, MessageSquareReply, Loader2, ArrowDown,
+  CheckCircle2, XCircle, Clock, Send, Eye, MessageSquareReply, Loader2, ArrowDown, ShieldAlert,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,14 @@ const channelMeta: Record<string, { icon: any; color: string; label: string }> =
   in_app: { icon: Bell, color: 'text-primary bg-primary/10 dark:bg-primary/10', label: 'In-App' },
 };
 
-const statusBadge = (s: string) => {
+const statusBadge = (s: string, errorMessage?: string | null) => {
+  if (/\b131049\b|healthy ecosystem engagement/i.test(errorMessage || '')) {
+    return (
+      <Badge variant="outline" className="rounded-full gap-1 font-medium bg-warning/10 text-warning border-warning/30">
+        <ShieldAlert className="h-3 w-3" />Paced / Suppressed
+      </Badge>
+    );
+  }
   const map: Record<string, { cls: string; icon: any; label: string }> = {
     sent: { cls: 'bg-info/10 text-info dark:text-info border-info/30', icon: Send, label: 'Sent' },
     delivered: { cls: 'bg-success/10 text-success dark:text-success border-success/30', icon: CheckCircle2, label: 'Delivered' },
@@ -558,7 +565,10 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-auto">
-                          {statusBadge(rollup.primary)}
+                          {statusBadge(
+                            rollup.primary,
+                            g.logs.find((entry: any) => /\b131049\b|healthy ecosystem engagement/i.test(entry.error_message || ''))?.error_message,
+                          )}
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {rollup.failed > 0 && rollup.failed < rollup.total && (
                               <span className="text-destructive dark:text-destructive mr-1">{rollup.failed} failed ·</span>
