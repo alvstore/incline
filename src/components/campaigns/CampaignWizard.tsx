@@ -1384,9 +1384,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       type="button"
                       size="sm"
                       onClick={handleSendTest}
-                      disabled={sendingTest || !testRecipient.trim()}
+                      disabled={sendingTest || !testRecipient.trim() || missing.length > 0}
                       className="rounded-full h-9 px-4 gap-1.5 bg-primary hover:bg-primary text-primary-foreground"
-                      title="Send this exact message to yourself using the same pipeline as real campaigns"
+                      title={missing.length > 0 ? `Fill ${missing.map((m) => m.token).join(', ')} first` : 'Send this exact message to yourself using the same pipeline as real campaigns'}
                     >
                       {sendingTest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Send Test
