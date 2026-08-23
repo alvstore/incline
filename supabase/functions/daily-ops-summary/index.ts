@@ -79,15 +79,15 @@ Deno.serve(async (req) => {
         .in("status", ["pending", "partial", "overdue"]),
       supabase.from("branches").select("id, name"),
       supabase
-        .from("attendance")
+        .from("member_attendance")
         .select("id", { count: "exact", head: true })
         .gte("check_in", startUtc.toISOString())
         .lt("check_in", endUtc.toISOString()),
       supabase
         .from("member_benefit_credits")
         .select("id", { count: "exact", head: true })
-        .eq("benefit_type", "pt_session")
-        .gt("remaining_count", 0),
+        .eq("benefit_type", "pt_sessions")
+        .gt("credits_remaining", 0),
     ]);
 
     const totalCheckins = attendanceCount ?? 0;
