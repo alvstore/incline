@@ -565,6 +565,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setCampaignType((c.campaign_type as CampaignType) || 'announcement');
     setName(c.name);
     setChannel(c.channel);
+    setSelectedChannels([c.channel as CampaignChannel]);
+    setChannelDrafts({});
     setFilter(c.audience_filter || { status: 'active' });
     setMessage(c.message || '');
     setSubject(c.subject || '');
