@@ -86,11 +86,18 @@ function renderPreview(body: string, sampleOverrides: Record<string, string> = {
   });
 }
 
+/** Slots resolved automatically per recipient (never manually filled). */
+const AUTO_VAR_KEYS = new Set(['1', 'first_name', 'name', 'member_name', 'full_name', 'member_code']);
+function isAutoVar(v: TplVar): boolean {
+  return AUTO_VAR_KEYS.has(v.positional ? v.key : v.key.toLowerCase());
+}
+
 function phoneLast10(value: string): string {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.length <= 10) return digits;
   return digits.slice(-10);
 }
+
 
 function firstNameOf(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || fullName.trim();
@@ -196,6 +203,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // Test send (Preview & Test panel)
   const [testRecipient, setTestRecipient] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+
+  // Fixed values for template slots that are NOT the recipient's name
+  // (e.g. {{2}} class name, {{3}} timing, {{4}} details). Meta rejects a send
+  // with empty params (template_param_empty:3,4), so these must be filled.
+  const [varOverrides, setVarOverrides] = useState<Record<string, string>>({});
+
 
   // ── RCS (Telinfy) template selection + per-variable mapping ──
   const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
@@ -613,11 +626,14 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         : (target.startsWith('+') ? target : `+${target}`);
 
       // Build per-recipient variables (mirrors send-broadcast perVars so
-      // Meta template positional params resolve identically).
+      // Meta template positional params resolve identically). Manually filled
+      // slots ({{2}}, {{3}}, …) override the auto mapping.
       const perVars: Record<string, string> = {
         member_name: testName, full_name: testName, first_name: firstName, name: firstName,
         '1': firstName, v1: firstName, param1: firstName,
+        ...filledVariables(),
       };
+
       // For RCS, template_name is packed into variables (Telinfy lcustomParam).
       const rcsVars = channel === 'rcs' && selectedRcsTemplate
         ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient({
@@ -1266,7 +1282,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             {message.trim().length > 0 && (() => {
               const vars = extractTemplateVars(buildFinalMessage());
               const anyPositional = vars.some((v) => v.positional);
-              const previewText = renderPreview(buildFinalMessage());
+              const fillable = vars.filter((v) => !isAutoVar(v));
+              const missing = fillable.filter((v) => !(varOverrides[v.key] || '').trim());
+              const previewText = renderPreview(buildFinalMessage(), varOverrides);
               return (
                 <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-3 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1277,23 +1295,48 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   </div>
 
                   {vars.length > 0 && (
-                    <div className="rounded-xl bg-card border p-2.5 space-y-1">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Variables in this message</p>
-                      {vars.map((v) => (
+                    <div className="rounded-xl bg-card border p-2.5 space-y-2">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Variables in this message</p>
+                      {vars.filter(isAutoVar).map((v) => (
                         <div key={v.token} className="flex items-center gap-2 text-[12px]">
                           <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground shrink-0">{v.token}</code>
                           <span className="text-muted-foreground">→</span>
                           <span className="text-foreground truncate"><b>{v.label}</b></span>
-                          <span className="text-muted-foreground text-[11px] truncate">e.g. "{v.sample}"</span>
+                          <span className="text-muted-foreground text-[11px] truncate">auto per recipient</span>
                         </div>
                       ))}
+                      {fillable.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Fill these values — they go out to everyone
+                          </p>
+                          {fillable.map((v) => (
+                            <div key={v.token} className="flex items-center gap-2">
+                              <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground shrink-0 w-14 text-center">{v.token}</code>
+                              <Input
+                                className="rounded-xl h-9 text-sm flex-1"
+                                placeholder={v.positional ? `Value for slot ${v.key}` : v.label}
+                                value={varOverrides[v.key] ?? ''}
+                                onChange={(e) => setVarOverrides((p) => ({ ...p, [v.key]: e.target.value }))}
+                                aria-label={`Value for ${v.token}`}
+                              />
+                            </div>
+                          ))}
+                          {missing.length > 0 && (
+                            <p className="text-[10px] text-destructive leading-relaxed">
+                              {missing.map((m) => m.token).join(', ')} empty — WhatsApp rejects sends with blank slots (template_param_empty).
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {anyPositional && (
-                        <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-                          Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Our sender maps them to the same fields as the named tokens above — nothing else to configure.
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Slot 1 is always the recipient's name; the rest are the values you type above.
                         </p>
                       )}
                     </div>
                   )}
+
 
                   <div className="rounded-xl bg-card border p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">What recipients will see</p>

@@ -2184,6 +2184,7 @@ export type Database = {
           subject: string | null
           success_count: number
           template_id: string | null
+          template_variables: Json
           timezone: string
           trigger_type: string
           updated_at: string
@@ -2215,6 +2216,7 @@ export type Database = {
           subject?: string | null
           success_count?: number
           template_id?: string | null
+          template_variables?: Json
           timezone?: string
           trigger_type?: string
           updated_at?: string
@@ -2246,6 +2248,7 @@ export type Database = {
           subject?: string | null
           success_count?: number
           template_id?: string | null
+          template_variables?: Json
           timezone?: string
           trigger_type?: string
           updated_at?: string
