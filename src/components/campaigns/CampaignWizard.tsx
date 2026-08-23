@@ -1273,28 +1273,40 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 ] as const).map((c) => {
                   const selected = selectedChannels.includes(c.id as CampaignChannel);
                   const active = channel === c.id;
+                  const canRemove = selected && selectedChannels.length > 1;
                   return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      aria-label={`${c.label} channel`}
-                      aria-pressed={selected}
-                      onClick={() => (selected ? switchChannel(c.id as CampaignChannel) : toggleChannel(c.id as CampaignChannel))}
-                      onDoubleClick={() => toggleChannel(c.id as CampaignChannel)}
-                      className={`relative cursor-pointer rounded-xl p-3 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
-                        active ? 'border-primary bg-primary/10 shadow-md'
-                        : selected ? 'border-primary/40 bg-primary/5'
-                        : 'border-border bg-card hover:border-primary/30'
-                      }`}
-                    >
-                      {selected && (
-                        <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
-                          <Check className="h-2.5 w-2.5" />
-                        </span>
+                    <div key={c.id} className="relative">
+                      <button
+                        type="button"
+                        aria-label={`${c.label} channel`}
+                        aria-pressed={selected}
+                        onClick={() => (selected ? switchChannel(c.id as CampaignChannel) : toggleChannel(c.id as CampaignChannel))}
+                        className={`w-full relative cursor-pointer rounded-xl p-3 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
+                          active ? 'border-primary bg-primary/10 shadow-md'
+                          : selected ? 'border-primary/40 bg-primary/5'
+                          : 'border-border bg-card hover:border-primary/30'
+                        }`}
+                      >
+                        {selected && !canRemove && (
+                          <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                            <Check className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                        <c.icon className={`h-5 w-5 mx-auto ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <p className={`text-xs mt-1 font-medium ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{c.label}</p>
+                      </button>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${c.label} channel`}
+                          title={`Remove ${c.label}`}
+                          onClick={(e) => { e.stopPropagation(); toggleChannel(c.id as CampaignChannel); }}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       )}
-                      <c.icon className={`h-5 w-5 mx-auto ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <p className={`text-xs mt-1 font-medium ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{c.label}</p>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
