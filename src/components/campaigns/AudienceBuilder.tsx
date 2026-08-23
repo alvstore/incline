@@ -31,6 +31,7 @@ interface Props {
 
 const KIND_OPTIONS: { id: AudienceKind; label: string; desc: string; icon: any }[] = [
   { id: 'members',    label: 'Members',          desc: 'Gym members in this branch',        icon: Users },
+  { id: 'members_and_staff', label: 'Everyone at the club', desc: 'Members + trainers + staff (no leads)', icon: Users },
   { id: 'leads',      label: 'Leads',            desc: 'Active prospects from CRM',         icon: UserPlus },
   { id: 'lost_leads', label: 'Lost leads',       desc: 'Status=lost or no contact 60d+',    icon: UserMinus },
   { id: 'contacts',   label: 'All contacts',     desc: 'Full contact book',                 icon: Contact2 },
@@ -201,6 +202,31 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             <span>
               Looking to win back members who haven&apos;t visited in a while?
               Use the <Link to="/automations" className="underline text-primary">Smart Retention Nudge Engine</Link> — it runs automatically based on absence cooldowns.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {kind === 'members_and_staff' && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Membership status</Label>
+            <Select
+              value={filter.member_status || 'all'}
+              onValueChange={(v) => setFilter({ ...filter, member_status: v as any })}
+            >
+              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                <SelectItem value="active">Active members only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-xl border border-dashed bg-muted/30 p-3 flex gap-2 text-[11px] text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>
+              Club-wide reach: members of this branch plus trainers, staff, managers, owners and admins.
+              Leads and cold contacts are intentionally excluded — ideal for class announcements.
             </span>
           </div>
         </div>
