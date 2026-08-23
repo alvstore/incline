@@ -986,11 +986,14 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       const channelDefaults = channel === 'whatsapp'
         ? { batch: batch_size, pace: pacing_ms }
         : channel === 'email'
-          ? { batch: 40, pace: 400 }
-          : { batch: 25, pace: 800 };
+          // 400ms tripped the edge-invoke rate limiter; 900ms is still ~66/min.
+          ? { batch: 30, pace: 900 }
+          : { batch: 25, pace: 900 };
       let effectiveBatchSize = Number(pacingState.batch_size) || channelDefaults.batch;
       let effectivePacingMs = Number(pacingState.pacing_ms) || channelDefaults.pace;
       let pacingHits = 0; // chunk-local counter
+      let transientHits = 0; // platform rate-limit / timeout counter
+
 
 
 
@@ -1140,13 +1143,32 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           error = e?.message || 'exception';
         }
 
-        await adminClient.from('campaign_recipients').update({
-          status, error, pacing_code: pacingCode,
-          fallback_used: fallbackUsed, fallback_channel: fallbackChannel,
-          provider_route: providerRoute, dispatched_at: new Date().toISOString(),
-        }).eq('id', r.id);
+        // v5.2.0 — platform-level transients (edge invoke rate limit, 25s
+        // abort, network fetch failure) are NOT delivery failures. Requeue the
+        // row as pending (claim_broadcast_batch will pick it up again, capped
+        // by attempt>3) and slow the isolate down so we stop tripping the limit.
+        const errText = String(error || '');
+        const isTransient =
+          status === 'failed' &&
+          (/rate limit exceeded/i.test(errText) ||
+            /timeout_25s/i.test(errText) ||
+            /fetch_failed/i.test(errText));
+        if (isTransient) {
+          transientHits += 1;
+          effectivePacingMs = Math.min(5000, Math.max(effectivePacingMs, 800) + 300);
+          await adminClient.from('campaign_recipients').update({
+            status: 'pending', error: `transient_requeued: ${errText}`.slice(0, 500),
+          }).eq('id', r.id);
+        } else {
+          await adminClient.from('campaign_recipients').update({
+            status, error, pacing_code: pacingCode,
+            fallback_used: fallbackUsed, fallback_channel: fallbackChannel,
+            provider_route: providerRoute, dispatched_at: new Date().toISOString(),
+          }).eq('id', r.id);
+        }
 
         if (effectivePacingMs > 0) await new Promise(res => setTimeout(res, effectivePacingMs));
+
       }
 
       // Pacing back-off — tighten the rate before the next chunk isolate
@@ -1162,9 +1184,13 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         nextBatchSize = Math.max(5, Math.floor(effectiveBatchSize / 2));
         nextPacingMs = Math.min(30000, Math.floor(effectivePacingMs * 1.5));
       }
-      const newPacingState = (pacingHits > 0 || pacingState.batch_size)
-        ? { batch_size: nextBatchSize, pacing_ms: nextPacingMs, updated_at: new Date().toISOString(), last_hits: pacingHits }
+      if (transientHits > 0) {
+        nextBatchSize = Math.max(10, Math.floor(effectiveBatchSize * 0.75));
+      }
+      const newPacingState = (pacingHits > 0 || transientHits > 0 || pacingState.batch_size)
+        ? { batch_size: nextBatchSize, pacing_ms: nextPacingMs, updated_at: new Date().toISOString(), last_hits: pacingHits, last_transients: transientHits }
         : null;
+
 
 
 
