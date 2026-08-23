@@ -1262,7 +1262,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channels</Label>
-                <span className="text-[11px] text-muted-foreground">Tap to add · tap an added channel to edit it</span>
+                <span className="text-[11px] text-muted-foreground">Tap to add · tap the × to remove</span>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {([
