@@ -1,0 +1,2 @@
+ALTER TABLE public.campaign_recipients DROP CONSTRAINT IF EXISTS campaign_recipients_source_type_check;
+ALTER TABLE public.campaign_recipients ADD CONSTRAINT campaign_recipients_source_type_check CHECK (source_type = ANY (ARRAY['member'::text,'lead'::text,'contact'::text,'lost_lead'::text,'csv'::text,'staff'::text]));

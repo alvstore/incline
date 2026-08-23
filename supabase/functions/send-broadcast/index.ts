@@ -890,20 +890,40 @@ async function handleMaterialize(a: MaterializeArgs): Promise<Response> {
     full_name: r.full_name, phone: r.phone, email: r.email,
     status: 'pending', attempt: 0,
   }));
+  let inserted = 0;
+  const insertErrors: string[] = [];
   for (let i = 0; i < toInsert.length; i += 500) {
     const slice = toInsert.slice(i, i + 500);
     const { error: insErr } = await adminClient.from('campaign_recipients').insert(slice);
-    if (insErr) console.warn('[materialize] insert slice failed:', insErr.message);
+    if (insErr) {
+      console.error('[materialize] insert slice failed:', insErr.message);
+      insertErrors.push(insErr.message);
+    } else {
+      inserted += slice.length;
+    }
   }
 
+  // Fail loudly instead of marking the campaign "sent" with zero recipients.
+  if (inserted === 0) {
+    await adminClient.from('campaigns').update({
+      status: 'failed',
+      recipients_count: 0,
+      last_run_error: `materialize_failed: ${insertErrors[0] || 'unknown'}`.slice(0, 500),
+    }).eq('id', campaign_id);
+    return jsonResp({ error: 'materialize_failed', detail: insertErrors[0] || 'unknown' }, 500, corsHeaders);
+  }
+
+
   await adminClient.from('campaigns').update({
-    status: 'sending', recipients_count: rows.length,
+    status: 'sending', recipients_count: inserted,
     success_count: 0, failure_count: 0,
-    last_run_error: null, last_progress_at: new Date().toISOString(),
+    last_run_error: insertErrors.length ? `partial_materialize: ${insertErrors[0]}`.slice(0, 500) : null,
+    last_progress_at: new Date().toISOString(),
   }).eq('id', campaign_id);
 
   kickChunk(supabaseUrl, supabaseServiceKey, campaign_id);
-  return jsonResp({ accepted: true, materialized: rows.length }, 202, corsHeaders);
+  return jsonResp({ accepted: true, materialized: inserted }, 202, corsHeaders);
+
 }
 
 type ChunkArgs = {
