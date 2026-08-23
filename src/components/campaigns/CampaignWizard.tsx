@@ -209,6 +209,32 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // with empty params (template_param_empty:3,4), so these must be filled.
   const [varOverrides, setVarOverrides] = useState<Record<string, string>>({});
 
+  /** Non-empty manual slot values, keyed by the token key and its positional
+   *  aliases so both `{{2}}` bodies and Meta positional params resolve. */
+  const filledVariables = useCallback((): Record<string, string> => {
+    const out: Record<string, string> = {};
+    Object.entries(varOverrides).forEach(([key, raw]) => {
+      const value = String(raw ?? '').trim();
+      if (!value) return;
+      out[key] = value;
+      if (/^\d+$/.test(key)) {
+        out[`v${key}`] = value;
+        out[`param${key}`] = value;
+      }
+    });
+    return out;
+  }, [varOverrides]);
+
+  /** Slots the user must type a value for (positional / unknown tokens). */
+  const missingSlotTokens = useMemo(() => {
+    if (!message.trim()) return [] as string[];
+    return extractTemplateVars(message)
+      .filter((v) => !isAutoVar(v))
+      .filter((v) => !(varOverrides[v.key] || '').trim())
+      .map((v) => v.token);
+  }, [message, varOverrides]);
+
+
 
   // ── RCS (Telinfy) template selection + per-variable mapping ──
   const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
