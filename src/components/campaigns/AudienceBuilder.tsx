@@ -31,6 +31,7 @@ interface Props {
 
 const KIND_OPTIONS: { id: AudienceKind; label: string; desc: string; icon: any }[] = [
   { id: 'members',    label: 'Members',          desc: 'Gym members in this branch',        icon: Users },
+  { id: 'members_and_staff', label: 'Everyone at the club', desc: 'Members + trainers + staff (no leads)', icon: Users },
   { id: 'leads',      label: 'Leads',            desc: 'Active prospects from CRM',         icon: UserPlus },
   { id: 'lost_leads', label: 'Lost leads',       desc: 'Status=lost or no contact 60d+',    icon: UserMinus },
   { id: 'contacts',   label: 'All contacts',     desc: 'Full contact book',                 icon: Contact2 },
