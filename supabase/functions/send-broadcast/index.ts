@@ -937,10 +937,19 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
 
       // Adaptive pacing: pick up prior back-off state so a fresh isolate
       // doesn't reset to defaults and immediately re-trip Meta throttles.
+      // v5.1.0 — channel-aware defaults. WhatsApp is the only channel Meta
+      // paces (131049); Email/SMS/RCS get bigger, faster chunks but still go
+      // through the same chunked pipeline (no giant isolate, resumable).
       const pacingState = fallbackPolicy?.pacing_state || {};
-      let effectiveBatchSize = Number(pacingState.batch_size) || batch_size;
-      let effectivePacingMs = Number(pacingState.pacing_ms) || pacing_ms;
+      const channelDefaults = channel === 'whatsapp'
+        ? { batch: batch_size, pace: pacing_ms }
+        : channel === 'email'
+          ? { batch: 40, pace: 400 }
+          : { batch: 25, pace: 800 };
+      let effectiveBatchSize = Number(pacingState.batch_size) || channelDefaults.batch;
+      let effectivePacingMs = Number(pacingState.pacing_ms) || channelDefaults.pace;
       let pacingHits = 0; // chunk-local counter
+
 
 
       const digits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '');
