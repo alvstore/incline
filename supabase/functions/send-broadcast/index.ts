@@ -1030,11 +1030,18 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         let providerRoute: string | null = channel === 'whatsapp' ? 'cloud_api' : channel;
 
         if ((r.attempt || 0) > 3) {
+          // Keep the LAST real failure reason visible — "max_attempts_exceeded"
+          // alone hides whether the row died from Meta pacing, a bad address,
+          // or platform rate limits.
+          const prev = String(r.error || '').replace(/^transient_requeued[^:]*:\s*/i, '').trim();
           await adminClient.from('campaign_recipients').update({
-            status: 'failed', error: 'max_attempts_exceeded', dispatched_at: new Date().toISOString(),
+            status: 'failed',
+            error: prev ? `max_attempts_exceeded: ${prev}`.slice(0, 500) : 'max_attempts_exceeded',
+            dispatched_at: new Date().toISOString(),
           }).eq('id', r.id);
           continue;
         }
+
 
         const target = channel === 'email' ? r.email : r.phone;
         if (!target) {
@@ -1143,23 +1150,48 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           error = e?.message || 'exception';
         }
 
-        // v5.2.0 — platform-level transients (edge invoke rate limit, 25s
-        // abort, network fetch failure) are NOT delivery failures. Requeue the
-        // row as pending (claim_broadcast_batch will pick it up again, capped
-        // by attempt>3) and slow the isolate down so we stop tripping the limit.
+        // v5.3.0 — platform-level transients (edge invoke rate limit, 25s
+        // abort, network fetch failure) are NOT delivery failures, so they must
+        // NOT consume the 3-attempt delivery budget. Previously every throttle
+        // burned an attempt, so healthy recipients died as
+        // "max_attempts_exceeded" without a single real send failure.
+        // We roll the attempt counter back and track transient replays
+        // separately, capped at 6 so a permanently broken platform still ends.
         const errText = String(error || '');
         const isTransient =
           status === 'failed' &&
-          (/rate limit exceeded/i.test(errText) ||
+          (/rate\s*limit/i.test(errText) ||          // covers "rate limit exceeded" AND SMTP "Ratelimit ... exceeded"
+            /throttl/i.test(errText) ||
+            /\b4\.7\.1\b|\b451\b|\b421\b|\b452\b/.test(errText) || // transient SMTP 4xx
+            /too many (messages|emails|requests)/i.test(errText) ||
             /timeout_25s/i.test(errText) ||
             /fetch_failed/i.test(errText));
-        if (isTransient) {
+
+        const priorTransients = Number(
+          String(r.error || '').match(/transient_requeued\((\d+)\)/i)?.[1] || 0,
+        );
+        if (isTransient && priorTransients < 6) {
           transientHits += 1;
-          effectivePacingMs = Math.min(5000, Math.max(effectivePacingMs, 800) + 300);
+          // SMTP provider throttles (Hostinger et al.) need a much harder
+          // slowdown than platform invoke limits — jump straight to 3s+.
+          const smtpThrottle = /rate\s*limit|throttl|\b4\.7\.1\b|\b451\b/i.test(errText);
+          effectivePacingMs = smtpThrottle
+            ? Math.min(8000, Math.max(effectivePacingMs, 3000) + 500)
+            : Math.min(5000, Math.max(effectivePacingMs, 800) + 300);
+
           await adminClient.from('campaign_recipients').update({
-            status: 'pending', error: `transient_requeued: ${errText}`.slice(0, 500),
+            status: 'pending',
+            attempt: Math.max(0, (r.attempt || 1) - 1),
+            error: `transient_requeued(${priorTransients + 1}): ${errText}`.slice(0, 500),
+          }).eq('id', r.id);
+        } else if (isTransient) {
+          await adminClient.from('campaign_recipients').update({
+            status: 'failed',
+            error: `transient_retries_exhausted: ${errText}`.slice(0, 500),
+            dispatched_at: new Date().toISOString(),
           }).eq('id', r.id);
         } else {
+
           await adminClient.from('campaign_recipients').update({
             status, error, pacing_code: pacingCode,
             fallback_used: fallbackUsed, fallback_channel: fallbackChannel,
