@@ -626,11 +626,14 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         : (target.startsWith('+') ? target : `+${target}`);
 
       // Build per-recipient variables (mirrors send-broadcast perVars so
-      // Meta template positional params resolve identically).
+      // Meta template positional params resolve identically). Manually filled
+      // slots ({{2}}, {{3}}, …) override the auto mapping.
       const perVars: Record<string, string> = {
         member_name: testName, full_name: testName, first_name: firstName, name: firstName,
         '1': firstName, v1: firstName, param1: firstName,
+        ...filledVariables(),
       };
+
       // For RCS, template_name is packed into variables (Telinfy lcustomParam).
       const rcsVars = channel === 'rcs' && selectedRcsTemplate
         ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient({
