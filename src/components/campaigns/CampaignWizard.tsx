@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ResponsiveSheet,
   ResponsiveSheetHeader,
@@ -208,6 +208,32 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // (e.g. {{2}} class name, {{3}} timing, {{4}} details). Meta rejects a send
   // with empty params (template_param_empty:3,4), so these must be filled.
   const [varOverrides, setVarOverrides] = useState<Record<string, string>>({});
+
+  /** Non-empty manual slot values, keyed by the token key and its positional
+   *  aliases so both `{{2}}` bodies and Meta positional params resolve. */
+  const filledVariables = useCallback((): Record<string, string> => {
+    const out: Record<string, string> = {};
+    Object.entries(varOverrides).forEach(([key, raw]) => {
+      const value = String(raw ?? '').trim();
+      if (!value) return;
+      out[key] = value;
+      if (/^\d+$/.test(key)) {
+        out[`v${key}`] = value;
+        out[`param${key}`] = value;
+      }
+    });
+    return out;
+  }, [varOverrides]);
+
+  /** Slots the user must type a value for (positional / unknown tokens). */
+  const missingSlotTokens = useMemo(() => {
+    if (!message.trim()) return [] as string[];
+    return extractTemplateVars(message)
+      .filter((v) => !isAutoVar(v))
+      .filter((v) => !(varOverrides[v.key] || '').trim())
+      .map((v) => v.token);
+  }, [message, varOverrides]);
+
 
 
   // ── RCS (Telinfy) template selection + per-variable mapping ──
@@ -463,6 +489,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     }
     // Track the editing row so any "Submit to Meta" resubmission updates it
     // instead of creating a duplicate draft (issue #1).
+    setVarOverrides(
+      (c as any).template_variables && typeof (c as any).template_variables === 'object'
+        ? Object.fromEntries(
+            Object.entries((c as any).template_variables as Record<string, unknown>)
+              .filter(([k]) => !/^(v|param)\d+$/.test(k))
+              .map(([k, v]) => [k, String(v ?? '')]),
+          )
+        : {},
+    );
     setDraftCampaignId(c.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingCampaign?.id]);
@@ -723,6 +758,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setUseApprovedTemplate(false); setSelectedTemplateId(null);
     setDraftCampaignId(null); setShowAllTemplates(false);
     setEvergreenAppliedFor(null); setEvergreenPickedName(null);
+    setVarOverrides({});
   };
 
   const close = () => { reset(); onOpenChange(false); };
@@ -805,6 +841,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           rsvp_url: eventRsvpUrl.trim() || null,
         } : {},
         template_id: channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') ? selectedTemplateId : null,
+        template_variables: filledVariables(),
         status: (
           trigger === 'send_now' ? 'sending' :
           trigger === 'scheduled' ? 'scheduled' : 'draft'
@@ -839,7 +876,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         const rcsVariables = channel === 'rcs' && selectedRcsTemplate
           ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
           : undefined;
-        const result = await sendCampaignNow(campaign, { ...audience, variables: rcsVariables });
+        const fixedVars = filledVariables();
+        const sendVariables = rcsVariables
+          ? { ...fixedVars, ...rcsVariables }
+          : (Object.keys(fixedVars).length ? fixedVars : undefined);
+        const result = await sendCampaignNow(campaign, { ...audience, variables: sendVariables });
         toast.success(
           `Campaign queued — sending to ${result.total} recipients in the background. Watch the card for live progress.`,
         );
@@ -1358,9 +1399,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       type="button"
                       size="sm"
                       onClick={handleSendTest}
-                      disabled={sendingTest || !testRecipient.trim()}
+                      disabled={sendingTest || !testRecipient.trim() || missing.length > 0}
                       className="rounded-full h-9 px-4 gap-1.5 bg-primary hover:bg-primary text-primary-foreground"
-                      title="Send this exact message to yourself using the same pipeline as real campaigns"
+                      title={missing.length > 0 ? `Fill ${missing.map((m) => m.token).join(', ')} first` : 'Send this exact message to yourself using the same pipeline as real campaigns'}
                     >
                       {sendingTest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Send Test
@@ -1643,7 +1684,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
+            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate || missingSlotTokens.length > 0} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : missingSlotTokens.length > 0 ? `Fill template slots ${missingSlotTokens.join(', ')} on the Message step` : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> :
                 trigger === 'send_now' ? <><Send className="h-4 w-4" /> Send Campaign</> :
                 trigger === 'scheduled' ? <><Clock className="h-4 w-4" /> Schedule Campaign</> :

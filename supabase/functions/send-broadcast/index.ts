@@ -376,7 +376,8 @@ Deno.serve(async (req) => {
         const personalized = message
           .replace(/\{\{member_name\}\}/g, perVars.member_name)
           .replace(/\{\{full_name\}\}/g, perVars.full_name)
-          .replace(/\{\{first_name\}\}/g, perVars.first_name);
+          .replace(/\{\{first_name\}\}/g, perVars.first_name)
+          .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
 
         try {
           const { data: dispatchRes, error: dispatchErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
@@ -640,7 +641,8 @@ Deno.serve(async (req) => {
         .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
         .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
         .replace(/\{\{\s*member_code\s*\}\}/gi, perVars.member_code)
-        .replace(/\{\{\s*1\s*\}\}/g, perVars['1']);
+        .replace(/\{\{\s*1\s*\}\}/g, perVars['1'])
+        .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
 
       let recipient = channel === "email" ? profile.email : profile.phone;
       let status: 'sent' | 'failed' | 'skipped' = "failed";
@@ -905,7 +907,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       // found"); anything else is a transient error and we requeue instead
       // of quietly giving up (which is what left prior chunks stuck).
       const { data: campaign, error: loadErr } = await adminClient.from('campaigns')
-        .select('id, branch_id, channel, template_id, message, subject, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
+        .select('id, branch_id, channel, template_id, template_variables, message, subject, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
         .eq('id', campaign_id).maybeSingle();
       if (loadErr) {
         console.error('[chunk] campaign load error, will retry:', campaign_id, loadErr);
@@ -1001,6 +1003,17 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           first_name: firstName || 'there',
           name: nameFallback,
           '1': nameFallback, v1: nameFallback, param1: nameFallback,
+          // Campaign-wide fixed slot values ({{2}}, {{3}}, …) set in the wizard.
+          ...(campaign.template_variables && typeof campaign.template_variables === 'object'
+            ? Object.fromEntries(
+                Object.entries(campaign.template_variables as Record<string, unknown>)
+                  .filter(([, v]) => typeof v === 'string' && String(v).trim())
+                  .map(([k, v]) => [k, String(v)
+                    .replace(/\{\{\s*first_name\s*\}\}/gi, firstName || 'there')
+                    .replace(/\{\{\s*full_name\s*\}\}/gi, r.full_name || 'there')
+                    .replace(/\{\{\s*member_name\s*\}\}/gi, r.full_name || 'there')]),
+              )
+            : {}),
         };
 
         if (channel === 'whatsapp' && templateId && !String(r.full_name || '').trim()) {
@@ -1013,7 +1026,8 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         const personalized = String(campaign.message || '')
           .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
           .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
-          .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name);
+          .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
+          .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
 
         try {
           const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {

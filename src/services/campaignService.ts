@@ -147,6 +147,7 @@ export interface Campaign {
   attachment_filename?: string | null;
   campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
   event_meta?: Record<string, any>;
+  template_variables?: Record<string, string> | null;
   fallback_policy?: { on_pacing?: boolean } | null;
   last_run_error?: string | null;
 }
@@ -258,6 +259,7 @@ export async function createCampaign(input: Omit<Campaign,
   campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
   event_meta?: Record<string, any>;
   template_id?: string | null;
+  template_variables?: Record<string, string> | null;
 }): Promise<Campaign> {
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -278,6 +280,7 @@ export async function createCampaign(input: Omit<Campaign,
       campaign_type: input.campaign_type ?? 'announcement',
       event_meta: input.event_meta ?? {},
       template_id: input.template_id ?? null,
+      template_variables: input.template_variables ?? {},
       created_by: user?.id,
     } as any)
     .select()
@@ -292,7 +295,7 @@ export async function updateCampaign(
   patch: Partial<Pick<Campaign,
     'name' | 'message' | 'subject' | 'channel' | 'audience_filter' |
     'scheduled_at' | 'attachment_url' | 'attachment_kind' | 'attachment_filename' |
-    'campaign_type' | 'event_meta' | 'template_id' | 'trigger_type' | 'status'
+    'campaign_type' | 'event_meta' | 'template_id' | 'template_variables' | 'trigger_type' | 'status'
   >>,
 ): Promise<Campaign> {
   const { data, error } = await supabase
@@ -354,6 +357,7 @@ export async function upsertDraftCampaignForTemplate(
       campaign_type: input.campaign_type,
       event_meta: input.event_meta ?? {},
       template_id: input.template_id ?? null,
+      template_variables: input.template_variables ?? {},
       status: (input.status ?? 'pending_template_approval') as CampaignStatus,
     });
   }
