@@ -197,6 +197,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [testRecipient, setTestRecipient] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
 
+  // Fixed values for template slots that are NOT the recipient's name
+  // (e.g. {{2}} class name, {{3}} timing, {{4}} details). Meta rejects a send
+  // with empty params (template_param_empty:3,4), so these must be filled.
+  const [varOverrides, setVarOverrides] = useState<Record<string, string>>({});
+
+
   // ── RCS (Telinfy) template selection + per-variable mapping ──
   const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
   const [rcsVarMap, setRcsVarMap] = useState<Record<string, string>>({});
