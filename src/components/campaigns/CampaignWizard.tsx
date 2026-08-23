@@ -86,11 +86,18 @@ function renderPreview(body: string, sampleOverrides: Record<string, string> = {
   });
 }
 
+/** Slots resolved automatically per recipient (never manually filled). */
+const AUTO_VAR_KEYS = new Set(['1', 'first_name', 'name', 'member_name', 'full_name', 'member_code']);
+function isAutoVar(v: TplVar): boolean {
+  return AUTO_VAR_KEYS.has(v.positional ? v.key : v.key.toLowerCase());
+}
+
 function phoneLast10(value: string): string {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.length <= 10) return digits;
   return digits.slice(-10);
 }
+
 
 function firstNameOf(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || fullName.trim();
