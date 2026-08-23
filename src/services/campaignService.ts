@@ -4,7 +4,7 @@ export type CampaignChannel = 'whatsapp' | 'email' | 'sms' | 'rcs';
 export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused' | 'pending_template_approval';
 export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 
-export type AudienceKind = 'members' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
+export type AudienceKind = 'members' | 'members_and_staff' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
 export type StaffRole = 'owner' | 'admin' | 'manager' | 'staff' | 'trainer';
 
 export interface AudienceFilter {
