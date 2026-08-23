@@ -875,7 +875,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         const rcsVariables = channel === 'rcs' && selectedRcsTemplate
           ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
           : undefined;
-        const result = await sendCampaignNow(campaign, { ...audience, variables: rcsVariables });
+        const fixedVars = filledVariables();
+        const sendVariables = rcsVariables
+          ? { ...fixedVars, ...rcsVariables }
+          : (Object.keys(fixedVars).length ? fixedVars : undefined);
+        const result = await sendCampaignNow(campaign, { ...audience, variables: sendVariables });
         toast.success(
           `Campaign queued — sending to ${result.total} recipients in the background. Watch the card for live progress.`,
         );
