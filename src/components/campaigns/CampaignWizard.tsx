@@ -1629,7 +1629,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs uppercase tracking-wider text-primary font-semibold">Preview &amp; Test</Label>
-                    {anyPositional && (
+                    {anyPositional && channel === 'whatsapp' && (
                       <span className="text-[10px] text-primary/80 font-mono">Meta positional variables detected</span>
                     )}
                   </div>
