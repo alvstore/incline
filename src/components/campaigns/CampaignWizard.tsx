@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle, Radio } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle, Radio, Check, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +42,17 @@ interface Props {
 }
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
+const EVENT_VARIABLES = ['{{class_name}}', '{{class_when}}', '{{class_trainer}}', '{{class_venue}}'];
+
+/** Per-channel editing state so each selected channel keeps its own content. */
+interface ChannelDraft {
+  message: string;
+  subject: string;
+  varOverrides: Record<string, string>;
+  templateId: string | null;
+  useApprovedTemplate: boolean;
+  evergreenName: string | null;
+}
 
 // ─── Variable resolution (kept in lock-step with dispatch-communication + send-broadcast) ───
 // Positional Meta vars ({{1}}, {{2}}, ...) map to these keys in order.
@@ -58,6 +69,11 @@ const NAMED_VAR_MEANINGS: Record<string, { label: string; sample: string }> = {
   name: { label: 'Recipient first name', sample: 'Rahul' },
   member_code: { label: 'Member code', sample: 'INC-000123' },
   branch_name: { label: 'Branch name', sample: 'Incline HQ' },
+  class_name: { label: 'Class / event name', sample: 'Sunday HIIT Bootcamp' },
+  class_when: { label: 'Class date & time', sample: 'Sun 24 Aug · 7:00 AM' },
+  class_trainer: { label: 'Class trainer', sample: 'Ritesh Sharma' },
+  class_venue: { label: 'Class venue', sample: 'Main floor' },
+  poster_url: { label: 'Poster / flyer image', sample: '' },
 };
 
 interface TplVar { token: string; key: string; positional: boolean; label: string; sample: string; }
@@ -90,6 +106,27 @@ function renderPreview(body: string, sampleOverrides: Record<string, string> = {
 const AUTO_VAR_KEYS = new Set(['1', 'first_name', 'name', 'member_name', 'full_name', 'member_code']);
 function isAutoVar(v: TplVar): boolean {
   return AUTO_VAR_KEYS.has(v.positional ? v.key : v.key.toLowerCase());
+}
+
+/** "Sun 24 Aug · 7:00 AM" in IST. */
+function formatClassWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const day = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+  return `${day} · ${time}`;
+}
+
+/** Very small markdown-ish → HTML for the email preview (escaped first). */
+function emailPreviewHtml(body: string): string {
+  if (/<[a-z][\s\S]*>/i.test(body)) return body; // already HTML
+  const esc = body
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#4f46e5">$1</a>')
+    .split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px">${p.replace(/\n/g, '<br/>')}</p>`).join('');
 }
 
 function phoneLast10(value: string): string {
@@ -162,7 +199,14 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [step, setStep] = useState(1);
   const [campaignType, setCampaignType] = useState<CampaignType>('announcement');
   const [name, setName] = useState('');
+  // `channel` = the channel currently being edited/previewed.
+  // `selectedChannels` = every channel this campaign will go out on. Each one
+  // keeps its own body/subject/template so an Email campaign never inherits a
+  // WhatsApp positional-slot body.
   const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
+  const [selectedChannels, setSelectedChannels] = useState<CampaignChannel[]>(['whatsapp']);
+  const [channelDrafts, setChannelDrafts] = useState<Record<string, ChannelDraft>>({});
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [filter, setFilter] = useState<AudienceFilter>({ status: 'active' });
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -211,9 +255,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
 
   /** Non-empty manual slot values, keyed by the token key and its positional
    *  aliases so both `{{2}}` bodies and Meta positional params resolve. */
-  const filledVariables = useCallback((): Record<string, string> => {
+  const filledVariables = useCallback((overrides?: Record<string, string>): Record<string, string> => {
+    const src = overrides ?? varOverrides;
     const out: Record<string, string> = {};
-    Object.entries(varOverrides).forEach(([key, raw]) => {
+    Object.entries(src).forEach(([key, raw]) => {
       const value = String(raw ?? '').trim();
       if (!value) return;
       out[key] = value;
@@ -368,7 +413,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // campaign. When the linked `meta_template_name` is APPROVED in
   // `whatsapp_templates`, we auto-toggle the "send via approved template" mode
   // and pre-select the local templates.id.
-  const { data: evergreenTemplates = [] } = useQuery({
+  const {
+    data: evergreenTemplates = [],
+    isSuccess: evergreenLoaded,
+    isFetching: evergreenFetching,
+  } = useQuery({
     queryKey: ['evergreen-templates', channel, campaignType, branchId],
     queryFn: async () => {
       let q = supabase
@@ -392,34 +441,90 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // Auto-apply evergreen on campaign-type / channel switch (only when not editing
   // and user hasn't typed a custom message yet, or when the prior body came from
   // a different evergreen).
+  //
+  // IMPORTANT: we only decide once the query for THIS channel has actually
+  // resolved. Deciding while the new channel's evergreen list is still loading
+  // used to mark the combo as "applied" with zero rows, leaving the previous
+  // channel's body (e.g. the WhatsApp positional template) on an Email campaign.
   useEffect(() => {
     if (!open || isEditing) return;
+    if (channel === 'rcs') return; // RCS is template-only, no evergreen body
+    if (!evergreenLoaded || evergreenFetching) return;
     const key = `${channel}:${campaignType}`;
     if (evergreenAppliedFor === key) return;
     const ever = (evergreenTemplates as any[])[0];
     if (!ever) {
-      // No evergreen for this combo — keep whatever the user has.
+      // No evergreen for this channel/type — clear any body inherited from
+      // another channel rather than shipping the wrong format.
       setEvergreenAppliedFor(key);
+      if (evergreenPickedName) {
+        setEvergreenPickedName(null);
+        setMessage('');
+        setSubject('');
+        setVarOverrides({});
+      }
       return;
     }
     // Don't blow away user's custom edits — only apply if message is empty or
-    // still matches the previously-applied evergreen body.
-    const messageIsCustom = message.trim().length > 0 &&
-      !(evergreenPickedName && message.trim() === (evergreenTemplates as any[])
-        .find((t: any) => t.name === evergreenPickedName)?.content?.trim());
+    // still came from an evergreen base (any channel's).
+    const messageIsCustom = message.trim().length > 0 && !evergreenPickedName;
     if (!messageIsCustom) {
       setMessage(ever.content || '');
-      if (channel === 'email' && ever.subject) setSubject(ever.subject);
+      setSubject(channel === 'email' ? (ever.subject || '') : '');
+      setVarOverrides({});
       setEvergreenPickedName(ever.name);
       // If the linked Meta template is APPROVED, auto-route through the
       // approved-template path so cold recipients don't get blocked.
-      if (channel === 'whatsapp' && ever.id && ever.meta_template_status === 'approved') {
+      if (channel === 'whatsapp' && ever.id && String(ever.meta_template_status || '').toLowerCase() === 'approved') {
         setUseApprovedTemplate(true);
         setSelectedTemplateId(ever.id);
+      } else if (channel !== 'whatsapp') {
+        setUseApprovedTemplate(false);
+        setSelectedTemplateId(null);
       }
     }
     setEvergreenAppliedFor(key);
-  }, [open, isEditing, channel, campaignType, evergreenTemplates, evergreenAppliedFor, evergreenPickedName, message]);
+  }, [open, isEditing, channel, campaignType, evergreenTemplates, evergreenLoaded, evergreenFetching, evergreenAppliedFor, evergreenPickedName, message]);
+
+  // ─── Upcoming classes (Event / Class campaigns) ────────────────────────────
+  const { data: upcomingClasses = [] } = useQuery({
+    queryKey: ['campaign-upcoming-classes', branchId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('classes')
+        .select('id, name, class_type, scheduled_at, duration_minutes, capacity, trainer_id, is_active')
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .gte('scheduled_at', new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+        .order('scheduled_at')
+        .limit(50);
+      if (error) throw error;
+      const rows = data || [];
+      const trainerIds = Array.from(new Set(rows.map((r: any) => r.trainer_id).filter(Boolean)));
+      let trainerNames = new Map<string, string>();
+      if (trainerIds.length) {
+        // trainers.full_name doesn't exist — the display name lives on profiles.
+        const { data: trainers } = await supabase
+          .from('trainers')
+          .select('id, user_id')
+          .in('id', trainerIds as string[]);
+        const userIds = (trainers || []).map((t: any) => t.user_id).filter(Boolean);
+        const { data: profs } = userIds.length
+          ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
+          : { data: [] as any[] };
+        const byUser = new Map((profs || []).map((p: any) => [p.id, p.full_name]));
+        trainerNames = new Map(
+          (trainers || []).map((t: any) => [t.id, byUser.get(t.user_id) || '']),
+        );
+      }
+      return rows.map((r: any) => ({
+        ...r,
+        trainer_name: r.trainer_id ? trainerNames.get(r.trainer_id) || null : null,
+      }));
+    },
+    enabled: open && campaignType === 'event' && !!branchId,
+  });
+
 
 
   const handleSyncFromMeta = async () => {
@@ -751,6 +856,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
 
   const reset = () => {
     setStep(1); setName(''); setChannel('whatsapp'); setCampaignType('announcement');
+    setSelectedChannels(['whatsapp']); setChannelDrafts({}); setSelectedClassId(null);
     setFilter({ status: 'active' }); setResolvedMemberIds([]);
     setMessage(''); setSubject(''); setTrigger('send_now'); setScheduledAt('');
     setAttachment(null);
@@ -765,9 +871,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
 
   const insertVar = (v: string) => setMessage((m) => `${m}${v}`);
 
-  const buildFinalMessage = () => {
-    let body = message.trim();
-    if (isEvent && (eventName || eventDate || eventVenue)) {
+  const buildFinalMessage = (body0?: string) => {
+    let body = (body0 ?? message).trim();
+    const alreadyHasEvent =
+      (!!eventName && body.includes(eventName)) || /\{\{\s*class_(name|when)\s*\}\}/.test(body);
+    if (isEvent && !alreadyHasEvent && (eventName || eventDate || eventVenue)) {
       const parts = [
         eventName ? `📅 ${eventName}` : '',
         eventDate ? `🗓️  ${eventDate}${eventTime ? ` at ${eventTime}` : ''}` : '',
@@ -778,6 +886,41 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     }
     return body;
   };
+
+  /** Auto-fill event fields + message slots from a scheduled class. */
+  const applyClassSelection = (classId: string) => {
+    setSelectedClassId(classId);
+    const cls = (upcomingClasses as any[]).find((c: any) => c.id === classId);
+    if (!cls) return;
+    const when = formatClassWhen(cls.scheduled_at);
+    const d = new Date(cls.scheduled_at);
+    setEventName(cls.name || '');
+    setEventDate(Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10));
+    setEventTime(
+      Number.isNaN(d.getTime())
+        ? ''
+        : d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }),
+    );
+    const detail = [cls.trainer_name ? `with ${cls.trainer_name}` : '', cls.duration_minutes ? `${cls.duration_minutes} min` : '']
+      .filter(Boolean).join(' · ');
+
+    // Fill named class_* tokens and, for Meta positional templates, the
+    // remaining non-auto slots in order (class name → when → details).
+    const queue = [cls.name || '', when, detail || eventVenue || 'Limited spots — book now'];
+    const next: Record<string, string> = { ...varOverrides };
+    let qi = 0;
+    extractTemplateVars(message).forEach((v) => {
+      if (isAutoVar(v)) return;
+      if (v.key === 'class_name') { next[v.key] = cls.name || ''; return; }
+      if (v.key === 'class_when') { next[v.key] = when; return; }
+      if (v.key === 'class_trainer') { next[v.key] = cls.trainer_name || ''; return; }
+      if (v.key === 'class_venue') { next[v.key] = eventVenue || ''; return; }
+      next[v.key] = queue[Math.min(qi, queue.length - 1)] || '';
+      qi += 1;
+    });
+    setVarOverrides(next);
+  };
+
 
   // Cold-audience template enforcement (only meaningful for WhatsApp)
   const coldCount = breakdown?.cold ?? 0;
@@ -794,112 +937,197 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const templateReadyForTrigger = templatePicked && (trigger !== 'send_now' || !selectedTemplatePending);
   const blockedByTemplate = requiresTemplate && !templateReadyForTrigger;
 
+  // ─── Per-channel drafts ────────────────────────────────────────────────────
+  const captureDraft = (): ChannelDraft => ({
+    message,
+    subject,
+    varOverrides,
+    templateId: selectedTemplateId,
+    useApprovedTemplate,
+    evergreenName: evergreenPickedName,
+  });
+
+  const applyDraft = (next: CampaignChannel, draft?: ChannelDraft) => {
+    if (draft) {
+      setMessage(draft.message);
+      setSubject(draft.subject);
+      setVarOverrides(draft.varOverrides);
+      setSelectedTemplateId(draft.templateId);
+      setUseApprovedTemplate(draft.useApprovedTemplate);
+      setEvergreenPickedName(draft.evergreenName);
+      setEvergreenAppliedFor(`${next}:${campaignType}`);
+    } else {
+      // Fresh channel — clear everything so the evergreen effect can seed the
+      // right body/subject for THIS channel (no cross-channel bleed).
+      setMessage('');
+      setSubject('');
+      setVarOverrides({});
+      setSelectedTemplateId(null);
+      setUseApprovedTemplate(false);
+      setEvergreenPickedName(null);
+      setEvergreenAppliedFor(null);
+    }
+  };
+
+  const switchChannel = (next: CampaignChannel) => {
+    if (next === channel) return;
+    const current = channel;
+    const snapshot = captureDraft();
+    setChannelDrafts((d) => ({ ...d, [current]: snapshot }));
+    applyDraft(next, channelDrafts[next]);
+    setChannel(next);
+  };
+
+  const toggleChannel = (id: CampaignChannel) => {
+    const isOn = selectedChannels.includes(id);
+    if (isOn) {
+      if (selectedChannels.length === 1) { switchChannel(id); return; }
+      const remaining = selectedChannels.filter((c) => c !== id);
+      setSelectedChannels(remaining);
+      setChannelDrafts((d) => { const n = { ...d }; delete n[id]; return n; });
+      if (channel === id) switchChannel(remaining[0]);
+      return;
+    }
+    setSelectedChannels([...selectedChannels, id]);
+    switchChannel(id);
+  };
+
+  /** Drafts for every selected channel, with the live editor state folded in. */
+  const allChannelDrafts = (): Array<{ channel: CampaignChannel; draft: ChannelDraft }> =>
+    selectedChannels.map((c) => ({
+      channel: c,
+      draft: c === channel ? captureDraft() : (channelDrafts[c] || { message: '', subject: '', varOverrides: {}, templateId: null, useApprovedTemplate: false, evergreenName: null }),
+    }));
+
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
-    if (!message.trim()) { toast.error('Message required'); return; }
+    if (selectedChannels.length === 0) { toast.error('Pick at least one channel'); return; }
     if (totalCount === 0) { toast.error('Audience is empty'); return; }
-    if (blockedByTemplate) {
-      const detail = requiresTemplate && templatePicked && selectedTemplatePending && trigger === 'send_now'
-        ? 'This template is still awaiting Meta approval — schedule for later, or pick an APPROVED template.'
-        : `${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`;
-      toast.error(detail);
-      return;
-    }
-    if (channel === 'rcs' && !rcsTemplateId) {
-      toast.error('Pick an RCS template — Telinfy RCS is template-only');
-      return;
-    }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
     if (trigger === 'scheduled' && !scheduledAt) { toast.error('Pick a date and time'); return; }
     if (trigger === 'scheduled' && new Date(scheduledAt).getTime() <= Date.now()) {
       toast.error('Scheduled time must be in the future'); return;
     }
 
+    const drafts = allChannelDrafts();
+    for (const { channel: ch, draft } of drafts) {
+      if (ch !== 'rcs' && !draft.message.trim()) {
+        toast.error(`${ch.toUpperCase()}: message is empty`); return;
+      }
+      if (ch === 'email' && !draft.subject.trim()) {
+        toast.error('Email: subject is required'); return;
+      }
+      if (ch === 'rcs' && !rcsTemplateId) {
+        toast.error('Pick an RCS template — Telinfy RCS is template-only'); return;
+      }
+      if (ch === 'whatsapp' && blockedByTemplate) {
+        const detail = templatePicked && selectedTemplatePending && trigger === 'send_now'
+          ? 'This template is still awaiting Meta approval — schedule for later, or pick an APPROVED template.'
+          : `${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`;
+        toast.error(detail); return;
+      }
+      const missing = extractTemplateVars(draft.message)
+        .filter((v) => !isAutoVar(v))
+        .filter((v) => !(draft.varOverrides[v.key] || '').trim())
+        .map((v) => v.token);
+      if (missing.length) {
+        toast.error(`${ch.toUpperCase()}: fill template slots ${missing.join(', ')}`); return;
+      }
+    }
+
     setSubmitting(true);
     try {
-      const finalMessage = buildFinalMessage();
-      const payload = {
-        branch_id: branchId,
-        name: name.trim(),
-        channel,
-        audience_filter: filter,
-        message: finalMessage,
-        subject: channel === 'email' ? subject.trim() || null : null,
-        trigger_type: trigger,
-        scheduled_at: trigger === 'scheduled' ? new Date(scheduledAt).toISOString() : null,
-        attachment_url: attachment?.url ?? null,
-        attachment_kind: attachment?.kind ?? null,
-        attachment_filename: attachment?.filename ?? null,
-        campaign_type: campaignType,
-        fallback_policy: { on_pacing: fallbackOnPacing },
+      const groupId = drafts.length > 1 ? crypto.randomUUID() : null;
+      let lastError: any = null;
+      let created = 0;
 
-        event_meta: isEvent ? {
-          name: eventName.trim(),
-          date: eventDate || null,
-          time: eventTime || null,
-          venue: eventVenue.trim() || null,
-          rsvp_url: eventRsvpUrl.trim() || null,
-        } : {},
-        template_id: channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') ? selectedTemplateId : null,
-        template_variables: filledVariables(),
-        status: (
-          trigger === 'send_now' ? 'sending' :
-          trigger === 'scheduled' ? 'scheduled' : 'draft'
-        ) as any,
-      };
-      // If we already have a draft campaign from "Submit to Meta", update it in
-      // place so we don't leave orphan rows (issue #1).
-      const targetId = editingCampaign?.id || draftCampaignId;
-      const campaign = targetId
-        ? await updateCampaign(targetId, payload as any).then((c) => c)
-        : await createCampaign(payload as any);
-
-      if (trigger === 'send_now') {
-        const useResolver = filter.audience_kind && filter.audience_kind !== 'members';
-        const audience = useResolver
-          ? { recipients: await (await import('@/services/campaignService')).resolveCampaignAudience(branchId, filter) }
-          : { memberIds: resolvedMemberIds };
-        const audienceSize = useResolver
-          ? (audience as any).recipients?.length ?? 0
-          : (audience as any).memberIds?.length ?? 0;
-        if (audienceSize === 0) {
-          // Reset campaign so it doesn't stay stuck at status='sending'.
-          try {
-            await updateCampaign(campaign.id, { status: 'draft' as any });
-          } catch {}
-          toast.error('Audience is empty — pick contacts or members before sending.');
-          setSubmitting(false);
-          return;
-        }
-        // For RCS, pack template_name + per-variable *tokens* (send-broadcast
-        // resolves {{first_name}} / {{full_name}} / {{email}} per-recipient).
-        const rcsVariables = channel === 'rcs' && selectedRcsTemplate
-          ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
-          : undefined;
-        const fixedVars = filledVariables();
-        const sendVariables = rcsVariables
-          ? { ...fixedVars, ...rcsVariables }
-          : (Object.keys(fixedVars).length ? fixedVars : undefined);
-        const result = await sendCampaignNow(campaign, { ...audience, variables: sendVariables });
-        toast.success(
-          `Campaign queued — sending to ${result.total} recipients in the background. Watch the card for live progress.`,
-        );
-      } else if (trigger === 'scheduled') {
-        toast.success(`Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}`);
-      } else {
-        // automated → wire to automation_rules so automation-brain runs it on schedule
-        const cron = recurrencePresetToCron(recurrence, customCron);
-        await createRecurringCampaignRule({
+      for (const { channel: ch, draft } of drafts) {
+        const finalMessage = buildFinalMessage(draft.message);
+        const payload = {
           branch_id: branchId,
-          campaign_id: campaign.id,
-          name: name.trim(),
-          cron_expression: cron,
-        });
-        toast.success(`Recurring rule created (${cron}) — runs via Automation Brain`);
+          name: drafts.length > 1 ? `${name.trim()} · ${ch.toUpperCase()}` : name.trim(),
+          channel: ch,
+          audience_filter: filter,
+          message: finalMessage,
+          subject: ch === 'email' ? draft.subject.trim() || null : null,
+          trigger_type: trigger,
+          scheduled_at: trigger === 'scheduled' ? new Date(scheduledAt).toISOString() : null,
+          attachment_url: attachment?.url ?? null,
+          attachment_kind: attachment?.kind ?? null,
+          attachment_filename: attachment?.filename ?? null,
+          campaign_type: campaignType,
+          fallback_policy: { on_pacing: fallbackOnPacing, ...(groupId ? { group_id: groupId } : {}) },
+
+          event_meta: isEvent ? {
+            name: eventName.trim(),
+            date: eventDate || null,
+            time: eventTime || null,
+            venue: eventVenue.trim() || null,
+            rsvp_url: eventRsvpUrl.trim() || null,
+            class_id: selectedClassId,
+          } : {},
+          template_id: ch === 'whatsapp' && draft.useApprovedTemplate && draft.templateId && !draft.templateId.startsWith('__meta__:') ? draft.templateId : null,
+          template_variables: filledVariables(draft.varOverrides),
+          status: (
+            trigger === 'send_now' ? 'sending' :
+            trigger === 'scheduled' ? 'scheduled' : 'draft'
+          ) as any,
+        };
+
+        try {
+          // Reuse the draft/editing row only for the first (primary) channel.
+          const targetId = created === 0 ? (editingCampaign?.id || draftCampaignId) : null;
+          const campaign = targetId
+            ? await updateCampaign(targetId, payload as any).then((c) => c)
+            : await createCampaign(payload as any);
+
+          if (trigger === 'send_now') {
+            const useResolver = filter.audience_kind && filter.audience_kind !== 'members';
+            const audience = useResolver
+              ? { recipients: await (await import('@/services/campaignService')).resolveCampaignAudience(branchId, filter) }
+              : { memberIds: resolvedMemberIds };
+            const audienceSize = useResolver
+              ? (audience as any).recipients?.length ?? 0
+              : (audience as any).memberIds?.length ?? 0;
+            if (audienceSize === 0) {
+              try { await updateCampaign(campaign.id, { status: 'draft' as any }); } catch {}
+              toast.error('Audience is empty — pick contacts or members before sending.');
+              setSubmitting(false);
+              return;
+            }
+            const rcsVariables = ch === 'rcs' && selectedRcsTemplate
+              ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
+              : undefined;
+            const fixedVars = filledVariables(draft.varOverrides);
+            const sendVariables = rcsVariables
+              ? { ...fixedVars, ...rcsVariables }
+              : (Object.keys(fixedVars).length ? fixedVars : undefined);
+            const result = await sendCampaignNow(campaign, { ...audience, variables: sendVariables });
+            toast.success(`${ch.toUpperCase()} — queued for ${result.total} recipients.`);
+          } else if (trigger === 'automated') {
+            const cron = recurrencePresetToCron(recurrence, customCron);
+            await createRecurringCampaignRule({
+              branch_id: branchId,
+              campaign_id: campaign.id,
+              name: payload.name,
+              cron_expression: cron,
+            });
+            toast.success(`${ch.toUpperCase()} — recurring rule created (${cron})`);
+          }
+          created += 1;
+        } catch (err: any) {
+          lastError = err;
+          toast.error(`${ch.toUpperCase()}: ${err?.message || 'failed'}`);
+        }
+      }
+
+      if (trigger === 'scheduled' && created > 0) {
+        toast.success(`Scheduled for ${new Date(scheduledAt).toLocaleString()} on ${created} channel(s)`);
       }
       qc.invalidateQueries({ queryKey: ['campaigns', branchId] });
       qc.invalidateQueries({ queryKey: ['automation_rules'] });
-      close();
+      if (created > 0) close();
+      else if (lastError) throw lastError;
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create campaign');
     } finally {
@@ -1004,24 +1232,95 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         {step === messageStepIndex && (
           <div className="space-y-5">
             <div>
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Channel</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channels</Label>
+                <span className="text-[11px] text-muted-foreground">Tap to add · tap an added channel to edit it</span>
+              </div>
               <div className="grid grid-cols-4 gap-2">
                 {([
                   { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'emerald' },
                   { id: 'rcs', label: 'RCS', icon: Radio, color: 'violet' },
                   { id: 'email', label: 'Email', icon: Mail, color: 'blue' },
                   { id: 'sms', label: 'SMS', icon: MessageSquare, color: 'amber' },
-                ] as const).map((c) => (
-                  <button key={c.id} type="button" onClick={() => setChannel(c.id as CampaignChannel)}
-                    className={`rounded-xl p-3 border-2 transition-all ${
-                      channel === c.id ? `border-${c.color}-500 bg-${c.color}-50 dark:bg-${c.color}-500/10` : 'border-border bg-card'
-                    }`}>
-                    <c.icon className={`h-5 w-5 mx-auto ${channel === c.id ? `text-${c.color}-600` : 'text-muted-foreground'}`} />
-                    <p className={`text-xs mt-1 font-medium ${channel === c.id ? 'text-foreground' : 'text-muted-foreground'}`}>{c.label}</p>
-                  </button>
-                ))}
+                ] as const).map((c) => {
+                  const selected = selectedChannels.includes(c.id as CampaignChannel);
+                  const active = channel === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-label={`${c.label} channel`}
+                      aria-pressed={selected}
+                      onClick={() => (selected ? switchChannel(c.id as CampaignChannel) : toggleChannel(c.id as CampaignChannel))}
+                      onDoubleClick={() => toggleChannel(c.id as CampaignChannel)}
+                      className={`relative cursor-pointer rounded-xl p-3 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
+                        active ? 'border-primary bg-primary/10 shadow-md'
+                        : selected ? 'border-primary/40 bg-primary/5'
+                        : 'border-border bg-card hover:border-primary/30'
+                      }`}
+                    >
+                      {selected && (
+                        <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5" />
+                        </span>
+                      )}
+                      <c.icon className={`h-5 w-5 mx-auto ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className={`text-xs mt-1 font-medium ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{c.label}</p>
+                    </button>
+                  );
+                })}
               </div>
+              {selectedChannels.length > 1 && (
+                <div className="mt-2 rounded-xl bg-primary/5 border border-primary/20 p-2.5">
+                  <p className="text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">{selectedChannels.length} channels selected.</span>{' '}
+                    Each channel keeps its own message and template — you're editing{' '}
+                    <span className="font-semibold text-primary">{channel.toUpperCase()}</span> now. One campaign row is created per channel.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {selectedChannels.map((c) => {
+                      const draft = c === channel ? { message, subject } : (channelDrafts[c] || { message: '', subject: '' });
+                      const ready = c === 'rcs' ? !!rcsTemplateId : !!draft.message.trim() && (c !== 'email' || !!draft.subject.trim());
+                      return (
+                        <button key={c} type="button" onClick={() => switchChannel(c)}
+                          className={`cursor-pointer text-[11px] px-2 py-1 rounded-full border ${
+                            c === channel ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground'
+                          }`}>
+                          {c.toUpperCase()} · {ready ? 'ready' : 'draft'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* ── Class picker (Event / Class campaigns) ── */}
+            {isEvent && (
+              <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-3 space-y-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-primary" /> Pick a scheduled class
+                </Label>
+                {upcomingClasses.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">No upcoming classes for this branch — fill the event details manually on the Event step.</p>
+                ) : (
+                  <Select value={selectedClassId || ''} onValueChange={applyClassSelection}>
+                    <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Choose a class to auto-fill…" /></SelectTrigger>
+                    <SelectContent>
+                      {(upcomingClasses as any[]).map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} · {formatClassWhen(c.scheduled_at)}{c.trainer_name ? ` · ${c.trainer_name}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Selecting a class auto-fills the event fields and every <code>{'{{class_*}}'}</code> / positional slot in this channel's message.
+                </p>
+              </div>
+            )}
+
 
             {/* ── RCS (Telinfy) template selection + variable mapping ── */}
             {channel === 'rcs' && (
