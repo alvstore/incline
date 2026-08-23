@@ -376,7 +376,8 @@ Deno.serve(async (req) => {
         const personalized = message
           .replace(/\{\{member_name\}\}/g, perVars.member_name)
           .replace(/\{\{full_name\}\}/g, perVars.full_name)
-          .replace(/\{\{first_name\}\}/g, perVars.first_name);
+          .replace(/\{\{first_name\}\}/g, perVars.first_name)
+          .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
 
         try {
           const { data: dispatchRes, error: dispatchErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
@@ -640,7 +641,8 @@ Deno.serve(async (req) => {
         .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
         .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
         .replace(/\{\{\s*member_code\s*\}\}/gi, perVars.member_code)
-        .replace(/\{\{\s*1\s*\}\}/g, perVars['1']);
+        .replace(/\{\{\s*1\s*\}\}/g, perVars['1'])
+        .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
 
       let recipient = channel === "email" ? profile.email : profile.phone;
       let status: 'sent' | 'failed' | 'skipped' = "failed";
@@ -1024,7 +1026,8 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         const personalized = String(campaign.message || '')
           .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
           .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
-          .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name);
+          .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
+          .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k: string) => perVars[k] ?? m);
 
         try {
           const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
