@@ -1,3 +1,5 @@
+// v2.5.0 — accepts automation-brain system calls (apikey+x-system-call) and
+// supports bounded bulk `sync_type:"delta"` runs.
 // v2.4.1 — credential-scoped token cache prevents stale/cross-branch sessions.
 // v2.4.0 — zero-decode photo pipeline. The edge worker NEVER decodes an image
 // again (that was the 546 "not enough compute resources" kill): oversized
@@ -588,7 +590,14 @@ Deno.serve(async (req) => {
   // Allow internal service-role callers (payment-webhook, automation-brain) OR staff-role JWTs.
   const authHeader = req.headers.get("Authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "");
-  const isService = bearer && bearer === SERVICE_KEY;
+  // The automation brain calls internal workers with `apikey: SERVICE_KEY` +
+  // `x-system-call`, never an Authorization header — accept that shape too
+  // (this was the hourly HTTP 401 on mips_personnel_delta_sync).
+  const apiKeyHeader = (req.headers.get("apikey") || "").trim();
+  const systemCall = (req.headers.get("x-system-call") || "").trim();
+  const isService =
+    (bearer && bearer === SERVICE_KEY) ||
+    (apiKeyHeader === SERVICE_KEY && systemCall.length > 0);
   if (!isService) {
     if (!bearer) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -621,6 +630,59 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+
+    // ── Bulk delta mode (automation brain, hourly) ───────────────────────
+    // Picks up people that have a photo but were never pushed to MIPS (or whose
+    // last push failed) and re-drives them one at a time through the normal
+    // single-person path. Bounded so an invocation can never run long.
+    if ((body as any)?.sync_type === "delta") {
+      const LIMIT = 10;
+      const targets: Array<{ person_type: string; person_id: string; branch_id: string | null }> = [];
+      for (const [table, personType] of [
+        ["members", "member"],
+        ["employees", "employee"],
+        ["trainers", "trainer"],
+      ] as const) {
+        if (targets.length >= LIMIT) break;
+        const { data: rows } = await supabase
+          .from(table)
+          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status")
+          .not("biometric_photo_path", "is", null)
+          .or("mips_person_id.is.null,mips_sync_status.eq.failed")
+          .limit(LIMIT - targets.length);
+        for (const r of rows ?? []) {
+          targets.push({ person_type: personType, person_id: r.id, branch_id: r.branch_id ?? null });
+        }
+      }
+
+      const results: Array<Record<string, unknown>> = [];
+      for (const t of targets) {
+        try {
+          const res = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_KEY}`,
+            },
+            body: JSON.stringify({ ...t, deploy_to_devices: true }),
+          });
+          results.push({ ...t, status: res.status, ok: res.ok });
+        } catch (e) {
+          results.push({ ...t, ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: "delta",
+          considered: targets.length,
+          synced: results.filter((r) => r.ok).length,
+          results,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices } = body as {
 
