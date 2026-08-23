@@ -861,7 +861,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
 
   const reset = () => {
     setStep(1); setName(''); setChannel('whatsapp'); setCampaignType('announcement');
-    setSelectedChannels(['whatsapp']); setChannelDrafts({}); setSelectedClassId(null);
+    setSelectedChannels(['whatsapp']); setChannelDrafts({}); setSelectedClassIds([]);
     setFilter({ status: 'active' }); setResolvedMemberIds([]);
     setMessage(''); setSubject(''); setTrigger('send_now'); setScheduledAt('');
     setAttachment(null);
