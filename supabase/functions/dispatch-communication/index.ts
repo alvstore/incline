@@ -682,7 +682,7 @@ Deno.serve(async (req) => {
     // ── 2) preference enforcement ──
     // `force` may bypass quiet hours for urgent transactional sends, but it
     // must never bypass consent, opt-out, or channel preference enforcement.
-    if (true) {
+    {
       const { data: pref } = await supabase.rpc('should_send_communication', {
         p_member_id: input.member_id ?? null,
         p_channel: input.channel,
@@ -723,14 +723,13 @@ Deno.serve(async (req) => {
       // This is deliberately outside the `force` semantics and applies to all
       // WhatsApp template categories. Meta can reclassify an operational
       // template as MARKETING, so the local category is not a safe gate.
-      if (input.channel === 'whatsapp' && input.template_id) {
+      if (input.channel === 'whatsapp') {
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const pacedQuery = supabase
           .from('communication_logs')
           .select('id')
           .eq('type', 'whatsapp')
           .eq('recipient', input.recipient)
-          .eq('template_id', input.template_id)
           .in('delivery_status', ['failed', 'bounced'])
           .or('error_message.ilike.%131049%,error_message.ilike.%healthy ecosystem engagement%')
           .gte('created_at', since)

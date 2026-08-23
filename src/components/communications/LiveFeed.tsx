@@ -565,7 +565,10 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-auto">
-                          {statusBadge(rollup.primary)}
+                          {statusBadge(
+                            rollup.primary,
+                            g.logs.find((entry: any) => /\b131049\b|healthy ecosystem engagement/i.test(entry.error_message || ''))?.error_message,
+                          )}
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {rollup.failed > 0 && rollup.failed < rollup.total && (
                               <span className="text-destructive dark:text-destructive mr-1">{rollup.failed} failed ·</span>
