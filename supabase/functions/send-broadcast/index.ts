@@ -1172,7 +1172,13 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         );
         if (isTransient && priorTransients < 6) {
           transientHits += 1;
-          effectivePacingMs = Math.min(5000, Math.max(effectivePacingMs, 800) + 300);
+          // SMTP provider throttles (Hostinger et al.) need a much harder
+          // slowdown than platform invoke limits — jump straight to 3s+.
+          const smtpThrottle = /rate\s*limit|throttl|\b4\.7\.1\b|\b451\b/i.test(errText);
+          effectivePacingMs = smtpThrottle
+            ? Math.min(8000, Math.max(effectivePacingMs, 3000) + 500)
+            : Math.min(5000, Math.max(effectivePacingMs, 800) + 300);
+
           await adminClient.from('campaign_recipients').update({
             status: 'pending',
             attempt: Math.max(0, (r.attempt || 1) - 1),
