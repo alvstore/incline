@@ -1664,12 +1664,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                           ))}
                           {missing.length > 0 && (
                             <p className="text-[10px] text-destructive leading-relaxed">
-                              {missing.map((m) => m.token).join(', ')} empty — WhatsApp rejects sends with blank slots (template_param_empty).
+                              {missing.map((m) => m.token).join(', ')} empty —{' '}
+                              {channel === 'whatsapp'
+                                ? 'WhatsApp rejects sends with blank slots (template_param_empty).'
+                                : 'recipients would see a blank gap in the message.'}
                             </p>
                           )}
                         </div>
                       )}
-                      {anyPositional && (
+                      {anyPositional && channel === 'whatsapp' && (
                         <p className="text-[10px] text-muted-foreground leading-relaxed">
                           Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Slot 1 is always the recipient's name; the rest are the values you type above.
                         </p>
@@ -1678,13 +1681,59 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   )}
 
 
-                  <div className="rounded-xl bg-card border p-2.5">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">What recipients will see</p>
-                    <pre className="text-xs whitespace-pre-wrap text-foreground font-sans leading-relaxed">{previewText}</pre>
-                    {attachment && (
-                      <p className="text-[10px] text-muted-foreground mt-1.5">+ attachment: {attachment.filename} ({attachment.kind})</p>
-                    )}
-                  </div>
+                  {/* Channel-accurate preview */}
+                  {channel === 'email' ? (
+                    <div className="rounded-xl border bg-muted/30 p-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Email preview</p>
+                      <div className="rounded-lg overflow-hidden border bg-white">
+                        <div className="px-3 py-2 border-b bg-slate-50">
+                          <p className="text-[11px] text-slate-500">From: The Incline Life by Incline</p>
+                          <p className="text-[13px] font-semibold text-slate-900 truncate">
+                            {renderPreview(subject || '(no subject)', varOverrides)}
+                          </p>
+                        </div>
+                        {attachment?.kind === 'image' && (
+                          <img src={attachment.url} alt="Campaign banner" className="w-full max-h-56 object-cover" />
+                        )}
+                        <div
+                          className="px-4 py-3 text-[13px] leading-relaxed text-slate-800"
+                          dangerouslySetInnerHTML={{ __html: emailPreviewHtml(previewText) }}
+                        />
+                        <div className="px-4 py-2 border-t text-[10px] text-slate-400">
+                          You're receiving this because you're a member of The Incline Life by Incline.
+                        </div>
+                      </div>
+                      {attachment && attachment.kind !== 'image' && (
+                        <p className="text-[10px] text-muted-foreground mt-1.5">+ attachment: {attachment.filename} ({attachment.kind})</p>
+                      )}
+                    </div>
+                  ) : channel === 'sms' ? (
+                    <div className="rounded-xl bg-card border p-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">SMS preview</p>
+                      <pre className="text-xs whitespace-pre-wrap text-foreground font-sans leading-relaxed">{previewText}</pre>
+                      <p className="text-[10px] text-muted-foreground mt-1.5">
+                        {previewText.length} chars · {Math.max(1, Math.ceil(previewText.length / 160))} SMS part(s) · DLT-approved sender required
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border p-2.5 bg-[#ece5dd] dark:bg-muted">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                        {channel === 'rcs' ? 'RCS preview' : 'WhatsApp preview'}
+                      </p>
+                      <div className="max-w-[85%] ml-auto rounded-2xl rounded-tr-sm bg-[#dcf8c6] dark:bg-success/20 px-3 py-2 shadow-sm">
+                        {attachment?.kind === 'image' && (
+                          <img src={attachment.url} alt="Campaign poster" className="rounded-lg mb-1.5 w-full object-cover max-h-48" />
+                        )}
+                        <pre className="text-xs whitespace-pre-wrap text-slate-900 dark:text-foreground font-sans leading-relaxed">{previewText}</pre>
+                        <p className="text-[9px] text-slate-500 text-right mt-1">
+                          {new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {attachment && attachment.kind !== 'image' && (
+                        <p className="text-[10px] text-muted-foreground mt-1.5">+ attachment: {attachment.filename} ({attachment.kind})</p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2">
                     <Input
