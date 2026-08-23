@@ -915,13 +915,15 @@ async function handleMaterialize(a: MaterializeArgs): Promise<Response> {
 
 
   await adminClient.from('campaigns').update({
-    status: 'sending', recipients_count: rows.length,
+    status: 'sending', recipients_count: inserted,
     success_count: 0, failure_count: 0,
-    last_run_error: null, last_progress_at: new Date().toISOString(),
+    last_run_error: insertErrors.length ? `partial_materialize: ${insertErrors[0]}`.slice(0, 500) : null,
+    last_progress_at: new Date().toISOString(),
   }).eq('id', campaign_id);
 
   kickChunk(supabaseUrl, supabaseServiceKey, campaign_id);
-  return jsonResp({ accepted: true, materialized: rows.length }, 202, corsHeaders);
+  return jsonResp({ accepted: true, materialized: inserted }, 202, corsHeaders);
+
 }
 
 type ChunkArgs = {
