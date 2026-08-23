@@ -69,9 +69,53 @@ export function MetaSyncControls() {
     refetchInterval: 60_000,
   });
 
+  // CRM-side templates — used to tell orphaned mirror rows apart from ones that
+  // an active CRM template still points at (those actually break sends).
+  const { data: crmTemplateNames = [] } = useQuery({
+    queryKey: ['crm-template-meta-names'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('id, name, meta_template_name')
+        .not('meta_template_name', 'is', null);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const crmByMetaName = new Map<string, { id: string; name: string }>();
+  for (const row of crmTemplateNames as any[]) {
+    if (row.meta_template_name) crmByMetaName.set(row.meta_template_name, { id: row.id, name: row.name });
+  }
+  const brokenStale = (staleTemplates as any[]).filter((t) => crmByMetaName.has(t.name));
+  const orphanStale = (staleTemplates as any[]).filter((t) => !crmByMetaName.has(t.name));
+
+  const [confirmPurge, setConfirmPurge] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+
+  const handlePurgeOrphans = async () => {
+    setIsPurging(true);
+    try {
+      const ids = orphanStale.map((t) => t.id);
+      const { error } = await supabase.from('whatsapp_templates').delete().in('id', ids);
+      if (error) throw error;
+      toast.success(`Cleared ${ids.length} orphaned catalog entr${ids.length === 1 ? 'y' : 'ies'}`);
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-stale'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-live-alignment'] });
+      queryClient.invalidateQueries({ queryKey: ['communication-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['template-coverage-gaps'] });
+      setConfirmPurge(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Could not clear orphaned entries');
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   const hasConfig = integrations.length > 0;
   const branchForCall = effectiveBranchId;
   const disabled = !hasConfig || !branchForCall;
+
 
   const handleTest = async () => {
     if (!branchForCall) return toast.error('No branch available');
