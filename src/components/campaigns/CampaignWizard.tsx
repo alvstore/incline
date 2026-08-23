@@ -2011,7 +2011,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               <div className="text-sm space-y-1">
                 <div><span className="text-muted-foreground">Type:</span> <span className="font-medium capitalize">{campaignType.replace('_', ' ')}</span></div>
                 <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{name || '—'}</span></div>
-                <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{channel.toUpperCase()}</span></div>
+                <div><span className="text-muted-foreground">Channels:</span> <span className="font-medium">{selectedChannels.map((c) => c.toUpperCase()).join(' + ')}</span>{selectedChannels.length > 1 ? <span className="text-muted-foreground text-xs"> · one campaign per channel</span> : null}</div>
                 <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{totalCount}{coldCount > 0 ? ` · ${coldCount} cold` : ''}</span></div>
                 {requiresTemplate && (
                   <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-success' : 'text-warning'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>
