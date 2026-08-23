@@ -758,6 +758,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setUseApprovedTemplate(false); setSelectedTemplateId(null);
     setDraftCampaignId(null); setShowAllTemplates(false);
     setEvergreenAppliedFor(null); setEvergreenPickedName(null);
+    setVarOverrides({});
   };
 
   const close = () => { reset(); onOpenChange(false); };
