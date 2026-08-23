@@ -1,4 +1,7 @@
-// dispatch-communication v1.30.0 — semantic positional slot resolution.
+// dispatch-communication v1.31.0 — pacing safety and live Meta routing.
+// v1.31.0: Meta 131049 cooldown applies to every WhatsApp template category,
+//          including forced retries. Live MARKETING templates route through
+//          Marketing Messages when enabled, even after category drift.
 // v1.30.0: FIX — templates whose `variables` column stores generic labels
 //          ("variable_1".."variable_4") produced an all-dashes body ("Hi —,
 //          Name: —, Interest: —"). Generic labels are now treated as UNLABELLED
@@ -677,7 +680,9 @@ Deno.serve(async (req) => {
     }
 
     // ── 2) preference enforcement ──
-    if (!input.force) {
+    // `force` may bypass quiet hours for urgent transactional sends, but it
+    // must never bypass consent, opt-out, or channel preference enforcement.
+    if (true) {
       const { data: pref } = await supabase.rpc('should_send_communication', {
         p_member_id: input.member_id ?? null,
         p_channel: input.channel,
@@ -715,21 +720,22 @@ Deno.serve(async (req) => {
       }
 
       // ── 2b) 131049 pacing cooldown ──
-      // Meta silently rate-limits marketing templates per recipient when
-      // engagement is low. Retrying inside the pacing window keeps digging
-      // the same hole (tanks template quality further). Suppress cleanly
-      // for 24 h after any 131049 to the same recipient.
-      if (input.channel === 'whatsapp' && input.category === 'marketing') {
+      // This is deliberately outside the `force` semantics and applies to all
+      // WhatsApp template categories. Meta can reclassify an operational
+      // template as MARKETING, so the local category is not a safe gate.
+      if (input.channel === 'whatsapp' && input.template_id) {
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: paced } = await supabase
+        const pacedQuery = supabase
           .from('communication_logs')
           .select('id')
           .eq('type', 'whatsapp')
           .eq('recipient', input.recipient)
+          .eq('template_id', input.template_id)
           .in('delivery_status', ['failed', 'bounced'])
-          .contains('delivery_metadata', { meta_code: 131049 } as any)
+          .or('error_message.ilike.%131049%,error_message.ilike.%healthy ecosystem engagement%')
           .gte('created_at', since)
           .limit(1);
+        const { data: paced } = await pacedQuery;
         if (paced && paced.length > 0) {
           const { data: log } = await supabase
             .from('communication_logs')
@@ -758,7 +764,7 @@ Deno.serve(async (req) => {
       }
 
       // ── 3) quiet hours ──
-      if (input.member_id && input.channel !== 'in_app') {
+      if (!input.force && input.member_id && input.channel !== 'in_app') {
         const { data: quiet } = await supabase.rpc('is_in_quiet_hours', { p_member_id: input.member_id });
         if (quiet === true) {
           const { data: log } = await supabase
@@ -892,6 +898,7 @@ Deno.serve(async (req) => {
       switch (input.channel) {
         case 'whatsapp': {
           let templateName: string | null = null;
+          let resolvedMetaMarketing = false;
           let components: Array<Record<string, unknown>> | null | undefined;
           let templateHeaderType: string | null = null;
           // Meta rejects (#132001) when the requested locale doesn't match the
@@ -1077,6 +1084,7 @@ Deno.serve(async (req) => {
               let categoryDrift = false;
               if (wt) {
                 const liveStatus = String(wt.status || '').toUpperCase();
+                resolvedMetaMarketing = String(wt.category || '').toUpperCase() === 'MARKETING';
                 if ((liveStatus !== 'APPROVED' && liveStatus !== 'PENDING_DELETION') || wt.is_stale) {
                   const reason = wt.is_stale
                     ? 'template_stale_in_meta'
@@ -1416,7 +1424,7 @@ Deno.serve(async (req) => {
               // Route marketing template sends through MM API for WhatsApp when
               // the branch's WA integration has `config.mm_api_enabled=true`.
               // send-whatsapp falls back to Cloud API automatically otherwise.
-              use_mm_api: input.category === 'marketing' && !!templateName,
+               use_mm_api: resolvedMetaMarketing && !!templateName,
             },
           });
           captureMetaErrorFields(r);
