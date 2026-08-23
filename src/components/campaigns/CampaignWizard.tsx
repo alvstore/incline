@@ -840,6 +840,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           rsvp_url: eventRsvpUrl.trim() || null,
         } : {},
         template_id: channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') ? selectedTemplateId : null,
+        template_variables: filledVariables(),
         status: (
           trigger === 'send_now' ? 'sending' :
           trigger === 'scheduled' ? 'scheduled' : 'draft'
