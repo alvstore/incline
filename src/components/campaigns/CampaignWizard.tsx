@@ -206,7 +206,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
   const [selectedChannels, setSelectedChannels] = useState<CampaignChannel[]>(['whatsapp']);
   const [channelDrafts, setChannelDrafts] = useState<Record<string, ChannelDraft>>({});
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  // Multiple classes can go out in one announcement (e.g. morning + evening
+  // Yoga). The first picked class drives the event fields; every picked class
+  // is listed in the {{class_when}} / {{class_details}} slots.
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<AudienceFilter>({ status: 'active' });
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
