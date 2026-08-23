@@ -1669,7 +1669,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
+            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate || missingSlotTokens.length > 0} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : missingSlotTokens.length > 0 ? `Fill template slots ${missingSlotTokens.join(', ')} on the Message step` : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> :
                 trigger === 'send_now' ? <><Send className="h-4 w-4" /> Send Campaign</> :
                 trigger === 'scheduled' ? <><Clock className="h-4 w-4" /> Schedule Campaign</> :
