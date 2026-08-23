@@ -52,8 +52,8 @@ Deno.serve(async (req) => {
       { data: payments },
       { data: openInvoices },
       { data: branches },
-      { data: attendanceCount },
-      { data: activePtCredits },
+      { count: attendanceCount },
+      { count: activePtCredits },
     ] = await Promise.all([
       supabase
         .from("memberships")
