@@ -214,6 +214,22 @@ Deno.serve(async (req) => {
         dues_collected: inr(duesCollected),
         dues_pending: inr(duesPending),
         event_key: "daily_ops_summary_report",
+        // Positional slots for the approved Meta template
+        // `daily_ops_summary_report`:
+        // Hi {{1}}, … summary for {{2}}. Check-ins: {{3}}. New Memberships:
+        // {{4}}. Total Revenue: ₹{{5}}. Active PT Sessions: {{6}}.
+        "1": r.name ?? "Team",
+        "2": dateLabel,
+        "3": String(totalCheckins),
+        "4": String(newMemberships),
+        "5": inr(receivedTotal),
+        "6": String(activePtSessions),
+        variable_1: r.name ?? "Team",
+        variable_2: dateLabel,
+        variable_3: String(totalCheckins),
+        variable_4: String(newMemberships),
+        variable_5: inr(receivedTotal),
+        variable_6: String(activePtSessions),
       };
 
       const send = async (
