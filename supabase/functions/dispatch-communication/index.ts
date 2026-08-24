@@ -832,33 +832,70 @@ Deno.serve(async (req) => {
             .select('id')
             .maybeSingle();
 
-          // Producer-side retry queue insert; process-comm-retry-queue will pick it up.
-          // v1.27.0: use the real column names (the previous insert referenced
-          // `retry_after`/`attempt_count`, which do not exist, so quiet-hours
-          // messages were silently never retried) and carry the variables.
+          // Producer-side retry queue: UPDATE the existing deferral row instead
+          // of inserting a new one (v1.32.0). Inserting on every deferral created
+          // an unbounded row-per-hour loop that re-sent the same payload forever.
+          // Deferrals are capped at 3, after which the message is dropped.
           if (log) {
-            await supabase.from('communication_retry_queue').insert({
-              original_log_id: log.id,
-              branch_id: input.branch_id,
-              member_id: input.member_id ?? null,
-              type: input.channel,
-              recipient: input.recipient,
-              subject: input.payload.subject ?? null,
-              content: input.payload.body,
-              template_id: input.template_id ?? null,
-              status: 'pending',
-              retry_count: 0,
-              max_retries: 3,
-              next_retry_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-              last_error: 'quiet_hours_deferred',
-              metadata: {
-                category: input.category,
-                variables: (input.payload as any)?.variables ?? null,
-                event_key: (input.payload as any)?.variables?.event_key ?? null,
-                attachment: input.attachment ?? null,
-              },
-            }).then(() => {}, () => {});
+            const deferMeta = {
+              category: input.category,
+              variables: (input.payload as any)?.variables ?? null,
+              event_key: (input.payload as any)?.variables?.event_key ?? null,
+              attachment: input.attachment ?? null,
+              deferral: true,
+            };
+            const digits = String(input.recipient ?? '').replace(/\D/g, '').slice(-10);
+            const { data: existing } = await supabase
+              .from('communication_retry_queue')
+              .select('id, retry_count')
+              .eq('type', input.channel)
+              .ilike('recipient', `%${digits}`)
+              .eq('content', input.payload.body ?? '')
+              .in('status', ['pending', 'processing'])
+              .limit(1)
+              .maybeSingle();
+
+            if (existing) {
+              const nextCount = (existing.retry_count ?? 0) + 1;
+              if (nextCount >= 3) {
+                await supabase
+                  .from('communication_retry_queue')
+                  .update({
+                    status: 'cancelled',
+                    cancelled_at: new Date().toISOString(),
+                    last_error: 'expired_quiet_hours',
+                  })
+                  .eq('id', existing.id);
+              } else {
+                await supabase
+                  .from('communication_retry_queue')
+                  .update({
+                    retry_count: nextCount,
+                    next_retry_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                    last_error: 'quiet_hours_deferred',
+                  })
+                  .eq('id', existing.id);
+              }
+            } else {
+              await supabase.from('communication_retry_queue').insert({
+                original_log_id: log.id,
+                branch_id: input.branch_id,
+                member_id: input.member_id ?? null,
+                type: input.channel,
+                recipient: input.recipient,
+                subject: input.payload.subject ?? null,
+                content: input.payload.body,
+                template_id: input.template_id ?? null,
+                status: 'pending',
+                retry_count: 0,
+                max_retries: 3,
+                next_retry_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                last_error: 'quiet_hours_deferred',
+                metadata: deferMeta,
+              }).then(() => {}, () => {});
+            }
           }
+
 
           return ok({ status: 'queued', log_id: log?.id, reason: 'quiet_hours' });
         }
