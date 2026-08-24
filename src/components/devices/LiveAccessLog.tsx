@@ -286,13 +286,18 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
   const staffCheckOutMutation = useMutation({
     mutationFn: async (profileId: string) => {
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      // staff_attendance has no `date` column — the day is derived from check_in (IST).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: existing, error: fetchErr } = await (supabase.from("staff_attendance") as any)
         .select("id, check_out")
         .eq("user_id", profileId)
-        .eq("date", today)
+        .gte("check_in", `${today}T00:00:00+05:30`)
+        .lte("check_in", `${today}T23:59:59+05:30`)
         .is("check_out", null)
+        .order("check_in", { ascending: false })
+        .limit(1)
         .maybeSingle();
+
       if (fetchErr) throw fetchErr;
       if (!existing) throw new Error("No active check-in found");
       const { error: updateErr } = await supabase
