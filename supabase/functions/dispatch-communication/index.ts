@@ -719,48 +719,93 @@ Deno.serve(async (req) => {
         return ok({ status: 'suppressed', log_id: log?.id, reason: reason ?? 'preference_block' });
       }
 
-      // ── 2b) 131049 pacing cooldown ──
+      // ── 2b) 131049 pacing cooldown + send budget + circuit breaker (v1.32.0) ──
       // This is deliberately outside the `force` semantics and applies to all
       // WhatsApp template categories. Meta can reclassify an operational
       // template as MARKETING, so the local category is not a safe gate.
+      const logSuppressed = async (reason: string, meta: Record<string, unknown>) => {
+        const { data: log } = await supabase
+          .from('communication_logs')
+          .insert({
+            branch_id: input.branch_id,
+            member_id: input.member_id ?? null,
+            user_id: input.user_id ?? null,
+            type: input.channel,
+            channel: input.channel,
+            category: input.category,
+            recipient: input.recipient,
+            subject: input.payload.subject ?? null,
+            content: input.payload.body,
+            template_id: input.template_id ?? null,
+            dedupe_key: input.dedupe_key,
+            status: 'suppressed',
+            delivery_status: 'suppressed',
+            error_message: reason,
+            delivery_metadata: meta as any,
+          })
+          .select('id')
+          .maybeSingle();
+        return ok({ status: 'suppressed', log_id: log?.id, reason });
+      };
+
+      // Per-recipient send budget — applies to EVERY channel and every entry
+      // path (campaigns, retries, staff alerts). This is the guard that was
+      // missing when a single lead alert was re-sent ~150×/day to two staff.
+      {
+        const { data: budget } = await supabase.rpc('communication_send_allowed', {
+          _recipient: input.recipient,
+          _channel: input.channel,
+          _category: input.category ?? null,
+          _content: input.payload.body ?? null,
+        });
+        const b = budget as { allowed?: boolean; reason?: string; detail?: string } | null;
+        if (b && b.allowed === false) {
+          return await logSuppressed(`${b.reason ?? 'budget_exceeded'}: ${b.detail ?? ''}`.trim(), {
+            suppressed_by: 'send_budget',
+            reason: b.reason,
+            detail: b.detail,
+          });
+        }
+      }
+
       if (input.channel === 'whatsapp') {
+        const digits = String(input.recipient ?? '').replace(/\D/g, '');
+        const last10 = digits.slice(-10);
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const pacedQuery = supabase
           .from('communication_logs')
           .select('id')
           .eq('type', 'whatsapp')
-          .eq('recipient', input.recipient)
+          .ilike('recipient', `%${last10}`)
           .in('delivery_status', ['failed', 'bounced'])
           .or('error_message.ilike.%131049%,error_message.ilike.%healthy ecosystem engagement%')
           .gte('created_at', since)
           .limit(1);
         const { data: paced } = await pacedQuery;
         if (paced && paced.length > 0) {
-          const { data: log } = await supabase
-            .from('communication_logs')
-            .insert({
-              branch_id: input.branch_id,
-              member_id: input.member_id ?? null,
-              user_id: input.user_id ?? null,
-              type: input.channel,
-              channel: input.channel,
-              category: input.category,
-              recipient: input.recipient,
-              subject: input.payload.subject ?? null,
-              content: input.payload.body,
-              template_id: input.template_id ?? null,
-              dedupe_key: input.dedupe_key,
-              status: 'suppressed',
-              delivery_status: 'suppressed',
-              error_message: 'pacing_cooldown_24h (Meta 131049 recently)',
-              delivery_metadata: { suppressed_by: 'pacing_cooldown', meta_code: 131049 } as any,
-            })
-            .select('id')
-            .maybeSingle();
+          return await logSuppressed('pacing_cooldown_24h (Meta 131049 recently)', {
+            suppressed_by: 'pacing_cooldown',
+            meta_code: 131049,
+          });
+        }
 
-          return ok({ status: 'suppressed', log_id: log?.id, reason: 'pacing_cooldown_24h' });
+        // Circuit breaker: when the sending number has taken 5+ pacing errors
+        // within an hour, only transactional traffic is allowed through.
+        const TRANSACTIONAL = ['otp', 'payment_receipt', 'invoice', 'password_reset'];
+        if (!TRANSACTIONAL.includes(String(input.category ?? ''))) {
+          const phoneNumberId = (globalThis as any).__wa_phone_number_id ?? Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') ?? 'default';
+          const { data: breakerOpen } = await supabase.rpc('whatsapp_breaker_open', {
+            _phone_number_id: phoneNumberId,
+          });
+          if (breakerOpen === true) {
+            return await logSuppressed('whatsapp_breaker_open (pacing errors spiked)', {
+              suppressed_by: 'circuit_breaker',
+              phone_number_id: phoneNumberId,
+            });
+          }
         }
       }
+
 
       // ── 3) quiet hours ──
       if (!input.force && input.member_id && input.channel !== 'in_app') {
