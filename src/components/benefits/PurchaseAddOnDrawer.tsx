@@ -338,9 +338,12 @@ export function PurchaseAddOnDrawer({
         _trainer_id: selectedTrainer,
         _branch_id: branchId,
         _price_paid: pkg.price,
+        _gst_rate: 5,
         _payment_method: paymentMethod,
+        _payment_source: 'in_person',
         _idempotency_key: ptIdemKey,
       });
+
       if (error) throw error;
       toast.success('PT package activated');
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });

@@ -121,12 +121,14 @@ export function PurchasePTPackageDrawer({
   const gstRate: 0 | 5 = gstExempt ? 0 : PT_GST_RATE;
 
   // Idempotency key stable across retries within this draft
+  const [trainerDraftKey, setTrainerDraftKey] = useState<string>('none');
   const draftId = selected === 'custom'
-    ? `custom-${mode}-${custom.name}-${custom.price}`
-    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}`;
+    ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}`
+    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
 
-  // Member must already have a trainer assigned
+
+  // Current general-training trainer on the member (may be null)
   const { data: member } = useQuery({
     queryKey: ['member-trainer', memberId],
     enabled: open && !!memberId,
@@ -140,33 +142,70 @@ export function PurchasePTPackageDrawer({
       return data;
     },
   });
-  const trainerId = member?.assigned_trainer_id ?? null;
+  const currentTrainerId = member?.assigned_trainer_id ?? null;
 
-  const { data: trainer } = useQuery({
-    queryKey: ['pt-trainer-detail', trainerId],
-    enabled: !!trainerId,
+  // Branch trainer roster — staff pick who is coaching this PT package.
+  const { data: trainers = [], isLoading: trainersLoading } = useQuery({
+    queryKey: ['pt-branch-trainers', branchId],
+    enabled: open && !!branchId,
     queryFn: async () => {
-      // No declared FK between trainers.user_id and profiles — resolve in two reads.
-      const { data: t } = await supabase
+      const { data: list, error } = await supabase
         .from('trainers')
-        .select('id, user_id, pt_share_percentage')
-        .eq('id', trainerId!)
-        .maybeSingle();
-      if (!t) return null;
-      let full_name: string | null = null;
-      if (t.user_id) {
-        const { data: p } = await supabase
+        .select('id, user_id, pt_share_percentage, is_active')
+        .eq('branch_id', branchId)
+        .eq('is_active', true);
+      if (error) throw error;
+      const ids = (list ?? []).map((t) => t.user_id).filter(Boolean) as string[];
+      let names: Record<string, string> = {};
+      if (ids.length) {
+        const { data: profs } = await supabase
           .from('profiles')
-          .select('full_name')
-          .eq('id', t.user_id)
-          .maybeSingle();
-        full_name = p?.full_name ?? null;
+          .select('id, full_name')
+          .in('id', ids);
+        names = Object.fromEntries((profs ?? []).map((p) => [p.id, p.full_name ?? 'Trainer']));
       }
-      return { ...t, full_name };
+      return (list ?? [])
+        .map((t) => ({
+          id: t.id,
+          full_name: (t.user_id && names[t.user_id]) || 'Unnamed trainer',
+          share: Number(t.pt_share_percentage ?? 0),
+        }))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
     },
   });
-  const trainerShare = Number(trainer?.pt_share_percentage ?? 20);
-  const trainerName: string | null = trainer?.full_name ?? null;
+
+  const [trainerId, setTrainerId] = useState<string | null>(null);
+  const [keepCurrentTrainer, setKeepCurrentTrainer] = useState(false);
+
+  // Seed selection from the member's current trainer when the drawer opens.
+  useEffect(() => {
+    if (open && currentTrainerId && trainerId === null) {
+      setTrainerId(currentTrainerId);
+      setTrainerDraftKey(currentTrainerId);
+    }
+  }, [open, currentTrainerId, trainerId]);
+  useEffect(() => {
+    if (!open) { setTrainerId(null); setTrainerDraftKey('none'); setKeepCurrentTrainer(false); }
+  }, [open]);
+
+  const handleTrainerChange = (id: string) => {
+    setTrainerId(id);
+    setTrainerDraftKey(id);
+  };
+
+
+  const selectedTrainer = useMemo(
+    () => trainers.find((t) => t.id === trainerId) ?? null,
+    [trainers, trainerId],
+  );
+  const currentTrainer = useMemo(
+    () => trainers.find((t) => t.id === currentTrainerId) ?? null,
+    [trainers, currentTrainerId],
+  );
+  const trainerShare = selectedTrainer ? selectedTrainer.share : null;
+  const trainerName: string | null = selectedTrainer?.full_name ?? null;
+  const willReassign = !!trainerId && trainerId !== currentTrainerId && !keepCurrentTrainer;
+
 
 
   const { data: packages = [], isLoading } = useQuery<CatalogPkg[]>({
@@ -209,11 +248,14 @@ export function PurchasePTPackageDrawer({
     : selectedPkg?.validity_days ?? null;
   const expiryPreview = previewExpiry(startDate, durationMonths ?? null, validityDays ?? null);
 
-  const commissionPreview = Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
+  const commissionPreview = trainerShare == null
+    ? null
+    : Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
 
   const purchase = useMutation({
     mutationFn: async () => {
-      if (!trainerId) throw new Error('Assign a trainer to this member before purchase');
+      if (!trainerId) throw new Error('Select the trainer for this package');
+
       if (!startDate) throw new Error('Pick a start date');
       let packageId: string | null = null;
 
@@ -260,6 +302,7 @@ export function PurchasePTPackageDrawer({
           _payment_source: paySource,
           _idempotency_key: idempotencyKey,
           _start_date: startDate,
+          _reassign_member_trainer: !keepCurrentTrainer,
         } as any,
       );
       if (rpcErr) throw rpcErr;
@@ -274,6 +317,14 @@ export function PurchasePTPackageDrawer({
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });
       queryClient.invalidateQueries({ queryKey: ['active-member-packages'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['member-trainer', memberId] });
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      queryClient.invalidateQueries({ queryKey: ['member-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['trainers-utilization'] });
+
+      if (data?.trainer_reassigned && trainerName) {
+        toast.success(`${trainerName} is now this member's trainer`);
+      }
 
       if (paySource === 'payment_link') {
         toast.success('Package created · awaiting payment');
@@ -284,6 +335,7 @@ export function PurchasePTPackageDrawer({
       toast.success('PT package activated');
       onOpenChange(false);
     },
+
     onError: (e: any) => toast.error(e?.message || 'Could not start checkout'),
   });
 
@@ -360,12 +412,76 @@ export function PurchasePTPackageDrawer({
           </SheetDescription>
         </SheetHeader>
 
-        {!trainerId && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg bg-warning/10 text-warning px-3 py-2 text-sm">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            Assign a trainer to this member before purchasing.
-          </div>
-        )}
+        <div className="px-6 pt-4">
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Personal trainer
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="pt-trainer" className="text-xs">
+                  Trainer for this package <span className="text-destructive">*</span>
+                </Label>
+                {trainersLoading ? (
+                  <div className="h-11 rounded-md bg-muted animate-pulse" />
+                ) : (
+                  <Select value={trainerId ?? ''} onValueChange={handleTrainerChange}>
+                    <SelectTrigger id="pt-trainer" className="h-11">
+                      <SelectValue placeholder="Select a trainer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trainers.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No active trainers in this branch
+                        </div>
+                      )}
+                      {trainers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.full_name} · {t.share}% share
+                          {t.id === currentTrainerId ? ' · current' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {!trainerId && (
+                <div className="flex items-center gap-2 rounded-lg bg-warning/10 text-warning px-3 py-2 text-xs">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  Pick the trainer who will coach this package — commission is paid to them.
+                </div>
+              )}
+
+              {trainerId && trainerId !== currentTrainerId && (
+                <>
+                  <div className="flex items-start gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-xs">
+                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      {keepCurrentTrainer
+                        ? `${currentTrainer?.full_name ?? 'The current trainer'} stays as the general-training trainer.`
+                        : `${trainerName} will ${currentTrainerId ? `replace ${currentTrainer?.full_name ?? 'the current trainer'} as` : 'become'} this member's trainer.`}
+                    </span>
+                  </div>
+                  {canEditTax && currentTrainerId && (
+                    <div className="flex items-center justify-between gap-3">
+                      <Label htmlFor="pt-keep-trainer" className="text-xs font-normal text-muted-foreground">
+                        Keep current trainer for general training
+                      </Label>
+                      <Switch
+                        id="pt-keep-trainer"
+                        checked={keepCurrentTrainer}
+                        onCheckedChange={setKeepCurrentTrainer}
+                        aria-label="Keep the current trainer assigned for general training"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
 
         {awaitingPayment && (
           <div className="mx-6 mt-4 flex items-center justify-between gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-sm">
@@ -639,10 +755,20 @@ export function PurchasePTPackageDrawer({
             <span>{gstExempt ? 'GST (exempt sale)' : 'GST 5% (inclusive)'}</span>
             <span>{formatINR(breakdown.tax)}</span>
           </div>
-          <div className="flex justify-between text-sm text-success">
-            <span>Trainer commission (preview)</span>
-            <span>{formatINR(commissionPreview)}</span>
-          </div>
+          {commissionPreview == null ? (
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Trainer commission (preview)</span>
+              <span>Select a trainer</span>
+            </div>
+          ) : (
+            <div className="flex justify-between text-sm text-success">
+              <span>
+                {trainerName} · {trainerShare}% of {formatINR(breakdown.subtotal)}
+              </span>
+              <span>{formatINR(commissionPreview)}</span>
+            </div>
+          )}
+
           <div className="flex justify-between text-base font-bold pt-1 border-t border-dashed border-border">
             <span>Final Total</span>
             <span>{formatINR(breakdown.total)}</span>
