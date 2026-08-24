@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -281,9 +282,10 @@ export function CampaignsPanel() {
       {branchId && (
         <CampaignWizard
           open={wizardOpen}
-          onOpenChange={(o) => { setWizardOpen(o); if (!o) setEditingCampaign(null); }}
+          onOpenChange={(o) => { setWizardOpen(o); if (!o) { setEditingCampaign(null); setAnnounceClassId(null); } }}
           branchId={branchId}
           editingCampaign={editingCampaign}
+          prefillClassId={announceClassId}
         />
       )}
       <CampaignDetailDrawer open={!!detailCampaign} onOpenChange={(o) => !o && setDetailCampaign(null)} campaign={detailCampaign} />
