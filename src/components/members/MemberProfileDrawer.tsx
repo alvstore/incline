@@ -867,6 +867,22 @@ export function MemberProfileDrawer({
     enabled: !!assignedTrainerId,
   });
 
+  // Name of the trainer attached to the member's PT package (may differ from the general trainer)
+  const ptTrainerUserId = (activePTPackage ?? pendingPTPackage ?? lastPTPackage)?.trainers?.user_id ?? null;
+  const { data: ptTrainerName } = useQuery({
+    queryKey: ['pt-trainer-name', ptTrainerUserId],
+    enabled: !!ptTrainerUserId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', ptTrainerUserId!)
+        .maybeSingle();
+      return data?.full_name ?? null;
+    },
+  });
+
+
   // Fetch wallet balance
   const { data: memberWallet } = useQuery({
     queryKey: ['member-wallet-balance', member?.id],
