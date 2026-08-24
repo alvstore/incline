@@ -59,6 +59,7 @@ import { TemplateAssignmentsSheet } from "@/components/fitness/TemplateAssignmen
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useNavigate } from "react-router-dom";
+import { signAttachmentUrl } from "@/lib/documents/signAttachment";
 
 type CommonFilter = "all" | "common" | "pt_only";
 
