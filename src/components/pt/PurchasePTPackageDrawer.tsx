@@ -411,8 +411,12 @@ export function PurchasePTPackageDrawer({
   });
 
   const awaitingPayment = !!pendingPackageId;
+  const canSellDuplicate = canEditTax; // owner / admin / manager
+  const duplicateBlocked = !!blockingPackage && !(canSellDuplicate && duplicateAck);
   const canCharge =
-    !purchase.isPending && !awaitingPayment && !!trainerId && !!startDate && price > 0 &&
+    !purchase.isPending && !awaitingPayment && !duplicateBlocked && !existingLoading &&
+    !!trainerId && !!startDate && price > 0 &&
+
     ((selected && selected !== 'custom') ||
       (selected === 'custom' &&
         custom.name.trim().length > 0 &&
