@@ -473,6 +473,38 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             logPatch.read_at = new Date().toISOString();
           }
           await supabase.from("communication_logs").update(logPatch).eq("id", log.id);
+
+          // v6.8.0: delivery outcome drives the retry queue and the pacing
+          // circuit breaker. Parked (`awaiting_confirmation`) rows are closed
+          // here so a paced message is never re-attempted by the worker.
+          try {
+            const isPacing = /(^|\D)131049(\D|$)|healthy ecosystem engagement/i.test(errMsg ?? "");
+            if (mapped === "failed") {
+              await supabase
+                .from("communication_retry_queue")
+                .update({ status: "terminal", last_error: errMsg ?? "delivery_failed" })
+                .eq("original_log_id", log.id)
+                .in("status", ["awaiting_confirmation", "pending", "processing"]);
+              if (isPacing) {
+                await supabase.rpc("whatsapp_record_pacing_error", {
+                  _phone_number_id: String(phoneNumberId ?? "default"),
+                  _error_code: failureCode ?? "131049",
+                });
+              }
+            } else if (mapped === "delivered" || mapped === "read") {
+              await supabase
+                .from("communication_retry_queue")
+                .update({ status: "succeeded", succeeded_at: new Date().toISOString() })
+                .eq("original_log_id", log.id)
+                .eq("status", "awaiting_confirmation");
+              await supabase.rpc("whatsapp_breaker_close", {
+                _phone_number_id: String(phoneNumberId ?? "default"),
+              });
+            }
+          } catch (e) {
+            console.warn("[whatsapp-webhook] breaker/queue sync failed:", e);
+          }
+
         }
       }
     } catch (e) {
