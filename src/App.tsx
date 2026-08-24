@@ -13,7 +13,7 @@ import { GymLoader } from "@/components/ui/gym-loader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardRedirect } from "@/components/auth/DashboardRedirect";
 import WhatsAppWidget from "@/components/common/WhatsAppWidget";
-import { DrBanner } from "@/components/system/DrBanner";
+
 
 // Critical auth pages — loaded eagerly (small bundles)
 import SetupPage from "./pages/Setup";
