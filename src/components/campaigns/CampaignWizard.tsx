@@ -1068,11 +1068,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       if (ch === 'rcs' && !rcsTemplateId) {
         toast.error('Pick an RCS template — Telinfy RCS is template-only'); return;
       }
-      if (ch === 'whatsapp' && blockedByTemplate) {
-        const detail = templatePicked && selectedTemplatePending && trigger === 'send_now'
-          ? 'This template is still awaiting Meta approval — schedule for later, or pick an APPROVED template.'
-          : `${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`;
-        toast.error(detail); return;
+      if (ch === 'whatsapp' && (coldCount > 0 || isCsv)) {
+        // Evaluate against the WhatsApp draft, not whichever channel tab is open.
+        const waPicked = draft.useApprovedTemplate && !!draft.templateId && !draft.templateId.startsWith('__meta__:');
+        const waMeta = (approvedTemplates as any[]).find((t) => t.id && t.id === draft.templateId);
+        const waPending = waMeta?.meta_template_status === 'PENDING';
+        const waReady = waPicked && (trigger !== 'send_now' || !waPending);
+        if (!waReady) {
+          const detail = waPicked && waPending && trigger === 'send_now'
+            ? 'This template is still awaiting Meta approval — schedule for later, or pick an APPROVED template.'
+            : `${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`;
+          toast.error(`WHATSAPP: ${detail}`); return;
+        }
       }
       const missing = extractTemplateVars(draft.message)
         .filter((v) => !isAutoVar(v))

@@ -250,9 +250,19 @@ serve(async (req: Request) => {
         const paymentEntity = payload.payload?.payment?.entity;
         // reference_id may carry a "<invoiceId>|<timestamp>" uniqueness suffix.
         const rawReferenceId: string | undefined = plinkEntity?.reference_id;
-        const referenceId = rawReferenceId
-          ? String(rawReferenceId).split("|")[0]
-          : (plinkEntity?.notes?.invoice_id as string | undefined);
+        // Legacy: "<uuid>|<ts>". Current: "<uuid-without-dashes>-<base36 ts>".
+        const parseReference = (raw?: string): string | undefined => {
+          if (!raw) return undefined;
+          const head = String(raw).split("|")[0];
+          if (isValidUUID(head)) return head;
+          const hex = head.replace(/-/g, "").slice(0, 32);
+          if (/^[0-9a-f]{32}$/i.test(hex)) {
+            return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+          }
+          return undefined;
+        };
+        const referenceId = parseReference(rawReferenceId)
+          ?? (plinkEntity?.notes?.invoice_id as string | undefined);
         const rzpAmount = (paymentEntity?.amount || plinkEntity?.amount || 0) / 100;
         const paymentId = paymentEntity?.id || plinkEntity?.id;
         const capturedAt = paymentEntity?.created_at ? new Date(paymentEntity.created_at * 1000).toISOString() : new Date().toISOString();

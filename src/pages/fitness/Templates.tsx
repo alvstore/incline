@@ -59,6 +59,7 @@ import { TemplateAssignmentsSheet } from "@/components/fitness/TemplateAssignmen
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useNavigate } from "react-router-dom";
+import { signAttachmentUrl } from "@/lib/documents/signAttachment";
 
 type CommonFilter = "all" | "common" | "pt_only";
 
@@ -85,7 +86,13 @@ export default function FitnessTemplatesPage() {
 
   const handleDownloadTemplate = async (template: FitnessPlanTemplate) => {
     if (template.source_kind === 'pdf' && template.pdf_url) {
-      window.open(template.pdf_url, '_blank', 'noopener');
+      // `attachments` is a private bucket — raw object URLs are rejected (400).
+      const signed = await signAttachmentUrl(template.pdf_url);
+      if (!signed) {
+        sonnerToast.error('Could not open this PDF');
+        return;
+      }
+      window.open(signed, '_blank', 'noopener');
       return;
     }
     try {

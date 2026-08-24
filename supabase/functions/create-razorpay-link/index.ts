@@ -182,8 +182,10 @@ serve(async (req: Request) => {
       amount: amountInPaise,
       currency: "INR",
       accept_partial: false,
-      // Unique per attempt; the webhook parses the invoice UUID before the "|".
-      reference_id: `${invoiceId}|${Date.now()}`,
+      // Razorpay caps reference_id at 40 chars: dash-less UUID (32) + "-" +
+      // 6-char base36 timestamp = 39. Webhook rebuilds the UUID (and also has
+      // notes.invoice_id as a fallback).
+      reference_id: `${invoiceId.replace(/-/g, "")}-${Date.now().toString(36).slice(-6)}`,
       description: surcharge > 0
         ? `Payment for Invoice ${invoice.invoice_number || invoiceId} (incl. ₹${surcharge} online convenience fee)`
         : `Payment for Invoice ${invoice.invoice_number || invoiceId}`,

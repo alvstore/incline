@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/accordion';
 import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target, Plus } from 'lucide-react';
 import { normalizeDietPlan } from '@/lib/planNormalizer';
+import { useSignedAttachment } from '@/lib/documents/signAttachment';
 
 
 interface PlanViewerSheetProps {
@@ -55,6 +56,11 @@ export function PlanViewerSheet({
   onAssign,
   footerExtras,
 }: PlanViewerSheetProps) {
+  // The `attachments` bucket is private — mint a short-lived signed URL.
+  const { url: signedPdfUrl, isLoading: signingPdf } = useSignedAttachment(
+    plan?.source_kind === 'pdf' ? plan?.pdf_url : null,
+  );
+
 
   const weeks = useMemo(() => {
     if (!plan) return [];
@@ -126,17 +132,21 @@ export function PlanViewerSheet({
             <div className="space-y-3">
               <div className="rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground flex items-center justify-between">
                 <span className="truncate">{plan.pdf_filename || 'PDF document'}</span>
-                <a
-                  href={plan.pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Open in new tab
-                </a>
+                {signedPdfUrl ? (
+                  <a
+                    href={signedPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Open in new tab
+                  </a>
+                ) : (
+                  <span>{signingPdf ? 'Preparing…' : 'Unavailable'}</span>
+                )}
               </div>
               <iframe
-                src={plan.pdf_url}
+                src={signedPdfUrl || undefined}
                 title={plan.name}
                 className="w-full h-[70vh] rounded-xl border bg-background"
               />
