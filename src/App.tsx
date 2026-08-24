@@ -356,7 +356,7 @@ const App = () => (
       <BrowserRouter future={{ v7_startTransition: true }}>
         <AuthProvider>
           <BranchProvider>
-          <DrBanner />
+          
           <PublicWhatsAppWidget />
           <RoutedContent />
           </BranchProvider>
