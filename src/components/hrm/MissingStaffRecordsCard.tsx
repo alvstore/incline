@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
-import { useBranch } from '@/contexts/BranchContext';
+import { useBranchContext } from '@/contexts/BranchContext';
 
 const PRIVILEGED_ROLES = ['owner', 'admin', 'manager'] as const;
 
@@ -25,7 +25,7 @@ interface GapRow {
  */
 export function MissingStaffRecordsCard() {
   const queryClient = useQueryClient();
-  const { selectedBranch, branches } = useBranch() as any;
+  const { selectedBranch, branches } = useBranchContext();
 
   const { data, isLoading, isError } = useQuery<GapRow[]>({
     queryKey: ['hrm-missing-staff-records'],
@@ -62,7 +62,7 @@ export function MissingStaffRecordsCard() {
   });
 
   const defaultBranchId = useMemo(
-    () => selectedBranch || (branches?.[0]?.id ?? null),
+    () => (selectedBranch && selectedBranch !== 'all' ? selectedBranch : branches?.[0]?.id ?? null),
     [selectedBranch, branches],
   );
 
