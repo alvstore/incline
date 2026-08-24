@@ -217,6 +217,24 @@ export function DisasterRecoveryCard() {
               )}
             </div>
 
+            <div className="text-xs text-muted-foreground">
+              {new Date(lastReport.startedAt).toLocaleString("en-IN")}
+              {lastReport.finishedAt && (
+                <>
+                  {" · "}
+                  {Math.max(
+                    1,
+                    Math.round(
+                      (new Date(lastReport.finishedAt).getTime() -
+                        new Date(lastReport.startedAt).getTime()) / 1000,
+                    ),
+                  )}
+                  s
+                </>
+              )}
+            </div>
+
+
             {lastReport.mirrored.authUsers && (
               <div className="grid grid-cols-2 gap-2 text-muted-foreground">
                 <div>
