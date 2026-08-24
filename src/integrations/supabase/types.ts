@@ -15063,6 +15063,10 @@ export type Database = {
         Args: { _kind: string; _member_id: string }
         Returns: Json
       }
+      howbody_token_in_visible_branch: {
+        Args: { _data_key: string }
+        Returns: boolean
+      }
       howbody_touch_device: {
         Args: { _equipment_no: string }
         Returns: undefined
