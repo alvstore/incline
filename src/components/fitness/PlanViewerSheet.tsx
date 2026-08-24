@@ -132,17 +132,21 @@ export function PlanViewerSheet({
             <div className="space-y-3">
               <div className="rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground flex items-center justify-between">
                 <span className="truncate">{plan.pdf_filename || 'PDF document'}</span>
-                <a
-                  href={plan.pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Open in new tab
-                </a>
+                {signedPdfUrl ? (
+                  <a
+                    href={signedPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Open in new tab
+                  </a>
+                ) : (
+                  <span>{signingPdf ? 'Preparing…' : 'Unavailable'}</span>
+                )}
               </div>
               <iframe
-                src={plan.pdf_url}
+                src={signedPdfUrl || undefined}
                 title={plan.name}
                 className="w-full h-[70vh] rounded-xl border bg-background"
               />
