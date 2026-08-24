@@ -13325,6 +13325,42 @@ export type Database = {
           },
         ]
       }
+      whatsapp_health: {
+        Row: {
+          breaker_open_until: string | null
+          created_at: string
+          id: string
+          last_error_at: string | null
+          last_error_code: string | null
+          pacing_errors: Json
+          phone_number_id: string
+          probe_ok_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          breaker_open_until?: string | null
+          created_at?: string
+          id?: string
+          last_error_at?: string | null
+          last_error_code?: string | null
+          pacing_errors?: Json
+          phone_number_id: string
+          probe_ok_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          breaker_open_until?: string | null
+          created_at?: string
+          id?: string
+          last_error_at?: string | null
+          last_error_code?: string | null
+          pacing_errors?: Json
+          phone_number_id?: string
+          probe_ok_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_messages: {
         Row: {
           branch_id: string
@@ -14387,6 +14423,15 @@ export type Database = {
       cleanup_old_notifications: { Args: never; Returns: Json }
       clear_do_not_contact: {
         Args: { p_branch_id: string; p_phone: string }
+        Returns: Json
+      }
+      communication_send_allowed: {
+        Args: {
+          _category?: string
+          _channel: string
+          _content?: string
+          _recipient: string
+        }
         Returns: Json
       }
       compute_error_fingerprint: {
@@ -16256,6 +16301,18 @@ export type Database = {
       }
       void_trainer_commission: {
         Args: { p_payment_id: string; p_reason?: string; p_void_ratio?: number }
+        Returns: Json
+      }
+      whatsapp_breaker_close: {
+        Args: { _phone_number_id: string }
+        Returns: undefined
+      }
+      whatsapp_breaker_open: {
+        Args: { _phone_number_id: string }
+        Returns: boolean
+      }
+      whatsapp_record_pacing_error: {
+        Args: { _error_code?: string; _phone_number_id: string }
         Returns: Json
       }
       workout_schedule_offset_load: {

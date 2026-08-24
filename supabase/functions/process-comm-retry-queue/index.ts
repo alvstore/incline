@@ -1,4 +1,9 @@
-// process-comm-retry-queue v2.6.0
+// process-comm-retry-queue v2.7.0
+// v2.7.0: Meta acceptance ≠ delivery. WhatsApp retries park in
+//          `awaiting_confirmation` until a webhook callback promotes them to
+//          `succeeded` or marks them `terminal` (131049/failure). Parked rows
+//          with no callback for 6h auto-close as succeeded.
+
 // v2.6.0: Meta 131049 pacing failures are terminal for the current message.
 //          Retrying the identical template/recipient payload worsens quality.
 // v2.5.0: terminal template contract failures never retry; cap each worker run
@@ -94,6 +99,16 @@ Deno.serve(async (req) => {
         manualId = body?.queue_id || null;
       }
     } catch { /* ignore */ }
+
+    // v2.7.0: close out parked rows — if no failure callback arrived within 6h,
+    // treat the send as delivered. These rows are never re-attempted.
+    await supabase
+      .from("communication_retry_queue")
+      .update({ status: "succeeded", succeeded_at: new Date().toISOString() })
+      .eq("status", "awaiting_confirmation")
+      .lt("updated_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+      .then(() => {}, () => {});
+
 
     let query = supabase
       .from("communication_retry_queue")
@@ -253,12 +268,17 @@ Deno.serve(async (req) => {
       const newRetryCount = (row.retry_count || 0) + 1;
 
       if (success) {
+        // v2.7.0: Meta ACCEPTING a request is not delivery. WhatsApp rows park in
+        // `awaiting_confirmation`; the webhook promotes them to `succeeded` on a
+        // delivered/read callback, or to `terminal` on 131049/failure — so a paced
+        // message can never be re-attempted by this worker.
+        const parked = row.type === "whatsapp" && dispatchStatus === "sent";
         await supabase
           .from("communication_retry_queue")
           .update({
-            status: "succeeded",
+            status: parked ? "awaiting_confirmation" : "succeeded",
             retry_count: newRetryCount,
-            succeeded_at: new Date().toISOString(),
+            succeeded_at: parked ? null : new Date().toISOString(),
             last_error: null,
           })
           .eq("id", row.id);
@@ -268,8 +288,9 @@ Deno.serve(async (req) => {
             .update({ status: "sent", attempt_count: newRetryCount + 1 })
             .eq("id", row.original_log_id);
         }
-        results.push({ id: row.id, status: "succeeded", attempts: newRetryCount });
+        results.push({ id: row.id, status: parked ? "awaiting_confirmation" : "succeeded", attempts: newRetryCount });
       } else {
+
         // Terminal reason in the fresh error → abandon now (no reschedule).
         const terminal = isTerminalReason(errorMsg, newRetryCount) || newRetryCount >= (row.max_retries || 3);
         if (terminal) {

@@ -20,6 +20,7 @@ import { exportToCSV } from '@/lib/csvExport';
 import { CommunicationFunnelCard } from '@/components/system/CommunicationFunnelCard';
 import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFindingsCard';
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
+import { WhatsAppPacingCard } from '@/components/system/WhatsAppPacingCard';
 import { AiReplySlaCard } from '@/components/system/AiReplySlaCard';
 import { DbIntegrityCard } from '@/components/system/DbIntegrityCard';
 import { StalledConversationsCard } from '@/components/system/StalledConversationsCard';
@@ -402,6 +403,7 @@ export default function SystemHealth() {
             <div className="grid gap-4 md:grid-cols-2">
               <ReconciliationFindingsCard />
               <WhatsAppDeliveryHealthCard />
+              <WhatsAppPacingCard />
             </div>
 
             <StalledConversationsCard />

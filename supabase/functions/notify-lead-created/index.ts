@@ -1,3 +1,5 @@
+// v3.4.0 — Staff WhatsApp alerts throttled to 1/15min per staff member;
+//          in-app notification always fires.
 // v3.3.0 — Per-recipient staff_name variable for team alerts (fixes 132018
 //          template_param_empty on internal_lead_alert). Profile queries now
 //          select full_name; dispatch() accepts varsOverride merged over the
@@ -380,7 +382,42 @@ Deno.serve(async (req) => {
           varsOverride: perRecipientVars,
         });
       }
-      if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone) {
+      // v3.4.0: staff WhatsApp alerts are rate-limited to ONE per 15 minutes per
+      // staff member. Every lead still reaches them in-app and by email; this
+      // stops Meta seeing the same operational alert dozens of times a day
+      // (the behaviour behind the 131049 pacing failures).
+      let waThrottled = false;
+      if (profile.phone) {
+        const digits = String(profile.phone).replace(/\D/g, '').slice(-10);
+        const { count } = await supabase
+          .from("communication_logs")
+          .select("id", { count: "exact", head: true })
+          .eq("type", "whatsapp")
+          .eq("category", "new_lead")
+          .ilike("recipient", `%${digits}`)
+          .gte("created_at", new Date(Date.now() - 15 * 60 * 1000).toISOString());
+        waThrottled = (count ?? 0) > 0;
+      }
+
+      // In-app notification always fires, regardless of WhatsApp throttling.
+      if (profile.id) {
+        await supabase.rpc("create_system_notification", {
+          p_user_id: profile.id,
+          p_title: "New lead",
+          p_message: `${vars.lead_name || "A new lead"} — ${vars.lead_source || "website"}`,
+          p_type: "lead",
+          p_linked_entity_id: String(lead.id),
+        }).then(() => {}, () => {});
+      }
+
+      if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone && waThrottled) {
+        results.push({
+          channel: "whatsapp",
+          recipient: profile.phone,
+          status: "skipped",
+          reason: "staff_alert_throttled_15m",
+        });
+      } else if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone) {
         if (!teamWaTemplateId) {
           // No safe template available — record a clean skip instead of attempting
           // a freeform send that hits Meta 131047 outside the 24h window.
