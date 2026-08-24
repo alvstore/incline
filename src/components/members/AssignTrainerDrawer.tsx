@@ -20,6 +20,8 @@ interface AssignTrainerDrawerProps {
   memberName: string;
   branchId: string;
   currentTrainerId?: string;
+  /** Read-only context: the trainer coaching this member's PT package, if any. */
+  ptTrainerName?: string;
 }
 
 export function AssignTrainerDrawer({
@@ -29,11 +31,12 @@ export function AssignTrainerDrawer({
   memberName,
   branchId,
   currentTrainerId,
+  ptTrainerName,
 }: AssignTrainerDrawerProps) {
   const queryClient = useQueryClient();
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>(currentTrainerId || '');
 
-  // Reset selection when drawer opens or currentTrainerId changes
+  // Keep the selection in sync — the current trainer id may arrive after the drawer opens.
   useEffect(() => {
     if (open) {
       setSelectedTrainerId(currentTrainerId || '');
@@ -42,7 +45,7 @@ export function AssignTrainerDrawer({
 
   // Fetch trainers with utilization
   const { data: trainers = [], isLoading } = useQuery({
-    queryKey: ['trainers-utilization', branchId],
+    queryKey: ['trainers-utilization', branchId, currentTrainerId ?? 'none'],
     queryFn: async () => {
       const { data: trainerList, error } = await supabase
         .from('trainers')
@@ -80,7 +83,11 @@ export function AssignTrainerDrawer({
         })
       );
 
-      return trainersWithUtilization.sort((a, b) => a.utilization - b.utilization);
+      return trainersWithUtilization.sort((a, b) => {
+        if (a.id === currentTrainerId) return -1;
+        if (b.id === currentTrainerId) return 1;
+        return a.utilization - b.utilization;
+      });
     },
     enabled: open,
   });
@@ -163,6 +170,12 @@ export function AssignTrainerDrawer({
             <CardContent className="pt-4">
               <p className="font-medium">{memberName}</p>
               <p className="text-sm text-muted-foreground">General Training Assignment</p>
+              {ptTrainerName && (
+                <p className="mt-2 text-sm">
+                  <span className="text-muted-foreground">Personal trainer for PT sessions: </span>
+                  <span className="font-medium">{ptTrainerName}</span>
+                </p>
+              )}
             </CardContent>
           </Card>
 
