@@ -324,6 +324,8 @@ export function PurchasePTPackageDrawer({
           _idempotency_key: idempotencyKey,
           _start_date: startDate,
           _reassign_member_trainer: !keepCurrentTrainer,
+          _allow_duplicate: duplicateAck,
+
         } as any,
       );
       if (rpcErr) throw rpcErr;
