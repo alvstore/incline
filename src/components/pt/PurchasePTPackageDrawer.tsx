@@ -179,11 +179,20 @@ export function PurchasePTPackageDrawer({
 
   // Seed selection from the member's current trainer when the drawer opens.
   useEffect(() => {
-    if (open && currentTrainerId && trainerId === null) setTrainerId(currentTrainerId);
+    if (open && currentTrainerId && trainerId === null) {
+      setTrainerId(currentTrainerId);
+      setTrainerDraftKey(currentTrainerId);
+    }
   }, [open, currentTrainerId, trainerId]);
   useEffect(() => {
-    if (!open) { setTrainerId(null); setKeepCurrentTrainer(false); }
+    if (!open) { setTrainerId(null); setTrainerDraftKey('none'); setKeepCurrentTrainer(false); }
   }, [open]);
+
+  const handleTrainerChange = (id: string) => {
+    setTrainerId(id);
+    setTrainerDraftKey(id);
+  };
+
 
   const selectedTrainer = useMemo(
     () => trainers.find((t) => t.id === trainerId) ?? null,
