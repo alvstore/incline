@@ -144,6 +144,27 @@ export function PurchasePTPackageDrawer({
   });
   const currentTrainerId = member?.assigned_trainer_id ?? null;
 
+  // Duplicate-sale guard — surface any package that is live or awaiting payment.
+  const { data: existingPackages = [], isLoading: existingLoading } = useQuery({
+    queryKey: ['pt-existing-packages', memberId],
+    enabled: open && !!memberId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_pt_packages')
+        .select('id, status, invoice_id, trainer_id, start_date, expiry_date, sessions_remaining, sessions_total, created_at, pt_packages(name)')
+        .eq('member_id', memberId)
+        .in('status', ['active', 'pending_payment'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data as any[]) ?? [];
+    },
+  });
+  const blockingPackage = existingPackages[0] ?? null;
+  const [duplicateAck, setDuplicateAck] = useState(false);
+  useEffect(() => { if (!open) setDuplicateAck(false); }, [open]);
+
+
+
   // Branch trainer roster — staff pick who is coaching this PT package.
   const { data: trainers = [], isLoading: trainersLoading } = useQuery({
     queryKey: ['pt-branch-trainers', branchId],
