@@ -867,6 +867,8 @@ export function MemberProfileDrawer({
     enabled: !!assignedTrainerId,
   });
 
+
+
   // Fetch wallet balance
   const { data: memberWallet } = useQuery({
     queryKey: ['member-wallet-balance', member?.id],
@@ -1029,7 +1031,41 @@ export function MemberProfileDrawer({
   const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
   const currentMembership = activeMembership || pendingMembership;
   const activePTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'active');
+  const pendingPTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'pending_payment');
+  const lastPTPackage = useMemo(() => {
+    const list = [...(memberDetails?.member_pt_packages ?? [])];
+    if (!list.length) return null;
+    return list.sort((a: any, b: any) =>
+      new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())[0];
+  }, [memberDetails?.member_pt_packages]);
+  /** Current PT relationship — drives the primary PT action so we never re-sell blindly. */
+  const ptState: 'none' | 'pending' | 'active' | 'lapsed' =
+    activePTPackage ? 'active'
+      : pendingPTPackage ? 'pending'
+      : lastPTPackage ? 'lapsed'
+      : 'none';
+  const ptPackage = activePTPackage ?? pendingPTPackage ?? lastPTPackage ?? null;
+  const ptLabel = ptState === 'pending' ? 'Complete PT Payment'
+    : ptState === 'active' ? 'Manage PT'
+    : ptState === 'lapsed' ? 'Renew PT'
+    : 'Buy PT';
+  // Name of the trainer attached to the PT package (may differ from the general trainer)
+  const ptTrainerUserId = (ptPackage as any)?.trainers?.user_id ?? null;
+  const { data: ptTrainerName } = useQuery({
+    queryKey: ['pt-trainer-name', ptTrainerUserId],
+    enabled: !!ptTrainerUserId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', ptTrainerUserId!)
+        .maybeSingle();
+      return data?.full_name ?? null;
+    },
+  });
   const hasRegistrationForm = !!registrationFormDocument;
+
+
 
   const startNowMutation = useMutation({
     mutationFn: async () => {
@@ -1387,13 +1423,60 @@ export function MemberProfileDrawer({
             <Button 
               variant="outline" 
               className="flex-1 min-h-[44px]"
-              onClick={() => { onOpenChange(false); onPurchasePT(); }}
+              onClick={() => {
+                if (ptState === 'pending' && ptPackage?.invoice_id) {
+                  window.open(`/member/pay?invoice=${ptPackage.invoice_id}`, '_blank');
+                  return;
+                }
+                onOpenChange(false);
+                onPurchasePT();
+              }}
               disabled={!activeMembership}
             >
               <Dumbbell className="h-4 w-4 mr-2 shrink-0" />
-              Buy PT
+              {ptLabel}
             </Button>
           </div>
+
+          {/* PT relationship strip — prevents duplicate PT sales */}
+          {ptPackage && (
+            <Card className="rounded-2xl">
+              <CardContent className="p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Personal training
+                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">
+                      {ptPackage.pt_packages?.name ?? 'PT package'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {ptTrainerName ? `${ptTrainerName} · ` : ''}
+                      {ptPackage.sessions_total > 0
+                        ? `${ptPackage.sessions_remaining}/${ptPackage.sessions_total} sessions`
+                        : 'Monthly coaching'}
+                      {ptPackage.expiry_date
+                        ? ` · till ${format(new Date(ptPackage.expiry_date), 'dd MMM yyyy')}`
+                        : ''}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      ptState === 'active'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : ptState === 'pending'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {ptState === 'active' ? 'Active' : ptState === 'pending' ? 'Awaiting payment' : 'Ended'}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
 
           {/* Quick Actions - Row 2 */}
           <div className="grid grid-cols-2 gap-2">
@@ -1411,8 +1494,9 @@ export function MemberProfileDrawer({
             )}
             <Button variant="outline" size="sm" onClick={() => setAssignTrainerOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
               <UserCog className="h-4 w-4 mr-2 shrink-0" />
-              {member.assigned_trainer_id ? 'Change Trainer' : 'Assign Trainer'}
+              {assignedTrainerId ? 'Change Trainer' : 'Assign Trainer'}
             </Button>
+
             <Button variant="outline" size="sm" onClick={() => setMeasurementOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
               <Ruler className="h-4 w-4 mr-2 shrink-0" />
               Record Body
@@ -2426,7 +2510,9 @@ export function MemberProfileDrawer({
           memberId={member.id}
           memberName={profile?.full_name}
           branchId={member.branch_id}
-          currentTrainerId={member.assigned_trainer_id}
+          currentTrainerId={assignedTrainerId ?? undefined}
+          ptTrainerName={ptTrainerName ?? undefined}
+
         />
         <RecordMeasurementDrawer
           open={measurementOpen}

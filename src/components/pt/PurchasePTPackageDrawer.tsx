@@ -144,6 +144,27 @@ export function PurchasePTPackageDrawer({
   });
   const currentTrainerId = member?.assigned_trainer_id ?? null;
 
+  // Duplicate-sale guard — surface any package that is live or awaiting payment.
+  const { data: existingPackages = [], isLoading: existingLoading } = useQuery({
+    queryKey: ['pt-existing-packages', memberId],
+    enabled: open && !!memberId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_pt_packages')
+        .select('id, status, invoice_id, trainer_id, start_date, expiry_date, sessions_remaining, sessions_total, created_at, pt_packages(name)')
+        .eq('member_id', memberId)
+        .in('status', ['active', 'pending_payment'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data as any[]) ?? [];
+    },
+  });
+  const blockingPackage = existingPackages[0] ?? null;
+  const [duplicateAck, setDuplicateAck] = useState(false);
+  useEffect(() => { if (!open) setDuplicateAck(false); }, [open]);
+
+
+
   // Branch trainer roster — staff pick who is coaching this PT package.
   const { data: trainers = [], isLoading: trainersLoading } = useQuery({
     queryKey: ['pt-branch-trainers', branchId],
@@ -303,6 +324,8 @@ export function PurchasePTPackageDrawer({
           _idempotency_key: idempotencyKey,
           _start_date: startDate,
           _reassign_member_trainer: !keepCurrentTrainer,
+          _allow_duplicate: duplicateAck,
+
         } as any,
       );
       if (rpcErr) throw rpcErr;
@@ -388,8 +411,12 @@ export function PurchasePTPackageDrawer({
   });
 
   const awaitingPayment = !!pendingPackageId;
+  const canSellDuplicate = canEditTax; // owner / admin / manager
+  const duplicateBlocked = !!blockingPackage && !(canSellDuplicate && duplicateAck);
   const canCharge =
-    !purchase.isPending && !awaitingPayment && !!trainerId && !!startDate && price > 0 &&
+    !purchase.isPending && !awaitingPayment && !duplicateBlocked && !existingLoading &&
+    !!trainerId && !!startDate && price > 0 &&
+
     ((selected && selected !== 'custom') ||
       (selected === 'custom' &&
         custom.name.trim().length > 0 &&
@@ -412,7 +439,70 @@ export function PurchasePTPackageDrawer({
           </SheetDescription>
         </SheetHeader>
 
+        {blockingPackage && (
+          <div className="px-6 pt-4">
+            <Card className="rounded-2xl border-0 shadow-sm bg-amber-50">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-amber-900">
+                      {blockingPackage.status === 'pending_payment'
+                        ? 'This member already has a PT package awaiting payment'
+                        : 'This member already has an active PT package'}
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      {blockingPackage.pt_packages?.name ?? 'PT package'}
+                      {trainers.find((t) => t.id === blockingPackage.trainer_id)
+                        ? ` · ${trainers.find((t) => t.id === blockingPackage.trainer_id)!.full_name}`
+                        : ''}
+                      {blockingPackage.start_date ? ` · from ${prettyDate(blockingPackage.start_date)}` : ''}
+                    </p>
+                  </div>
+                  <Badge
+                    className={`ml-auto shrink-0 rounded-full text-xs ${
+                      blockingPackage.status === 'pending_payment'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-emerald-100 text-emerald-700'
+                    }`}
+                    variant="secondary"
+                  >
+                    {blockingPackage.status === 'pending_payment' ? 'Awaiting payment' : 'Active'}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {blockingPackage.invoice_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="min-h-[44px]"
+                      onClick={() => window.open(`/member/pay?invoice=${blockingPackage.invoice_id}`, '_blank')}
+                    >
+                      Open existing invoice
+                    </Button>
+                  )}
+                  {canSellDuplicate ? (
+                    <Button
+                      size="sm"
+                      variant={duplicateAck ? 'secondary' : 'default'}
+                      className="min-h-[44px]"
+                      onClick={() => setDuplicateAck((v) => !v)}
+                    >
+                      {duplicateAck ? 'Additional package confirmed' : 'Sell an additional package anyway'}
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-amber-800">
+                      Ask a manager if an additional package is genuinely needed.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         <div className="px-6 pt-4">
+
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardContent className="p-4 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

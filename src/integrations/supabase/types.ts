@@ -15561,23 +15561,42 @@ export type Database = {
         }
         Returns: Json
       }
-      purchase_pt_package: {
-        Args: {
-          _branch_id: string
-          _gst_rate: number
-          _idempotency_key: string
-          _member_id: string
-          _package_id: string
-          _payment_method: string
-          _payment_source: string
-          _price_paid: number
-          _reassign_member_trainer?: boolean
-          _received_by?: string
-          _start_date?: string
-          _trainer_id: string
-        }
-        Returns: Json
-      }
+      purchase_pt_package:
+        | {
+            Args: {
+              _branch_id: string
+              _gst_rate: number
+              _idempotency_key: string
+              _member_id: string
+              _package_id: string
+              _payment_method: string
+              _payment_source: string
+              _price_paid: number
+              _reassign_member_trainer?: boolean
+              _received_by?: string
+              _start_date?: string
+              _trainer_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _allow_duplicate?: boolean
+              _branch_id: string
+              _gst_rate: number
+              _idempotency_key: string
+              _member_id: string
+              _package_id: string
+              _payment_method: string
+              _payment_source: string
+              _price_paid: number
+              _reassign_member_trainer?: boolean
+              _received_by?: string
+              _start_date?: string
+              _trainer_id: string
+            }
+            Returns: Json
+          }
       purge_expired_otp_verifications: { Args: never; Returns: undefined }
       quote_convenience_fee: {
         Args: { p_invoice_id: string; p_method?: string }
