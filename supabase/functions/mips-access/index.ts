@@ -291,22 +291,56 @@ async function applyMemberAction(
     console.warn("Device dispatch failed (non-fatal):", e);
   }
 
-  // v2.7.0 — READ-BACK VERIFICATION. MIPS can answer 200 and silently keep the
-  // old validity (e.g. the record is managed under a different person/employee
-  // entry), which is exactly how an overdue member kept turnstile access.
-  // Never report success unless the server actually echoes the new date.
+  // v2.8.0 — READ-BACK VERIFICATION WITH RETRY + RE-PUSH. MIPS can answer 200 and
+  // still serve a stale record for a moment (write-behind cache), and it can also
+  // silently drop the update. Poll a few times, re-push once, and only log an
+  // error when the value is still wrong after that.
+  const norm = (v: string | null) => String(v || "").trim().slice(0, 10);
   let verified = false;
   let observedValidTimeEnd: string | null = null;
-  try {
-    const after = (await fetchPersonDetail(baseUrl, token, existing.personId)) ||
-      (await lookupPerson(baseUrl, token, personSn));
-    observedValidTimeEnd = after?.validTimeEnd ? String(after.validTimeEnd) : null;
-    const norm = (v: string | null) => String(v || "").trim().slice(0, 10);
-    verified = norm(observedValidTimeEnd) === norm(newValidTimeEnd);
-  } catch (e) {
-    console.warn("Read-back verification failed:", e);
+
+  const readBack = async (): Promise<boolean> => {
+    try {
+      const after = (await fetchPersonDetail(baseUrl, token, existing.personId)) ||
+        (await lookupPerson(baseUrl, token, personSn));
+      observedValidTimeEnd = after?.validTimeEnd ? String(after.validTimeEnd) : null;
+      return norm(observedValidTimeEnd) === norm(newValidTimeEnd);
+    } catch (e) {
+      console.warn("Read-back verification failed:", e);
+      return false;
+    }
+  };
+
+  for (const waitMs of [0, 1200, 2500]) {
+    if (waitMs) await new Promise((r) => setTimeout(r, waitMs));
+    verified = await readBack();
+    if (verified) break;
   }
 
+  if (!verified) {
+    // One corrective re-push before giving up — covers the silent-drop case.
+    try {
+      console.warn(`[MIPS-ACCESS] Re-pushing ${personSn} after failed read-back`);
+      const retryDetail = await fetchPersonDetail(baseUrl, token, existing.personId);
+      const retryRes = await fetch(`${baseUrl}/personInfo/person`, {
+        method: "PUT",
+        headers: authHeaders(token),
+        body: JSON.stringify({
+          ...(retryDetail || updatedPerson),
+          personId: existing.personId,
+          personSn,
+          validTimeEnd: newValidTimeEnd,
+          expiredType: 0,
+        }),
+      });
+      await retryRes.json().catch(() => ({}));
+      await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId).catch(() => {});
+      await new Promise((r) => setTimeout(r, 1500));
+      verified = await readBack();
+    } catch (e) {
+      console.warn("MIPS re-push failed (non-fatal):", e);
+    }
+  }
 
   if (!verified) {
     console.error(
@@ -323,12 +357,14 @@ async function applyMemberAction(
           action,
           pushed_valid_time_end: newValidTimeEnd,
           observed_valid_time_end: observedValidTimeEnd,
+          retried: true,
         },
       });
     } catch (e) {
       console.warn("log_error_event failed (non-fatal):", e);
     }
   }
+
 
 
   // Only mark the member as fully revoked when MIPS actually confirmed the new

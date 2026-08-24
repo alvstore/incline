@@ -264,10 +264,11 @@ export function useTrainerData() {
           branch:branches(id, name, code)
         `)
         .eq('user_id', user!.id)
-        .single();
-      
+        .maybeSingle();
+
       if (error) {
-        console.error('Error fetching trainer:', error);
+        // PGRST116 (no rows) is expected for non-trainer users — not an app fault.
+        if (error.code !== 'PGRST116') console.error('Error fetching trainer:', error);
         return null;
       }
       return data;
