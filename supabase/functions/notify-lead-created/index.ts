@@ -406,7 +406,7 @@ Deno.serve(async (req) => {
           p_title: "New lead",
           p_message: `${vars.lead_name || "A new lead"} — ${vars.lead_source || "website"}`,
           p_type: "lead",
-          p_link: `/leads/${lead.id}`,
+          p_linked_entity_id: String(lead.id),
         }).then(() => {}, () => {});
       }
 
