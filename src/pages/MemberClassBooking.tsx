@@ -51,6 +51,8 @@ interface AgendaItem {
   locked?: boolean;
   /** Cheapest add-on package that unlocks this facility. */
   unlockPackage?: AddOnPackage | null;
+  /** Class poster shown as the card hero. */
+  banner?: string | null;
   rawData: any;
 }
 
@@ -441,7 +443,12 @@ export default function MemberClassBooking() {
         type: 'class',
         datetime: new Date(cls.scheduled_at),
         title: cls.name,
-        subtitle: `${cls.duration_minutes} min${cls.trainer?.profiles?.full_name ? ` • ${cls.trainer.profiles.full_name}` : ''}`,
+        subtitle: [
+          `${cls.duration_minutes} min`,
+          cls.trainer?.profiles?.full_name || cls.external_trainer_name || '',
+          cls.venue || '',
+        ].filter(Boolean).join(' • '),
+        banner: cls.banner_url || null,
         duration: cls.duration_minutes || 60,
         spotsLeft: cls.capacity - bookedCount,
         capacity: cls.capacity,
