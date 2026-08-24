@@ -56,6 +56,11 @@ export function PlanViewerSheet({
   onAssign,
   footerExtras,
 }: PlanViewerSheetProps) {
+  // The `attachments` bucket is private — mint a short-lived signed URL.
+  const { url: signedPdfUrl, isLoading: signingPdf } = useSignedAttachment(
+    plan?.source_kind === 'pdf' ? plan?.pdf_url : null,
+  );
+
 
   const weeks = useMemo(() => {
     if (!plan) return [];
