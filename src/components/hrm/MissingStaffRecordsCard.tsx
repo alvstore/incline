@@ -33,7 +33,7 @@ export function MissingStaffRecordsCard() {
       const { data: roleRows, error: roleErr } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', PRIVILEGED_ROLES as unknown as string[]);
+        .in('role', PRIVILEGED_ROLES as unknown as ('owner' | 'admin' | 'manager')[]);
       if (roleErr) throw roleErr;
 
       const ids = Array.from(new Set((roleRows || []).map((r) => r.user_id)));
@@ -69,14 +69,14 @@ export function MissingStaffRecordsCard() {
   const createRecord = useMutation({
     mutationFn: async (row: GapRow) => {
       if (!defaultBranchId) throw new Error('Select a branch first');
-      const { error } = await supabase.from('employees').insert({
+      const { error } = await supabase.from('employees').insert([{
         user_id: row.userId,
         branch_id: defaultBranchId,
         position: row.role === 'owner' ? 'Owner' : row.role === 'admin' ? 'Director' : 'Manager',
         department: 'Management',
         hire_date: new Date().toISOString().slice(0, 10),
         is_active: true,
-      });
+      }] as never);
       if (error) throw error;
     },
     onSuccess: () => {
