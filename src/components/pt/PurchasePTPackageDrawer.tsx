@@ -302,6 +302,7 @@ export function PurchasePTPackageDrawer({
           _payment_source: paySource,
           _idempotency_key: idempotencyKey,
           _start_date: startDate,
+          _reassign_member_trainer: !keepCurrentTrainer,
         } as any,
       );
       if (rpcErr) throw rpcErr;
@@ -316,6 +317,14 @@ export function PurchasePTPackageDrawer({
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });
       queryClient.invalidateQueries({ queryKey: ['active-member-packages'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['member-trainer', memberId] });
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      queryClient.invalidateQueries({ queryKey: ['member-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['trainers-utilization'] });
+
+      if (data?.trainer_reassigned && trainerName) {
+        toast.success(`${trainerName} is now this member's trainer`);
+      }
 
       if (paySource === 'payment_link') {
         toast.success('Package created · awaiting payment');
@@ -326,6 +335,7 @@ export function PurchasePTPackageDrawer({
       toast.success('PT package activated');
       onOpenChange(false);
     },
+
     onError: (e: any) => toast.error(e?.message || 'Could not start checkout'),
   });
 
