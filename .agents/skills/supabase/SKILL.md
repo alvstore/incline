@@ -147,3 +147,50 @@ When you get an error on a Supabase-related request, for example an error code f
 
 - **Skill Feedback** → [references/skill-feedback.md](references/skill-feedback.md)
   **MUST read when** the user reports that this skill gave incorrect guidance or is missing information.
+
+---
+
+## Incline Overlay (project-specific — overrides upstream where they conflict)
+
+This project runs on **Lovable Cloud**. The backend is Supabase under the hood, but the user must never be told that.
+
+### Naming and access
+- Say "Lovable Cloud", "backend", "database", "auth", "functions", "storage". Never "Supabase" in user-facing text.
+- Never surface project refs, `*.supabase.co` URLs, or dashboard links. There is no dashboard for this user.
+- `SUPABASE_SERVICE_ROLE_KEY` and the DB password are not retrievable here. Never fabricate, log, or echo them.
+- The Supabase CLI (`supabase db pull`, `migration list`) is NOT available. All schema changes go through the migration tool; all reads through the read-query/run-sql tools.
+- Never edit `src/integrations/supabase/client.ts`, `previewAuthStorage.ts`, `types.ts`, `.env`, or `supabase/config.toml`.
+
+### Table creation — non-negotiable order
+1. `CREATE TABLE public.<name>(...)`
+2. `GRANT` to every role a policy allows (`authenticated`, plus `service_role`; `anon` only when a policy allows anon reads)
+3. `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`
+4. `CREATE POLICY ...`
+
+A migration that creates a public table without GRANTs is wrong — PostgREST returns a permission error regardless of RLS.
+
+### Authorization model
+- Roles live in `public.user_roles` (never on `profiles`). Check with `public.has_role(auth.uid(), 'admin')`.
+- Capabilities: server `public.has_capability()` + `role_capabilities`; client `can.X(roles)` from `src/lib/auth/permissions.ts`. Never inline `hasAnyRole([...])` in new code.
+- **Every** policy on branch-owned data must scope by branch (`user_visible_branch_ids()` / `set_active_branch` selection). Client `.eq('branch_id', …)` is defense-in-depth only.
+- Rows with `branch_id IS NULL` are org-wide — restrict them to owner/admin unless explicitly global config.
+
+### Writes
+- Multi-step business writes go through atomic `SECURITY DEFINER` RPCs, never client sequences:
+  `record_payment`, `purchase_membership`, `cancel_membership`, `freeze_membership`, `transition_member_lifecycle`,
+  locker assign/release, staff attendance, approvals, PT purchase, commission reversal, `book_facility_slot`.
+- Pass `null`, never `''`, for auto-generated columns — triggers fire on `IS NULL`.
+- All functions pin `SET search_path = public`.
+- DR mode: `dr_block_writes` blocks writes when the global `dr_mode` flag is set. Production edge functions must never set that flag.
+
+### Edge functions
+- Strict CORS headers, a top-level try/catch, and a `// vX.Y.Z` version comment at the top of every function.
+- Error capture goes through the `log_error_event` RPC — never `console.error` alone.
+- Outbound messaging must call `dispatch-communication`. Never insert into `communication_logs` and never invoke `send-*` functions directly from the client (CI guard blocks both).
+- Avoid auto-generated FK aliases in PostgREST joins; use explicit table names/hints and treat 1:N joins as arrays.
+
+### Storage
+- Member ID / medical / contract files: sign with `signMemberDocument(path, ttl=60s)`. Never `getPublicUrl` for sensitive objects.
+
+### Never touch
+`auth`, `storage`, `realtime`, `supabase_functions`, `vault` schemas — including triggers on them.
