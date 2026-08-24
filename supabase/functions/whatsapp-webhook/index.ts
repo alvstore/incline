@@ -391,6 +391,7 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
 
 async function processStatusUpdates(value: any, branchId: string | null) {
   const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+  const phoneNumberId = value?.metadata?.phone_number_id ?? "default";
 
   for (const status of statuses) {
     if (!status?.id) continue;
