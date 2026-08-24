@@ -1406,13 +1406,60 @@ export function MemberProfileDrawer({
             <Button 
               variant="outline" 
               className="flex-1 min-h-[44px]"
-              onClick={() => { onOpenChange(false); onPurchasePT(); }}
+              onClick={() => {
+                if (ptState === 'pending' && ptPackage?.invoice_id) {
+                  window.open(`/member/pay?invoice=${ptPackage.invoice_id}`, '_blank');
+                  return;
+                }
+                onOpenChange(false);
+                onPurchasePT();
+              }}
               disabled={!activeMembership}
             >
               <Dumbbell className="h-4 w-4 mr-2 shrink-0" />
-              Buy PT
+              {ptLabel}
             </Button>
           </div>
+
+          {/* PT relationship strip — prevents duplicate PT sales */}
+          {ptPackage && (
+            <Card className="rounded-2xl">
+              <CardContent className="p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Personal training
+                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">
+                      {ptPackage.pt_packages?.name ?? 'PT package'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {ptTrainerName ? `${ptTrainerName} · ` : ''}
+                      {ptPackage.sessions_total > 0
+                        ? `${ptPackage.sessions_remaining}/${ptPackage.sessions_total} sessions`
+                        : 'Monthly coaching'}
+                      {ptPackage.expiry_date
+                        ? ` · till ${format(new Date(ptPackage.expiry_date), 'dd MMM yyyy')}`
+                        : ''}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      ptState === 'active'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : ptState === 'pending'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {ptState === 'active' ? 'Active' : ptState === 'pending' ? 'Awaiting payment' : 'Ended'}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
 
           {/* Quick Actions - Row 2 */}
           <div className="grid grid-cols-2 gap-2">
