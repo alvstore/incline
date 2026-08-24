@@ -15510,13 +15510,14 @@ export type Database = {
       purchase_pt_package: {
         Args: {
           _branch_id: string
-          _gst_rate?: number
-          _idempotency_key?: string
+          _gst_rate: number
+          _idempotency_key: string
           _member_id: string
           _package_id: string
-          _payment_method?: string
-          _payment_source?: string
+          _payment_method: string
+          _payment_source: string
           _price_paid: number
+          _reassign_member_trainer?: boolean
           _received_by?: string
           _start_date?: string
           _trainer_id: string
