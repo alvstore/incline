@@ -1,4 +1,6 @@
-import { MessageSquare, GripVertical, Clock } from 'lucide-react';
+import { MessageSquare, GripVertical, Clock, UserRound } from 'lucide-react';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { formatISTFull } from '@/lib/utils/datetime';
 import { cn } from '@/lib/utils';
 import { DueDatePill } from './DueDatePill';
 import { AssigneeAvatar } from './AssigneeAvatar';
@@ -64,9 +66,21 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
           </div>
         </div>
 
+        {task.created_at && (
+          <p
+            className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground"
+            title={formatISTFull(task.created_at)}
+          >
+            <UserRound className="h-2.5 w-2.5" />
+            Created {formatDistanceToNowStrict(new Date(task.created_at))} ago
+            {task.assigner?.full_name ? ` by ${task.assigner.full_name}` : ''}
+          </p>
+        )}
+
         <div className="mt-3 flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
             <DueDatePill dueDate={task.due_date} completed={task.status === 'completed'} />
+
             {task.due_time && !task.status.includes('completed') && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
                 <Clock className="h-2.5 w-2.5" />

@@ -86,3 +86,22 @@ export function istHmToUtcHm(hIst: number, mIst: number): { h: number; m: number
 }
 
 export const IST_TIMEZONE = IST_TZ;
+
+/**
+ * Absolute UTC instants for the start and end of the current IST calendar day.
+ * Use for "today" range filters so the boundary is Udaipur midnight, never
+ * UTC midnight (which leaks tomorrow's 00:00–05:30 IST rows into "today").
+ */
+export function getISTDayRange(date: Date = new Date()): { startISO: string; endISO: string } {
+  // Shift into IST wall-clock space, floor to the day, then shift back.
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const istWall = new Date(date.getTime() + IST_OFFSET_MS);
+  const dayStartWall = Date.UTC(
+    istWall.getUTCFullYear(),
+    istWall.getUTCMonth(),
+    istWall.getUTCDate(),
+  );
+  const startISO = new Date(dayStartWall - IST_OFFSET_MS).toISOString();
+  const endISO = new Date(dayStartWall + 24 * 60 * 60 * 1000 - IST_OFFSET_MS).toISOString();
+  return { startISO, endISO };
+}

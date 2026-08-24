@@ -15,6 +15,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useInView } from '@/hooks/useInView';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
+import { getISTDayRange, formatISTTime } from '@/lib/utils/datetime';
+import { useNavigate } from 'react-router-dom';
+import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
 import { 
   UserPlus, 
   Dumbbell, 
@@ -43,6 +46,7 @@ function ChartSkeleton() {
 export default function DashboardPage() {
   const { profile, roles, user } = useAuth();
   const { selectedBranch, setSelectedBranch, branchFilter, branches } = useBranchContext();
+  const navigate = useNavigate();
 
   // InView hooks for below-fold sections
   const { ref: crmRef, inView: crmInView } = useInView();
@@ -115,10 +119,21 @@ export default function DashboardPage() {
       if (branchFilter) trainersQuery = trainersQuery.eq('branch_id', branchFilter);
       const { count: activeTrainers } = await trainersQuery;
 
-      // Today's classes
-      let classesQuery = supabase.from('classes').select('id', { count: 'exact' }).gte('scheduled_at', today).lt('scheduled_at', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+      // Today's classes — anchored to the IST calendar day, not a rolling UTC window
+      const { startISO: istDayStart, endISO: istDayEnd } = getISTDayRange();
+      let classesQuery = supabase
+        .from('classes')
+        .select('id, name, scheduled_at')
+        .eq('is_active', true)
+        .gte('scheduled_at', istDayStart)
+        .lt('scheduled_at', istDayEnd)
+        .order('scheduled_at');
       if (branchFilter) classesQuery = classesQuery.eq('branch_id', branchFilter);
-      const { count: todayClasses } = await classesQuery;
+      const { data: todayClassRows } = await classesQuery;
+      const todayClasses = todayClassRows?.length ?? 0;
+      const nextClass = (todayClassRows || []).find(
+        (c: any) => new Date(c.scheduled_at).getTime() >= Date.now(),
+      );
 
       // Pending approvals
       let approvalsQuery = supabase.from('approval_requests').select('id', { count: 'exact' }).eq('status', 'pending');
@@ -137,7 +152,14 @@ export default function DashboardPage() {
         newLeads: newLeads || 0,
         activeTrainers: activeTrainers || 0,
         todayClasses: todayClasses || 0,
+        nextClassLabel: nextClass
+          ? `Next: ${nextClass.name} · ${formatISTTime(nextClass.scheduled_at)}`
+          : todayClasses > 0
+            ? 'All sessions done for today'
+            : 'No classes scheduled today',
         pendingApprovals: pendingApprovals || 0,
+
+
       } as any;
     },
   });
@@ -382,12 +404,20 @@ export default function DashboardPage() {
               icon={Dumbbell}
               variant="default"
             />
-            <StatCard
-              title="Today's Classes"
-              value={(stats as any)?.todayClasses || 0}
-              icon={Calendar}
-              variant="accent"
-            />
+            <button
+              type="button"
+              onClick={() => navigate('/classes')}
+              className="text-left rounded-xl focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+              aria-label="View today's classes"
+            >
+              <StatCard
+                title="Today's Classes"
+                value={(stats as any)?.todayClasses || 0}
+                description={(stats as any)?.nextClassLabel}
+                icon={Calendar}
+                variant="accent"
+              />
+            </button>
             <StatCard
               title="Pending Approvals"
               value={(stats as any)?.pendingApprovals || 0}
@@ -397,7 +427,12 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Live task pulse */}
+        <MyTasksWidget branchFilter={branchFilter} />
+
+
         {/* Charts Row */}
+
         <div className="grid gap-6 md:grid-cols-2">
           <RevenueChart data={revenueData} />
           <AttendanceChart data={attendanceData} />

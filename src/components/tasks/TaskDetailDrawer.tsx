@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatISTFull } from '@/lib/utils/datetime';
 import { useLinkedMembers } from '@/hooks/useLinkedMembers';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -177,6 +178,29 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
               </Badge>
             )}
           </div>
+
+          <div className="grid gap-2 rounded-xl bg-muted/40 p-3 text-xs sm:grid-cols-2">
+            <div>
+              <p className="font-semibold uppercase tracking-wider text-muted-foreground">Raised by</p>
+              <p className="mt-0.5 text-sm font-medium text-foreground">
+                {task.assigner?.full_name || task.assigner?.email || 'System'}
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold uppercase tracking-wider text-muted-foreground">Created</p>
+              <p className="mt-0.5 text-sm font-medium text-foreground">
+                {task.created_at ? formatISTFull(task.created_at) : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold uppercase tracking-wider text-muted-foreground">Assigned to</p>
+              <p className="mt-0.5 text-sm font-medium text-foreground">
+                {task.assignee?.full_name || task.assignee?.email || 'Unassigned'}
+              </p>
+            </div>
+          </div>
+
+
 
           {task.description && (
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>

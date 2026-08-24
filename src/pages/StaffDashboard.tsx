@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -169,6 +170,10 @@ export default function StaffDashboard() {
           </div>
           <Badge variant="default" className="w-fit">Staff</Badge>
         </div>
+
+        {/* Live task pulse */}
+        <MyTasksWidget />
+
 
         {/* Quick Actions */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">

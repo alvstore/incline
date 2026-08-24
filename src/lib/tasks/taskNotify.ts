@@ -15,12 +15,30 @@ export interface TaskAssignmentNotice {
   taskId: string;
   branchId: string;
   assignedTo: string | null | undefined;
+  assignedBy?: string | null;
   title: string;
   description?: string | null;
   priority?: string | null;
   dueDate?: string | null;
   dueTime?: string | null;
 }
+
+/** Resolve the creator's display name and the branch name for message copy. */
+async function resolveContext(notice: TaskAssignmentNotice) {
+  const [creator, branch] = await Promise.all([
+    notice.assignedBy
+      ? supabase.from('profiles').select('full_name, email').eq('id', notice.assignedBy).maybeSingle()
+      : Promise.resolve({ data: null } as any),
+    notice.branchId
+      ? supabase.from('branches').select('name').eq('id', notice.branchId).maybeSingle()
+      : Promise.resolve({ data: null } as any),
+  ]);
+  return {
+    createdByName: creator?.data?.full_name || creator?.data?.email || 'Incline CRM',
+    branchName: branch?.data?.name || 'Incline',
+  };
+}
+
 
 export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<void> {
   // Always trigger broad notifications for management if it's a member request or urgent
@@ -50,9 +68,10 @@ export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<
     const dueTime = notice.dueTime ? ` at ${notice.dueTime.substring(0, 5)}` : '';
     const priority = (notice.priority || 'medium').toUpperCase();
     const link = `${window.location.origin}/tasks?id=${notice.taskId}`;
+    const { createdByName, branchName } = await resolveContext(notice);
 
     const body =
-      `Hi ${assigneeName}, a new task has been assigned to you.\n\n` +
+      `Hi ${assigneeName}, ${createdByName} assigned you a new task at ${branchName}.\n\n` +
       `Task: ${notice.title}\n` +
       `Priority: ${priority}\n` +
       `Due: ${due}${dueTime}\n` +
@@ -66,8 +85,12 @@ export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<
       priority,
       due_date: due,
       due_time: notice.dueTime?.substring(0, 5) || '',
+      created_by_name: createdByName,
+      branch_name: branchName,
+      task_id: notice.taskId,
       link,
     };
+
 
     const channels: Array<{ channel: 'whatsapp' | 'email'; recipient: string }> = [];
     if (profile.phone) channels.push({ channel: 'whatsapp', recipient: profile.phone });
@@ -132,11 +155,13 @@ async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<vo
     const dueTime = notice.dueTime ? ` at ${notice.dueTime.substring(0, 5)}` : '';
     const priority = (notice.priority || 'medium').toUpperCase();
     const link = `${window.location.origin}/tasks?id=${notice.taskId}`;
-    const alertReason = (notice as any).memberCreated ? '🚨 MEMBER REQUEST' : '🔥 URGENT TASK';
+    const alertReason = (notice as any).memberCreated ? 'MEMBER REQUEST' : 'URGENT TASK';
+    const { createdByName, branchName } = await resolveContext(notice);
 
     const body =
-      `${alertReason}\n\n` +
+      `${alertReason} — ${branchName}\n\n` +
       `Task: ${notice.title}\n` +
+      `Raised by: ${createdByName}\n` +
       `Priority: ${priority}\n` +
       `Due: ${due}${dueTime}\n` +
       (notice.description ? `Details: ${notice.description}\n` : '') +
@@ -148,6 +173,9 @@ async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<vo
       task_title: notice.title,
       priority,
       due_date: due,
+      created_by_name: createdByName,
+      branch_name: branchName,
+      task_id: notice.taskId,
       link,
     };
 
