@@ -195,7 +195,7 @@ const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: st
   { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', emoji: '🔁', color: 'emerald' },
 ];
 
-export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }: Props) {
+export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, prefillClassId }: Props) {
   const qc = useQueryClient();
   const isEditing = !!editingCampaign;
   const [step, setStep] = useState(1);
@@ -964,6 +964,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     });
     setVarOverrides(next);
   };
+
+  // Deep-link: /campaigns?announce_class=<id> opens the wizard as an Event
+  // campaign with that class already selected.
+  useEffect(() => {
+    if (!open || !prefillClassId || isEditing) return;
+    if (campaignType !== 'event') { setCampaignType('event'); return; }
+    if (selectedClassIds.includes(prefillClassId)) return;
+    if (!(upcomingClasses as any[]).some((c: any) => c.id === prefillClassId)) return;
+    applyClassSelections([prefillClassId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillClassId, isEditing, campaignType, upcomingClasses]);
+
 
   const toggleClass = (classId: string) => {
     const ids = selectedClassIds.includes(classId)
