@@ -162,15 +162,22 @@ export function DisasterRecoveryCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-sm text-muted-foreground leading-relaxed">
-          The fallback database is mirrored automatically every night at{" "}
-          <span className="font-medium text-foreground">02:30 IST</span>. Trigger
-          a manual sync before risky migrations, or verify 1:1 parity any time.
+          The standby database is dumped automatically every night at{" "}
+          <span className="font-medium text-foreground">02:30 IST</span> — schema,
+          all table data, auth users and storage files. Run a dump manually before
+          risky migrations, or verify 1:1 parity any time.
+        </div>
+
+        <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground leading-relaxed">
+          Cold standby: server functions are <span className="font-medium text-foreground">not</span>{" "}
+          auto-deployed to the standby project. In a real recovery, restore points at the
+          mirrored database and functions are deployed from this project in one step.
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => sync.mutate()} disabled={isRunning} className="gap-2">
             <RefreshCw className={`h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
-            {sync.isPending ? "Syncing…" : "Sync to fallback now"}
+            {sync.isPending ? "Dumping…" : "Run dump now"}
           </Button>
           <Button
             onClick={() => verify.mutate()}
@@ -182,6 +189,7 @@ export function DisasterRecoveryCard() {
             {verify.isPending ? "Verifying…" : "Verify parity"}
           </Button>
         </div>
+
 
         {(sync.isPending || progress > 0) && (
           <div className="space-y-2">
