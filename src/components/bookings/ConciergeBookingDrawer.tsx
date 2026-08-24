@@ -97,7 +97,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
 
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, scheduled_at, capacity, class_type')
+        .select('id, name, scheduled_at, capacity, class_type, duration_minutes, banner_url, external_trainer_name, venue, trainer_id')
         .eq('branch_id', branchId)
         .eq('is_active', true)
         .gte('scheduled_at', startDate.toISOString())
@@ -109,24 +109,40 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
       const classIds = (data || []).map(c => c.id);
       if (classIds.length === 0) return [];
 
-      const { data: bookings } = await supabase
-        .from('class_bookings')
-        .select('class_id')
-        .in('class_id', classIds)
-        .eq('status', 'booked');
+      const trainerIds = Array.from(
+        new Set((data || []).map((c: any) => c.trainer_id).filter(Boolean)),
+      ) as string[];
+
+      const [{ data: bookings }, { data: waitlist }, { data: trainers }] = await Promise.all([
+        supabase.from('class_bookings').select('class_id').in('class_id', classIds).eq('status', 'booked'),
+        supabase.from('class_waitlist').select('class_id').in('class_id', classIds),
+        trainerIds.length
+          ? supabase.from('trainers').select('id, full_name').in('id', trainerIds)
+          : Promise.resolve({ data: [] as any[] } as any),
+      ]);
 
       const countMap: Record<string, number> = {};
       (bookings || []).forEach(b => {
         countMap[b.class_id] = (countMap[b.class_id] || 0) + 1;
       });
+      const waitMap: Record<string, number> = {};
+      (waitlist || []).forEach((w: any) => {
+        waitMap[w.class_id] = (waitMap[w.class_id] || 0) + 1;
+      });
 
-      return (data || []).map(c => ({
+      return (data || []).map((c: any) => ({
         ...c,
+        trainer_name:
+          c.external_trainer_name ||
+          (trainers || []).find((t: any) => t.id === c.trainer_id)?.full_name ||
+          null,
         booked_count: countMap[c.id] || 0,
+        waitlist_count: waitMap[c.id] || 0,
         is_full: (countMap[c.id] || 0) >= c.capacity,
       }));
     },
   });
+
 
   // Fetch facilities & filter by gender
   const { data: allFacilities = [] } = useQuery({
