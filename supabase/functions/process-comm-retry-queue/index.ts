@@ -1,4 +1,9 @@
-// process-comm-retry-queue v2.6.0
+// process-comm-retry-queue v2.7.0
+// v2.7.0: Meta acceptance ≠ delivery. WhatsApp retries park in
+//          `awaiting_confirmation` until a webhook callback promotes them to
+//          `succeeded` or marks them `terminal` (131049/failure). Parked rows
+//          with no callback for 6h auto-close as succeeded.
+
 // v2.6.0: Meta 131049 pacing failures are terminal for the current message.
 //          Retrying the identical template/recipient payload worsens quality.
 // v2.5.0: terminal template contract failures never retry; cap each worker run
