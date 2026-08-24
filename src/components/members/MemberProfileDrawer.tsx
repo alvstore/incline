@@ -1477,8 +1477,9 @@ export function MemberProfileDrawer({
             )}
             <Button variant="outline" size="sm" onClick={() => setAssignTrainerOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
               <UserCog className="h-4 w-4 mr-2 shrink-0" />
-              {member.assigned_trainer_id ? 'Change Trainer' : 'Assign Trainer'}
+              {assignedTrainerId ? 'Change Trainer' : 'Assign Trainer'}
             </Button>
+
             <Button variant="outline" size="sm" onClick={() => setMeasurementOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
               <Ruler className="h-4 w-4 mr-2 shrink-0" />
               Record Body
