@@ -121,10 +121,12 @@ export function PurchasePTPackageDrawer({
   const gstRate: 0 | 5 = gstExempt ? 0 : PT_GST_RATE;
 
   // Idempotency key stable across retries within this draft
+  const [trainerDraftKey, setTrainerDraftKey] = useState<string>('none');
   const draftId = selected === 'custom'
-    ? `custom-${mode}-${custom.name}-${custom.price}`
-    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}`;
+    ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}`
+    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
+
 
   // Current general-training trainer on the member (may be null)
   const { data: member } = useQuery({
