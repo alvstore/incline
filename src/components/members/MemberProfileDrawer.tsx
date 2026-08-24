@@ -1029,7 +1029,26 @@ export function MemberProfileDrawer({
   const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
   const currentMembership = activeMembership || pendingMembership;
   const activePTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'active');
+  const pendingPTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'pending_payment');
+  const lastPTPackage = useMemo(() => {
+    const list = [...(memberDetails?.member_pt_packages ?? [])];
+    if (!list.length) return null;
+    return list.sort((a: any, b: any) =>
+      new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())[0];
+  }, [memberDetails?.member_pt_packages]);
+  /** Current PT relationship — drives the primary PT action so we never re-sell blindly. */
+  const ptState: 'none' | 'pending' | 'active' | 'lapsed' =
+    activePTPackage ? 'active'
+      : pendingPTPackage ? 'pending'
+      : lastPTPackage ? 'lapsed'
+      : 'none';
+  const ptPackage = activePTPackage ?? pendingPTPackage ?? lastPTPackage ?? null;
+  const ptLabel = ptState === 'pending' ? 'Complete PT Payment'
+    : ptState === 'active' ? 'Manage PT'
+    : ptState === 'lapsed' ? 'Renew PT'
+    : 'Buy PT';
   const hasRegistrationForm = !!registrationFormDocument;
+
 
   const startNowMutation = useMutation({
     mutationFn: async () => {
