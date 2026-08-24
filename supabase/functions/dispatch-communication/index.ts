@@ -1,4 +1,11 @@
-// dispatch-communication v1.31.0 — pacing safety and live Meta routing.
+// dispatch-communication v1.32.0 — send budget, circuit breaker, quiet-hours loop fix.
+// v1.32.0: every send passes `communication_send_allowed` (identical-content and
+//          hourly ceilings per recipient); WhatsApp adds a per-number circuit
+//          breaker (5 pacing errors/hour ⇒ 6h pause for non-transactional);
+//          pacing cooldown now matches recipients on the last 10 digits; the
+//          quiet-hours deferral UPDATES its queue row instead of inserting a
+//          new one each hour (the runaway staff-alert loop).
+
 // v1.31.0: Meta 131049 cooldown applies to every WhatsApp template category,
 //          including forced retries. Live MARKETING templates route through
 //          Marketing Messages when enabled, even after category drift.
