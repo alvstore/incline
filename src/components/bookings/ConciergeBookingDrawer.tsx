@@ -247,6 +247,32 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
     }
   };
 
+  const handleJoinWaitlist = async (classId: string) => {
+    if (!selectedMember) return;
+    setBooking(true);
+    try {
+      const { data, error } = await supabase.rpc('add_to_waitlist', {
+        _class_id: classId,
+        _member_id: selectedMember.id,
+      });
+      if (error) throw error;
+      const result = data as any;
+      if (result?.success === false) {
+        toast.error(result?.error || 'Could not join waitlist');
+      } else {
+        toast.success(`${selectedMember.full_name} added to the waitlist`);
+        onSuccess?.();
+        onOpenChange(false);
+        resetState();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Could not join waitlist');
+    } finally {
+      setBooking(false);
+    }
+  };
+
+
   const handleBookSlot = async (slotId: string) => {
     if (!selectedMember) return;
     if (!validateForce()) return;
