@@ -14661,6 +14661,7 @@ export type Database = {
         }
         Returns: Json
       }
+      email_queue_dispatch: { Args: never; Returns: undefined }
       enforce_branch_match: {
         Args: { p_branch_id: string }
         Returns: undefined
