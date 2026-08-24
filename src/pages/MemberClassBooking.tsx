@@ -850,7 +850,15 @@ function AgendaCard({
   const isLocked = !!item.locked;
 
   return (
-    <Card className={`rounded-2xl border-border/50 transition-all duration-200 hover:shadow-md ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''} ${isLocked ? 'bg-muted/30' : ''}`}>
+    <Card className={`overflow-hidden rounded-2xl border-border/50 transition-all duration-200 hover:shadow-md ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''} ${isLocked ? 'bg-muted/30' : ''}`}>
+      {item.banner && (
+        <img
+          src={item.banner}
+          alt={`${item.title} poster`}
+          loading="lazy"
+          className="aspect-[16/6] w-full object-cover"
+        />
+      )}
       <CardContent className="py-3 px-4">
         <div className="flex items-center gap-4">
           {/* Time Column */}
