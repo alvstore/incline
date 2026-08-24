@@ -126,7 +126,7 @@ export function PurchasePTPackageDrawer({
     : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
 
-  // Member must already have a trainer assigned
+  // Current general-training trainer on the member (may be null)
   const { data: member } = useQuery({
     queryKey: ['member-trainer', memberId],
     enabled: open && !!memberId,
@@ -140,33 +140,61 @@ export function PurchasePTPackageDrawer({
       return data;
     },
   });
-  const trainerId = member?.assigned_trainer_id ?? null;
+  const currentTrainerId = member?.assigned_trainer_id ?? null;
 
-  const { data: trainer } = useQuery({
-    queryKey: ['pt-trainer-detail', trainerId],
-    enabled: !!trainerId,
+  // Branch trainer roster — staff pick who is coaching this PT package.
+  const { data: trainers = [], isLoading: trainersLoading } = useQuery({
+    queryKey: ['pt-branch-trainers', branchId],
+    enabled: open && !!branchId,
     queryFn: async () => {
-      // No declared FK between trainers.user_id and profiles — resolve in two reads.
-      const { data: t } = await supabase
+      const { data: list, error } = await supabase
         .from('trainers')
-        .select('id, user_id, pt_share_percentage')
-        .eq('id', trainerId!)
-        .maybeSingle();
-      if (!t) return null;
-      let full_name: string | null = null;
-      if (t.user_id) {
-        const { data: p } = await supabase
+        .select('id, user_id, pt_share_percentage, is_active')
+        .eq('branch_id', branchId)
+        .eq('is_active', true);
+      if (error) throw error;
+      const ids = (list ?? []).map((t) => t.user_id).filter(Boolean) as string[];
+      let names: Record<string, string> = {};
+      if (ids.length) {
+        const { data: profs } = await supabase
           .from('profiles')
-          .select('full_name')
-          .eq('id', t.user_id)
-          .maybeSingle();
-        full_name = p?.full_name ?? null;
+          .select('id, full_name')
+          .in('id', ids);
+        names = Object.fromEntries((profs ?? []).map((p) => [p.id, p.full_name ?? 'Trainer']));
       }
-      return { ...t, full_name };
+      return (list ?? [])
+        .map((t) => ({
+          id: t.id,
+          full_name: (t.user_id && names[t.user_id]) || 'Unnamed trainer',
+          share: Number(t.pt_share_percentage ?? 0),
+        }))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
     },
   });
-  const trainerShare = Number(trainer?.pt_share_percentage ?? 20);
-  const trainerName: string | null = trainer?.full_name ?? null;
+
+  const [trainerId, setTrainerId] = useState<string | null>(null);
+  const [keepCurrentTrainer, setKeepCurrentTrainer] = useState(false);
+
+  // Seed selection from the member's current trainer when the drawer opens.
+  useEffect(() => {
+    if (open && currentTrainerId && trainerId === null) setTrainerId(currentTrainerId);
+  }, [open, currentTrainerId, trainerId]);
+  useEffect(() => {
+    if (!open) { setTrainerId(null); setKeepCurrentTrainer(false); }
+  }, [open]);
+
+  const selectedTrainer = useMemo(
+    () => trainers.find((t) => t.id === trainerId) ?? null,
+    [trainers, trainerId],
+  );
+  const currentTrainer = useMemo(
+    () => trainers.find((t) => t.id === currentTrainerId) ?? null,
+    [trainers, currentTrainerId],
+  );
+  const trainerShare = selectedTrainer ? selectedTrainer.share : null;
+  const trainerName: string | null = selectedTrainer?.full_name ?? null;
+  const willReassign = !!trainerId && trainerId !== currentTrainerId && !keepCurrentTrainer;
+
 
 
   const { data: packages = [], isLoading } = useQuery<CatalogPkg[]>({
