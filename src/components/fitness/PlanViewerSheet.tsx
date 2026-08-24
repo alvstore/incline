@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/accordion';
 import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target, Plus } from 'lucide-react';
 import { normalizeDietPlan } from '@/lib/planNormalizer';
+import { useSignedAttachment } from '@/lib/documents/signAttachment';
 
 
 interface PlanViewerSheetProps {
