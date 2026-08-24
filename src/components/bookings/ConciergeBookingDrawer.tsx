@@ -444,29 +444,90 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                   </TabsList>
 
                   {/* Classes */}
-                  <TabsContent value="class" className="space-y-2 mt-3">
+                  <TabsContent value="class" className="space-y-3 mt-3">
                     {classes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">No classes on this date</p>
+                      <div className="rounded-2xl bg-muted/40 py-8 text-center">
+                        <Calendar className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                        <p className="mt-2 text-sm text-muted-foreground">No classes on this date</p>
+                      </div>
                     ) : (
-                      classes.map((c: any) => (
-                        <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border">
-                          <div>
-                            <div className="font-medium">{c.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {format(new Date(c.scheduled_at), 'HH:mm')} • {c.booked_count}/{c.capacity} booked
+                      classes.map((c: any) => {
+                        const pct = Math.min(100, Math.round((c.booked_count / Math.max(1, c.capacity)) * 100));
+                        return (
+                          <div
+                            key={c.id}
+                            className="overflow-hidden rounded-2xl bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                          >
+                            {c.banner_url && (
+                              <img
+                                src={c.banner_url}
+                                alt={`${c.name} class banner`}
+                                loading="lazy"
+                                className="h-24 w-full object-cover"
+                              />
+                            )}
+                            <div className="space-y-2 p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-foreground">{c.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {format(new Date(c.scheduled_at), 'HH:mm')}
+                                    {c.duration_minutes ? ` • ${c.duration_minutes} min` : ''}
+                                    {c.trainer_name ? ` • ${c.trainer_name}` : ''}
+                                    {c.venue ? ` • ${c.venue}` : ''}
+                                  </p>
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    c.is_full
+                                      ? 'bg-destructive/10 text-destructive border-destructive/25'
+                                      : 'bg-success/10 text-success border-success/25'
+                                  }
+                                >
+                                  {c.is_full ? 'Full' : `${c.capacity - c.booked_count} left`}
+                                </Badge>
+                              </div>
+
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${c.is_full ? 'bg-destructive' : 'bg-primary'}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-muted-foreground">
+                                  {c.booked_count}/{c.capacity} booked
+                                  {c.waitlist_count ? ` • ${c.waitlist_count} waitlisted` : ''}
+                                </span>
+                                {c.is_full && !forceAdd ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="cursor-pointer"
+                                    disabled={booking}
+                                    onClick={() => handleJoinWaitlist(c.id)}
+                                  >
+                                    Join waitlist
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    className="cursor-pointer"
+                                    disabled={booking}
+                                    onClick={() => handleBookClass(c.id)}
+                                  >
+                                    Book
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <Button
-                            size="sm"
-                            disabled={booking || (c.is_full && !forceAdd)}
-                            onClick={() => handleBookClass(c.id)}
-                          >
-                            {c.is_full ? 'Full' : 'Book'}
-                          </Button>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </TabsContent>
+
 
                   {/* Recovery */}
                   <TabsContent value="recovery" className="space-y-3 mt-3">
