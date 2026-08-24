@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -133,6 +134,10 @@ export default function TrainerDashboard() {
           <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
           <MyShiftWeekCard userId={trainer.user_id} />
         </div>
+
+        {/* ── My tasks ──────────────────────────────────────────────── */}
+        <MyTasksWidget />
+
 
         {/* ── KPI row ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">

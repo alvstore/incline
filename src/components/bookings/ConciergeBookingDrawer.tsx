@@ -97,7 +97,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
 
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, scheduled_at, capacity, class_type')
+        .select('id, name, scheduled_at, capacity, class_type, duration_minutes, banner_url, external_trainer_name, venue, trainer_id')
         .eq('branch_id', branchId)
         .eq('is_active', true)
         .gte('scheduled_at', startDate.toISOString())
@@ -109,24 +109,40 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
       const classIds = (data || []).map(c => c.id);
       if (classIds.length === 0) return [];
 
-      const { data: bookings } = await supabase
-        .from('class_bookings')
-        .select('class_id')
-        .in('class_id', classIds)
-        .eq('status', 'booked');
+      const trainerIds = Array.from(
+        new Set((data || []).map((c: any) => c.trainer_id).filter(Boolean)),
+      ) as string[];
+
+      const [{ data: bookings }, { data: waitlist }, { data: trainers }] = await Promise.all([
+        supabase.from('class_bookings').select('class_id').in('class_id', classIds).eq('status', 'booked'),
+        supabase.from('class_waitlist').select('class_id').in('class_id', classIds),
+        trainerIds.length
+          ? supabase.from('trainers').select('id, full_name').in('id', trainerIds)
+          : Promise.resolve({ data: [] as any[] } as any),
+      ]);
 
       const countMap: Record<string, number> = {};
       (bookings || []).forEach(b => {
         countMap[b.class_id] = (countMap[b.class_id] || 0) + 1;
       });
+      const waitMap: Record<string, number> = {};
+      (waitlist || []).forEach((w: any) => {
+        waitMap[w.class_id] = (waitMap[w.class_id] || 0) + 1;
+      });
 
-      return (data || []).map(c => ({
+      return (data || []).map((c: any) => ({
         ...c,
+        trainer_name:
+          c.external_trainer_name ||
+          (trainers || []).find((t: any) => t.id === c.trainer_id)?.full_name ||
+          null,
         booked_count: countMap[c.id] || 0,
+        waitlist_count: waitMap[c.id] || 0,
         is_full: (countMap[c.id] || 0) >= c.capacity,
       }));
     },
   });
+
 
   // Fetch facilities & filter by gender
   const { data: allFacilities = [] } = useQuery({
@@ -230,6 +246,32 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
       setBooking(false);
     }
   };
+
+  const handleJoinWaitlist = async (classId: string) => {
+    if (!selectedMember) return;
+    setBooking(true);
+    try {
+      const { data, error } = await supabase.rpc('add_to_waitlist', {
+        _class_id: classId,
+        _member_id: selectedMember.id,
+      });
+      if (error) throw error;
+      const result = data as any;
+      if (result?.success === false) {
+        toast.error(result?.error || 'Could not join waitlist');
+      } else {
+        toast.success(`${selectedMember.full_name} added to the waitlist`);
+        onSuccess?.();
+        onOpenChange(false);
+        resetState();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Could not join waitlist');
+    } finally {
+      setBooking(false);
+    }
+  };
+
 
   const handleBookSlot = async (slotId: string) => {
     if (!selectedMember) return;
@@ -402,29 +444,90 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                   </TabsList>
 
                   {/* Classes */}
-                  <TabsContent value="class" className="space-y-2 mt-3">
+                  <TabsContent value="class" className="space-y-3 mt-3">
                     {classes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">No classes on this date</p>
+                      <div className="rounded-2xl bg-muted/40 py-8 text-center">
+                        <Calendar className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                        <p className="mt-2 text-sm text-muted-foreground">No classes on this date</p>
+                      </div>
                     ) : (
-                      classes.map((c: any) => (
-                        <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border">
-                          <div>
-                            <div className="font-medium">{c.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {format(new Date(c.scheduled_at), 'HH:mm')} • {c.booked_count}/{c.capacity} booked
+                      classes.map((c: any) => {
+                        const pct = Math.min(100, Math.round((c.booked_count / Math.max(1, c.capacity)) * 100));
+                        return (
+                          <div
+                            key={c.id}
+                            className="overflow-hidden rounded-2xl bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                          >
+                            {c.banner_url && (
+                              <img
+                                src={c.banner_url}
+                                alt={`${c.name} class banner`}
+                                loading="lazy"
+                                className="h-24 w-full object-cover"
+                              />
+                            )}
+                            <div className="space-y-2 p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-foreground">{c.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {format(new Date(c.scheduled_at), 'HH:mm')}
+                                    {c.duration_minutes ? ` • ${c.duration_minutes} min` : ''}
+                                    {c.trainer_name ? ` • ${c.trainer_name}` : ''}
+                                    {c.venue ? ` • ${c.venue}` : ''}
+                                  </p>
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    c.is_full
+                                      ? 'bg-destructive/10 text-destructive border-destructive/25'
+                                      : 'bg-success/10 text-success border-success/25'
+                                  }
+                                >
+                                  {c.is_full ? 'Full' : `${c.capacity - c.booked_count} left`}
+                                </Badge>
+                              </div>
+
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${c.is_full ? 'bg-destructive' : 'bg-primary'}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-muted-foreground">
+                                  {c.booked_count}/{c.capacity} booked
+                                  {c.waitlist_count ? ` • ${c.waitlist_count} waitlisted` : ''}
+                                </span>
+                                {c.is_full && !forceAdd ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="cursor-pointer"
+                                    disabled={booking}
+                                    onClick={() => handleJoinWaitlist(c.id)}
+                                  >
+                                    Join waitlist
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    className="cursor-pointer"
+                                    disabled={booking}
+                                    onClick={() => handleBookClass(c.id)}
+                                  >
+                                    Book
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <Button
-                            size="sm"
-                            disabled={booking || (c.is_full && !forceAdd)}
-                            onClick={() => handleBookClass(c.id)}
-                          >
-                            {c.is_full ? 'Full' : 'Book'}
-                          </Button>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </TabsContent>
+
 
                   {/* Recovery */}
                   <TabsContent value="recovery" className="space-y-3 mt-3">

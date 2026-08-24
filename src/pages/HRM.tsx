@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateContractDrawer } from '@/components/hrm/CreateContractDrawer';
+import { MissingStaffRecordsCard } from '@/components/hrm/MissingStaffRecordsCard';
 import { AddEmployeeDrawer } from '@/components/employees/AddEmployeeDrawer';
 import { EditEmployeeDrawer } from '@/components/employees/EditEmployeeDrawer';
 import { EditTrainerDrawer } from '@/components/trainers/EditTrainerDrawer';
@@ -876,6 +877,7 @@ export default function HRMPage() {
 
           {/* Employees Tab — Unified Directory (single source of truth) */}
           <TabsContent value="employees" className="mt-4 space-y-4">
+            <MissingStaffRecordsCard />
             {/* 5 KPI tiles */}
             <div className="grid gap-4 md:grid-cols-5">
               <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
