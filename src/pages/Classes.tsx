@@ -12,7 +12,8 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Plus, Users, Clock, CalendarDays, Check, X, UserX, Edit, Phone, User, Search, Filter, Dumbbell, Calendar, ClipboardList } from "lucide-react";
+import { Plus, Users, Clock, CalendarDays, Check, X, UserX, Edit, Phone, User, Search, Filter, Dumbbell, Calendar, ClipboardList, Megaphone, MapPin } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useClasses, useClassBookings, useMarkAttendance, useCancelBooking } from "@/hooks/useClasses";
 import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -27,6 +28,7 @@ type TimeFilter = "upcoming" | "past" | "all";
 
 export default function ClassesPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const { effectiveBranchId: branchId = '' } = useBranchContext();
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -82,6 +84,12 @@ export default function ClassesPage() {
     setIsEditOpen(true);
   };
 
+  /** Hand the class off to the Campaign Wizard, pre-seeded as an Event campaign. */
+  const handleAnnounceClass = (classId: string) => {
+    navigate(`/campaigns?announce_class=${classId}`);
+  };
+
+
   // Get trainer info by ID
   const getTrainer = (trainerId: string | null) => {
     if (!trainerId) return null;
@@ -93,6 +101,14 @@ export default function ClassesPage() {
     return trainer?.profile_name || trainer?.profile_email || null;
   };
 
+  /** Staff trainer name, or the freelance/guest instructor typed on the class. */
+  const getClassInstructor = (cls: ClassWithDetails): { name: string | null; isGuest: boolean } => {
+    const staffName = getTrainerName(cls.trainer_id);
+    if (staffName) return { name: staffName, isGuest: false };
+    const guest = ((cls as any).external_trainer_name || '').trim();
+    return { name: guest || null, isGuest: !!guest };
+  };
+
   const getTrainerPhone = (trainerId: string | null) => {
     const trainer = getTrainer(trainerId);
     return trainer?.profile_phone;
@@ -102,6 +118,7 @@ export default function ClassesPage() {
     const trainer = getTrainer(trainerId);
     return trainer?.profile_avatar;
   };
+
 
   // Filter classes by time period
   const filteredByTime = useMemo(() => {
@@ -122,13 +139,21 @@ export default function ClassesPage() {
   // Filter classes by search and other filters
   const filteredClasses = useMemo(() => {
     return filteredByTime.filter(cls => {
-      const matchesSearch = !searchQuery || 
-        cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cls.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        getTrainerName(cls.trainer_id)?.toLowerCase().includes(searchQuery.toLowerCase());
-      
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery ||
+        cls.name.toLowerCase().includes(q) ||
+        cls.description?.toLowerCase().includes(q) ||
+        ((cls as any).venue || '').toLowerCase().includes(q) ||
+        (getClassInstructor(cls).name || '').toLowerCase().includes(q);
+
       const matchesType = classTypeFilter === "all" || cls.class_type === classTypeFilter;
-      const matchesTrainer = trainerFilter === "all" || cls.trainer_id === trainerFilter;
+      const matchesTrainer =
+        trainerFilter === "all"
+          ? true
+          : trainerFilter === "guest"
+            ? !cls.trainer_id && !!(cls as any).external_trainer_name
+            : cls.trainer_id === trainerFilter;
+
       
       return matchesSearch && matchesType && matchesTrainer;
     }).sort((a, b) => {
@@ -323,6 +348,7 @@ export default function ClassesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Trainers</SelectItem>
+                    <SelectItem value="guest">Guest / freelance</SelectItem>
                     {trainers?.map((trainer: any) => (
                       <SelectItem key={trainer.id} value={trainer.id}>
                         {trainer.profile_name || trainer.profile_email}
@@ -367,64 +393,97 @@ export default function ClassesPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredClasses.map((cls) => {
                   const status = getClassStatus(cls);
-                  const trainerName = getTrainerName(cls.trainer_id);
-                  const trainerPhone = getTrainerPhone(cls.trainer_id);
-                  const trainerAvatar = getTrainerAvatar(cls.trainer_id);
+                  const instructor = getClassInstructor(cls);
+                  const trainerName = instructor.name;
+                  const trainerPhone = instructor.isGuest ? null : getTrainerPhone(cls.trainer_id);
+                  const trainerAvatar = instructor.isGuest ? undefined : getTrainerAvatar(cls.trainer_id);
                   const capacityPercent = getCapacityPercentage(cls);
                   const bookedCount = cls.bookings_count || 0;
+                  const bannerUrl = (cls as any).banner_url as string | null;
+                  const venue = (cls as any).venue as string | null;
 
                   return (
                     <Card
                       key={cls.id}
-                      className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group ${
+                      className={`cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 group ${
                         selectedClass === cls.id ? "border-primary ring-2 ring-primary/20" : ""
                       } ${!cls.is_active ? "opacity-60" : ""}`}
                       onClick={() => setSelectedClass(cls.id)}
                     >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <CardTitle className="text-lg truncate">{cls.name}</CardTitle>
-                              <Badge className={`text-xs ${status.color}`}>
-                                {status.label}
-                              </Badge>
-                            </div>
-                            {cls.class_type && (
-                              <Badge variant="secondary" className="mt-1.5 text-xs">
-                                {cls.class_type.charAt(0).toUpperCase() + cls.class_type.slice(1)}
-                              </Badge>
-                            )}
+                      {/* Banner / poster */}
+                      <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-primary/20 via-primary/10 to-accent/10">
+                        {bannerUrl ? (
+                          <img
+                            src={bannerUrl}
+                            alt={`${cls.name} poster`}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Dumbbell className="h-10 w-10 text-primary/40" />
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        )}
+                        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
+                          <Badge className={`text-xs ${status.color}`}>{status.label}</Badge>
+                          <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                             <Button
-                              variant="ghost"
+                              variant="secondary"
                               size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRosterClassId(cls.id);
-                              }}
+                              className="h-9 w-9 cursor-pointer"
+                              onClick={(e) => { e.stopPropagation(); handleAnnounceClass(cls.id); }}
+                              aria-label={`Announce ${cls.name}`}
+                              title="Announce this class"
+                            >
+                              <Megaphone className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="icon"
+                              className="h-9 w-9 cursor-pointer"
+                              onClick={(e) => { e.stopPropagation(); setRosterClassId(cls.id); }}
+                              aria-label={`View attendees of ${cls.name}`}
                               title="View Attendees"
                             >
                               <ClipboardList className="h-4 w-4" />
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="secondary"
                               size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditClass(cls);
-                              }}
+                              className="h-9 w-9 cursor-pointer"
+                              onClick={(e) => { e.stopPropagation(); handleEditClass(cls); }}
+                              aria-label={`Edit ${cls.name}`}
                               title="Edit Class"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
+                      </div>
+
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-lg truncate">{cls.name}</CardTitle>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              {cls.class_type && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {cls.class_type.charAt(0).toUpperCase() + cls.class_type.slice(1)}
+                                </Badge>
+                              )}
+                              {venue && (
+                                <Badge variant="outline" className="text-xs">
+                                  <MapPin className="mr-1 h-3 w-3" />{venue}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                         {cls.description && (
                           <CardDescription className="line-clamp-2 mt-1">{cls.description}</CardDescription>
                         )}
                       </CardHeader>
+
                       <CardContent className="space-y-4">
                         {/* Date & Time */}
                         <div className="flex items-center gap-4 text-sm">
@@ -462,7 +521,12 @@ export default function ClassesPage() {
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{trainerName}</p>
+                              <p className="font-medium text-sm truncate flex items-center gap-1.5">
+                                {trainerName}
+                                {instructor.isGuest && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">Guest</Badge>
+                                )}
+                              </p>
                               {trainerPhone && (
                                 <a 
                                   href={`tel:${trainerPhone}`} 

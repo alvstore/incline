@@ -16,6 +16,8 @@ import { format } from 'date-fns';
 import { AlertTriangle, Phone, Mail, User, Gift, IndianRupee, Sparkles } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type { ClassWithDetails } from '@/services/classService';
+import { ClassBannerUpload } from './ClassBannerUpload';
+import { TrainerPicker } from './TrainerPicker';
 
 interface EditClassDrawerProps {
   open: boolean;
@@ -39,6 +41,9 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
     duration_minutes: 60,
     scheduled_at: '',
     trainer_id: '',
+    external_trainer_name: '',
+    venue: '',
+    banner_url: null as string | null,
     class_type: '',
     is_active: true,
     benefit_type_id: '',
@@ -60,6 +65,9 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
         duration_minutes: classData.duration_minutes || 60,
         scheduled_at: classData.scheduled_at ? format(new Date(classData.scheduled_at), "yyyy-MM-dd'T'HH:mm") : '',
         trainer_id: classData.trainer_id || '',
+        external_trainer_name: cd.external_trainer_name || '',
+        venue: cd.venue || '',
+        banner_url: cd.banner_url || null,
         class_type: classData.class_type || '',
         is_active: classData.is_active ?? true,
         benefit_type_id: cd.benefit_type_id || '',
@@ -70,6 +78,7 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
       });
     }
   }, [classData]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +106,9 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
           class_type: formData.class_type,
           is_active: formData.is_active,
           trainer_id: formData.trainer_id || null,
+          external_trainer_name: formData.trainer_id ? null : (formData.external_trainer_name.trim() || null),
+          venue: formData.venue.trim() || null,
+          banner_url: formData.banner_url,
           scheduled_at: new Date(formData.scheduled_at).toISOString(),
           benefit_type_id: mode === 'benefit' ? formData.benefit_type_id : null,
           requires_benefit: mode === 'benefit' ? formData.requires_benefit : false,
@@ -169,6 +181,12 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
 
           <Separator />
 
+          <ClassBannerUpload
+            value={formData.banner_url}
+            onChange={(url) => setFormData({ ...formData, banner_url: url })}
+          />
+
+
           <div className="space-y-2">
             <Label>Class Name *</Label>
             <Input
@@ -231,25 +249,25 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
             </div>
           </div>
 
+          <TrainerPicker
+            trainers={trainers}
+            trainerId={formData.trainer_id}
+            guestName={formData.external_trainer_name}
+            onChange={({ trainerId, guestName }) =>
+              setFormData({ ...formData, trainer_id: trainerId, external_trainer_name: guestName })
+            }
+          />
+
           <div className="space-y-2">
-            <Label>Trainer</Label>
-            <Select
-              value={formData.trainer_id || "none"}
-              onValueChange={(value) => setFormData({ ...formData, trainer_id: value === "none" ? "" : value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select trainer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No trainer</SelectItem>
-                {trainers?.map((trainer: any) => (
-                  <SelectItem key={trainer.id} value={trainer.id}>
-                    {trainer.profile_name || trainer.profile_email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="edit-class-venue">Venue / Studio</Label>
+            <Input
+              id="edit-class-venue"
+              value={formData.venue}
+              onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+              placeholder="Main floor, Studio 2, Rooftop…"
+            />
           </div>
+
 
           {/* Trainer Contact Info */}
           {selectedTrainer && (

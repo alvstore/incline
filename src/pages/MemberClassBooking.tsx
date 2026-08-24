@@ -51,6 +51,8 @@ interface AgendaItem {
   locked?: boolean;
   /** Cheapest add-on package that unlocks this facility. */
   unlockPackage?: AddOnPackage | null;
+  /** Class poster shown as the card hero. */
+  banner?: string | null;
   rawData: any;
 }
 
@@ -441,7 +443,12 @@ export default function MemberClassBooking() {
         type: 'class',
         datetime: new Date(cls.scheduled_at),
         title: cls.name,
-        subtitle: `${cls.duration_minutes} min${cls.trainer?.profiles?.full_name ? ` • ${cls.trainer.profiles.full_name}` : ''}`,
+        subtitle: [
+          `${cls.duration_minutes} min`,
+          cls.trainer?.profiles?.full_name || cls.external_trainer_name || '',
+          cls.venue || '',
+        ].filter(Boolean).join(' • '),
+        banner: cls.banner_url || null,
         duration: cls.duration_minutes || 60,
         spotsLeft: cls.capacity - bookedCount,
         capacity: cls.capacity,
@@ -843,7 +850,15 @@ function AgendaCard({
   const isLocked = !!item.locked;
 
   return (
-    <Card className={`rounded-2xl border-border/50 transition-all duration-200 hover:shadow-md ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''} ${isLocked ? 'bg-muted/30' : ''}`}>
+    <Card className={`overflow-hidden rounded-2xl border-border/50 transition-all duration-200 hover:shadow-md ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''} ${isLocked ? 'bg-muted/30' : ''}`}>
+      {item.banner && (
+        <img
+          src={item.banner}
+          alt={`${item.title} poster`}
+          loading="lazy"
+          className="aspect-[16/6] w-full object-cover"
+        />
+      )}
       <CardContent className="py-3 px-4">
         <div className="flex items-center gap-4">
           {/* Time Column */}

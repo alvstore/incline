@@ -39,6 +39,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   branchId: string;
   editingCampaign?: Campaign | null;
+  /** Deep-link from the Classes page — pre-selects this class as an Event campaign. */
+  prefillClassId?: string | null;
 }
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
@@ -193,7 +195,7 @@ const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: st
   { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', emoji: '🔁', color: 'emerald' },
 ];
 
-export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }: Props) {
+export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, prefillClassId }: Props) {
   const qc = useQueryClient();
   const isEditing = !!editingCampaign;
   const [step, setStep] = useState(1);
@@ -495,7 +497,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     queryFn: async () => {
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, class_type, scheduled_at, duration_minutes, capacity, trainer_id, is_active')
+        .select('id, name, class_type, scheduled_at, duration_minutes, capacity, trainer_id, is_active, banner_url, venue, external_trainer_name')
         .eq('branch_id', branchId)
         .eq('is_active', true)
         .gte('scheduled_at', new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
@@ -522,7 +524,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       }
       return rows.map((r: any) => ({
         ...r,
-        trainer_name: r.trainer_id ? trainerNames.get(r.trainer_id) || null : null,
+        trainer_name: r.trainer_id
+          ? trainerNames.get(r.trainer_id) || null
+          : (r.external_trainer_name || null),
       }));
     },
     enabled: open && campaignType === 'event' && !!branchId,
@@ -960,6 +964,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     });
     setVarOverrides(next);
   };
+
+  // Deep-link: /campaigns?announce_class=<id> opens the wizard as an Event
+  // campaign with that class already selected.
+  useEffect(() => {
+    if (!open || !prefillClassId || isEditing) return;
+    if (campaignType !== 'event') { setCampaignType('event'); return; }
+    if (selectedClassIds.includes(prefillClassId)) return;
+    if (!(upcomingClasses as any[]).some((c: any) => c.id === prefillClassId)) return;
+    applyClassSelections([prefillClassId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillClassId, isEditing, campaignType, upcomingClasses]);
+
 
   const toggleClass = (classId: string) => {
     const ids = selectedClassIds.includes(classId)

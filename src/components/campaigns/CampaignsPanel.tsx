@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,19 @@ export function CampaignsPanel() {
   const [confirmDelete, setConfirmDelete] = useState<Campaign | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [announceClassId, setAnnounceClassId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link from the Classes page: /campaigns?announce_class=<id>
+  useEffect(() => {
+    const classId = searchParams.get('announce_class');
+    if (!classId) return;
+    setAnnounceClassId(classId);
+    setWizardOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('announce_class');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ['campaigns', branchId],
@@ -281,9 +295,10 @@ export function CampaignsPanel() {
       {branchId && (
         <CampaignWizard
           open={wizardOpen}
-          onOpenChange={(o) => { setWizardOpen(o); if (!o) setEditingCampaign(null); }}
+          onOpenChange={(o) => { setWizardOpen(o); if (!o) { setEditingCampaign(null); setAnnounceClassId(null); } }}
           branchId={branchId}
           editingCampaign={editingCampaign}
+          prefillClassId={announceClassId}
         />
       )}
       <CampaignDetailDrawer open={!!detailCampaign} onOpenChange={(o) => !o && setDetailCampaign(null)} campaign={detailCampaign} />
