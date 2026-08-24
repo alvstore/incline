@@ -412,12 +412,76 @@ export function PurchasePTPackageDrawer({
           </SheetDescription>
         </SheetHeader>
 
-        {!trainerId && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg bg-warning/10 text-warning px-3 py-2 text-sm">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            Assign a trainer to this member before purchasing.
-          </div>
-        )}
+        <div className="px-6 pt-4">
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Personal trainer
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="pt-trainer" className="text-xs">
+                  Trainer for this package <span className="text-destructive">*</span>
+                </Label>
+                {trainersLoading ? (
+                  <div className="h-11 rounded-md bg-muted animate-pulse" />
+                ) : (
+                  <Select value={trainerId ?? ''} onValueChange={handleTrainerChange}>
+                    <SelectTrigger id="pt-trainer" className="h-11">
+                      <SelectValue placeholder="Select a trainer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trainers.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No active trainers in this branch
+                        </div>
+                      )}
+                      {trainers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.full_name} · {t.share}% share
+                          {t.id === currentTrainerId ? ' · current' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {!trainerId && (
+                <div className="flex items-center gap-2 rounded-lg bg-warning/10 text-warning px-3 py-2 text-xs">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  Pick the trainer who will coach this package — commission is paid to them.
+                </div>
+              )}
+
+              {trainerId && trainerId !== currentTrainerId && (
+                <>
+                  <div className="flex items-start gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-xs">
+                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      {keepCurrentTrainer
+                        ? `${currentTrainer?.full_name ?? 'The current trainer'} stays as the general-training trainer.`
+                        : `${trainerName} will ${currentTrainerId ? `replace ${currentTrainer?.full_name ?? 'the current trainer'} as` : 'become'} this member's trainer.`}
+                    </span>
+                  </div>
+                  {canEditTax && currentTrainerId && (
+                    <div className="flex items-center justify-between gap-3">
+                      <Label htmlFor="pt-keep-trainer" className="text-xs font-normal text-muted-foreground">
+                        Keep current trainer for general training
+                      </Label>
+                      <Switch
+                        id="pt-keep-trainer"
+                        checked={keepCurrentTrainer}
+                        onCheckedChange={setKeepCurrentTrainer}
+                        aria-label="Keep the current trainer assigned for general training"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
 
         {awaitingPayment && (
           <div className="mx-6 mt-4 flex items-center justify-between gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-sm">
