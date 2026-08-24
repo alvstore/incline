@@ -755,10 +755,20 @@ export function PurchasePTPackageDrawer({
             <span>{gstExempt ? 'GST (exempt sale)' : 'GST 5% (inclusive)'}</span>
             <span>{formatINR(breakdown.tax)}</span>
           </div>
-          <div className="flex justify-between text-sm text-success">
-            <span>Trainer commission (preview)</span>
-            <span>{formatINR(commissionPreview)}</span>
-          </div>
+          {commissionPreview == null ? (
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Trainer commission (preview)</span>
+              <span>Select a trainer</span>
+            </div>
+          ) : (
+            <div className="flex justify-between text-sm text-success">
+              <span>
+                {trainerName} · {trainerShare}% of {formatINR(breakdown.subtotal)}
+              </span>
+              <span>{formatINR(commissionPreview)}</span>
+            </div>
+          )}
+
           <div className="flex justify-between text-base font-bold pt-1 border-t border-dashed border-border">
             <span>Final Total</span>
             <span>{formatINR(breakdown.total)}</span>
