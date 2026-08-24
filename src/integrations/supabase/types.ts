@@ -2381,6 +2381,7 @@ export type Database = {
       }
       classes: {
         Row: {
+          banner_url: string | null
           benefit_type_id: string | null
           branch_id: string
           capacity: number
@@ -2388,6 +2389,7 @@ export type Database = {
           created_at: string
           description: string | null
           duration_minutes: number | null
+          external_trainer_name: string | null
           gst_rate: number
           id: string
           is_active: boolean | null
@@ -2401,8 +2403,10 @@ export type Database = {
           scheduled_at: string
           trainer_id: string | null
           updated_at: string
+          venue: string | null
         }
         Insert: {
+          banner_url?: string | null
           benefit_type_id?: string | null
           branch_id: string
           capacity: number
@@ -2410,6 +2414,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_minutes?: number | null
+          external_trainer_name?: string | null
           gst_rate?: number
           id?: string
           is_active?: boolean | null
@@ -2423,8 +2428,10 @@ export type Database = {
           scheduled_at: string
           trainer_id?: string | null
           updated_at?: string
+          venue?: string | null
         }
         Update: {
+          banner_url?: string | null
           benefit_type_id?: string | null
           branch_id?: string
           capacity?: number
@@ -2432,6 +2439,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_minutes?: number | null
+          external_trainer_name?: string | null
           gst_rate?: number
           id?: string
           is_active?: boolean | null
@@ -2445,6 +2453,7 @@ export type Database = {
           scheduled_at?: string
           trainer_id?: string | null
           updated_at?: string
+          venue?: string | null
         }
         Relationships: [
           {

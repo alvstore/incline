@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,10 @@ import { toast } from 'sonner';
 import { useCreateClass } from '@/hooks/useClasses';
 import { useTrainers } from '@/hooks/useTrainers';
 import { useBenefitTypes } from '@/hooks/useBenefitTypes';
-import { Gift, IndianRupee, Sparkles } from 'lucide-react';
+import { ClassBannerUpload } from './ClassBannerUpload';
+import { TrainerPicker } from './TrainerPicker';
+import { Gift, IndianRupee, Sparkles, CheckCircle2, Megaphone, Copy, Plus } from 'lucide-react';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 interface AddClassDrawerProps {
   open: boolean;
@@ -21,34 +25,38 @@ interface AddClassDrawerProps {
 
 type ChargingMode = 'free' | 'benefit' | 'paid';
 
+const EMPTY_FORM = {
+  name: '',
+  description: '',
+  capacity: 20,
+  duration_minutes: 60,
+  scheduled_at: '',
+  trainer_id: '',
+  external_trainer_name: '',
+  venue: '',
+  banner_url: null as string | null,
+  class_type: '',
+  benefit_type_id: '',
+  requires_benefit: true,
+  price: 0,
+  gst_rate: 18,
+  is_gst_inclusive: true,
+};
+
 export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerProps) {
   const createClass = useCreateClass();
+  const navigate = useNavigate();
   const { data: trainers } = useTrainers(branchId);
   const { data: benefitTypes = [] } = useBenefitTypes(branchId);
 
   const [mode, setMode] = useState<ChargingMode>('free');
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    capacity: 20,
-    duration_minutes: 60,
-    scheduled_at: '',
-    trainer_id: '',
-    class_type: '',
-    benefit_type_id: '',
-    requires_benefit: true,
-    price: 0,
-    gst_rate: 18,
-    is_gst_inclusive: true,
-  });
+  const [formData, setFormData] = useState({ ...EMPTY_FORM });
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
 
   const reset = () => {
     setMode('free');
-    setFormData({
-      name: '', description: '', capacity: 20, duration_minutes: 60,
-      scheduled_at: '', trainer_id: '', class_type: '', benefit_type_id: '',
-      requires_benefit: true, price: 0, gst_rate: 18, is_gst_inclusive: true,
-    });
+    setFormData({ ...EMPTY_FORM });
+    setCreated(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,7 +75,7 @@ export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerP
     }
 
     try {
-      await createClass.mutateAsync({
+      const row = await createClass.mutateAsync({
         name: formData.name,
         description: formData.description,
         capacity: formData.capacity,
@@ -75,6 +83,9 @@ export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerP
         class_type: formData.class_type,
         branch_id: branchId,
         trainer_id: formData.trainer_id || null,
+        external_trainer_name: formData.trainer_id ? null : (formData.external_trainer_name.trim() || null),
+        venue: formData.venue.trim() || null,
+        banner_url: formData.banner_url,
         scheduled_at: new Date(formData.scheduled_at).toISOString(),
         benefit_type_id: mode === 'benefit' ? formData.benefit_type_id : null,
         requires_benefit: mode === 'benefit' ? formData.requires_benefit : false,
@@ -84,30 +95,90 @@ export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerP
         is_gst_inclusive: mode === 'paid' ? formData.is_gst_inclusive : true,
       } as any);
       toast.success('Class created successfully');
-      onOpenChange(false);
-      reset();
+      setCreated({ id: (row as any).id, name: formData.name });
     } catch (error) {
       toast.error('Failed to create class');
     }
   };
 
+  const closeDrawer = () => {
+    onOpenChange(false);
+    reset();
+  };
+
+  if (created) {
+    return (
+      <Sheet open={open} onOpenChange={(v) => { if (!v) closeDrawer(); }}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Class scheduled
+            </SheetTitle>
+            <SheetDescription>{created.name} is live on the schedule. What next?</SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-3 py-6">
+            {formData.banner_url && (
+              <img
+                src={formData.banner_url}
+                alt={`${created.name} banner`}
+                className="aspect-video w-full rounded-2xl object-cover"
+              />
+            )}
+            <Button
+              className="w-full cursor-pointer"
+              onClick={() => { const id = created.id; closeDrawer(); navigate(`/campaigns?announce_class=${id}`); }}
+            >
+              <Megaphone className="mr-2 h-4 w-4" /> Announce to members &amp; staff
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full cursor-pointer"
+              onClick={async () => {
+                const ok = await copyToClipboard(`${window.location.origin}/book?type=classes`);
+                if (ok) toast.success('Booking link copied'); else toast.error('Could not copy the link');
+              }}
+
+            >
+              <Copy className="mr-2 h-4 w-4" /> Copy booking link
+            </Button>
+            <Button variant="outline" className="w-full cursor-pointer" onClick={reset}>
+              <Plus className="mr-2 h-4 w-4" /> Create another class
+            </Button>
+          </div>
+
+          <SheetFooter>
+            <Button variant="ghost" className="w-full cursor-pointer" onClick={closeDrawer}>Done</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+    <Sheet open={open} onOpenChange={(v) => { if (!v) closeDrawer(); else onOpenChange(true); }}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Create New Class</SheetTitle>
           <SheetDescription>Schedule a new group class or paid workshop</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <ClassBannerUpload
+            value={formData.banner_url}
+            onChange={(url) => setFormData({ ...formData, banner_url: url })}
+          />
+
           <div className="space-y-2">
-            <Label>Class Name *</Label>
+            <Label htmlFor="class-name">Class Name *</Label>
             <Input
+              id="class-name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Yoga, HIIT, Spin, etc."
             />
           </div>
+
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -157,23 +228,25 @@ export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerP
             </div>
           </div>
 
+          <TrainerPicker
+            trainers={trainers}
+            trainerId={formData.trainer_id}
+            guestName={formData.external_trainer_name}
+            onChange={({ trainerId, guestName }) =>
+              setFormData({ ...formData, trainer_id: trainerId, external_trainer_name: guestName })
+            }
+          />
+
           <div className="space-y-2">
-            <Label>Trainer</Label>
-            <Select
-              value={formData.trainer_id || 'none'}
-              onValueChange={(value) => setFormData({ ...formData, trainer_id: value === 'none' ? '' : value })}
-            >
-              <SelectTrigger><SelectValue placeholder="Select trainer" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No trainer</SelectItem>
-                {trainers?.map((trainer: any) => (
-                  <SelectItem key={trainer.id} value={trainer.id}>
-                    {trainer.profile_name || trainer.profile_email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="class-venue">Venue / Studio</Label>
+            <Input
+              id="class-venue"
+              value={formData.venue}
+              onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+              placeholder="Main floor, Studio 2, Rooftop…"
+            />
           </div>
+
 
           {/* Charging mode */}
           <div className="space-y-2 rounded-xl border p-4 bg-muted/30">
