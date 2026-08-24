@@ -1049,7 +1049,22 @@ export function MemberProfileDrawer({
     : ptState === 'active' ? 'Manage PT'
     : ptState === 'lapsed' ? 'Renew PT'
     : 'Buy PT';
+  // Name of the trainer attached to the PT package (may differ from the general trainer)
+  const ptTrainerUserId = (ptPackage as any)?.trainers?.user_id ?? null;
+  const { data: ptTrainerName } = useQuery({
+    queryKey: ['pt-trainer-name', ptTrainerUserId],
+    enabled: !!ptTrainerUserId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', ptTrainerUserId!)
+        .maybeSingle();
+      return data?.full_name ?? null;
+    },
+  });
   const hasRegistrationForm = !!registrationFormDocument;
+
 
 
   const startNowMutation = useMutation({
