@@ -237,11 +237,14 @@ export function PurchasePTPackageDrawer({
     : selectedPkg?.validity_days ?? null;
   const expiryPreview = previewExpiry(startDate, durationMonths ?? null, validityDays ?? null);
 
-  const commissionPreview = Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
+  const commissionPreview = trainerShare == null
+    ? null
+    : Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
 
   const purchase = useMutation({
     mutationFn: async () => {
-      if (!trainerId) throw new Error('Assign a trainer to this member before purchase');
+      if (!trainerId) throw new Error('Select the trainer for this package');
+
       if (!startDate) throw new Error('Pick a start date');
       let packageId: string | null = null;
 
