@@ -52,6 +52,19 @@ export function CampaignsPanel() {
   const [confirmDelete, setConfirmDelete] = useState<Campaign | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [announceClassId, setAnnounceClassId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link from the Classes page: /campaigns?announce_class=<id>
+  useEffect(() => {
+    const classId = searchParams.get('announce_class');
+    if (!classId) return;
+    setAnnounceClassId(classId);
+    setWizardOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('announce_class');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ['campaigns', branchId],
