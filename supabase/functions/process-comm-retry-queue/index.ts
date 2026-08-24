@@ -95,6 +95,16 @@ Deno.serve(async (req) => {
       }
     } catch { /* ignore */ }
 
+    // v2.7.0: close out parked rows — if no failure callback arrived within 6h,
+    // treat the send as delivered. These rows are never re-attempted.
+    await supabase
+      .from("communication_retry_queue")
+      .update({ status: "succeeded", succeeded_at: new Date().toISOString() })
+      .eq("status", "awaiting_confirmation")
+      .lt("updated_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+      .then(() => {}, () => {});
+
+
     let query = supabase
       .from("communication_retry_queue")
       .select("*")
