@@ -1165,7 +1165,9 @@ export function MemberProfileDrawer({
       type: 'pt_package' as const,
       title: 'PT package purchased',
       subtitle: pkg.pt_packages?.name
-        ? `${pkg.pt_packages.name} · ${pkg.sessions_remaining}/${pkg.sessions_total} sessions left`
+        ? `${pkg.pt_packages.name} · ${pkg.package_type === 'monthly' || Number(pkg.sessions_total || 0) === 0
+          ? `valid until ${format(new Date(pkg.expiry_date), 'dd MMM yyyy')}`
+          : `${pkg.sessions_remaining}/${pkg.sessions_total} sessions left`}`
         : undefined,
       amount: pkg.price_paid,
       badge: 'PT',

@@ -268,9 +268,9 @@ export default function PTSessionsPage() {
           <KpiCard
             icon={<Dumbbell className="h-5 w-5" />}
             tint="amber"
-            label="Sessions Today"
-            value={todayCount}
-            sub="Scheduled for today"
+            label="PT Roster Today"
+            value={activePackages?.length || 0}
+            sub={`${todayCount} appointment${todayCount === 1 ? '' : 's'} scheduled`}
           />
           <KpiCard
             icon={<Users className="h-5 w-5" />}
