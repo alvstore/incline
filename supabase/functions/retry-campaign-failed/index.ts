@@ -1,3 +1,7 @@
+// v1.3.0 — Fold every dedupe-key variant (`:a1`, `:retry:<ts>`, `:fallback:<ts>`)
+// back to the base recipient key so DLR-failed rows are actually detected, and
+// skip Meta-terminal error codes (131026 undeliverable, 130472 experiment)
+// which can never succeed on retry.
 // v1.1.0 — Retry only currently failed recipients; do not retry contacts that
 // already have a successful send log for the same campaign/source key.
 // v1.0.0 — Retry only the failed recipients of a campaign.
@@ -72,22 +76,32 @@ Deno.serve(async (req) => {
     // attempts for the same recipient collapse to one current outcome.
     const { data: campaignLogs } = await admin
       .from('communication_logs')
-      .select('dedupe_key, delivery_status, status')
+      .select('dedupe_key, delivery_status, status, error_message')
       .like('dedupe_key', `campaign:${campaign_id}:%`)
       .order('created_at', { ascending: false });
 
     const successfulKeys = new Set(
       (campaignLogs || [])
         .filter((l: any) => ['sent', 'delivered', 'read'].includes(String(l.delivery_status || l.status || '').toLowerCase()))
-        .map((l: any) => String(l.dedupe_key || '').replace(/:retry:\d+$/, '')),
+        .map((l: any) => baseCampaignKey(l.dedupe_key))
+        .filter(Boolean) as string[],
     );
 
     const dlrFailedKeys = new Set(
       (campaignLogs || [])
         .filter((l: any) => ['failed', 'bounced'].includes(String(l.delivery_status || '').toLowerCase()))
-        .map((l: any) => String(l.dedupe_key || ''))
-        // strip any :retry:N suffix so we compare to the original recipient key
-        .map((k: string) => k.replace(/:retry:\d+$/, '')),
+        .map((l: any) => baseCampaignKey(l.dedupe_key))
+        .filter(Boolean) as string[],
+    );
+
+    // Meta error codes that are permanent for this recipient — retrying only
+    // burns sending quality, so they stay failed.
+    const TERMINAL_CODES = ['131026', '130472', '131047', '132000'];
+    const terminalKeys = new Set(
+      (campaignLogs || [])
+        .filter((l: any) => TERMINAL_CODES.some((c) => String(l.error_message || '').includes(c)))
+        .map((l: any) => baseCampaignKey(l.dedupe_key))
+        .filter(Boolean) as string[],
     );
 
     // Pull sent-but-DLR-failed recipient rows to also retry.
@@ -104,7 +118,10 @@ Deno.serve(async (req) => {
     }
 
     const merged = [...(recRows || []), ...dlrFailedRecipients]
-      .filter((r: any) => !successfulKeys.has(`campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}`));
+      .filter((r: any) => {
+        const key = `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}`;
+        return !successfulKeys.has(key) && !terminalKeys.has(key);
+      });
     // Dedupe by (source_type, source_ref_id)
     const seen = new Set<string>();
     const audience = merged.filter((r: any) => {
@@ -115,7 +132,11 @@ Deno.serve(async (req) => {
     });
 
     if (audience.length === 0) {
-      return json(200, { accepted: 0, reason: 'no failed recipients to retry' });
+      return json(200, {
+        accepted: 0,
+        reason: 'no retryable failed recipients (terminal-error contacts skipped)',
+        terminal_skipped: terminalKeys.size,
+      });
     }
 
     // Bump attempt + last_retried_at on these recipient rows.
@@ -179,3 +200,10 @@ Deno.serve(async (req) => {
     return json(500, { error: e?.message || String(e) });
   }
 });
+
+/** Fold `campaign:<cid>:<type>:<ref>:<variant…>` down to the base recipient key. */
+function baseCampaignKey(raw: unknown): string | null {
+  const parts = String(raw || '').split(':');
+  if (parts.length < 4 || parts[0] !== 'campaign') return null;
+  return parts.slice(0, 4).join(':');
+}
