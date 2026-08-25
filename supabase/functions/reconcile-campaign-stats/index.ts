@@ -1,3 +1,7 @@
+// v1.2.0 — Normalise dedupe keys to `campaign:<cid>:<source_type>:<source_ref_id>`
+//          so variant suffixes (`:a1`, `:retry:<ts>`, `:fallback:<ts>`) are folded
+//          into one recipient outcome. Previously any suffixed log row was never
+//          matched, so provider failures (e.g. Meta 131049) were counted as sent.
 // v1.1.0 — Collapse duplicate retry rows by source key and understand
 //          `:retry:<ts>` dedupe suffixes before counting delivery status.
 // v1.0.0 — Fold provider DLR outcomes back into `campaigns` counters so
