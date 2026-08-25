@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
 
     const dlrByKey = new Map<string, any>();
     for (const l of logs || []) {
-      const base = String((l as any).dedupe_key || '').replace(/:retry:\d+$/, '');
+      const base = baseCampaignKey((l as any).dedupe_key);
+      if (!base) continue;
       const existing = dlrByKey.get(base);
       if (!existing || statusRank((l as any).delivery_status) > statusRank(existing.delivery_status)) {
         dlrByKey.set(base, l);
@@ -78,6 +79,7 @@ Deno.serve(async (req) => {
     const recByKey = new Map<string, any>();
     for (const r of recips || []) {
       const key = `campaign:${cid}:${(r as any).source_type}:${(r as any).source_ref_id}`;
+
       const existing = recByKey.get(key);
       if (!existing || recipientRank((r as any).status) > recipientRank(existing.status)) {
         recByKey.set(key, r);
