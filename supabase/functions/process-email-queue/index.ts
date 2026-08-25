@@ -1,3 +1,4 @@
+// v1.1.0 — Reconcile queue outcomes into the originating communication log.
 import { sendLovableEmail } from 'npm:@lovable.dev/email-js'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -34,6 +35,31 @@ function getRetryAfterSeconds(error: unknown): number {
   return 60
 }
 
+async function reconcileCommunicationLog(
+  supabase: ReturnType<typeof createClient>,
+  payload: Record<string, unknown>,
+  status: 'sent' | 'failed',
+  messageId: string | null,
+  errorMessage?: string,
+): Promise<void> {
+  const sourceLogId = typeof payload.source_log_id === 'string' ? payload.source_log_id : null;
+  if (!sourceLogId) return;
+  const now = new Date().toISOString();
+  await supabase.from('communication_logs').update({
+    status,
+    delivery_status: status,
+    provider_message_id: messageId,
+    error_message: errorMessage ?? null,
+    sent_at: status === 'sent' ? now : undefined,
+    failed_at: status === 'failed' ? now : null,
+    delivery_metadata: {
+      provider: 'lovable_cloud',
+      queue_reconciled: true,
+      queue_message_id: payload.message_id ?? null,
+    },
+  }).eq('id', sourceLogId);
+}
+
 function parseJwtClaims(token: string): Record<string, unknown> | null {
   const parts = token.split('.')
   if (parts.length < 2) {
@@ -67,6 +93,7 @@ async function moveToDlq(
     status: 'dlq',
     error_message: reason,
   })
+  await reconcileCommunicationLog(supabase, payload, 'failed', null, reason)
   const { error } = await supabase.rpc('move_to_dlq', {
     source_queue: queue,
     dlq_name: `${queue}_dlq`,
@@ -278,6 +305,7 @@ Deno.serve(async (req) => {
           recipient_email: payload.to,
           status: 'sent',
         })
+        await reconcileCommunicationLog(supabase, payload, 'sent', payload.message_id as string, undefined)
 
         // Delete from queue
         const { error: delError } = await supabase.rpc('delete_email', {
@@ -343,6 +371,7 @@ Deno.serve(async (req) => {
           status: 'failed',
           error_message: errorMsg.slice(0, 1000),
         })
+        await reconcileCommunicationLog(supabase, payload, 'failed', null, errorMsg.slice(0, 1000))
         if (payload?.message_id && typeof payload.message_id === 'string') {
           failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
         }

@@ -1,3 +1,4 @@
+// v2.8.0 — System-worker auth and idempotent approved-template event reconciliation.
 // v2.7.0 — Paginated full-catalog reconciliation; imported Meta rows carry live
 //          variable/header metadata and remain inactive until event-mapped.
 // v2.6.0 — Hard-fail on media-header templates when a Meta handle cannot be
@@ -110,7 +111,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify caller identity via JWT
+    // Verify caller identity via JWT, or accept the dedicated Automation Brain worker.
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -119,15 +120,21 @@ serve(async (req) => {
       );
     }
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized — invalid or expired session" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const isSystemWorker = bearer === supabaseServiceKey && req.headers.get("x-system-call") === "template-manager-worker";
+    let user: { id: string } | null = null;
+    if (!isSystemWorker) {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const authResult = await userClient.auth.getUser();
+      user = authResult.data.user;
+      if (authResult.error || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized — invalid or expired session" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -151,14 +158,14 @@ serve(async (req) => {
     }
 
     // Verify role access
-    const { data: userRoles } = await supabase
+    const { data: userRoles } = isSystemWorker ? { data: [{ role: "system" }] } : await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", user?.id)
       .in("role", ["owner", "admin", "manager"])
       .limit(1);
 
-    const hasAllowedRole = Array.isArray(userRoles) && userRoles.length > 0;
+    const hasAllowedRole = isSystemWorker || (Array.isArray(userRoles) && userRoles.length > 0);
     if (!hasAllowedRole) {
       return new Response(
         JSON.stringify({ error: "Forbidden — only owners, admins, and managers can manage Meta templates" }),
@@ -316,6 +323,30 @@ serve(async (req) => {
           );
       }
 
+      // Reconcile approved legacy templates to their declared system event.
+      // One event has one active mapping; prefer UTILITY for operational events.
+      const { data: approvedCandidates } = await supabase
+        .from('templates')
+        .select('id, trigger_event, meta_template_name')
+        .eq('branch_id', branch_id)
+        .eq('type', 'whatsapp')
+        .eq('is_active', true)
+        .eq('meta_template_status', 'APPROVED')
+        .not('trigger_event', 'is', null)
+        .neq('trigger_event', 'custom');
+      let mapped = 0;
+      for (const candidate of approvedCandidates || []) {
+        const live = templates.find((item: any) => item.name === candidate.meta_template_name);
+        if (!live || live.status !== 'APPROVED') continue;
+        const { error: mappingError } = await supabase.from('whatsapp_triggers').upsert({
+          branch_id,
+          event_name: candidate.trigger_event,
+          template_id: candidate.id,
+          is_active: true,
+        }, { onConflict: 'branch_id,event_name' });
+        if (!mappingError) mapped += 1;
+      }
+
       // Mirror Meta status into legacy `templates`. UPDATE existing rows; if no
       // row matches `meta_template_name`, INSERT a stub so the Campaign Wizard
       // picker (which queries `templates`) sees every approved Meta template.
@@ -368,6 +399,7 @@ serve(async (req) => {
             imported,
             updated: updatedCount,
             stale: Math.max(0, (existingLocal || []).length - liveIds.size),
+            mapped,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
