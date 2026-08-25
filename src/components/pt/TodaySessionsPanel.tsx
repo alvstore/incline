@@ -145,15 +145,15 @@ function Section({
           <ul className="divide-y divide-border">
             {rows.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center gap-3 py-3">
-                <span
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                    avatarColor(s.member_name),
+                <Avatar className="h-9 w-9 shrink-0">
+                  {s.member_avatar_url && (
+                    <AvatarImage src={s.member_avatar_url} alt={s.member_name || 'Member'} />
                   )}
-                  aria-hidden
-                >
-                  {initialsOf(s.member_name)}
-                </span>
+                  <AvatarFallback className={cn('text-xs font-semibold', avatarColor(s.member_name))}>
+                    {initialsOf(s.member_name)}
+                  </AvatarFallback>
+                </Avatar>
+
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">
                     {s.member_name || 'Member'}
