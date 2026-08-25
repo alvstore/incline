@@ -22,6 +22,24 @@ import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
+import { isReversedPayment, reversalLabel } from '@/lib/payments/paymentDisplay';
+
+/**
+ * PT/membership line items are sometimes written with a generated idempotency
+ * key instead of a human description. Render something a member can read.
+ */
+function readableItemDescription(description?: string | null): string {
+  const raw = String(description || '').trim();
+  if (!raw) return 'Item';
+  const looksGenerated =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(raw) ||
+    /^(pt|mem|inv|idem)[-_:]/i.test(raw) ||
+    (!/\s/.test(raw) && raw.length > 18);
+  if (!looksGenerated) return raw;
+  if (/^pt/i.test(raw)) return 'Personal Training package';
+  return 'Package purchase';
+}
+
 
 interface InvoiceViewDrawerProps {
   open: boolean;
