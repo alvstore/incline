@@ -13,14 +13,19 @@ export interface PTPackageWithDetails extends PTPackage {
 export interface MemberPTPackageWithDetails extends MemberPTPackage {
   package_name?: string;
   trainer_name?: string;
+  trainer_avatar_url?: string | null;
   member_code?: string;
   member_name?: string;
+  member_avatar_url?: string | null;
+  dues_amount?: number;
 }
 
 export interface PTSessionWithDetails extends PTSession {
   member_name?: string;
+  member_avatar_url?: string | null;
   trainer_name?: string;
 }
+
 
 // Fetch PT packages for a branch (optional branchId = all branches)
 export async function fetchPTPackages(
