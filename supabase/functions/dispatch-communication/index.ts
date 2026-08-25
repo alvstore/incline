@@ -1338,10 +1338,21 @@ Deno.serve(async (req) => {
               }
 
               if (tpl.content) {
+                // v1.33.0 FIX — positional slots ({{1}}, {{2}}…) must resolve
+                // through the SEMANTIC key derived for THAT slot index. They
+                // never matched by name, so every slot fell back to index 0 and
+                // rendered the member name everywhere ("₹Jhony house of optics").
+                let seq = -1;
                 const rendered = String(tpl.content)
                   .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
-                    const idx = keys.findIndex((kk) => stripBraces(kk) === k);
-                    const v = resolveVarValue(k, templateValues, idx >= 0 ? idx : 0);
+                    seq += 1;
+                    const positional = /^\d+$/.test(String(k));
+                    const found = positional
+                      ? Number(k) - 1
+                      : keys.findIndex((kk) => stripBraces(kk) === k);
+                    const idx = found >= 0 && found < keys.length ? found : seq;
+                    const lookupKey = keys[idx] ?? k;
+                    const v = resolveVarValue(lookupKey, templateValues, idx);
                     return v || '';
                   })
                   .replace(/[ \t]{2,}/g, ' ')
