@@ -52,8 +52,10 @@ no onboarding questions for the trainer and no new lead row.
 ## 4. Email sending path
 
 Email already sends through the configured provider with the Hostinger SMTP fallback in
-`send-email`. No change unless you want the fallback order flipped — tell me and I'll
-include it.
+`send-email`. Change: send app emails through the Lovable/Cloud email queue first
+(notify.theincline.in), and automatically fall back to the Hostinger SMTP path already in
+`send-email` when the queue send is rejected or unavailable — so sends never stall on a
+provider limit. Failures on both paths are logged with the reason.
 
 ## Technical notes
 
