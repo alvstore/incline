@@ -1,3 +1,6 @@
+// v2.6.0 — no-membership probation window REMOVED. Members without a valid
+// membership sync with the canonical revoked date (2000-01-01), and every
+// member sync is re-checked against `member_access_status` before the write.
 // v2.5.0 — accepts automation-brain system calls (apikey+x-system-call) and
 // supports bounded bulk `sync_type:"delta"` runs.
 // v2.4.1 — credential-scoped token cache prevents stale/cross-branch sessions.
