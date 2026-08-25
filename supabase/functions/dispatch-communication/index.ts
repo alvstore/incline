@@ -972,6 +972,7 @@ Deno.serve(async (req) => {
     // ── 5) channel routing ──
     let providerMessageId: string | undefined;
     let sendError: string | undefined;
+    let finalDeliveryOverride: 'queued' | null = null;
     // Structured Meta error envelope captured from send-whatsapp v2.7.0
     // and persisted into communication_logs.delivery_metadata so the UI
     // can show pacing vs template-config vs recipient issues distinctly.

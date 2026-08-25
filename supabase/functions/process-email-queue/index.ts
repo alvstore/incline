@@ -22,9 +22,9 @@ function isRateLimited(error: unknown): boolean {
 // Move straight to DLQ.
 function isForbidden(error: unknown): boolean {
   if (error && typeof error === 'object' && 'status' in error) {
-    return (error as { status: number }).status === 403
+    return [402, 403].includes((error as { status: number }).status)
   }
-  return error instanceof Error && error.message.includes('403')
+  return error instanceof Error && /\b(402|403)\b/.test(error.message)
 }
 
 // Extract Retry-After seconds from a structured EmailAPIError, or default to 60s.
@@ -45,19 +45,20 @@ async function reconcileCommunicationLog(
   const sourceLogId = typeof payload.source_log_id === 'string' ? payload.source_log_id : null;
   if (!sourceLogId) return;
   const now = new Date().toISOString();
-  await supabase.from('communication_logs').update({
+  const update: Record<string, unknown> = {
     status,
     delivery_status: status,
     provider_message_id: messageId,
     error_message: errorMessage ?? null,
-    sent_at: status === 'sent' ? now : undefined,
     failed_at: status === 'failed' ? now : null,
     delivery_metadata: {
       provider: 'lovable_cloud',
       queue_reconciled: true,
       queue_message_id: payload.message_id ?? null,
     },
-  }).eq('id', sourceLogId);
+  };
+  if (status === 'sent') update.sent_at = now;
+  await supabase.from('communication_logs').update(update).eq('id', sourceLogId);
 }
 
 function parseJwtClaims(token: string): Record<string, unknown> | null {

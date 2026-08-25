@@ -318,9 +318,6 @@ async function sendViaSendGrid(
   credentials: Record<string, string>,
   attachments?: Array<{ filename: string; content_base64: string; content_type: string }>
 ) {
-  const startedAt = Date.now();
-  const totalBudgetMs = 70_000;
-  let activeConnection: Deno.Conn | Deno.TlsConn | null = null;
   const payload: any = {
     personalizations: [{ to: [{ email: to }] }],
     from: { email: fromEmail, name: fromName },
@@ -455,6 +452,9 @@ async function sendViaSMTP(
   config: Record<string, string>, credentials: Record<string, string>,
   attachments?: EmailAttachment[],
 ) {
+  const startedAt = Date.now();
+  const totalBudgetMs = 70_000;
+  let activeConnection: Deno.Conn | Deno.TlsConn | null = null;
   const host = config.host;
   const port = config.port || "587";
   const username = credentials.username;
