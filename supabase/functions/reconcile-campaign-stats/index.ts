@@ -153,17 +153,28 @@ Deno.serve(async (req) => {
   });
 });
 
+/** Fold every dedupe-key variant (`:a1`, `:retry:<ts>`, `:fallback:<ts>`, …)
+ *  back to `campaign:<cid>:<source_type>:<source_ref_id>`. */
+function baseCampaignKey(raw: unknown): string | null {
+  const parts = String(raw || '').split(':');
+  if (parts.length < 4 || parts[0] !== 'campaign') return null;
+  return parts.slice(0, 4).join(':');
+}
+
 function statusRank(status: unknown): number {
   switch (String(status || '').toLowerCase()) {
     case 'read': return 5;
     case 'delivered': return 4;
     case 'sent': return 3;
-    case 'queued': return 2;
+    case 'queued':
+    case 'sending': return 2;
     case 'failed':
-    case 'bounced': return 1;
+    case 'bounced':
+    case 'suppressed': return 1;
     default: return 0;
   }
 }
+
 
 function recipientRank(status: unknown): number {
   switch (String(status || '').toLowerCase()) {
