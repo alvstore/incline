@@ -331,7 +331,6 @@ serve(async (req) => {
         .eq('branch_id', branch_id)
         .eq('type', 'whatsapp')
         .eq('is_active', true)
-        .eq('meta_template_status', 'APPROVED')
         .not('trigger_event', 'is', null)
         .neq('trigger_event', 'custom');
       let mapped = 0;

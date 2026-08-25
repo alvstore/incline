@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
 
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
   const isSystemCall = req.headers.get("x-system-call") === "automation-brain";
-  if (bearer !== serviceKey && !isSystemCall) return response({ error: "Unauthorized" }, 401);
+  if (bearer !== serviceKey || !isSystemCall) return response({ error: "Unauthorized" }, 401);
 
   const admin = createClient(backendUrl, serviceKey);
   const now = new Date();
