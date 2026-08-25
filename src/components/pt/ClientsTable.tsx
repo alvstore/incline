@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 import {
   Table,
   TableBody,
@@ -28,7 +30,9 @@ import {
   RefreshCw,
   XCircle,
   ArrowUpDown,
+  IndianRupee,
 } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import { avatarColor, initialsOf, type PTMemberPackageRow } from './ptTypes';
 import { useAuth } from '@/contexts/AuthContext';
