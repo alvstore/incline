@@ -117,7 +117,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
         supabase.from('class_bookings').select('class_id').in('class_id', classIds).eq('status', 'booked'),
         supabase.from('class_waitlist').select('class_id').in('class_id', classIds),
         trainerIds.length
-          ? supabase.from('trainers').select('id, full_name').in('id', trainerIds)
+          ? supabase.from('trainers_directory').select('id, full_name').in('id', trainerIds)
           : Promise.resolve({ data: [] as any[] } as any),
       ]);
 

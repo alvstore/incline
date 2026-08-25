@@ -1,4 +1,7 @@
-// process-comm-retry-queue v2.7.0
+// process-comm-retry-queue v2.8.0
+// v2.8.0: Missing template variables are repairable. The dispatcher now
+//          hydrates canonical member/branch data, so manual restarts and worker
+//          retries must be allowed to replay old template_param_empty rows.
 // v2.7.0: Meta acceptance ≠ delivery. WhatsApp retries park in
 //          `awaiting_confirmation` until a webhook callback promotes them to
 //          `succeeded` or marks them `terminal` (131049/failure). Parked rows
@@ -40,7 +43,6 @@ const TERMINAL_REASON_PATTERNS: RegExp[] = [
   /no_template_for_closed_session/i,
   /template_not_approved/i,
   /template_stale/i,
-  /template_param_empty/i,
   /template_missing/i,
   /missing_template/i,
   /do_not_contact/i,
