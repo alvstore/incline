@@ -651,45 +651,6 @@ export default function AttendanceDashboard() {
         {/* Rapid-Entry Search Bar (Management Roles Only) */}
         {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1 p-1 rounded-full bg-muted/60 border">
-              <button
-                type="button"
-                onClick={() => { setActiveTab('members'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'members' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Users className="inline h-3.5 w-3.5 mr-1" />Members
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('pt'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'pt' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Sessions
-              </button>
-              {hasAnyRole(['owner', 'admin', 'manager']) && (
-                <button
-                  type="button"
-                  onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
-                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => { setActiveTab('staff-log'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-log' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Clock className="inline h-3.5 w-3.5 mr-1" />Staff Log
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('history'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'history' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <History className="inline h-3.5 w-3.5 mr-1" />History
-              </button>
-            </div>
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Scan className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />

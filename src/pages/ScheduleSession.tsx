@@ -65,6 +65,10 @@ export default function ScheduleSession() {
     c?.member?.profile?.full_name || c?.member?.member_code || 'Unknown';
   const hasSessions = (c: any) =>
     (c?.package_type ?? 'session_based') === 'monthly' || (c?.sessions_remaining ?? 0) > 0;
+  const packageAvailability = (c: any) =>
+    (c?.package_type ?? 'session_based') === 'monthly'
+      ? `valid until ${c?.expiry_date ? format(new Date(c.expiry_date), 'dd MMM yyyy') : 'end date'}`
+      : `${c?.sessions_remaining ?? 0} sessions left`;
 
   const handleScheduleSession = async () => {
     if (!selectedClient || !selectedDate) {
@@ -175,7 +179,7 @@ export default function ScheduleSession() {
                     <SelectContent>
                       {clients.map((client: any) => (
                         <SelectItem key={client.member_id} value={client.member_id}>
-                          {clientName(client)} · {client.sessions_remaining ?? 0} left
+                           {clientName(client)} · {packageAvailability(client)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -324,7 +328,8 @@ export default function ScheduleSession() {
                       const selected = selectedClient === client.member_id;
                       const billing = billingByPackage[client.id];
                       const payMeta = billing ? paymentStateMeta(billing.payment_state) : null;
-                      const left = client.sessions_remaining ?? 0;
+                       const left = client.sessions_remaining ?? 0;
+                       const isMonthly = (client.package_type ?? 'session_based') === 'monthly';
                       return (
                         <li key={client.id}>
                           <button
@@ -343,11 +348,11 @@ export default function ScheduleSession() {
                                 </p>
                               </div>
                               <Badge
-                                className={`shrink-0 rounded-full border-0 text-xs ${
-                                  left > 3 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
+                                 className={`shrink-0 rounded-full border-0 text-xs ${
+                                   isMonthly || left > 3 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
                                 }`}
                               >
-                                {left} left
+                                 {packageAvailability(client)}
                               </Badge>
                             </div>
                             {payMeta && (

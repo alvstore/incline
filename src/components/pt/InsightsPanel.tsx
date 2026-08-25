@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Crown, Package, TrendingUp, IndianRupee } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -79,9 +80,12 @@ export function InsightsPanel({
             {topPerformer ? (
               <>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-base font-bold ring-2 ring-white/30">
-                    {initialsOf(topPerformer.name)}
-                  </span>
+                  <Avatar className="h-12 w-12 ring-2 ring-primary-foreground/30">
+                    <AvatarImage src={topPerformer.avatarUrl || undefined} alt={topPerformer.name} />
+                    <AvatarFallback className="bg-primary-foreground/15 text-primary-foreground text-base font-bold">
+                      {initialsOf(topPerformer.name)}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="min-w-0">
                     <p className="truncate text-lg font-bold leading-tight">{topPerformer.name}</p>
                     <p className="text-xs text-primary-foreground/70">Leading this period</p>
@@ -228,15 +232,12 @@ export function InsightsPanel({
                       >
                         {i + 1}
                       </span>
-                      <span
-                        className={cn(
-                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                          avatarColor(t.name),
-                        )}
-                        aria-hidden
-                      >
-                        {initialsOf(t.name)}
-                      </span>
+                       <Avatar className="h-8 w-8 flex-shrink-0">
+                         <AvatarImage src={t.avatarUrl || undefined} alt={t.name} />
+                         <AvatarFallback className={cn('text-xs font-semibold', avatarColor(t.name))}>
+                           {initialsOf(t.name)}
+                         </AvatarFallback>
+                       </Avatar>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-semibold text-foreground">{t.name}</p>

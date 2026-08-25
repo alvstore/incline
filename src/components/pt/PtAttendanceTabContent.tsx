@@ -31,6 +31,7 @@ import { logPtSession } from '@/services/ptService';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { toast } from 'sonner';
 import { exportToCSV } from '@/lib/csvExport';
+import { getISTDayRange } from '@/lib/utils/datetime';
 import { useMutation } from '@tanstack/react-query';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -590,7 +591,7 @@ export function PtAttendanceTabContent() {
   const { selectedBranch } = useBranchContext();
   const { roles, user } = useAuth();
   const isTrainerOnly = roles.length > 0 && roles.every((r: any) => r.role === 'trainer');
-  const canMark = roles.some((r: any) => ['owner', 'admin', 'manager', 'trainer'].includes(r.role));
+  const canMark = roles.some((r: any) => ['owner', 'admin', 'manager', 'staff', 'trainer'].includes(r.role));
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(null);
@@ -699,8 +700,7 @@ export function PtAttendanceTabContent() {
     queryKey: ['pt-roster-sessions', effectiveTrainerId, dayISO],
     enabled: !!effectiveTrainerId,
     queryFn: async (): Promise<SessionRow[]> => {
-      const from = startOfDay(selectedDate).toISOString();
-      const to = endOfDay(selectedDate).toISOString();
+      const { startISO: from, endISO: to } = getISTDayRange(selectedDate);
       const { data, error } = await supabase
         .from('pt_sessions')
         .select('id, status, scheduled_at, member_pt_package_id')

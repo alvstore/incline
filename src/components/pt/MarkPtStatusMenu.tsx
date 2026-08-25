@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Clock, XCircle, Sun, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logPtSession, type PtSessionStatusInput } from '@/services/ptService';
+import { getISTToday } from '@/lib/utils/datetime';
 
 interface Props {
   memberPackageId: string;
@@ -34,7 +35,7 @@ export function MarkPtStatusMenu({
   const qc = useQueryClient();
   const [pending, setPending] = useState<PtSessionStatusInput | null>(null);
   const [notes, setNotes] = useState('');
-  const [sessionDate, setSessionDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [sessionDate, setSessionDate] = useState<string>(getISTToday());
 
   const CACHE_KEYS: readonly (readonly unknown[])[] = [
     ['my-pt-clients'],
@@ -144,7 +145,7 @@ export function MarkPtStatusMenu({
                 onSelect={(e) => { 
                   e.preventDefault(); 
                   setNotes(''); 
-                  setSessionDate(new Date().toISOString().split('T')[0]);
+                   setSessionDate(getISTToday());
                   setPending(opt.value); 
                 }}
               >
@@ -177,7 +178,7 @@ export function MarkPtStatusMenu({
                 type="date"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={sessionDate}
-                max={new Date().toISOString().split('T')[0]}
+                 max={getISTToday()}
                 min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                 onChange={(e) => setSessionDate(e.target.value)}
               />
