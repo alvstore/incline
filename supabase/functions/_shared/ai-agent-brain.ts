@@ -2151,6 +2151,11 @@ interface MemberResolveResult {
   leadStage?: string;
   leadPhone?: string;
   leadEmail?: string;
+  // v10.1.0 — internal team (owner/admin/manager/staff/trainer/employee).
+  // When true the lead-capture funnel is skipped entirely.
+  isStaff?: boolean;
+  staffName?: string;
+  staffRole?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
