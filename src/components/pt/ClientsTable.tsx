@@ -273,7 +273,20 @@ export function ClientsTable({
 
                 </TableCell>
                 <TableCell className="text-foreground">{pkg.package_name}</TableCell>
-                <TableCell className="text-foreground">{pkg.trainer_name || '—'}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-7 w-7">
+                      {pkg.trainer_avatar_url && (
+                        <AvatarImage src={pkg.trainer_avatar_url} alt={pkg.trainer_name || 'Trainer'} />
+                      )}
+                      <AvatarFallback className={cn('text-[10px] font-semibold', avatarColor(pkg.trainer_name))}>
+                        {initialsOf(pkg.trainer_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-foreground">{pkg.trainer_name || '—'}</span>
+                  </div>
+                </TableCell>
+
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <ProgressRing pct={p.pct} />
