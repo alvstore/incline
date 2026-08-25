@@ -248,8 +248,12 @@ Deno.serve(async (req) => {
       p_activity_level: activityLevel || null,
       p_equipment_availability: Array.isArray(equipmentAvailability) ? equipmentAvailability : null,
       p_injuries_limitations: injuriesLimitations || null,
-      p_schedule_welcome: true,
-      p_welcome_channels: ['email'],
+      // v1.1.0 — `onboard_member` only wrote a `pending` communication_logs row
+      // that nothing ever dispatched, so staff-created members never received a
+      // welcome. Scheduling is now done below through dispatch-communication.
+      p_schedule_welcome: false,
+      p_welcome_channels: [],
+
     })
 
     if (onboardError) {
