@@ -147,10 +147,14 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
   const dueAmount = invoice.total_amount - (invoice.amount_paid || 0);
 
   // Derive Wallet Used vs Other Payment from payments table (fallback to notes regex)
-  const walletPaid = payments
+  const livePayments = payments.filter((p: any) => !isReversedPayment(p));
+  const countedPaid = livePayments
+    .filter((p: any) => (p.status || 'completed') === 'completed')
+    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const walletPaid = livePayments
     .filter((p: any) => (p.payment_method || '').toLowerCase() === 'wallet' && (p.status || 'completed') === 'completed')
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const otherPaid = payments
+  const otherPaid = livePayments
     .filter((p: any) => (p.payment_method || '').toLowerCase() !== 'wallet' && (p.status || 'completed') === 'completed')
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
   const notesWalletMatch = !walletPaid && invoice.notes
@@ -158,6 +162,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
     : null;
   const walletDisplay = walletPaid || (notesWalletMatch ? Number(notesWalletMatch[1].replace(/,/g, '')) : 0);
   const isRefund = (invoice.total_amount || 0) < 0;
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
