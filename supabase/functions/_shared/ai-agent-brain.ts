@@ -808,7 +808,7 @@ export async function runUnifiedAgent(
   // skip fields already on file. Stops the bot from re-asking name/email/goal/
   // plan_interest when the CRM already has them. v1.0.0
   let leadCtx: LeadContext | null = null;
-  if (!memberCtx.isMember) {
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
     try {
       const variants = phoneVariants(ctx.senderId);
       leadCtx = await resolveLeadContext(supabase, variants, ctx.branchId);
@@ -955,7 +955,7 @@ export async function runUnifiedAgent(
   //     snapshot into a real leads row BEFORE any deterministic short-circuit
   //     returns. Prevents the Roma/Dinesh leak where name+email+goal+plan
   //     were all known but the CRM never received a row.
-  if (!memberCtx.isMember) {
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
     try {
       const ensured = await ensureLeadFromMemory(supabase, {
         branchId: ctx.branchId,
@@ -1197,7 +1197,8 @@ GENERAL RULES:
   const inPostCaptureNurture = !memberCtx.isMember && (fullyCaptured || leadAlreadyEngaged);
 
   // v9.0.0 — STRICT MEMBER GUARD: If resolved as a member, skip the funnel entirely.
-  const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+  // v10.1.0 — internal team members never enter the lead funnel.
+  const shouldCaptureLead = !memberCtx.isMember && !memberCtx.isStaff && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
 
 
   // v10.0.0 — DETERMINISTIC ASK-LADDER REMOVED.
@@ -2151,6 +2152,11 @@ interface MemberResolveResult {
   leadStage?: string;
   leadPhone?: string;
   leadEmail?: string;
+  // v10.1.0 — internal team (owner/admin/manager/staff/trainer/employee).
+  // When true the lead-capture funnel is skipped entirely.
+  isStaff?: boolean;
+  staffName?: string;
+  staffRole?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
@@ -2165,6 +2171,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   let memberEmail: string | undefined;
 
   // Resolve member via profiles.phone → members.user_id
+  let directoryProfile: any = null;
   if (variants.length > 0) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -2172,7 +2179,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
       .in("phone", variants)
       .limit(1)
       .maybeSingle();
-    
+    directoryProfile = profile ?? null;
+
     if (profile?.id) {
       const { data: member } = await supabase
         .from("members")
@@ -2190,6 +2198,47 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
       }
     }
   }
+
+  // v10.1.0 — INTERNAL TEAM GUARD. Before treating anyone as a lead, scan the
+  // whole directory: trainers, employees and privileged roles. Owners, admins,
+  // managers, staff and trainers must never be pushed through the lead funnel
+  // (name → email → goal → plan).
+  if (!memberMatch && directoryProfile?.id) {
+    try {
+      const [{ data: trainerRow }, { data: employeeRow }, { data: roleRows }] = await Promise.all([
+        supabase.from("trainers").select("id, branch_id, is_active").eq("user_id", directoryProfile.id).limit(1).maybeSingle(),
+        supabase.from("employees").select("id, branch_id, position, department, is_active").eq("user_id", directoryProfile.id).limit(1).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", directoryProfile.id),
+      ]);
+      const roles = (roleRows ?? []).map((r: any) => String(r.role));
+      const privileged = roles.filter((r) => r !== "member");
+      const isStaff = !!trainerRow || !!employeeRow || privileged.length > 0;
+
+      if (isStaff) {
+        const staffRole = trainerRow
+          ? "trainer"
+          : (privileged[0] || (employeeRow as any)?.position || "staff");
+        const staffName = directoryProfile.full_name || "Team member";
+        console.log(`[AI:${platform}] internal team resolved (${staffRole}) for ${senderId}`);
+        return {
+          isMember: false,
+          isStaff: true,
+          staffName,
+          staffRole,
+          contextPrompt:
+            `[Internal team] ${staffName} — ${staffRole} at Incline. ` +
+            `This is a COLLEAGUE, not a lead or a prospect. Never ask for their name, ` +
+            `email, fitness goal or plan interest, and never pitch memberships. ` +
+            `Answer their operational question directly and briefly, or say a teammate ` +
+            `will follow up.`,
+        };
+      }
+    } catch (e) {
+      console.warn(`[AI:${platform}] staff lookup failed:`, (e as Error).message);
+    }
+  }
+
+
 
 
   if (!memberMatch) {

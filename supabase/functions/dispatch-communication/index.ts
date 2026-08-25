@@ -1,3 +1,10 @@
+// dispatch-communication v1.33.0 — positional template slots render per-slot.
+// v1.33.0: FIX — the readable mirror of an approved WhatsApp template resolved
+//          {{1}}/{{2}}/… by literal name, which never matched, so every slot
+//          fell back to slot 1 and printed the recipient name in the amount /
+//          plan positions ("₹Jhony house of optics"). Each positional slot now
+//          resolves through the semantic key derived for its own index.
+
 // dispatch-communication v1.32.0 — send budget, circuit breaker, quiet-hours loop fix.
 // v1.32.0: every send passes `communication_send_allowed` (identical-content and
 //          hourly ceilings per recipient); WhatsApp adds a per-number circuit
@@ -1338,10 +1345,21 @@ Deno.serve(async (req) => {
               }
 
               if (tpl.content) {
+                // v1.33.0 FIX — positional slots ({{1}}, {{2}}…) must resolve
+                // through the SEMANTIC key derived for THAT slot index. They
+                // never matched by name, so every slot fell back to index 0 and
+                // rendered the member name everywhere ("₹Jhony house of optics").
+                let seq = -1;
                 const rendered = String(tpl.content)
                   .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
-                    const idx = keys.findIndex((kk) => stripBraces(kk) === k);
-                    const v = resolveVarValue(k, templateValues, idx >= 0 ? idx : 0);
+                    seq += 1;
+                    const positional = /^\d+$/.test(String(k));
+                    const found = positional
+                      ? Number(k) - 1
+                      : keys.findIndex((kk) => stripBraces(kk) === k);
+                    const idx = found >= 0 && found < keys.length ? found : seq;
+                    const lookupKey = keys[idx] ?? k;
+                    const v = resolveVarValue(lookupKey, templateValues, idx);
                     return v || '';
                   })
                   .replace(/[ \t]{2,}/g, ' ')
