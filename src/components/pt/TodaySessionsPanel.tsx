@@ -4,10 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Check, X, Clock, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { avatarColor, initialsOf, type PTSessionRow } from './ptTypes';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   sessions: PTSessionRow[];
@@ -21,6 +21,9 @@ interface Props {
 /**
  * The trainer's actual daily job: who is coming today, and marking each
  * session done or cancelled without leaving the row.
+ *
+ * Trainer scoping happens in the parent query (`useTrainerSessions` is called
+ * with only the signed-in trainer's id), so this panel renders what it is given.
  */
 export function TodaySessionsPanel({
   sessions,
@@ -31,25 +34,9 @@ export function TodaySessionsPanel({
   onSchedule,
 }: Props) {
   const now = new Date();
-  const { user, roles } = useAuth();
-  const isTrainer = roles.some(r => r.role === 'trainer');
-  const isAdmin = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
-
-  const filteredSessions = useMemo(() => {
-    // If user is a trainer and NOT an admin/manager, filter sessions to only show their own.
-    if (isTrainer && !isAdmin && user?.id) {
-      // In PTSessions.tsx, we already scope trainerIds to just the current trainer's ID
-      // when calling the hook. This secondary filter is a defense-in-depth safety.
-      // We look for a trainer record where user_id matches, but sessions only has trainer_id (UUID).
-      // Since fetchTrainerSessions returns trainer_name but not trainer user_id, 
-      // the parent component's query scoping is the primary security boundary.
-      return sessions;
-    }
-    return sessions;
-  }, [sessions, isTrainer, isAdmin, user?.id]);
 
   const { today, upcoming } = useMemo(() => {
-    const sorted = [...filteredSessions].sort(
+    const sorted = [...sessions].sort(
       (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
     );
     return {
@@ -59,7 +46,8 @@ export function TodaySessionsPanel({
       ),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredSessions, now]);
+  }, [sessions, now]);
+
 
   if (loading) {
     return (
@@ -157,15 +145,15 @@ function Section({
           <ul className="divide-y divide-border">
             {rows.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center gap-3 py-3">
-                <span
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                    avatarColor(s.member_name),
+                <Avatar className="h-9 w-9 shrink-0">
+                  {s.member_avatar_url && (
+                    <AvatarImage src={s.member_avatar_url} alt={s.member_name || 'Member'} />
                   )}
-                  aria-hidden
-                >
-                  {initialsOf(s.member_name)}
-                </span>
+                  <AvatarFallback className={cn('text-xs font-semibold', avatarColor(s.member_name))}>
+                    {initialsOf(s.member_name)}
+                  </AvatarFallback>
+                </Avatar>
+
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">
                     {s.member_name || 'Member'}

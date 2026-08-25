@@ -248,8 +248,12 @@ Deno.serve(async (req) => {
       p_activity_level: activityLevel || null,
       p_equipment_availability: Array.isArray(equipmentAvailability) ? equipmentAvailability : null,
       p_injuries_limitations: injuriesLimitations || null,
-      p_schedule_welcome: true,
-      p_welcome_channels: ['email'],
+      // v1.1.0 — `onboard_member` only wrote a `pending` communication_logs row
+      // that nothing ever dispatched, so staff-created members never received a
+      // welcome. Scheduling is now done below through dispatch-communication.
+      p_schedule_welcome: false,
+      p_welcome_channels: [],
+
     })
 
     if (onboardError) {
@@ -286,6 +290,96 @@ Deno.serve(async (req) => {
     }
 
     console.log('Member onboarded:', result.member_id)
+
+    // Welcome messages — WhatsApp + Email through the canonical dispatcher, the
+    // same contract the public /register flow uses. Failures are logged and
+    // queued for retry; they never block member creation.
+    try {
+      const { data: branchRow } = await supabaseAdmin
+        .from('branches')
+        .select('name')
+        .eq('id', branchId)
+        .maybeSingle()
+
+      const LOGIN_URL = 'https://theincline.in/auth'
+      const welcomeVars = {
+        name: fullName,
+        member_name: fullName,
+        member_code: result.member_code ?? '',
+        membership_plan: 'Incline',
+        plan_name: 'Incline',
+        branch_name: branchRow?.name ?? 'Incline',
+        login_url: LOGIN_URL,
+        login_link: LOGIN_URL,
+        event_key: 'member_created',
+      }
+      const welcomeBody =
+        `Hi ${fullName}, welcome to The Incline Life by Incline! ` +
+        `Your member code is ${result.member_code ?? ''}. ` +
+        `Log in to your member portal at ${LOGIN_URL} — use "Forgot password" the first time to set your password.`
+
+      const channels: Array<{ channel: 'whatsapp' | 'email'; recipient: string }> = []
+      if (phone) channels.push({ channel: 'whatsapp', recipient: phone })
+      if (email) channels.push({ channel: 'email', recipient: email })
+
+      await Promise.allSettled(channels.map(async (c) => {
+        let reason = ''
+        try {
+          const r = await supabaseAdmin.functions.invoke('dispatch-communication', {
+            body: {
+              branch_id: branchId,
+              channel: c.channel,
+              category: 'transactional',
+              recipient: c.recipient,
+              member_id: result.member_id,
+              dedupe_key: `member_created:${result.member_id}:${c.channel}`,
+              force: true,
+              source_caller: 'create-member-user',
+              payload: {
+                ...(c.channel === 'email'
+                  ? { subject: `Welcome to The Incline Life, ${fullName}!`, use_branded_template: true }
+                  : {}),
+                body: welcomeBody,
+                variables: welcomeVars,
+              },
+            },
+          })
+          const status = (r as { data?: { status?: string } })?.data?.status
+          const err = (r as { error?: unknown })?.error
+          if (!err && (status === 'sent' || status === 'queued' || status === 'deduped' || status === 'suppressed')) return
+          reason = String(
+            (r as { data?: { reason?: string } })?.data?.reason ??
+              (err instanceof Error ? err.message : err ?? 'dispatch_failed'),
+          )
+        } catch (e) {
+          reason = e instanceof Error ? e.message : String(e)
+        }
+        console.error(`welcome dispatch failed (${c.channel}):`, reason)
+        await supabaseAdmin.from('communication_retry_queue').insert({
+          branch_id: branchId,
+          member_id: result.member_id,
+          type: c.channel,
+          recipient: c.recipient,
+          subject: c.channel === 'email' ? `Welcome to The Incline Life, ${fullName}!` : null,
+          content: welcomeBody,
+          status: 'pending',
+          retry_count: 0,
+          max_retries: 3,
+          next_retry_at: new Date(Date.now() + 60_000).toISOString(),
+          last_error: reason.slice(0, 500),
+          metadata: {
+            category: 'transactional',
+            event_key: 'member_created',
+            source: 'create-member-user',
+            variables: welcomeVars,
+          },
+        })
+      }))
+    } catch (e) {
+      console.error('welcome dispatch block failed:', e instanceof Error ? e.message : e)
+    }
+
+
 
     return new Response(
       JSON.stringify({

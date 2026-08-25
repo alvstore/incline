@@ -22,6 +22,24 @@ import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
+import { isReversedPayment, reversalLabel } from '@/lib/payments/paymentDisplay';
+
+/**
+ * PT/membership line items are sometimes written with a generated idempotency
+ * key instead of a human description. Render something a member can read.
+ */
+function readableItemDescription(description?: string | null): string {
+  const raw = String(description || '').trim();
+  if (!raw) return 'Item';
+  const looksGenerated =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(raw) ||
+    /^(pt|mem|inv|idem)[-_:]/i.test(raw) ||
+    (!/\s/.test(raw) && raw.length > 18);
+  if (!looksGenerated) return raw;
+  if (/^pt/i.test(raw)) return 'Personal Training package';
+  return 'Package purchase';
+}
+
 
 interface InvoiceViewDrawerProps {
   open: boolean;
@@ -147,10 +165,14 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
   const dueAmount = invoice.total_amount - (invoice.amount_paid || 0);
 
   // Derive Wallet Used vs Other Payment from payments table (fallback to notes regex)
-  const walletPaid = payments
+  const livePayments = payments.filter((p: any) => !isReversedPayment(p));
+  const countedPaid = livePayments
+    .filter((p: any) => (p.status || 'completed') === 'completed')
+    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const walletPaid = livePayments
     .filter((p: any) => (p.payment_method || '').toLowerCase() === 'wallet' && (p.status || 'completed') === 'completed')
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const otherPaid = payments
+  const otherPaid = livePayments
     .filter((p: any) => (p.payment_method || '').toLowerCase() !== 'wallet' && (p.status || 'completed') === 'completed')
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
   const notesWalletMatch = !walletPaid && invoice.notes
@@ -158,6 +180,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
     : null;
   const walletDisplay = walletPaid || (notesWalletMatch ? Number(notesWalletMatch[1].replace(/,/g, '')) : 0);
   const isRefund = (invoice.total_amount || 0) < 0;
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -250,7 +273,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
                 <TableBody>
                   {invoice.invoice_items?.map((item: any) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.description}</TableCell>
+                      <TableCell>{readableItemDescription(item.description)}</TableCell>
                       <TableCell className="text-right">{item.quantity || 1}</TableCell>
                       <TableCell className="text-right">₹{item.unit_price.toLocaleString()}</TableCell>
                       <TableCell className="text-right">₹{item.total_amount.toLocaleString()}</TableCell>
@@ -345,22 +368,47 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
               <CardContent className="pt-4">
                 <h4 className="font-medium mb-3">Payment History</h4>
                 <div className="space-y-2">
-                  {payments.map((payment: any) => (
-                    <div key={payment.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                        <span className="capitalize">{payment.payment_method}</span>
-                        <span className="text-muted-foreground">
-                          • {format(new Date(payment.payment_date), 'dd MMM yyyy')}
+                  {payments.map((payment: any) => {
+                    const reversed = isReversedPayment(payment);
+                    const label = reversalLabel(payment);
+                    return (
+                      <div
+                        key={payment.id}
+                        className={`flex justify-between items-center text-sm p-2 rounded ${reversed ? 'bg-muted/30' : 'bg-muted/50'}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CreditCard className={`h-4 w-4 shrink-0 ${reversed ? 'text-muted-foreground/60' : 'text-muted-foreground'}`} />
+                          <span className={`capitalize ${reversed ? 'text-muted-foreground' : ''}`}>
+                            {payment.payment_method}
+                          </span>
+                          <span className="text-muted-foreground">
+                            • {format(new Date(payment.payment_date), 'dd MMM yyyy')}
+                          </span>
+                          {label && (
+                            <Badge className="bg-muted text-muted-foreground hover:bg-muted rounded-full px-2 py-0 text-[10px] font-medium">
+                              {label}
+                            </Badge>
+                          )}
+                        </div>
+                        <span
+                          className={`font-medium ${reversed ? 'text-muted-foreground line-through' : 'text-success'}`}
+                        >
+                          ₹{Number(payment.amount || 0).toLocaleString()}
                         </span>
                       </div>
-                      <span className="font-medium text-success">₹{payment.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                {payments.some((p: any) => isReversedPayment(p)) && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Counted toward this invoice: ₹{countedPaid.toLocaleString()} — reversed entries stay
+                    listed for audit but are not money received.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
+
 
           {/* Notes */}
           {invoice.notes && (
