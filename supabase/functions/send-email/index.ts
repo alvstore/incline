@@ -151,43 +151,85 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch active email integration
-    const { data: integrations, error: intErr } = await supabase
-      .from("integration_settings")
-      .select("*")
-      .eq("integration_type", "email")
-      .eq("is_active", true)
-      .limit(1);
+    // ── PRIMARY: Lovable Cloud email queue (notify.theincline.in) ───────────
+    // Managed sending domain, no per-hour SMTP ceiling. Attachments are NOT
+    // supported by the managed sender, so those always take the SMTP path.
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    let result: { success: boolean; message_id?: string; error?: string } | null = null;
+    let providerUsed = "lovable_cloud";
+    let primaryError: string | null = null;
 
-    if (intErr || !integrations?.length) {
-      return json({ error: "No active email provider configured. Please configure an email provider in Settings → Integrations." }, 400);
+    if (!hasAttachments && CLOUD_EMAIL_ENABLED) {
+      const messageId = crypto.randomUUID();
+      const senderDomain = Deno.env.get("EMAIL_SENDER_DOMAIN") || DEFAULT_SENDER_DOMAIN;
+      try {
+        const { error: qErr } = await supabase.rpc("enqueue_email", {
+          queue_name: "transactional_emails",
+          payload: {
+            to,
+            from: from_override || `Incline <noreply@${senderDomain}>`,
+            sender_domain: senderDomain,
+            subject,
+            html: finalHtml,
+            text: text || undefined,
+            purpose: "transactional",
+            label: body?.label || "app_email",
+            idempotency_key: body?.idempotency_key || messageId,
+            message_id: messageId,
+            queued_at: new Date().toISOString(),
+          },
+        });
+        if (qErr) throw new Error(qErr.message);
+        result = { success: true, message_id: messageId };
+      } catch (e) {
+        primaryError = (e as Error).message;
+        console.warn("[send-email] Lovable Cloud queue unavailable, falling back to SMTP:", primaryError);
+      }
     }
 
-    const integration = integrations[0];
-    const config = integration.config || {};
-    const credentials = integration.credentials || {};
-    const provider = integration.provider;
+    // ── FALLBACK: configured provider (Hostinger SMTP / SendGrid / …) ───────
+    let provider = providerUsed;
+    if (!result) {
+      const { data: integrations, error: intErr } = await supabase
+        .from("integration_settings")
+        .select("*")
+        .eq("integration_type", "email")
+        .eq("is_active", true)
+        .limit(1);
 
-    const fromEmail = from_override || config.from_email || "noreply@inclinefitness.in";
-    const fromName = config.from_name || "Incline";
+      if (intErr || !integrations?.length) {
+        return json({
+          error: primaryError
+            ? `Managed email failed (${primaryError}) and no fallback email provider is configured.`
+            : "No active email provider configured. Please configure an email provider in Settings → Integrations.",
+        }, 400);
+      }
 
-    let result: { success: boolean; message_id?: string; error?: string };
+      const integration = integrations[0];
+      const config = integration.config || {};
+      const credentials = integration.credentials || {};
+      provider = integration.provider;
+      providerUsed = provider;
 
-    switch (provider) {
-      case "smtp":
-        result = await sendViaSMTP(to, subject, finalHtml, fromEmail, fromName, config, credentials, attachments);
-        break;
-      case "sendgrid":
-        result = await sendViaSendGrid(to, subject, finalHtml, fromEmail, fromName, credentials, attachments);
-        break;
-      case "mailgun":
-        result = await sendViaMailgun(to, subject, finalHtml, fromEmail, fromName, config, credentials, attachments);
-        break;
-      case "ses":
-        result = await sendViaSES(to, subject, finalHtml, fromEmail, fromName, config, credentials);
-        break;
-      default:
-        result = { success: false, error: `Unsupported email provider: ${provider}` };
+      const fromEmail = from_override || config.from_email || "noreply@inclinefitness.in";
+      const fromName = config.from_name || "Incline";
+
+      switch (provider) {
+        case "smtp":
+          result = await sendViaSMTP(to, subject, finalHtml, fromEmail, fromName, config, credentials, attachments);
+          break;
+        case "sendgrid":
+          result = await sendViaSendGrid(to, subject, finalHtml, fromEmail, fromName, credentials, attachments);
+          break;
+        case "mailgun":
+          result = await sendViaMailgun(to, subject, finalHtml, fromEmail, fromName, config, credentials, attachments);
+          break;
+        case "ses":
+          result = await sendViaSES(to, subject, finalHtml, fromEmail, fromName, config, credentials);
+          break;
+        default:
+          result = { success: false, error: `Unsupported email provider: ${provider}` };
+      }
     }
 
     // Log to communication_logs (capture attachment metadata for auditability).
@@ -206,15 +248,20 @@ Deno.serve(async (req) => {
         status: result.success ? "sent" : "failed",
         delivery_status: result.success ? "sent" : "failed",
         sent_at: new Date().toISOString(),
-        delivery_metadata: { provider, attachments: attachmentMeta, attachment_count: attachmentMeta.length },
+        delivery_metadata: {
+          provider: providerUsed,
+          primary_error: primaryError,
+          attachments: attachmentMeta,
+          attachment_count: attachmentMeta.length,
+        },
         error_message: result.success ? null : (result.error || null),
       });
     }
 
     if (result.success) {
-      return json({ success: true, message_id: result.message_id, provider });
+      return json({ success: true, message_id: result.message_id, provider: providerUsed, fallback: providerUsed !== "lovable_cloud" });
     } else {
-      return json({ error: result.error, provider }, 500);
+      return json({ error: result.error, provider: providerUsed }, 500);
     }
   } catch (error: any) {
     await captureEdgeError('send-email', error);
