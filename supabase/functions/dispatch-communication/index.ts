@@ -1,3 +1,14 @@
+// dispatch-communication v1.34.2 — infer positional plan and branch slots.
+// v1.34.2: Generic Meta labels now understand "plan {{n}}" and "from {{n}}"
+//          copy, covering welcome and diet/workout document templates.
+// dispatch-communication v1.34.1 — preserve failed-send replay context.
+// v1.34.1: Pre-flight failures retain variables and attachment metadata so a
+//          corrected retry can replay the original document safely.
+// dispatch-communication v1.34.0 — hydrate missing member/template variables server-side.
+// v1.34.0: Before template selection, recover member name/code, branch name and
+//          current plan from canonical database rows. This repairs legacy retry
+//          payloads and prevents missing positional parameters from being treated
+//          as permanent failures when the data already exists in the backend.
 // dispatch-communication v1.33.0 — positional template slots render per-slot.
 // v1.33.0: FIX — the readable mirror of an approved WhatsApp template resolved
 //          {{1}}/{{2}}/… by literal name, which never matched, so every slot
@@ -289,11 +300,12 @@ function inferSlotSemantics(content: string): Record<string, string> {
     let key = '';
     if (/(₹|rs\.?|inr)\s*$/.test(tail)) key = 'amount_due';
     else if (/(amount|outstanding|balance|due|total|fees|price)[^a-z]*$/.test(tail)) key = 'amount_due';
-    else if (/(interest|looking for|plan)[^a-z]*$/.test(tail)) key = 'plan_interest';
+    else if (/(interest|looking for)[^a-z]*$/.test(tail)) key = 'plan_interest';
+    else if (/(plan|membership)[^a-z]*$/.test(tail) || /your\s*$/.test(tail)) key = 'plan_name';
     else if (/(source|channel|via)[^a-z]*$/.test(tail)) key = 'lead_source';
     else if (/(invoice|receipt|reference|ref)[^a-z]*$/.test(tail)) key = 'invoice_number';
     else if (/(trainer|coach)[^a-z]*$/.test(tail)) key = 'trainer_name';
-    else if (/(branch|club|studio|centre|center)[^a-z]*$/.test(tail)) key = 'branch_name';
+    else if (/(branch|club|studio|centre|center|from)[^a-z]*$/.test(tail)) key = 'branch_name';
     else if (/(date|on|expires|expiry|valid till|till|by)[^a-z]*$/.test(tail)) key = 'date';
     else if (/(time|at)[^a-z]*$/.test(tail)) key = 'time';
     else if (/(link|url|download)[^a-z]*$/.test(tail)) key = 'document_link';
@@ -360,7 +372,7 @@ function resolveVarValue(
   if (k.includes('staff')) tryKeys.push('staff_name', 'assignee_name', 'recipient_name');
   if (k.includes('lead_name')) tryKeys.push('lead_name', 'full_name', 'contact_name', 'name', 'member_name');
   if (k.includes('member') || k === 'name' || k === 'first_name' || k === 'full_name') tryKeys.push('member_name', 'name', 'full_name', 'first_name', 'lead_name', 'contact_name');
-  if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name', 'plan');
+  if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name', 'plan', 'membership_plan', 'plan_interest');
   if (k.includes('trainer')) tryKeys.push('trainer_name');
   if (k.includes('interest')) tryKeys.push('interest', 'plan_interest', 'interest_name');
   if (k.includes('source')) tryKeys.push('source', 'lead_source', 'utm_source');
@@ -624,6 +636,62 @@ Deno.serve(async (req) => {
   );
 
   try {
+    // Runtime delivery owns recipient context; the catalog worker only owns
+    // template discovery/approval. Hydrate absent values here so every caller
+    // (including legacy retry rows) gets the same complete template contract.
+    if (input.channel === 'whatsapp') {
+      const hydrated: Record<string, unknown> = { ...(input.payload.variables ?? {}) };
+      if (input.member_id) {
+        const { data: member } = await supabase
+          .from('members')
+          .select('member_code, branch_id, user_id')
+          .eq('id', input.member_id)
+          .maybeSingle();
+
+        if (member?.user_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', member.user_id)
+            .maybeSingle();
+          const fullName = String(profile?.full_name ?? '').trim();
+          if (fullName) {
+            hydrated.full_name ??= fullName;
+            hydrated.member_name ??= fullName;
+            hydrated.name ??= fullName;
+            hydrated.first_name ??= fullName.split(/\s+/)[0];
+            hydrated.recipient_name ??= fullName;
+          }
+        }
+        if (member?.member_code) hydrated.member_code ??= member.member_code;
+
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('membership_plans(name)')
+          .eq('member_id', input.member_id)
+          .in('status', ['active', 'pending', 'frozen'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const joinedPlan = (membership as { membership_plans?: { name?: string | null } | null } | null)?.membership_plans;
+        if (joinedPlan?.name) {
+          hydrated.membership_plan ??= joinedPlan.name;
+          hydrated.plan_name ??= joinedPlan.name;
+        }
+      }
+
+      const branchId = input.branch_id;
+      if (!hydrated.branch_name && branchId) {
+        const { data: branch } = await supabase
+          .from('branches')
+          .select('name')
+          .eq('id', branchId)
+          .maybeSingle();
+        if (branch?.name) hydrated.branch_name = branch.name;
+      }
+      input.payload.variables = hydrated;
+    }
+
     // ── 0) channel kill-switch (Settings → Integrations) ──
     // If the target channel is toggled OFF for this branch (or globally,
     // when no branch row exists), suppress immediately. This applies to ALL
@@ -1315,8 +1383,14 @@ Deno.serve(async (req) => {
                   .update({
                     delivery_status: 'failed',
                     status: 'failed',
-                    error_message: `132018: ${reason} (blocked pre-flight; provide full_name or use a no-name template)`,
+                    error_message: `132018: ${reason} (blocked pre-flight; required template data is missing)`,
                     delivery_metadata: {
+                      ...(input.attachment ? { attachment: input.attachment } : {}),
+                      ...(input.payload.variables ? { variables: input.payload.variables } : {}),
+                      ...(input.payload.variables?.event_key
+                        ? { event_key: input.payload.variables.event_key }
+                        : {}),
+                      ...(input.source_caller ? { source_caller: input.source_caller } : {}),
                       pre_flight_block: true,
                       missing_keys: missingRequired,
                       template: templateName,
