@@ -741,7 +741,7 @@ export function MemberProfileDrawer({
   // PT packages) are fetched separately — PostgREST resolves every embed as a
   // correlated query that re-runs the profiles RLS policy, which was pushing
   // the combined request past the statement timeout.
-  const { data: memberCore, refetch: refetchMemberCore } = useQuery({
+  const { data: memberCore, refetch: refetchMemberCore, isLoading: memberCoreLoading } = useQuery({
     queryKey: ['member-details', member?.id, 'core'],
     queryFn: async () => {
       if (!member?.id) return null;
@@ -776,7 +776,7 @@ export function MemberProfileDrawer({
     enabled: !!member?.id && open,
   });
 
-  const { data: memberPlans, refetch: refetchMemberPlans } = useQuery({
+  const { data: memberPlans, refetch: refetchMemberPlans, isLoading: memberPlansLoading } = useQuery({
     queryKey: ['member-details', member?.id, 'plans'],
     queryFn: async () => {
       if (!member?.id) return { memberships: [], member_pt_packages: [] };
@@ -1014,7 +1014,7 @@ export function MemberProfileDrawer({
   // Fall back to lead row PII when the member has no linked auth profile yet
   // (lead→member conversion leaves user_id NULL until the member sets a password).
   const leadFallback = (memberDetails as any)?.lead;
-  const profile = memberDetails?.profiles || member?.profiles || (leadFallback ? {
+  const profile = memberDetails?.profiles || (leadFallback ? {
     full_name: leadFallback.full_name,
     email: leadFallback.email,
     phone: leadFallback.phone,
@@ -1026,6 +1026,7 @@ export function MemberProfileDrawer({
   // blanking while the heavy member-details query resolves.
   const { data: identity, isLoading: identityLoading } = useMemberIdentity(member?.id);
   const avatarSrc = profile?.avatar_url || identity?.avatar_url || undefined;
+  const memberProfileLoading = open && !!member?.id && (memberCoreLoading || memberPlansLoading);
   const activeMembership = memberDetails?.memberships?.find((m: any) => m.status === 'active' || m.status === 'frozen');
   // Scheduled plan that has not started yet — still needs gift days / date edits / early start
   const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
@@ -1254,6 +1255,23 @@ export function MemberProfileDrawer({
           </SheetTitle>
         </SheetHeader>
 
+        {memberProfileLoading ? (
+          <div className="mt-6 space-y-6" aria-label="Loading member profile">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-20 w-20 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-6 w-2/3" />
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[0, 1, 2].map((item) => <Skeleton key={item} className="h-24 rounded-2xl" />)}
+            </div>
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-2xl" />
+          </div>
+        ) : (
         <div className="mt-6 space-y-6">
           {/* Profile Header */}
           <div className="flex items-start gap-3">
@@ -1276,8 +1294,8 @@ export function MemberProfileDrawer({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-nowrap">
                 <h2 className="text-lg sm:text-xl font-semibold truncate min-w-0 flex-1">{profile?.full_name || 'N/A'}</h2>
-                <Badge className={`${getMemberStatusColor(member.status)} shrink-0`}>
-                  {member.status === 'pending_plan' ? 'Pending Plan' : member.status}
+                <Badge className={`${getMemberStatusColor(memberDetails?.status || member.status)} shrink-0`}>
+                  {(memberDetails?.status || member.status) === 'pending_plan' ? 'Pending Plan' : (memberDetails?.status || member.status)}
                 </Badge>
                 <Button 
                   variant="ghost" 
@@ -1288,7 +1306,7 @@ export function MemberProfileDrawer({
                   <Edit className="h-3 w-3" />
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground font-mono">{member.member_code}</p>
+              <p className="text-sm text-muted-foreground font-mono">{memberDetails?.member_code}</p>
               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:gap-4 gap-1 mt-2 text-sm text-muted-foreground">
                 {profile?.email && (
                   <span className="flex items-center gap-1 min-w-0">
@@ -2489,6 +2507,7 @@ export function MemberProfileDrawer({
             <DocumentVaultTab memberId={member.id} />
           </Tabs>
         </div>
+        )}
 
         {/* Drawer Components */}
         {activeMembership && (
