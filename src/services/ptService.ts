@@ -370,15 +370,20 @@ export async function fetchTrainerSessions(
     .filter((id): id is string => !!id);
 
   let names: Record<string, string> = {};
+  let avatars: Record<string, string | null> = {};
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, avatar_url")
       .in("id", [...new Set(userIds)]);
     names = (profiles || []).reduce((acc, p) => {
       acc[p.id] = p.full_name || "Unknown";
       return acc;
     }, {} as Record<string, string>);
+    avatars = (profiles || []).reduce((acc, p) => {
+      acc[p.id] = (p as any).avatar_url ?? null;
+      return acc;
+    }, {} as Record<string, string | null>);
   }
 
   return sessions.map((s) => {
@@ -386,9 +391,11 @@ export async function fetchTrainerSessions(
     return {
       ...s,
       member_name: member?.user_id ? names[member.user_id] : member?.member_code || "Unknown",
+      member_avatar_url: member?.user_id ? avatars[member.user_id] ?? null : null,
     };
   });
 }
+
 
 // Complete a previously scheduled PT session.
 // Routes through the canonical `log_pt_session` engine (handles monthly packs,
