@@ -1,3 +1,4 @@
+// v2.7.0 — Correlate managed queue sends to dispatcher logs and bound SMTP wall time.
 // v2.6.0 — Managed Lovable Cloud email queue (notify.theincline.in) is now the
 //           PRIMARY path for attachment-free app emails; the configured provider
 //           (Hostinger SMTP) is the automatic fallback when the queue is
@@ -132,7 +133,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { to, subject, html, text, branch_id, attachments, from_override, use_branded_template, variables, skip_log } = body;
+    const { to, subject, html, text, branch_id, attachments, from_override, use_branded_template, variables, skip_log, source_log_id } = body;
 
     if (!to || !subject || (!html && !text)) {
       return json({ error: "Missing required fields: to, subject, html or text" }, 400);
@@ -165,7 +166,7 @@ Deno.serve(async (req) => {
     // Managed sending domain, no per-hour SMTP ceiling. Attachments are NOT
     // supported by the managed sender, so those always take the SMTP path.
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    let result: { success: boolean; message_id?: string; error?: string } | null = null;
+    let result: { success: boolean; message_id?: string; error?: string; status?: string } | null = null;
     let providerUsed = "lovable_cloud";
     let primaryError: string | null = null;
 
@@ -212,14 +213,15 @@ Deno.serve(async (req) => {
               .slice(0, 5000) || subject,
             purpose: "transactional",
             label: body?.label || "app_email",
-            idempotency_key: body?.idempotency_key || messageId,
+            idempotency_key: body?.idempotency_key || source_log_id || messageId,
             message_id: messageId,
+            source_log_id: source_log_id || null,
             unsubscribe_token: unsubscribeToken,
             queued_at: new Date().toISOString(),
           },
         });
         if (qErr) throw new Error(qErr.message);
-        result = { success: true, message_id: messageId };
+        result = { success: true, message_id: messageId, status: "queued" };
       } catch (e) {
         primaryError = (e as Error).message;
         console.warn("[send-email] Lovable Cloud queue unavailable, falling back to SMTP:", primaryError);
@@ -298,7 +300,8 @@ Deno.serve(async (req) => {
     }
 
     if (result.success) {
-      return json({ success: true, message_id: result.message_id, provider: providerUsed, fallback: providerUsed !== "lovable_cloud" });
+      const deliveryStatus = (result as { status?: string }).status || "sent";
+      return json({ success: true, status: deliveryStatus, message_id: result.message_id, provider: providerUsed, fallback: providerUsed !== "lovable_cloud" });
     } else {
       return json({ error: result.error, provider: providerUsed }, 500);
     }
@@ -449,6 +452,9 @@ async function sendViaSMTP(
   config: Record<string, string>, credentials: Record<string, string>,
   attachments?: EmailAttachment[],
 ) {
+  const startedAt = Date.now();
+  const totalBudgetMs = 70_000;
+  let activeConnection: Deno.Conn | Deno.TlsConn | null = null;
   const host = config.host;
   const port = config.port || "587";
   const username = credentials.username;
@@ -469,7 +475,7 @@ async function sendViaSMTP(
   const makeIO = (conn: Deno.Conn | Deno.TlsConn) => {
     const readResponse = async (overallTimeoutMs = 60_000): Promise<string> => {
       let acc = '';
-      const deadline = Date.now() + overallTimeoutMs;
+      const deadline = Math.min(Date.now() + overallTimeoutMs, startedAt + totalBudgetMs);
       while (Date.now() < deadline) {
         const buf = new Uint8Array(16384);
         const readPromise = conn.read(buf);
@@ -488,6 +494,7 @@ async function sendViaSMTP(
         // SMTP final line is "NNN <text>" (space, not dash). Multiline uses "NNN-".
         if (/(^|\n)\d{3} [^\n]*\r?\n?$/.test(acc)) return acc;
       }
+      if (Date.now() >= startedAt + totalBudgetMs) throw new Error('SMTP total time budget exceeded');
       return acc;
     };
     const read = () => readResponse(15_000);
@@ -502,7 +509,7 @@ async function sendViaSMTP(
       for (let i = 0; i < data.length; i += CHUNK) {
         await conn.write(data.subarray(i, i + CHUNK));
       }
-      return await readResponse(120_000);
+      return await readResponse(60_000);
     };
     return { read, write, writeRaw, readResponse };
   };
@@ -510,6 +517,7 @@ async function sendViaSMTP(
   try {
     if (port === "465") {
       const tlsConn = await Deno.connectTls({ hostname: host, port: portNum });
+      activeConnection = tlsConn;
       const { read, write, writeRaw } = makeIO(tlsConn);
       await read();
       await write(`EHLO ${host}`);
@@ -529,6 +537,7 @@ async function sendViaSMTP(
     }
 
     const conn = await Deno.connect({ hostname: host, port: portNum });
+    activeConnection = conn;
     const plainIO = makeIO(conn);
     await plainIO.read();
     await plainIO.write(`EHLO ${host}`);
@@ -536,6 +545,7 @@ async function sendViaSMTP(
     if (port === "587") {
       await plainIO.write("STARTTLS");
       const tlsConn = await Deno.startTls(conn, { hostname: host });
+      activeConnection = tlsConn;
       const { read, write, writeRaw } = makeIO(tlsConn);
       await write(`EHLO ${host}`);
       await write("AUTH LOGIN");
@@ -569,6 +579,7 @@ async function sendViaSMTP(
       ? { success: true, message_id: `smtp-${Date.now()}` }
       : { success: false, error: `SMTP error: ${dataResp}` };
   } catch (e) {
+    try { activeConnection?.close(); } catch { /* already closed */ }
     return { success: false, error: `SMTP failed: ${(e as Error).message}` };
   }
 }

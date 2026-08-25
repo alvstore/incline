@@ -91,6 +91,7 @@ async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${SERVICE_KEY}`,
           apikey: SERVICE_KEY,
           "x-system-call": "automation-brain",
         },

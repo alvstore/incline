@@ -167,6 +167,7 @@ export function MetaSyncControls() {
         : `Synced ${count} template(s) from Meta`);
       queryClient.invalidateQueries({ queryKey: ['communication-templates'] });
       queryClient.invalidateQueries({ queryKey: ['template-coverage'] });
+      queryClient.invalidateQueries({ queryKey: ['template-coverage-gaps'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-stale'] });
     } catch (err: any) {
       setLastError(err.message);

@@ -44,6 +44,8 @@ interface Proposal {
   footer?: string;
   language?: string;
   header_type?: string;
+  header_sample_url?: string;
+  variables?: string[];
   event?: string;
   trigger_event?: string;
   state: ProposalState;
@@ -233,6 +235,8 @@ export function AIGenerateTemplatesDrawer({
               body_text: p.body_text || p.body || '',
               footer_text: p.footer || undefined,
               header_type: p.header_type || 'none',
+               header_sample_url: p.header_sample_url || undefined,
+               variables: p.variables || [],
               trigger_event: p.trigger_event || p.event || 'custom',
             },
           },
@@ -259,7 +263,7 @@ export function AIGenerateTemplatesDrawer({
 
     const failed = proposals.length - success;
     if (success > 0 && failed === 0) {
-      toast.success(`Submitted ${success} template${success === 1 ? '' : 's'} to Meta`);
+      toast.success(`Submitted ${success} template${success === 1 ? '' : 's'} for Meta review`);
       onOpenChange(false);
     } else if (success > 0) {
       toast.warning(`${success} submitted, ${failed} failed — ${firstError}`);

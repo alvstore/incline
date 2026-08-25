@@ -972,6 +972,7 @@ Deno.serve(async (req) => {
     // ── 5) channel routing ──
     let providerMessageId: string | undefined;
     let sendError: string | undefined;
+    let finalDeliveryOverride: 'queued' | null = null;
     // Structured Meta error envelope captured from send-whatsapp v2.7.0
     // and persisted into communication_logs.delivery_metadata so the UI
     // can show pacing vs template-config vs recipient issues distinctly.
@@ -1628,6 +1629,9 @@ Deno.serve(async (req) => {
           });
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { message_id?: string })?.message_id;
+          if ((r.data as { status?: string })?.status === 'queued') {
+            finalDeliveryOverride = 'queued';
+          }
           break;
         }
         case 'rcs': {
@@ -1755,10 +1759,10 @@ Deno.serve(async (req) => {
       .update({
         delivery_status: callbackAlreadyTerminal
           ? finalTerminalStatus
-          : (sendError ? 'failed' : 'sent'),
+          : (sendError ? 'failed' : (finalDeliveryOverride ?? 'sent')),
         status: callbackAlreadyTerminal
           ? finalTerminalStatus
-          : (sendError ? 'failed' : 'sent'),
+          : (sendError ? 'failed' : (finalDeliveryOverride ?? 'sent')),
         provider_message_id: providerMessageId ?? null,
         delivery_metadata: Object.keys(mergedFinalMeta).length ? mergedFinalMeta : {},
         error_message: callbackAlreadyTerminal
@@ -1778,7 +1782,7 @@ Deno.serve(async (req) => {
     if (sendError || callbackAlreadyTerminal) {
       return ok({ status: 'failed', log_id: log!.id, reason: sendError, provider_route: providerRoute });
     }
-    return ok({ status: 'sent', log_id: log!.id, provider_message_id: providerMessageId, provider_route: providerRoute });
+    return ok({ status: finalDeliveryOverride ?? 'sent', log_id: log!.id, provider_message_id: providerMessageId, provider_route: providerRoute });
   } catch (e) {
     return bad(500, { error: 'unexpected', detail: (e as Error).message });
   }

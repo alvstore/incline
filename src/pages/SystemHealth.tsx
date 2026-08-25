@@ -70,87 +70,6 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: any; color: string }>
 const FALLBACK_SOURCE = { label: 'Other', icon: Layers, color: 'text-muted-foreground' } as const;
 const getSourceConfig = (s?: string | null) => SOURCE_CONFIG[s || 'frontend'] || FALLBACK_SOURCE;
 
-const EMPTY_TABLE_CANDIDATES = [
-  { name: 'role_permissions', note: 'Superseded by user_roles + has_role()' },
-  { name: 'permissions', note: 'Superseded by user_roles' },
-  { name: 'settings', note: 'Superseded by organization_settings' },
-  { name: 'payment_transactions', note: 'Superseded by payments table' },
-  { name: 'payroll_rules', note: 'Never used' },
-  { name: 'biometric_sync_queue', note: 'Never used' },
-  { name: 'device_commands', note: 'Never used' },
-];
-
-function DatabaseAuditCard() {
-  const { data: tableCounts = [], isLoading } = useQuery({
-    queryKey: ['db-audit-empty-tables'],
-    queryFn: async () => {
-      const results = await Promise.all(
-        EMPTY_TABLE_CANDIDATES.map(async (t) => {
-          try {
-            const { count, error } = await (supabase.from(t.name as any) as any)
-              .select('*', { count: 'exact', head: true });
-            return { ...t, count: error ? -1 : (count ?? 0) };
-          } catch {
-            return { ...t, count: -1 };
-          }
-        })
-      );
-      return results;
-    },
-    staleTime: 60000,
-  });
-
-  const emptyTables = tableCounts.filter((t) => t.count === 0);
-
-  return (
-    <Card className="rounded-2xl border-border/50 shadow-lg">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Database className="h-5 w-5 text-warning" />
-          Database Audit — Empty/Unused Tables
-          {emptyTables.length > 0 && (
-            <Badge variant="secondary" className="text-xs">{emptyTables.length} empty</Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">Checking tables...</p>
-        ) : emptyTables.length === 0 ? (
-          <div className="text-center py-8">
-            <CheckCircle className="h-10 w-10 text-primary mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">All candidate tables have data. No cleanup needed.</p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Table Name</TableHead>
-                <TableHead>Rows</TableHead>
-                <TableHead>Note</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {emptyTables.map((t) => (
-                <TableRow key={t.name}>
-                  <TableCell className="font-mono text-sm">{t.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">0 rows</Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{t.note}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        <p className="text-xs text-muted-foreground mt-3">
-          These tables are empty and may be safe to remove. Review before deleting — some may be used by future features.
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function SystemHealth() {
   const [selectedError, setSelectedError] = useState<ErrorLog | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -590,8 +509,6 @@ export default function SystemHealth() {
               </CardContent>
             </Card>
 
-            {/* Database Audit: Empty/Unused Tables */}
-            <DatabaseAuditCard />
           </TabsContent>
 
           <TabsContent value="audit" className="mt-4">
