@@ -5,6 +5,8 @@
 //          person and only report success when the server echoes the pushed
 //          validTimeEnd. Mismatches are logged via log_error_event.
 // v2.6.1 — credential-scoped token cache prevents stale/cross-branch sessions.
+// v2.7.0 — sweep also closes members with hardware_access_status="none" that
+// still hold a MIPS person record (pre-membership biometric enrolment).
 // v2.6.2 — sweep now includes overdue/pending invoice revokes with strict grace period.
 // v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
 // v2.0.0 — Unified MIPS hardware-access function (members + staff).
