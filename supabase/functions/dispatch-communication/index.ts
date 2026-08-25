@@ -1,3 +1,10 @@
+// dispatch-communication v1.33.0 — positional template slots render per-slot.
+// v1.33.0: FIX — the readable mirror of an approved WhatsApp template resolved
+//          {{1}}/{{2}}/… by literal name, which never matched, so every slot
+//          fell back to slot 1 and printed the recipient name in the amount /
+//          plan positions ("₹Jhony house of optics"). Each positional slot now
+//          resolves through the semantic key derived for its own index.
+
 // dispatch-communication v1.32.0 — send budget, circuit breaker, quiet-hours loop fix.
 // v1.32.0: every send passes `communication_send_allowed` (identical-content and
 //          hourly ceilings per recipient); WhatsApp adds a per-number circuit
