@@ -852,11 +852,31 @@ Deno.serve(async (req) => {
           validTimeEnd = formatDate(membership.end_date + "T23:59:59", validTimeEnd);
         }
       } else {
-        // No membership yet — give a 24h probation window instead of 2099
-        remarkExtra = "No active membership (probation window)";
-        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        validTimeEnd = formatDate(tomorrow.toISOString(), validTimeEnd);
+        // No membership → NO access. Enrolment is allowed (face/photo can be
+        // captured), but the device validity is the canonical revoked date so
+        // the turnstile can never open. No probation window, ever.
+        remarkExtra = "No membership — access revoked";
+        validTimeEnd = REVOKED_DATE;
       }
+
+      // Single source of truth: whatever the membership dates say, the server
+      // access gate has the final word (dues / blocked / lifecycle state).
+      try {
+        const { data: access } = await supabase.rpc("member_access_status", {
+          _member_id: person_id,
+          _branch_id: effectiveBranchId,
+        });
+        if (access && (access as any).allowed === false && validTimeEnd !== REVOKED_DATE) {
+          console.log(
+            `[sync-to-mips] access gate denied for ${personNo} (${(access as any).reason ?? "blocked"}) — forcing revoked validity`,
+          );
+          remarkExtra = `Access blocked: ${(access as any).reason ?? "gate denied"}`;
+          validTimeEnd = REVOKED_DATE;
+        }
+      } catch (e) {
+        console.error(`[sync-to-mips] access gate check failed: ${(e as Error).message}`);
+      }
+
     } else if (person_type === "employee") {
       tableName = "employees";
       deptId = 101;
