@@ -1,3 +1,5 @@
+// v2.11.0 — sweep also closes members with hardware_access_status="none" that
+//          still hold a MIPS person record (pre-membership biometric enrolment).
 // v2.10.0 — restore path: targeted per-member restore from the access trigger,
 //          and requires_sync flags are cleared once the hardware confirms.
 // v2.7.0 — read-back verification: after PUT /personInfo/person we re-read the
@@ -445,12 +447,18 @@ async function sweepExpired(supabase: any) {
   // of them (not just "active"), because a member flipped to blocked_overdue in the
   // CRM whose MIPS push silently failed would otherwise never be retried.
   const NEEDS_REVOKE_STATUSES = [
+    // "none" is included on purpose: a member enrolled for biometrics before
+    // buying a plan has status "none" but may still hold a live validity
+    // window on the device (the old sync "probation window" bug). Without
+    // this the sweep never closed that door.
+    "none",
     "active",
     "blocked_overdue",
     "blocked_member_status",
     "frozen",
     "expired",
   ];
+
 
   // 1. Hardware validity present but no active membership
   const { data: activeHardwareMembers, error: queryError } = await supabase
