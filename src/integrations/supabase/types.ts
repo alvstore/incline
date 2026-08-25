@@ -15610,6 +15610,10 @@ export type Database = {
           read_ct: number
         }[]
       }
+      reap_stuck_communication_logs: {
+        Args: { _older_than_minutes?: number }
+        Returns: Json
+      }
       reap_stuck_sending_campaigns: {
         Args: { p_max_age_min?: number }
         Returns: number
