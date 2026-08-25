@@ -282,6 +282,15 @@ serve(async (req) => {
     let notified = 0;
     let skipped = 0;
     for (const row of stuck) {
+      // v3.1.0 — Instagram/Messenger inbounds are mostly existing members
+      // reacting to stories/reels. They must NOT create front-desk tasks or a
+      // holding line; only WhatsApp keeps the SLA alerting.
+      const platform = String(row.platform || "whatsapp").toLowerCase();
+      if (platform !== "whatsapp") {
+        await logLeadLoss(row, "skipped_non_whatsapp_platform");
+        skipped++;
+        continue;
+      }
       if (await alreadyHandledRecently(row.phone_number)) {
         await logLeadLoss(row, "already_handled_within_24h");
         skipped++;
