@@ -239,26 +239,34 @@ export function ClientsTable({
               <TableRow key={pkg.id} className="transition-colors duration-150 hover:bg-muted/50">
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold',
-                        avatarColor(pkg.member_name),
+                    <Avatar className="h-8 w-8">
+                      {pkg.member_avatar_url && (
+                        <AvatarImage src={pkg.member_avatar_url} alt={pkg.member_name || 'Member'} />
                       )}
-                      aria-hidden
-                    >
-                      {initialsOf(pkg.member_name)}
-                    </span>
+                      <AvatarFallback className={cn('text-xs font-semibold', avatarColor(pkg.member_name))}>
+                        {initialsOf(pkg.member_name)}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className="min-w-0">
                       <span className="block truncate font-medium text-foreground">
                         {pkg.member_name || '—'}
                       </span>
-                      {pkg.member_code && (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {pkg.member_code}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1.5">
+                        {pkg.member_code && (
+                          <span className="truncate text-xs text-muted-foreground">
+                            {pkg.member_code}
+                          </span>
+                        )}
+                        {Number(pkg.dues_amount || 0) > 0 && (
+                          <Badge className="rounded-full bg-destructive/10 px-2 py-0 text-[10px] font-medium text-destructive hover:bg-destructive/10">
+                            <IndianRupee className="mr-0.5 h-2.5 w-2.5" aria-hidden />
+                            {Number(pkg.dues_amount).toLocaleString('en-IN')} due
+                          </Badge>
+                        )}
+                      </span>
                     </span>
                   </div>
+
                 </TableCell>
                 <TableCell className="text-foreground">{pkg.package_name}</TableCell>
                 <TableCell className="text-foreground">{pkg.trainer_name || '—'}</TableCell>
