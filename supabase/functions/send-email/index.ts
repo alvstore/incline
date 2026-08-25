@@ -214,6 +214,7 @@ Deno.serve(async (req) => {
             label: body?.label || "app_email",
             idempotency_key: body?.idempotency_key || messageId,
             message_id: messageId,
+            unsubscribe_token: unsubscribeToken,
             queued_at: new Date().toISOString(),
           },
         });
