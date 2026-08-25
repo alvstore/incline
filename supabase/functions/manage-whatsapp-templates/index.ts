@@ -335,9 +335,17 @@ serve(async (req) => {
         .not('trigger_event', 'is', null)
         .neq('trigger_event', 'custom');
       let mapped = 0;
+      const preferredByEvent = new Map<string, { id: string; trigger_event: string; meta_template_name: string }>();
       for (const candidate of approvedCandidates || []) {
         const live = templates.find((item: any) => item.name === candidate.meta_template_name);
         if (!live || live.status !== 'APPROVED') continue;
+        const current = preferredByEvent.get(candidate.trigger_event);
+        const currentLive = current ? templates.find((item: any) => item.name === current.meta_template_name) : null;
+        if (!current || (live.category === 'UTILITY' && currentLive?.category !== 'UTILITY')) {
+          preferredByEvent.set(candidate.trigger_event, candidate);
+        }
+      }
+      for (const candidate of preferredByEvent.values()) {
         const { error: mappingError } = await supabase.from('whatsapp_triggers').upsert({
           branch_id,
           event_name: candidate.trigger_event,
