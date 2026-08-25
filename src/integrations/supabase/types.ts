@@ -9786,47 +9786,6 @@ export type Database = {
           },
         ]
       }
-      payroll_rules: {
-        Row: {
-          branch_id: string
-          calculation: Json
-          created_at: string
-          id: string
-          is_active: boolean | null
-          name: string
-          rule_type: string
-          updated_at: string
-        }
-        Insert: {
-          branch_id: string
-          calculation: Json
-          created_at?: string
-          id?: string
-          is_active?: boolean | null
-          name: string
-          rule_type: string
-          updated_at?: string
-        }
-        Update: {
-          branch_id?: string
-          calculation?: Json
-          created_at?: string
-          id?: string
-          is_active?: boolean | null
-          name?: string
-          rule_type?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payroll_rules_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       payroll_run_lines: {
         Row: {
           blocks_attended: number
@@ -12424,6 +12383,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      template_manager_state: {
+        Row: {
+          consecutive_429: number
+          cursor_branch_id: string | null
+          job_key: string
+          last_finished_at: string | null
+          last_result: Json
+          last_started_at: string | null
+          lease_until: string | null
+          paused_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          consecutive_429?: number
+          cursor_branch_id?: string | null
+          job_key: string
+          last_finished_at?: string | null
+          last_result?: Json
+          last_started_at?: string | null
+          lease_until?: string | null
+          paused_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          consecutive_429?: number
+          cursor_branch_id?: string | null
+          job_key?: string
+          last_finished_at?: string | null
+          last_result?: Json
+          last_started_at?: string | null
+          lease_until?: string | null
+          paused_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       templates: {
         Row: {
