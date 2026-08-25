@@ -26,6 +26,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Managed Lovable Cloud sending domain. Set EMAIL_SENDER_DOMAIN to override.
+const DEFAULT_SENDER_DOMAIN = "notify.theincline.in";
+// Kill-switch: set CLOUD_EMAIL_DISABLED=true to force the SMTP path only.
+const CLOUD_EMAIL_ENABLED = (Deno.env.get("CLOUD_EMAIL_DISABLED") || "").toLowerCase() !== "true";
+
 // ── Branded HTML Email Template ─────────────────────────────────────────────
 function wrapInBrandedTemplate(
   bodyHtml: string,
