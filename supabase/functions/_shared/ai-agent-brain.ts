@@ -808,7 +808,7 @@ export async function runUnifiedAgent(
   // skip fields already on file. Stops the bot from re-asking name/email/goal/
   // plan_interest when the CRM already has them. v1.0.0
   let leadCtx: LeadContext | null = null;
-  if (!memberCtx.isMember) {
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
     try {
       const variants = phoneVariants(ctx.senderId);
       leadCtx = await resolveLeadContext(supabase, variants, ctx.branchId);
@@ -955,7 +955,7 @@ export async function runUnifiedAgent(
   //     snapshot into a real leads row BEFORE any deterministic short-circuit
   //     returns. Prevents the Roma/Dinesh leak where name+email+goal+plan
   //     were all known but the CRM never received a row.
-  if (!memberCtx.isMember) {
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
     try {
       const ensured = await ensureLeadFromMemory(supabase, {
         branchId: ctx.branchId,
@@ -1197,7 +1197,8 @@ GENERAL RULES:
   const inPostCaptureNurture = !memberCtx.isMember && (fullyCaptured || leadAlreadyEngaged);
 
   // v9.0.0 — STRICT MEMBER GUARD: If resolved as a member, skip the funnel entirely.
-  const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+  // v10.1.0 — internal team members never enter the lead funnel.
+  const shouldCaptureLead = !memberCtx.isMember && !memberCtx.isStaff && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
 
 
   // v10.0.0 — DETERMINISTIC ASK-LADDER REMOVED.
