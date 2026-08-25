@@ -173,6 +173,25 @@ Deno.serve(async (req) => {
       const messageId = crypto.randomUUID();
       const senderDomain = Deno.env.get("EMAIL_SENDER_DOMAIN") || DEFAULT_SENDER_DOMAIN;
       try {
+        // Transactional sends require a one-click unsubscribe token per address.
+        const recipientEmail = String(to).trim().toLowerCase();
+        let unsubscribeToken: string | null = null;
+        const { data: existingTok } = await supabase
+          .from("email_unsubscribe_tokens")
+          .select("token")
+          .eq("email", recipientEmail)
+          .maybeSingle();
+        unsubscribeToken = existingTok?.token ?? null;
+        if (!unsubscribeToken) {
+          const fresh = crypto.randomUUID().replace(/-/g, "");
+          const { data: inserted } = await supabase
+            .from("email_unsubscribe_tokens")
+            .upsert({ email: recipientEmail, token: fresh }, { onConflict: "email" })
+            .select("token")
+            .maybeSingle();
+          unsubscribeToken = inserted?.token ?? fresh;
+        }
+
         const { error: qErr } = await supabase.rpc("enqueue_email", {
           queue_name: "transactional_emails",
           payload: {
