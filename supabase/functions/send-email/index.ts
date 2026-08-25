@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     // Managed sending domain, no per-hour SMTP ceiling. Attachments are NOT
     // supported by the managed sender, so those always take the SMTP path.
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    let result: { success: boolean; message_id?: string; error?: string } | null = null;
+    let result: { success: boolean; message_id?: string; error?: string; status?: string } | null = null;
     let providerUsed = "lovable_cloud";
     let primaryError: string | null = null;
 
@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
           },
         });
         if (qErr) throw new Error(qErr.message);
-        result = { success: true, message_id: messageId, status: "queued" } as typeof result & { status: string };
+        result = { success: true, message_id: messageId, status: "queued" };
       } catch (e) {
         primaryError = (e as Error).message;
         console.warn("[send-email] Lovable Cloud queue unavailable, falling back to SMTP:", primaryError);

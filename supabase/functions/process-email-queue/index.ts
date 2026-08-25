@@ -372,7 +372,6 @@ Deno.serve(async (req) => {
           status: 'failed',
           error_message: errorMsg.slice(0, 1000),
         })
-        await reconcileCommunicationLog(supabase, payload, 'failed', null, errorMsg.slice(0, 1000))
         if (payload?.message_id && typeof payload.message_id === 'string') {
           failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
         }
