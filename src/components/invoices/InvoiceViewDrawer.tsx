@@ -345,22 +345,47 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
               <CardContent className="pt-4">
                 <h4 className="font-medium mb-3">Payment History</h4>
                 <div className="space-y-2">
-                  {payments.map((payment: any) => (
-                    <div key={payment.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                        <span className="capitalize">{payment.payment_method}</span>
-                        <span className="text-muted-foreground">
-                          • {format(new Date(payment.payment_date), 'dd MMM yyyy')}
+                  {payments.map((payment: any) => {
+                    const reversed = isReversedPayment(payment);
+                    const label = reversalLabel(payment);
+                    return (
+                      <div
+                        key={payment.id}
+                        className={`flex justify-between items-center text-sm p-2 rounded ${reversed ? 'bg-muted/30' : 'bg-muted/50'}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CreditCard className={`h-4 w-4 shrink-0 ${reversed ? 'text-muted-foreground/60' : 'text-muted-foreground'}`} />
+                          <span className={`capitalize ${reversed ? 'text-muted-foreground' : ''}`}>
+                            {payment.payment_method}
+                          </span>
+                          <span className="text-muted-foreground">
+                            • {format(new Date(payment.payment_date), 'dd MMM yyyy')}
+                          </span>
+                          {label && (
+                            <Badge className="bg-muted text-muted-foreground hover:bg-muted rounded-full px-2 py-0 text-[10px] font-medium">
+                              {label}
+                            </Badge>
+                          )}
+                        </div>
+                        <span
+                          className={`font-medium ${reversed ? 'text-muted-foreground line-through' : 'text-success'}`}
+                        >
+                          ₹{Number(payment.amount || 0).toLocaleString()}
                         </span>
                       </div>
-                      <span className="font-medium text-success">₹{payment.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                {payments.some((p: any) => isReversedPayment(p)) && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Counted toward this invoice: ₹{countedPaid.toLocaleString()} — reversed entries stay
+                    listed for audit but are not money received.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
+
 
           {/* Notes */}
           {invoice.notes && (
