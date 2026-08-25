@@ -4,6 +4,7 @@ export interface PTSessionRow {
   id: string;
   scheduled_at: string;
   member_name?: string | null;
+  member_avatar_url?: string | null;
   trainer_id?: string | null;
   duration_minutes?: number | null;
   status: string;
@@ -11,12 +12,16 @@ export interface PTSessionRow {
 
 export interface PTMemberPackageRow {
   id: string;
+  member_id?: string | null;
   member_name?: string | null;
   member_code?: string | null;
+  member_avatar_url?: string | null;
   package_name?: string | null;
   package_type?: string | null;
   trainer_id?: string | null;
   trainer_name?: string | null;
+  trainer_avatar_url?: string | null;
+  dues_amount?: number | null;
   branch_id?: string | null;
   sessions_total?: number | null;
   sessions_remaining?: number | null;
@@ -28,6 +33,7 @@ export interface PTMemberPackageRow {
   invoice_id?: string | null;
   invoice_number?: string | null;
 }
+
 
 export interface PTPackageRow {
   id: string;

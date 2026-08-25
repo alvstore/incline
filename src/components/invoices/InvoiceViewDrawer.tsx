@@ -273,7 +273,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
                 <TableBody>
                   {invoice.invoice_items?.map((item: any) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.description}</TableCell>
+                      <TableCell>{readableItemDescription(item.description)}</TableCell>
                       <TableCell className="text-right">{item.quantity || 1}</TableCell>
                       <TableCell className="text-right">₹{item.unit_price.toLocaleString()}</TableCell>
                       <TableCell className="text-right">₹{item.total_amount.toLocaleString()}</TableCell>
