@@ -1,3 +1,8 @@
+// v2.6.0 — Managed Lovable Cloud email queue (notify.theincline.in) is now the
+//           PRIMARY path for attachment-free app emails; the configured provider
+//           (Hostinger SMTP) is the automatic fallback when the queue is
+//           unavailable or when the message carries PDF attachments. Both paths
+//           record the provider used and any primary failure reason.
 // v2.5.0 — Branded shell hardening: brand "INCLINE" + tagline "Rise. Reflect. Repeat.";
 //           defensively strips <html>/<head>/<body>/<style>/<script>/<meta>/<link> from
 //           incoming HTML so AI-drafted or legacy full documents don't nest inside shell.
