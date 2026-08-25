@@ -181,7 +181,16 @@ Deno.serve(async (req) => {
             sender_domain: senderDomain,
             subject,
             html: finalHtml,
-            text: text || undefined,
+            // The managed sender REQUIRES a plain-text part; derive it from the
+            // HTML when the caller only supplied markup.
+            text: text || String(finalHtml)
+              .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;/g, '&')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 5000) || subject,
             purpose: "transactional",
             label: body?.label || "app_email",
             idempotency_key: body?.idempotency_key || messageId,
