@@ -1,3 +1,7 @@
+// v1.2.0 — Normalise dedupe keys to `campaign:<cid>:<source_type>:<source_ref_id>`
+//          so variant suffixes (`:a1`, `:retry:<ts>`, `:fallback:<ts>`) are folded
+//          into one recipient outcome. Previously any suffixed log row was never
+//          matched, so provider failures (e.g. Meta 131049) were counted as sent.
 // v1.1.0 — Collapse duplicate retry rows by source key and understand
 //          `:retry:<ts>` dedupe suffixes before counting delivery status.
 // v1.0.0 — Fold provider DLR outcomes back into `campaigns` counters so
@@ -64,7 +68,8 @@ Deno.serve(async (req) => {
 
     const dlrByKey = new Map<string, any>();
     for (const l of logs || []) {
-      const base = String((l as any).dedupe_key || '').replace(/:retry:\d+$/, '');
+      const base = baseCampaignKey((l as any).dedupe_key);
+      if (!base) continue;
       const existing = dlrByKey.get(base);
       if (!existing || statusRank((l as any).delivery_status) > statusRank(existing.delivery_status)) {
         dlrByKey.set(base, l);
@@ -74,6 +79,7 @@ Deno.serve(async (req) => {
     const recByKey = new Map<string, any>();
     for (const r of recips || []) {
       const key = `campaign:${cid}:${(r as any).source_type}:${(r as any).source_ref_id}`;
+
       const existing = recByKey.get(key);
       if (!existing || recipientRank((r as any).status) > recipientRank(existing.status)) {
         recByKey.set(key, r);
@@ -86,11 +92,14 @@ Deno.serve(async (req) => {
       const dlrStatus = String(dlr?.delivery_status || '').toLowerCase();
       const recStatus = String((r as any).status || '').toLowerCase();
 
+      // Provider DLR always wins over the send-time recipient snapshot.
       if (dlrStatus === 'read' || dlr?.read_at) { read++; delivered++; sent++; continue; }
       if (dlrStatus === 'delivered' || dlr?.delivered_at) { delivered++; sent++; continue; }
-      if (recStatus === 'sent' || dlrStatus === 'sent' || dlrStatus === 'queued') { sent++; continue; }
-      if (dlrStatus === 'failed' || recStatus === 'failed') { failed++; continue; }
-      if (recStatus === 'skipped') { failed++; continue; }
+      if (dlrStatus === 'failed' || dlrStatus === 'bounced' || dlrStatus === 'suppressed') { failed++; continue; }
+      if (dlrStatus === 'sent' || dlrStatus === 'queued' || dlrStatus === 'sending') { sent++; continue; }
+      if (recStatus === 'sent') { sent++; continue; }
+      if (recStatus === 'failed' || recStatus === 'skipped') { failed++; continue; }
+
     }
 
     const total = recByKey.size || (c as any).recipients_count || 0;
@@ -144,17 +153,28 @@ Deno.serve(async (req) => {
   });
 });
 
+/** Fold every dedupe-key variant (`:a1`, `:retry:<ts>`, `:fallback:<ts>`, …)
+ *  back to `campaign:<cid>:<source_type>:<source_ref_id>`. */
+function baseCampaignKey(raw: unknown): string | null {
+  const parts = String(raw || '').split(':');
+  if (parts.length < 4 || parts[0] !== 'campaign') return null;
+  return parts.slice(0, 4).join(':');
+}
+
 function statusRank(status: unknown): number {
   switch (String(status || '').toLowerCase()) {
     case 'read': return 5;
     case 'delivered': return 4;
     case 'sent': return 3;
-    case 'queued': return 2;
+    case 'queued':
+    case 'sending': return 2;
     case 'failed':
-    case 'bounced': return 1;
+    case 'bounced':
+    case 'suppressed': return 1;
     default: return 0;
   }
 }
+
 
 function recipientRank(status: unknown): number {
   switch (String(status || '').toLowerCase()) {
