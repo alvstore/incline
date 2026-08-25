@@ -2049,10 +2049,19 @@ export function MemberProfileDrawer({
                   <CardContent className="space-y-2 text-sm">
                     <p className="font-medium">{activePTPackage.pt_packages?.name}</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <div>Sessions: {activePTPackage.sessions_remaining}/{activePTPackage.sessions_total}</div>
-                      <div>Trainer: Assigned</div>
+                      <div>
+                        {activePTPackage.sessions_total > 0
+                          ? `Sessions: ${activePTPackage.sessions_remaining}/${activePTPackage.sessions_total}`
+                          : 'Plan: Monthly (unlimited sessions)'}
+                      </div>
+                      <div>
+                        Trainer: {(activePTPackage as any).trainers?.full_name
+                          ?? (activePTPackage as any).trainer_name
+                          ?? 'Assigned'}
+                      </div>
                       <div>Expires: {format(new Date(activePTPackage.expiry_date), 'dd MMM yyyy')}</div>
                     </div>
+
                   </CardContent>
                 </Card>
               )}
