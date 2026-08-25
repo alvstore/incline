@@ -252,25 +252,52 @@ export async function fetchActiveMemberPackages(
   ].filter((id): id is string => !!id);
 
   let names: Record<string, string> = {};
+  let avatars: Record<string, string | null> = {};
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, avatar_url")
       .in("id", [...new Set(userIds)]);
     names = (profiles || []).reduce((acc, p) => {
       acc[p.id] = p.full_name || "Unknown";
       return acc;
     }, {} as Record<string, string>);
+    avatars = (profiles || []).reduce((acc, p) => {
+      acc[p.id] = (p as any).avatar_url ?? null;
+      return acc;
+    }, {} as Record<string, string | null>);
+  }
+
+  // Outstanding dues per member so a trainer can see at a glance that a client
+  // is behind on payment. Reversed/cancelled invoices are excluded by status.
+  const memberIds = [...new Set(packages.map((p) => p.member_id).filter(Boolean))] as string[];
+  const dues: Record<string, number> = {};
+  if (memberIds.length > 0) {
+    const { data: openInvoices } = await supabase
+      .from("invoices")
+      .select("member_id, total_amount, amount_paid")
+      .in("member_id", memberIds)
+      .in("status", ["pending", "partial", "overdue"]);
+    for (const inv of openInvoices || []) {
+      const balance = Number(inv.total_amount || 0) - Number(inv.amount_paid || 0);
+      if (balance > 0 && inv.member_id) {
+        dues[inv.member_id] = (dues[inv.member_id] || 0) + balance;
+      }
+    }
   }
 
   return packages.map((p) => ({
     ...p,
     package_name: (p.package as any)?.name,
     trainer_name: (p.trainer as any)?.user_id ? names[(p.trainer as any).user_id] : undefined,
+    trainer_avatar_url: (p.trainer as any)?.user_id ? avatars[(p.trainer as any).user_id] ?? null : null,
     member_code: (p.member as any)?.member_code,
     member_name: (p.member as any)?.user_id ? names[(p.member as any).user_id] : (p.member as any)?.member_code,
+    member_avatar_url: (p.member as any)?.user_id ? avatars[(p.member as any).user_id] ?? null : null,
+    dues_amount: p.member_id ? dues[p.member_id] || 0 : 0,
   }));
 }
+
 
 // Schedule PT session
 export async function schedulePTSession(
