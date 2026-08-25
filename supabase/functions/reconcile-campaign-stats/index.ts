@@ -92,11 +92,14 @@ Deno.serve(async (req) => {
       const dlrStatus = String(dlr?.delivery_status || '').toLowerCase();
       const recStatus = String((r as any).status || '').toLowerCase();
 
+      // Provider DLR always wins over the send-time recipient snapshot.
       if (dlrStatus === 'read' || dlr?.read_at) { read++; delivered++; sent++; continue; }
       if (dlrStatus === 'delivered' || dlr?.delivered_at) { delivered++; sent++; continue; }
-      if (recStatus === 'sent' || dlrStatus === 'sent' || dlrStatus === 'queued') { sent++; continue; }
-      if (dlrStatus === 'failed' || recStatus === 'failed') { failed++; continue; }
-      if (recStatus === 'skipped') { failed++; continue; }
+      if (dlrStatus === 'failed' || dlrStatus === 'bounced' || dlrStatus === 'suppressed') { failed++; continue; }
+      if (dlrStatus === 'sent' || dlrStatus === 'queued' || dlrStatus === 'sending') { sent++; continue; }
+      if (recStatus === 'sent') { sent++; continue; }
+      if (recStatus === 'failed' || recStatus === 'skipped') { failed++; continue; }
+
     }
 
     const total = recByKey.size || (c as any).recipients_count || 0;
