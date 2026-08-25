@@ -590,7 +590,7 @@ export function PtAttendanceTabContent() {
   const { selectedBranch } = useBranchContext();
   const { roles, user } = useAuth();
   const isTrainerOnly = roles.length > 0 && roles.every((r: any) => r.role === 'trainer');
-  const canMark = roles.some((r: any) => ['owner', 'admin', 'manager', 'trainer'].includes(r.role));
+  const canMark = roles.some((r: any) => ['owner', 'admin', 'manager', 'staff', 'trainer'].includes(r.role));
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(null);

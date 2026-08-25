@@ -48,6 +48,7 @@ export interface PTPackageRow {
 
 export interface TrainerRevenueRow {
   name: string;
+  avatarUrl?: string | null;
   revenue: number;
   clients: number;
 }

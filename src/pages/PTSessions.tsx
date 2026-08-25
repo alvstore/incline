@@ -28,6 +28,7 @@ import { EditPTPackageDrawer } from "@/components/pt/EditPTPackageDrawer";
 import { CancelInvoiceDrawer } from "@/components/invoices/CancelInvoiceDrawer";
 import { PendingPaymentsAlert } from "@/components/pt/PendingPaymentsAlert";
 import { TodaySessionsPanel } from "@/components/pt/TodaySessionsPanel";
+import { PtAttendanceTabContent } from "@/components/pt/PtAttendanceTabContent";
 import { ClientsTable } from "@/components/pt/ClientsTable";
 import { InsightsPanel } from "@/components/pt/InsightsPanel";
 import { PackageCard } from "@/components/pt/PackageCard";
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils";
 export default function PTSessionsPage() {
   const { roles, user } = useAuth();
   const canManage = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
+  const canOperateAttendance = roles.some(r => ['owner', 'admin', 'manager', 'staff', 'trainer'].includes(r.role));
   const { effectiveBranchId, branchFilter } = useBranchContext();
   const [isCreatePackageOpen, setIsCreatePackageOpen] = useState(false);
   const [isEditPackageOpen, setIsEditPackageOpen] = useState(false);
@@ -98,13 +100,18 @@ export default function PTSessionsPage() {
   const totalSessions = completedCount + scheduledCount + cancelledCount;
 
   const trainerRevenue = useMemo(() => {
-    const map = new Map<string, { name: string; revenue: number; clients: number }>();
+    const map = new Map<string, { name: string; avatarUrl?: string | null; revenue: number; clients: number }>();
     activePackages?.forEach((pkg: any) => {
       // If trainer, only include own revenue
       if (isTrainer && !canManage && pkg.trainer?.user_id !== user?.id) return;
       
       const id = pkg.trainer_id || 'unknown';
-      const existing = map.get(id) || { name: pkg.trainer_name || 'Unassigned', revenue: 0, clients: 0 };
+      const existing = map.get(id) || {
+        name: pkg.trainer_name || 'Unassigned',
+        avatarUrl: pkg.trainer_avatar_url ?? null,
+        revenue: 0,
+        clients: 0,
+      };
       existing.revenue += pkg.price_paid || 0;
       existing.clients += 1;
       map.set(id, existing);
@@ -295,9 +302,9 @@ export default function PTSessionsPage() {
           onCancelInvoice={setCancelInvoiceTarget}
         />
 
-        <Tabs defaultValue={canManage ? "today" : "clients"} className="space-y-4">
+        <Tabs defaultValue={canOperateAttendance ? "today" : "clients"} className="space-y-4">
           <TabsList className="rounded-xl bg-muted p-1">
-            {canManage && (
+            {canOperateAttendance && (
               <TabsTrigger value="today" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
                 Today's Sessions
               </TabsTrigger>
@@ -323,14 +330,17 @@ export default function PTSessionsPage() {
 
 
           <TabsContent value="today">
-            <TodaySessionsPanel
-              sessions={(sessions || []) as any}
-              loading={sessionsLoading}
-              busy={completeSession.isPending || cancelSession.isPending}
-              onComplete={handleCompleteSession}
-              onCancel={handleCancelSession}
-              onSchedule={() => setIsScheduleOpen(true)}
-            />
+            <div className="space-y-5">
+              <PtAttendanceTabContent />
+              <TodaySessionsPanel
+                sessions={(sessions || []) as any}
+                loading={sessionsLoading}
+                busy={completeSession.isPending || cancelSession.isPending}
+                onComplete={handleCompleteSession}
+                onCancel={handleCancelSession}
+                onSchedule={() => setIsScheduleOpen(true)}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="clients">
@@ -460,7 +470,7 @@ export default function PTSessionsPage() {
         <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Schedule PT session</SheetTitle>
-            <SheetDescription>Book a personal training session for an active client package.</SheetDescription>
+            <SheetDescription>Optional appointment booking. Daily PT attendance is recorded from Today&apos;s Sessions.</SheetDescription>
           </SheetHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
@@ -470,11 +480,16 @@ export default function PTSessionsPage() {
                   <SelectValue placeholder="Select member package" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activePackages?.map((pkg) => (
-                    <SelectItem key={pkg.id} value={pkg.id}>
-                      {pkg.member_name} - {pkg.package_name} ({pkg.sessions_remaining} left)
-                    </SelectItem>
-                  ))}
+                  {activePackages?.map((pkg) => {
+                    const monthly = pkg.package_type === 'monthly' || Number(pkg.sessions_total || 0) === 0;
+                    return (
+                      <SelectItem key={pkg.id} value={pkg.id}>
+                        {pkg.member_name} - {pkg.package_name} ({monthly
+                          ? `valid until ${format(new Date(pkg.expiry_date), 'dd MMM yyyy')}`
+                          : `${pkg.sessions_remaining ?? 0} sessions left`})
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
