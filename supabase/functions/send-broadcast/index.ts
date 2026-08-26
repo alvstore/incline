@@ -1022,10 +1022,12 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       const rows: any[] = batch || [];
 
       for (const r of rows) {
-        let status: 'sent' | 'failed' | 'skipped' = 'failed';
+        let status: 'submitted' | 'queued' | 'sent' | 'failed' | 'skipped' | 'suppressed' = 'failed';
         let error: string | null = null;
         let pacingCode: number | null = null;
+        let marketingBlocked: string | null = null;
         let fallbackUsed = false;
+
         let fallbackChannel: string | null = null;
         let providerRoute: string | null = channel === 'whatsapp' ? 'cloud_api' : channel;
 
