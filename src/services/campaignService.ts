@@ -444,6 +444,21 @@ export async function resumeCampaignSending(campaignId: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Un-pause a campaign that send-broadcast auto-paused (Meta terminal error
+ * concentration). `handleChunk` refuses to run while status is `paused`, so we
+ * flip it back to `sending` first, then kick a fresh chunk isolate.
+ */
+export async function resumePausedCampaign(campaignId: string): Promise<void> {
+  const { error: upErr } = await supabase
+    .from('campaigns')
+    .update({ status: 'sending', last_progress_at: new Date().toISOString() })
+    .eq('id', campaignId)
+    .eq('status', 'paused');
+  if (upErr) throw upErr;
+  await resumeCampaignSending(campaignId);
+}
+
 /** Ask the reconciler to refresh this campaign's stats immediately (no cron wait). */
 export async function reconcileCampaignStats(campaignId: string): Promise<void> {
   const { error } = await supabase.functions.invoke('reconcile-campaign-stats', {

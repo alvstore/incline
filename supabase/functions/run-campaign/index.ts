@@ -126,6 +126,23 @@ Deno.serve(async (req) => {
     }
 
     const total = (broadcastBody.member_ids?.length ?? broadcastBody.recipients?.length ?? 0);
+
+    // send-broadcast v4+/v5 answers async for anything but tiny audiences:
+    // { accepted: true, background: true, ... } with NO sent/failed counts.
+    // In that case the background chunk loop (and the reconciler) own the
+    // terminal status/counters — never overwrite them here or the campaign is
+    // falsely marked "sent 0/0" while dispatch is still running.
+    const isAsyncAck = body?.accepted === true || body?.background === true ||
+      (body?.sent === undefined && body?.failed === undefined);
+
+    if (isAsyncAck) {
+      await admin.from("campaigns").update({
+        recipients_count: total,
+        last_run_error: null,
+      }).eq("id", c.id);
+      return json({ ok: true, accepted: true, background: true, total });
+    }
+
     await admin.from("campaigns").update({
       sent_at: new Date().toISOString(),
       recipients_count: total,
