@@ -29,6 +29,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
 import { phoneVariants } from "../_shared/phone.ts";
+import { mayAdvance } from "../_shared/deliveryState.ts";
+
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 
 const corsHeaders = {
