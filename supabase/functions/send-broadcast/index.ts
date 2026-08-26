@@ -34,6 +34,12 @@
 // v3.1.0 — Route through dispatch-communication with Meta template support.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  classifyMetaError,
+  extractMetaCode,
+  marketingBlockedUntil,
+} from "../_shared/metaErrorPolicy.ts";
+
 
 // deno-lint-ignore no-explicit-any
 declare const EdgeRuntime: any;
@@ -1022,10 +1028,12 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       const rows: any[] = batch || [];
 
       for (const r of rows) {
-        let status: 'sent' | 'failed' | 'skipped' = 'failed';
+        let status: 'submitted' | 'queued' | 'sent' | 'failed' | 'skipped' | 'suppressed' = 'failed';
         let error: string | null = null;
         let pacingCode: number | null = null;
+        let marketingBlocked: string | null = null;
         let fallbackUsed = false;
+
         let fallbackChannel: string | null = null;
         let providerRoute: string | null = channel === 'whatsapp' ? 'cloud_api' : channel;
 
@@ -1107,10 +1115,15 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
               ...(attachment ? { attachment } : {}),
             },
           });
-          const ok = !dErr && ['sent', 'queued', 'deduped'].includes(String((dRes as any)?.status || ''));
-          status = ok ? 'sent' : 'failed';
+          // Phase 5: dispatcher status maps to a *lifecycle* state, never an
+          // optimistic "sent". Provider acceptance = `submitted`; only a real
+          // provider delivery event may promote to sent/delivered/read.
+          const dStatus = String((dRes as any)?.status || '');
+          const ok = !dErr && ['sent', 'queued', 'deduped'].includes(dStatus);
+          status = !ok ? 'failed' : (dStatus === 'queued' ? 'queued' : 'submitted');
           if (!ok) error = dErr?.message || (dRes as any)?.reason || (dRes as any)?.error || 'dispatch_failed';
           providerRoute = (dRes as any)?.provider_route ?? providerRoute;
+
 
           if (!ok && channel === 'whatsapp' && r.phone) {
             const m = String(error || '').match(/\b(131049|130472)\b/);
@@ -1131,18 +1144,22 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
                 fallbackUsed = true;
                 fallbackChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
                 if (fbOk) {
-                  status = 'sent';
+                  status = String((fbRes as any)?.status) === 'queued' ? 'queued' : 'submitted';
                   error = `paced_${pacingCode}_fallback_via_${fallbackChannel}`;
                   providerRoute = fallbackChannel;
                 } else {
                   error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
                 }
               } else {
-                // 131049 is terminal for this payload. A future intentional
-                // campaign may try after cooldown; this row must not loop.
-                status = 'failed';
-                error = `paced_${pacingCode}_terminal`;
+                // Phase 9: 131049/130472 is a recipient-level marketing pacing
+                // outcome, not a transient error. Suppress this recipient for
+                // the policy cooldown; do NOT loop, do NOT fail the campaign.
+                const pol = classifyMetaError({ code: String(pacingCode) });
+                status = 'suppressed';
+                error = `paced_${pacingCode}: ${pol.description}`;
+                marketingBlocked = marketingBlockedUntil(pol);
               }
+
             }
           }
         } catch (e: any) {
@@ -1196,7 +1213,12 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
             status, error, pacing_code: pacingCode,
             fallback_used: fallbackUsed, fallback_channel: fallbackChannel,
             provider_route: providerRoute, dispatched_at: new Date().toISOString(),
+            submitted_at: status === 'submitted' ? new Date().toISOString() : null,
+            last_meta_error_code: pacingCode ? String(pacingCode) : null,
+            last_meta_error_at: pacingCode ? new Date().toISOString() : null,
+            marketing_blocked_until: marketingBlocked,
           }).eq('id', r.id);
+
         }
 
         if (effectivePacingMs > 0) await new Promise(res => setTimeout(res, effectivePacingMs));
@@ -1226,29 +1248,33 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
 
 
 
-      // Recompute counters from DB (source of truth).
-      const [sentAgg, failedAgg, pendingAgg] = await Promise.all([
-        adminClient.from('campaign_recipients').select('*', { count: 'exact', head: true })
-          .eq('campaign_id', campaign_id).eq('status', 'sent'),
-        adminClient.from('campaign_recipients').select('*', { count: 'exact', head: true })
-          .eq('campaign_id', campaign_id).eq('status', 'failed'),
-        adminClient.from('campaign_recipients').select('*', { count: 'exact', head: true })
-          .eq('campaign_id', campaign_id).in('status', ['pending', 'dispatching']),
-      ]);
-      const sentCount = sentAgg.count ?? 0;
-      const failedCount = failedAgg.count ?? 0;
-      const remaining = pendingAgg.count ?? 0;
+      // Phase 6: campaign_recipients is the ONLY source of truth. The RPC
+      // recomputes every lifecycle bucket and writes the derived cache columns.
+      const { data: statsRaw } = await adminClient.rpc('refresh_campaign_stats', { p_campaign_id: campaign_id });
+      const stats = (statsRaw ?? {}) as Record<string, number>;
+      const sentCount = Number(stats.sent ?? 0);
+      const submittedCount = Number(stats.submitted ?? 0);
+      const queuedCount = Number(stats.queued ?? 0);
+      const failedCount = Number(stats.failed ?? 0);
+      const suppressedCount = Number(stats.suppressed ?? 0);
+      const remaining = Number(stats.pending ?? 0);
+      const deliveredish = sentCount + submittedCount + queuedCount;
 
       let shouldPause = false;
       let pauseReason = '';
       if (failedCount >= 3) {
         const { data: recentFails } = await adminClient.from('campaign_recipients')
           .select('phone, error').eq('campaign_id', campaign_id).eq('status', 'failed').limit(500);
-        const TERMINAL = ['132000', '132001', '132012', '132018', '131051'];
+        // Phase 7/9: pause decisions use the shared policy. Pacing outcomes are
+        // recipient-level and must never pause or fail a whole campaign.
         const counts: Record<string, number> = {};
         for (const row of (recentFails || [])) {
-          const m = String((row as any).error || '').match(/\b(13\d{4})\b/);
-          if (m && TERMINAL.includes(m[1])) counts[m[1]] = (counts[m[1]] || 0) + 1;
+          const code = extractMetaCode(String((row as any).error || ''));
+          if (!code) continue;
+          const pol = classifyMetaError({ code });
+          if (pol.operator_action_required && pol.class !== 'pacing') {
+            counts[code] = (counts[code] || 0) + 1;
+          }
         }
         const [worst, wc] = Object.entries(counts).sort(([, x], [, y]) => y - x)[0] || [null, 0];
         if (worst && (wc as number) >= 3 && ((wc as number) / Math.max(1, failedCount)) >= 0.25) {
@@ -1271,16 +1297,19 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
         : new Date().toISOString();
 
+      // A campaign only "fails" when nothing at all reached the provider and
+      // the failures were not merely recipient-level pacing/suppression.
+      const campaignFailed = done && deliveredish === 0 && failedCount > 0 && failedCount > suppressedCount;
+
       await adminClient.from('campaigns').update({
-        status: shouldPause ? 'paused' : (done ? (sentCount === 0 && failedCount > 0 ? 'failed' : 'sent') : 'sending'),
-        success_count: sentCount,
-        failure_count: failedCount,
+        status: shouldPause ? 'paused' : (done ? (campaignFailed ? 'failed' : 'sent') : 'sending'),
         last_progress_at: nextProgressAt,
         fallback_policy: nextFallbackPolicy,
         ...(done ? { sent_at: new Date().toISOString() } : {}),
         ...(shouldPause ? { last_run_error: pauseReason } : {}),
         ...(heavyThrottle && !shouldPause ? { last_run_error: `pacing_backoff: ${pacingHits}/${rows.length} throttled, cooldown 15m` } : {}),
       }).eq('id', campaign_id);
+
 
       if (!done && !shouldPause && !heavyThrottle) {
         await new Promise(res => setTimeout(res, chunk_gap_ms));

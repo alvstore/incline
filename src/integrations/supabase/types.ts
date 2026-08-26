@@ -2030,10 +2030,13 @@ export type Database = {
         Row: {
           attempt: number
           campaign_id: string
+          communication_log_id: string | null
           created_at: string
+          delivered_at: string | null
           dispatched_at: string | null
           email: string | null
           error: string | null
+          error_class: string | null
           error_code: string | null
           error_reason: string | null
           fallback_channel: string | null
@@ -2041,23 +2044,33 @@ export type Database = {
           full_name: string | null
           id: string
           in_window: boolean | null
+          last_meta_error_at: string | null
+          last_meta_error_code: string | null
           last_retried_at: string | null
+          marketing_blocked_until: string | null
           pacing_code: number | null
           phone: string | null
+          provider_message_id: string | null
           provider_route: string | null
           read_at: string | null
           source_label: string | null
           source_ref_id: string | null
           source_type: string
           status: string
+          submitted_at: string | null
+          superseded: boolean
+          unknown_at: string | null
         }
         Insert: {
           attempt?: number
           campaign_id: string
+          communication_log_id?: string | null
           created_at?: string
+          delivered_at?: string | null
           dispatched_at?: string | null
           email?: string | null
           error?: string | null
+          error_class?: string | null
           error_code?: string | null
           error_reason?: string | null
           fallback_channel?: string | null
@@ -2065,23 +2078,33 @@ export type Database = {
           full_name?: string | null
           id?: string
           in_window?: boolean | null
+          last_meta_error_at?: string | null
+          last_meta_error_code?: string | null
           last_retried_at?: string | null
+          marketing_blocked_until?: string | null
           pacing_code?: number | null
           phone?: string | null
+          provider_message_id?: string | null
           provider_route?: string | null
           read_at?: string | null
           source_label?: string | null
           source_ref_id?: string | null
           source_type: string
           status?: string
+          submitted_at?: string | null
+          superseded?: boolean
+          unknown_at?: string | null
         }
         Update: {
           attempt?: number
           campaign_id?: string
+          communication_log_id?: string | null
           created_at?: string
+          delivered_at?: string | null
           dispatched_at?: string | null
           email?: string | null
           error?: string | null
+          error_class?: string | null
           error_code?: string | null
           error_reason?: string | null
           fallback_channel?: string | null
@@ -2089,15 +2112,22 @@ export type Database = {
           full_name?: string | null
           id?: string
           in_window?: boolean | null
+          last_meta_error_at?: string | null
+          last_meta_error_code?: string | null
           last_retried_at?: string | null
+          marketing_blocked_until?: string | null
           pacing_code?: number | null
           phone?: string | null
+          provider_message_id?: string | null
           provider_route?: string | null
           read_at?: string | null
           source_label?: string | null
           source_ref_id?: string | null
           source_type?: string
           status?: string
+          submitted_at?: string | null
+          superseded?: boolean
+          unknown_at?: string | null
         }
         Relationships: [
           {
@@ -2164,6 +2194,7 @@ export type Database = {
           audience_filter: Json
           branch_id: string
           campaign_type: string
+          cancelled_count: number
           channel: string
           created_at: string
           created_by: string | null
@@ -2176,17 +2207,23 @@ export type Database = {
           last_run_error: string | null
           message: string
           name: string
+          pending_count: number
+          queued_count: number
           read_count: number
           recipients_count: number
           scheduled_at: string | null
           sent_at: string | null
+          skipped_count: number
           status: string
           subject: string | null
+          submitted_count: number
           success_count: number
+          suppressed_count: number
           template_id: string | null
           template_variables: Json
           timezone: string
           trigger_type: string
+          unknown_count: number
           updated_at: string
         }
         Insert: {
@@ -2196,6 +2233,7 @@ export type Database = {
           audience_filter?: Json
           branch_id: string
           campaign_type?: string
+          cancelled_count?: number
           channel: string
           created_at?: string
           created_by?: string | null
@@ -2208,17 +2246,23 @@ export type Database = {
           last_run_error?: string | null
           message: string
           name: string
+          pending_count?: number
+          queued_count?: number
           read_count?: number
           recipients_count?: number
           scheduled_at?: string | null
           sent_at?: string | null
+          skipped_count?: number
           status?: string
           subject?: string | null
+          submitted_count?: number
           success_count?: number
+          suppressed_count?: number
           template_id?: string | null
           template_variables?: Json
           timezone?: string
           trigger_type?: string
+          unknown_count?: number
           updated_at?: string
         }
         Update: {
@@ -2228,6 +2272,7 @@ export type Database = {
           audience_filter?: Json
           branch_id?: string
           campaign_type?: string
+          cancelled_count?: number
           channel?: string
           created_at?: string
           created_by?: string | null
@@ -2240,17 +2285,23 @@ export type Database = {
           last_run_error?: string | null
           message?: string
           name?: string
+          pending_count?: number
+          queued_count?: number
           read_count?: number
           recipients_count?: number
           scheduled_at?: string | null
           sent_at?: string | null
+          skipped_count?: number
           status?: string
           subject?: string | null
+          submitted_count?: number
           success_count?: number
+          suppressed_count?: number
           template_id?: string | null
           template_variables?: Json
           timezone?: string
           trigger_type?: string
+          unknown_count?: number
           updated_at?: string
         }
         Relationships: [
@@ -13390,6 +13441,8 @@ export type Database = {
           phone_number: string
           platform: Database["public"]["Enums"]["messaging_platform"]
           platform_message_id: string | null
+          provider_ack_state: string | null
+          provider_attempted_at: string | null
           read_at: string | null
           retry_count: number
           sent_at: string | null
@@ -13419,6 +13472,8 @@ export type Database = {
           phone_number: string
           platform?: Database["public"]["Enums"]["messaging_platform"]
           platform_message_id?: string | null
+          provider_ack_state?: string | null
+          provider_attempted_at?: string | null
           read_at?: string | null
           retry_count?: number
           sent_at?: string | null
@@ -13448,6 +13503,8 @@ export type Database = {
           phone_number?: string
           platform?: Database["public"]["Enums"]["messaging_platform"]
           platform_message_id?: string | null
+          provider_ack_state?: string | null
+          provider_attempted_at?: string | null
           read_at?: string | null
           retry_count?: number
           sent_at?: string | null
@@ -14155,6 +14212,20 @@ export type Database = {
         Args: { _amount: number; _user_id: string }
         Returns: Json
       }
+      apply_campaign_recipient_status: {
+        Args: {
+          p_blocked_until?: string
+          p_error?: string
+          p_error_class?: string
+          p_log_id?: string
+          p_meta_code?: string
+          p_provider_message_id?: string
+          p_provider_route?: string
+          p_recipient_id: string
+          p_status: string
+        }
+        Returns: Json
+      }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_measurement_range: {
         Args: { _field: string; _max: number; _min: number; _value: number }
@@ -14276,6 +14347,7 @@ export type Database = {
         Args: { p_clock_in: string; p_clock_out: string }
         Returns: number
       }
+      campaign_recipient_rank: { Args: { _status: string }; Returns: number }
       can_access_biometric_photo: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
@@ -14380,10 +14452,13 @@ export type Database = {
         Returns: {
           attempt: number
           campaign_id: string
+          communication_log_id: string | null
           created_at: string
+          delivered_at: string | null
           dispatched_at: string | null
           email: string | null
           error: string | null
+          error_class: string | null
           error_code: string | null
           error_reason: string | null
           fallback_channel: string | null
@@ -14391,15 +14466,22 @@ export type Database = {
           full_name: string | null
           id: string
           in_window: boolean | null
+          last_meta_error_at: string | null
+          last_meta_error_code: string | null
           last_retried_at: string | null
+          marketing_blocked_until: string | null
           pacing_code: number | null
           phone: string | null
+          provider_message_id: string | null
           provider_route: string | null
           read_at: string | null
           source_label: string | null
           source_ref_id: string | null
           source_type: string
           status: string
+          submitted_at: string | null
+          superseded: boolean
+          unknown_at: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -15733,6 +15815,7 @@ export type Database = {
         }
         Returns: Json
       }
+      refresh_campaign_stats: { Args: { p_campaign_id: string }; Returns: Json }
       release_coupon: {
         Args: { p_reason?: string; p_redemption_id: string }
         Returns: Json

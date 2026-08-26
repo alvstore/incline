@@ -1,11 +1,16 @@
-// process-comm-retry-queue v2.8.0
+// process-comm-retry-queue v3.0.0
+// v3.0.0: PHASE 4 + 7 — never fabricate success, one shared Meta policy.
+//          • Parked `awaiting_confirmation` rows with no provider callback now
+//            close as `unknown`, NOT `succeeded`. Elapsed time is not evidence.
+//          • All terminal / retryable / cooldown decisions come from
+//            `_shared/metaErrorPolicy.ts`. No local Meta code tables.
 // v2.8.0: Missing template variables are repairable. The dispatcher now
 //          hydrates canonical member/branch data, so manual restarts and worker
 //          retries must be allowed to replay old template_param_empty rows.
 // v2.7.0: Meta acceptance ≠ delivery. WhatsApp retries park in
 //          `awaiting_confirmation` until a webhook callback promotes them to
-//          `succeeded` or marks them `terminal` (131049/failure). Parked rows
-//          with no callback for 6h auto-close as succeeded.
+//          `succeeded` or marks them `terminal` (131049/failure).
+
 
 // v2.6.0: Meta 131049 pacing failures are terminal for the current message.
 //          Retrying the identical template/recipient payload worsens quality.
@@ -29,15 +34,25 @@
 // v2.0.0: Always retry through dispatch-communication.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  BACKOFF_MINUTES,
+  classifyMetaError,
+  extractMetaCode,
+  isTerminal,
+} from "../_shared/metaErrorPolicy.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BACKOFF_MINUTES = [5, 30, 120]; // 5min, 30min, 2h
+// Phase 7/8: terminal/retry/backoff decisions come from the shared Meta policy.
 
-// Reason substrings that should abandon the retry row immediately.
+
+// Reason substrings (non-Meta, dispatcher contract failures) that abandon the
+// retry row immediately. Meta codes are NOT listed here — they come from the
+// shared policy module.
 const TERMINAL_REASON_PATTERNS: RegExp[] = [
   /no_active_session_no_template/i,
   /no_template_for_closed_session/i,
@@ -53,38 +68,21 @@ const TERMINAL_REASON_PATTERNS: RegExp[] = [
   /recipient_unreachable/i,
 ];
 
-// Meta WhatsApp Cloud API error codes that are permanent for THIS message
-// (recipient/template/policy problems — retrying won't change the outcome).
-const TERMINAL_META_CODES = new Set([
-  131026, // recipient cannot receive
-  131047, // outside 24h window (we already prefer the template path; if we still
-          //                     hit this, the template wasn't usable — terminal)
-  131049, // ecosystem engagement pacing — wait for a future intentional send
-  131051, // unsupported message type for template
-  132000, // template param count mismatch
-  132001, // template not found in WABA
-  132012, // template param format invalid
-  133010, // phone not registered with WhatsApp
-]);
-
-// Meta codes that are transient but should be capped after 1 retry.
-const SOFT_TERMINAL_META_CODES = new Set([
-  131000, // generic "Something went wrong" — often persists for the same payload
-  133000, // account or asset restriction (transient sometimes, usually sticky)
-]);
+// Transient Meta codes that must still be capped after one retry.
+const SOFT_TERMINAL_META_CODES = new Set(["131000", "133000"]);
 
 function isTerminalReason(reason: string | null | undefined, retryCount = 0): boolean {
   if (!reason) return false;
   const s = String(reason);
   if (TERMINAL_REASON_PATTERNS.some((re) => re.test(s))) return true;
-  const codeMatch = s.match(/\b(13\d{4})\b/);
-  if (codeMatch) {
-    const code = Number(codeMatch[1]);
-    if (TERMINAL_META_CODES.has(code)) return true;
-    if (SOFT_TERMINAL_META_CODES.has(code) && retryCount >= 1) return true;
-  }
+  const code = extractMetaCode(s);
+  if (!code) return false;
+  const pol = classifyMetaError({ code });
+  if (isTerminal(pol)) return true;
+  if (SOFT_TERMINAL_META_CODES.has(code) && retryCount >= 1) return true;
   return false;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -102,14 +100,15 @@ Deno.serve(async (req) => {
       }
     } catch { /* ignore */ }
 
-    // v2.7.0: close out parked rows — if no failure callback arrived within 6h,
-    // treat the send as delivered. These rows are never re-attempted.
+    // v3.0.0 (Phase 4): a parked row with no provider callback is NOT a success.
+    // Close it as `unknown` — never `succeeded` — and never re-attempt it.
     await supabase
       .from("communication_retry_queue")
-      .update({ status: "succeeded", succeeded_at: new Date().toISOString() })
+      .update({ status: "unknown", last_error: "no provider confirmation within 6h — outcome unknown" })
       .eq("status", "awaiting_confirmation")
       .lt("updated_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
       .then(() => {}, () => {});
+
 
 
     let query = supabase

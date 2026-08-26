@@ -1,15 +1,18 @@
-// v1.0.0 — Reaper for AI outbound WhatsApp messages stuck at status='pending'.
-//          Edge function workers can be terminated between row insert and the
-//          Meta API call inside `whatsapp-webhook/sendAiReply`, leaving rows
-//          forever in `pending` with no `whatsapp_message_id`. This cron
-//          (every 2 minutes) finds those rows, replays the Meta send, and
-//          updates the status + mirrors a `communication_logs` entry.
+// v2.0.0 (Phase 1 — provider outcome safety)
+// Reaper for outbound WhatsApp rows stuck at status='pending'.
 //
-// Idempotent: uses the existing `try_whatsapp_send_lock` RPC so it can't
-// double-send if a fresh webhook is also retrying.
+// SAFETY CONTRACT — an unknown provider outcome MUST NOT become a resend:
+//   • provider_attempted_at IS NULL  → the request never left this worker.
+//                                      Replaying it is safe and idempotent.
+//   • provider_attempted_at IS NOT NULL → the request may have reached Meta and
+//                                      the response was lost. The row parks as
+//                                      `unknown`. We never resend, never mark it
+//                                      succeeded, and never mark it failed.
+// Elapsed time is NEVER treated as evidence of delivery or of failure.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
+import { classifyMetaError } from "../_shared/metaErrorPolicy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +25,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const MAX_PER_TICK = 100;
 const MIN_AGE_SECONDS = 180; // wait 3 min before reaping (gives original send a chance)
-const MAX_AGE_HOURS = 24;    // beyond Meta's freeform window — mark expired, don't retry
+const MAX_AGE_HOURS = 24;    // beyond Meta's freeform window — stop reaping
+
 
 interface PendingRow {
   id: string;
@@ -32,7 +36,10 @@ interface PendingRow {
   content: string;
   message_type: string;
   created_at: string;
+  provider_attempted_at: string | null;
+  provider_ack_state: string | null;
 }
+
 
 interface Integration {
   branch_id: string | null;
@@ -133,6 +140,12 @@ async function retryOne(row: PendingRow): Promise<{ ok: boolean; reason: string 
     text: { body: row.content || "" },
   };
 
+  // Record transmission evidence before the request leaves this worker.
+  await supabase.from("whatsapp_messages").update({
+    provider_ack_state: "attempting",
+    provider_attempted_at: new Date().toISOString(),
+  }).eq("id", row.id);
+
   let metaResp: Response | null = null;
   let metaData: any = null;
   try {
@@ -143,14 +156,24 @@ async function retryOne(row: PendingRow): Promise<{ ok: boolean; reason: string 
     });
     metaData = await metaResp.json();
   } catch (e) {
-    const reason = `reconciler exception: ${(e as Error).message}`;
+    const err = (e as Error).message;
+    const preTransmission = /dns error|error trying to connect|connection refused|failed to lookup/i.test(err);
+    const pol = classifyMetaError({ networkError: err, transmitted: !preTransmission });
+    if (preTransmission) {
+      // Never transmitted: leave the row pending so the next tick may replay it.
+      await supabase.from("whatsapp_messages").update({
+        provider_ack_state: "not_transmitted",
+        failure_reason: `not_transmitted: ${err}`.slice(0, 500),
+      }).eq("id", row.id);
+      return { ok: false, reason: `not_transmitted: ${err}` };
+    }
+    // Response lost after transmission — outcome unknown, never resend.
     await supabase.from("whatsapp_messages").update({
-      status: "failed",
-      failure_reason: reason,
-      failed_at: new Date().toISOString(),
+      status: "unknown",
+      provider_ack_state: "response_lost",
+      failure_reason: `${pol.description}`.slice(0, 500),
     }).eq("id", row.id);
-    await mirrorLog(row, false, null, reason, null);
-    return { ok: false, reason };
+    return { ok: false, reason: "unknown_response_lost" };
   }
 
   const wamid = metaData?.messages?.[0]?.id || null;
@@ -161,10 +184,12 @@ async function retryOne(row: PendingRow): Promise<{ ok: boolean; reason: string 
       status: "sent",
       sent_at: new Date().toISOString(),
       whatsapp_message_id: wamid,
+      provider_ack_state: "accepted",
     }).eq("id", row.id);
     await mirrorLog(row, true, wamid, null, metaResp.status);
     return { ok: true, reason: "sent" };
   } else {
+    // Provider RESPONDED with a rejection — this is real evidence.
     const reason = `reconciler meta: ${JSON.stringify(metaData?.error || metaData || {}).slice(0, 500)}`;
     const code = String(metaData?.error?.code ?? "");
     await supabase.from("whatsapp_messages").update({
@@ -172,24 +197,49 @@ async function retryOne(row: PendingRow): Promise<{ ok: boolean; reason: string 
       failure_reason: reason,
       failure_code: code || null,
       failed_at: new Date().toISOString(),
+      provider_ack_state: "rejected",
     }).eq("id", row.id);
     await mirrorLog(row, false, null, reason, metaResp.status);
     return { ok: false, reason };
   }
 }
 
-async function expireStale() {
-  // Anything older than 24h is past Meta's freeform window — drop to failed.
-  const cutoff = new Date(Date.now() - MAX_AGE_HOURS * 3600 * 1000).toISOString();
+/**
+ * Rows that already carry transmission evidence must never be resent, and
+ * elapsed time is not evidence of failure — they park as `unknown`.
+ */
+async function parkAmbiguous() {
+  const cutoff = new Date(Date.now() - MIN_AGE_SECONDS * 1000).toISOString();
   const { data, error } = await supabase.from("whatsapp_messages")
     .update({
-      status: "failed",
-      failure_reason: "reconciler: pending > 24h, freeform window expired",
-      failed_at: new Date().toISOString(),
+      status: "unknown",
+      provider_ack_state: "response_lost",
+      failure_reason: "provider response never observed — outcome unknown, not resent",
     })
     .eq("direction", "outbound")
     .eq("status", "pending")
     .is("whatsapp_message_id", null)
+    .not("provider_attempted_at", "is", null)
+    .lt("provider_attempted_at", cutoff)
+    .select("id");
+  if (error) console.warn("[reconciler] parkAmbiguous error:", error.message);
+  return (data || []).length;
+}
+
+async function expireStale() {
+  // Older than 24h AND never transmitted — the send definitively never happened.
+  const cutoff = new Date(Date.now() - MAX_AGE_HOURS * 3600 * 1000).toISOString();
+  const { data, error } = await supabase.from("whatsapp_messages")
+    .update({
+      status: "failed",
+      failure_reason: "reconciler: never transmitted, freeform window expired",
+      failed_at: new Date().toISOString(),
+      provider_ack_state: "not_transmitted",
+    })
+    .eq("direction", "outbound")
+    .eq("status", "pending")
+    .is("whatsapp_message_id", null)
+    .is("provider_attempted_at", null)
     .lt("created_at", cutoff)
     .select("id");
   if (error) console.warn("[reconciler] expireStale error:", error.message);
@@ -204,12 +254,14 @@ serve(async (req) => {
     const ageCutoff = new Date(Date.now() - MIN_AGE_SECONDS * 1000).toISOString();
     const maxCutoff = new Date(Date.now() - MAX_AGE_HOURS * 3600 * 1000).toISOString();
 
+    // ONLY rows with no transmission evidence are replay candidates.
     const { data: rows, error } = await supabase
       .from("whatsapp_messages")
-      .select("id, branch_id, phone_number, contact_name, content, message_type, created_at")
+      .select("id, branch_id, phone_number, contact_name, content, message_type, created_at, provider_attempted_at, provider_ack_state")
       .eq("direction", "outbound")
       .eq("status", "pending")
       .is("whatsapp_message_id", null)
+      .is("provider_attempted_at", null)
       .lt("created_at", ageCutoff)
       .gte("created_at", maxCutoff)
       .order("created_at", { ascending: true })
@@ -218,17 +270,19 @@ serve(async (req) => {
     if (error) throw error;
 
     const candidates = (rows || []) as PendingRow[];
-    const results = { reaped: 0, sent: 0, failed: 0, skipped: 0, expired: 0 };
+    const results = { reaped: 0, sent: 0, failed: 0, skipped: 0, expired: 0, parked_unknown: 0 };
 
     for (const row of candidates) {
       results.reaped++;
       const r = await retryOne(row);
       if (r.ok) results.sent++;
-      else if (r.reason.startsWith("lock_held") || r.reason === "no_integration" || r.reason === "incomplete_credentials") results.skipped++;
+      else if (r.reason.startsWith("lock_held") || r.reason === "no_integration" || r.reason === "incomplete_credentials" || r.reason.startsWith("not_transmitted")) results.skipped++;
       else results.failed++;
     }
 
+    results.parked_unknown = await parkAmbiguous();
     results.expired = await expireStale();
+
 
     const body = { ok: true, took_ms: Date.now() - startedAt, ...results };
     console.log("[reconcile-whatsapp-pending]", JSON.stringify(body));
