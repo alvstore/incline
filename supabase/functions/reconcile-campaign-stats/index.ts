@@ -175,7 +175,3 @@ function authorityRank(log: any): number {
   if (s === 'queued' || s === 'sending') return 1;
   return 0;
 }
-
-    default: return 0;
-  }
-}
