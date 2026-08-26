@@ -1,7 +1,9 @@
-// run-campaign v1.0.0
+// run-campaign v1.2.0
 // Invoked by automation-brain for recurring marketing campaigns.
 // Reads worker_payload.campaign_id, re-resolves audience fresh, dispatches via send-broadcast.
 // Re-uses the same campaign row for stats; does not duplicate it.
+// v1.2.0: pass a per-run dedupe key so recurring runs are not deduped away.
+// v1.1.0: never fabricate terminal "sent" status on the async 202 ACK.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
