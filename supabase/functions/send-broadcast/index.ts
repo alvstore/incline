@@ -1207,7 +1207,12 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
             status, error, pacing_code: pacingCode,
             fallback_used: fallbackUsed, fallback_channel: fallbackChannel,
             provider_route: providerRoute, dispatched_at: new Date().toISOString(),
+            submitted_at: status === 'submitted' ? new Date().toISOString() : null,
+            last_meta_error_code: pacingCode ? String(pacingCode) : null,
+            last_meta_error_at: pacingCode ? new Date().toISOString() : null,
+            marketing_blocked_until: marketingBlocked,
           }).eq('id', r.id);
+
         }
 
         if (effectivePacingMs > 0) await new Promise(res => setTimeout(res, effectivePacingMs));
