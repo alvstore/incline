@@ -119,16 +119,21 @@ function formatClassWhen(iso: string): string {
   return `${day} · ${time}`;
 }
 
-/** Very small markdown-ish → HTML for the email preview (escaped first). */
+/** Very small markdown-ish → HTML for the email preview.
+ *  Raw HTML bodies are sanitized before rendering — the preview is rendered
+ *  with dangerouslySetInnerHTML, so untrusted markup must never pass through. */
 function emailPreviewHtml(body: string): string {
-  if (/<[a-z][\s\S]*>/i.test(body)) return body; // already HTML
+  if (/<[a-z][\s\S]*>/i.test(body)) {
+    return DOMPurify.sanitize(body, { USE_PROFILES: { html: true } });
+  }
   const esc = body
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return esc
+  const html = esc
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#4f46e5">$1</a>')
     .split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px">${p.replace(/\n/g, '<br/>')}</p>`).join('');
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 }
 
 function phoneLast10(value: string): string {
