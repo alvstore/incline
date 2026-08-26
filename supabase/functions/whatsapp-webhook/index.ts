@@ -404,7 +404,11 @@ async function processStatusUpdates(value: any, branchId: string | null) {
       ? String(status.errors[0]?.code ?? status.errors[0]?.error_code ?? '') || null
       : null;
 
-    // 1. WhatsApp inbox row
+    // 1. WhatsApp inbox row — MONOTONIC (Phase 2). Meta callbacks can arrive
+    //    out of order; `read` must never regress to `delivered`/`sent`.
+    const WA_RANK: Record<string, number> = {
+      pending: 0, unknown: 1, queued: 1, sent: 2, delivered: 3, read: 4, failed: 9,
+    };
     const messagePatch: Record<string, unknown> = {
       status: newStatus,
       updated_at: new Date().toISOString(),
@@ -414,17 +418,33 @@ async function processStatusUpdates(value: any, branchId: string | null) {
       messagePatch.failure_code = failureCode;
       messagePatch.failure_reason = errMsg;
     }
-    let updateQuery = supabase
+    let existingQuery = supabase
       .from("whatsapp_messages")
-      .update(messagePatch)
+      .select("id, status")
       .eq("whatsapp_message_id", status.id);
-    if (branchId) updateQuery = updateQuery.eq("branch_id", branchId);
-    const { error } = await updateQuery;
-    if (error) console.error("Failed to update WhatsApp message status", error);
+    if (branchId) existingQuery = existingQuery.eq("branch_id", branchId);
+    const { data: existingRow } = await existingQuery.maybeSingle();
 
-    // 2. Dispatcher audit trail — route every callback through the
-    //    record_delivery_event SSOT so the Live Feed rail advances
-    //    Queued → Sent → Delivered → Read for WA messages.
+    const curRank = WA_RANK[String(existingRow?.status ?? "pending")] ?? 0;
+    const nextRank = WA_RANK[newStatus] ?? 0;
+    const mayAdvance = !existingRow
+      || (newStatus === "failed"
+        ? !["delivered", "read"].includes(String(existingRow.status))
+        : nextRank > curRank);
+
+    if (existingRow && mayAdvance) {
+      const { error } = await supabase
+        .from("whatsapp_messages")
+        .update(messagePatch)
+        .eq("id", existingRow.id);
+      if (error) console.error("Failed to update WhatsApp message status", error);
+    } else if (existingRow) {
+      console.log(`[wa-status] ignored regression ${existingRow.status} -> ${newStatus} (${status.id})`);
+    }
+
+    // 2. Dispatcher audit trail — `record_delivery_event` is the ONLY writer of
+    //    communication_logs delivery state (Phase 2). It also propagates the
+    //    authoritative provider outcome to the campaign recipient (Phase 3).
     try {
       const { data: waMessage } = await supabase
         .from("whatsapp_messages")
@@ -453,27 +473,6 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             p_metadata: { wa_status: newStatus, raw: status },
           });
 
-          const logPatch: Record<string, unknown> = {
-            delivery_status: mapped,
-            status: mapped,
-            provider_message_id: status.id,
-            delivery_metadata: {
-              ...(((log as any).delivery_metadata as Record<string, unknown> | null) ?? {}),
-              wa_status: newStatus,
-              last_event_status: mapped,
-              last_event_at: new Date().toISOString(),
-              raw_status: status,
-            },
-          };
-          if (mapped === "failed") {
-            logPatch.error_message = errMsg;
-            logPatch.failed_at = new Date().toISOString();
-          } else if (mapped === "delivered") {
-            logPatch.delivered_at = new Date().toISOString();
-          } else if (mapped === "read") {
-            logPatch.read_at = new Date().toISOString();
-          }
-          await supabase.from("communication_logs").update(logPatch).eq("id", log.id);
 
           // v6.8.0: delivery outcome drives the retry queue and the pacing
           // circuit breaker. Parked (`awaiting_confirmation`) rows are closed
@@ -1012,12 +1011,18 @@ async function sendAiReply(
     metaBody.text = { body: replyText };
   }
 
-  // v6.1.0: wrap the Meta call so a worker shutdown / network exception no
-  // longer leaves the outbound row stuck in `pending` forever. On any failure
-  // we mark the row failed with a reason — the reconciler then retries.
+  // v6.5.0 (Phase 1): record transmission evidence BEFORE the request leaves
+  // this worker. If the response is then lost we must never guess the outcome:
+  // the row parks as `unknown` and the reconciler will not resend it.
+  await supabase.from("whatsapp_messages").update({
+    provider_ack_state: "attempting",
+    provider_attempted_at: new Date().toISOString(),
+  }).eq("id", aiMsg.id);
+
   let metaResponse: Response | null = null;
   let metaData: any = null;
   let sendException: Error | null = null;
+  let transmitted = true;
   try {
     metaResponse = await fetch(metaUrl, {
       method: "POST",
@@ -1027,7 +1032,11 @@ async function sendAiReply(
     metaData = await metaResponse.json();
   } catch (e) {
     sendException = e as Error;
-    console.error("[sendAiReply] Meta fetch exception:", sendException.message);
+    // Connection-establishment failures prove the request bytes never reached
+    // Meta. Anything else may have been accepted with the response lost.
+    transmitted = !/dns error|error trying to connect|connection refused|connection reset before|failed to lookup/i
+      .test(sendException.message || "");
+    console.error("[sendAiReply] Meta fetch exception:", sendException.message, "transmitted=", transmitted);
   }
 
   const wamid: string | null = metaData?.messages?.[0]?.id || null;
@@ -1040,8 +1049,16 @@ async function sendAiReply(
         status: "sent",
         sent_at: new Date().toISOString(),
         whatsapp_message_id: wamid,
+        provider_ack_state: "accepted",
       })
       .eq("id", aiMsg.id);
+  } else if (sendException && transmitted) {
+    // Phase 1: outcome genuinely unknown — do NOT fail, do NOT resend.
+    await supabase.from("whatsapp_messages").update({
+      status: "unknown",
+      provider_ack_state: "response_lost",
+      failure_reason: `response_lost: ${sendException.message}`.slice(0, 500),
+    }).eq("id", aiMsg.id);
   } else {
     const reason = sendException
       ? `exception: ${sendException.message}`
@@ -1053,8 +1070,10 @@ async function sendAiReply(
       failure_reason: reason,
       failure_code: code || null,
       failed_at: new Date().toISOString(),
+      provider_ack_state: sendException ? "not_transmitted" : "rejected",
     }).eq("id", aiMsg.id);
   }
+
 
   // v6.1.0: Mirror every AI auto-reply into communication_logs so the
   // Communication Hub finally has visibility into AI conversations.

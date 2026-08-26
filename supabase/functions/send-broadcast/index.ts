@@ -1107,10 +1107,15 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
               ...(attachment ? { attachment } : {}),
             },
           });
-          const ok = !dErr && ['sent', 'queued', 'deduped'].includes(String((dRes as any)?.status || ''));
-          status = ok ? 'sent' : 'failed';
+          // Phase 5: dispatcher status maps to a *lifecycle* state, never an
+          // optimistic "sent". Provider acceptance = `submitted`; only a real
+          // provider delivery event may promote to sent/delivered/read.
+          const dStatus = String((dRes as any)?.status || '');
+          const ok = !dErr && ['sent', 'queued', 'deduped'].includes(dStatus);
+          status = !ok ? 'failed' : (dStatus === 'queued' ? 'queued' : 'submitted');
           if (!ok) error = dErr?.message || (dRes as any)?.reason || (dRes as any)?.error || 'dispatch_failed';
           providerRoute = (dRes as any)?.provider_route ?? providerRoute;
+
 
           if (!ok && channel === 'whatsapp' && r.phone) {
             const m = String(error || '').match(/\b(131049|130472)\b/);
@@ -1131,18 +1136,22 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
                 fallbackUsed = true;
                 fallbackChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
                 if (fbOk) {
-                  status = 'sent';
+                  status = String((fbRes as any)?.status) === 'queued' ? 'queued' : 'submitted';
                   error = `paced_${pacingCode}_fallback_via_${fallbackChannel}`;
                   providerRoute = fallbackChannel;
                 } else {
                   error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
                 }
               } else {
-                // 131049 is terminal for this payload. A future intentional
-                // campaign may try after cooldown; this row must not loop.
-                status = 'failed';
-                error = `paced_${pacingCode}_terminal`;
+                // Phase 9: 131049/130472 is a recipient-level marketing pacing
+                // outcome, not a transient error. Suppress this recipient for
+                // the policy cooldown; do NOT loop, do NOT fail the campaign.
+                const pol = classifyMetaError({ code: String(pacingCode) });
+                status = 'suppressed';
+                error = `paced_${pacingCode}: ${pol.description}`;
+                marketingBlocked = marketingBlockedUntil(pol);
               }
+
             }
           }
         } catch (e: any) {
