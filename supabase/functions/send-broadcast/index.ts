@@ -34,6 +34,12 @@
 // v3.1.0 — Route through dispatch-communication with Meta template support.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  classifyMetaError,
+  extractMetaCode,
+  marketingBlockedUntil,
+} from "../_shared/metaErrorPolicy.ts";
+
 
 // deno-lint-ignore no-explicit-any
 declare const EdgeRuntime: any;
