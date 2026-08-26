@@ -61,6 +61,9 @@ Deno.serve(async (req) => {
       subject: c.subject,
       branch_id: c.branch_id,
       campaign_id: c.id,
+      // Unique per run — recurring campaigns share one campaign_id, so the
+      // dispatcher dedupe key must vary per execution.
+      run_key: new Date().toISOString().replace(/[:.TZ-]/g, "").slice(0, 12),
       attachment_url: c.attachment_url ?? undefined,
       attachment_kind: c.attachment_kind ?? undefined,
       attachment_filename: c.attachment_filename ?? undefined,
