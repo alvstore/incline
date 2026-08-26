@@ -53,62 +53,66 @@ Deno.serve(async (req) => {
 
   for (const c of campaigns || []) {
     const cid = (c as any).id;
-    // Recipient snapshot from campaign_recipients (source of truth for the send-time outcome)
+    // Recipient rows are the source of truth; superseded duplicates excluded.
     const { data: recips } = await admin
       .from('campaign_recipients')
-      .select('id, source_type, source_ref_id, status')
-      .eq('campaign_id', cid);
+      .select('id, source_type, source_ref_id, status, error')
+      .eq('campaign_id', cid)
+      .eq('superseded', false);
 
-    // Pull DLR for this campaign via dedupe_key prefix
+    // Pull every provider outcome for this campaign via dedupe_key prefix.
     const { data: logs } = await admin
       .from('communication_logs')
-      .select('dedupe_key, delivery_status, read_at, delivered_at')
+      .select('id, dedupe_key, delivery_status, read_at, delivered_at, failed_at, error_message, provider_message_id')
       .like('dedupe_key', `campaign:${cid}:%`);
 
+    // Phase 3 precedence: read > delivered > failed > sent > queued.
+    // A later provider failure therefore beats an earlier send-time ACK.
     const dlrByKey = new Map<string, any>();
     for (const l of logs || []) {
       const base = baseCampaignKey((l as any).dedupe_key);
       if (!base) continue;
       const existing = dlrByKey.get(base);
-      if (!existing || statusRank((l as any).delivery_status) > statusRank(existing.delivery_status)) {
-        dlrByKey.set(base, l);
-      }
+      if (!existing || authorityRank(l) > authorityRank(existing)) dlrByKey.set(base, l);
     }
 
-    const recByKey = new Map<string, any>();
+    let applied = 0;
     for (const r of recips || []) {
       const key = `campaign:${cid}:${(r as any).source_type}:${(r as any).source_ref_id}`;
-
-      const existing = recByKey.get(key);
-      if (!existing || recipientRank((r as any).status) > recipientRank(existing.status)) {
-        recByKey.set(key, r);
-      }
-    }
-
-    let sent = 0, delivered = 0, read = 0, failed = 0;
-    for (const [key, r] of recByKey.entries()) {
       const dlr = dlrByKey.get(key);
-      const dlrStatus = String(dlr?.delivery_status || '').toLowerCase();
-      const recStatus = String((r as any).status || '').toLowerCase();
+      if (!dlr) continue;
 
-      // Provider DLR always wins over the send-time recipient snapshot.
-      if (dlrStatus === 'read' || dlr?.read_at) { read++; delivered++; sent++; continue; }
-      if (dlrStatus === 'delivered' || dlr?.delivered_at) { delivered++; sent++; continue; }
-      if (dlrStatus === 'failed' || dlrStatus === 'bounced' || dlrStatus === 'suppressed') { failed++; continue; }
-      if (dlrStatus === 'sent' || dlrStatus === 'queued' || dlrStatus === 'sending') { sent++; continue; }
-      if (recStatus === 'sent') { sent++; continue; }
-      if (recStatus === 'failed' || recStatus === 'skipped') { failed++; continue; }
+      const ds = String(dlr.delivery_status || '').toLowerCase();
+      const mapped =
+        ds === 'read' || dlr.read_at ? 'read' :
+        ds === 'delivered' || dlr.delivered_at ? 'delivered' :
+        ds === 'failed' || ds === 'bounced' ? 'failed' :
+        ds === 'suppressed' ? 'suppressed' :
+        ds === 'skipped' || ds === 'deduped' ? 'skipped' :
+        ds === 'sent' ? 'sent' :
+        ds === 'queued' || ds === 'sending' ? 'queued' : null;
+      if (!mapped) continue;
+      if (mapped === String((r as any).status)) continue;
 
+      const { error: aErr } = await admin.rpc('apply_campaign_recipient_status', {
+        p_recipient_id: (r as any).id,
+        p_status: mapped,
+        p_error: mapped === 'failed' ? (dlr.error_message ?? null) : null,
+        p_error_class: null,
+        p_meta_code: null,
+        p_provider_message_id: dlr.provider_message_id ?? null,
+        p_provider_route: null,
+        p_log_id: dlr.id,
+        p_blocked_until: null,
+      });
+      if (!aErr) applied++;
     }
 
-    const total = recByKey.size || (c as any).recipients_count || 0;
+    const total = (recips || []).length;
 
     // Stuck-sending backfill
     const ageMin = (Date.now() - new Date((c as any).created_at).getTime()) / 60000;
-    const isStuck =
-      (c as any).status === 'sending' &&
-      ageMin > 30 &&
-      total === 0;
+    const isStuck = (c as any).status === 'sending' && ageMin > 30 && total === 0;
 
     if (isStuck) {
       await admin.from('campaigns').update({
@@ -123,23 +127,22 @@ Deno.serve(async (req) => {
 
     if (total === 0) { results.push({ cid, skip: 'no recipients' }); continue; }
 
-    // Decide final status
+    // Phase 6: counters derived from the rows, never incremented independently.
+    const { data: statsRaw } = await admin.rpc('refresh_campaign_stats', { p_campaign_id: cid });
+    const stats = (statsRaw ?? {}) as Record<string, number>;
+
+    // Only a campaign with nothing in flight can be closed out.
     let finalStatus = (c as any).status;
-    if (finalStatus === 'sending') {
-      const done = sent + failed;
-      if (done >= total) finalStatus = failed > 0 && sent === 0 ? 'failed' : 'sent';
+    const inFlight = Number(stats.pending ?? 0) + Number(stats.queued ?? 0) + Number(stats.dispatching ?? 0);
+    if (finalStatus === 'sending' && inFlight === 0) {
+      const reached = Number(stats.sent ?? 0) + Number(stats.submitted ?? 0);
+      finalStatus = reached === 0 && Number(stats.failed ?? 0) > 0 ? 'failed' : 'sent';
+      await admin.from('campaigns').update({ status: finalStatus }).eq('id', cid);
     }
 
-    await admin.from('campaigns').update({
-      success_count: sent,
-      delivered_count: delivered,
-      read_count: read,
-      failure_count: failed,
-      recipients_count: total,
-      status: finalStatus,
-    }).eq('id', cid);
     reconciled++;
-    results.push({ cid, sent, delivered, read, failed, total, status: finalStatus });
+    results.push({ cid, applied, total, status: finalStatus, ...stats });
+
   }
 
   return json(200, {
