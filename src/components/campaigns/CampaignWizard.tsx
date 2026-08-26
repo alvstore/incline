@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle, Radio, Check, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
+import DOMPurify from 'dompurify';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { supabase } from '@/integrations/supabase/client';
 import { AudienceBuilder } from './AudienceBuilder';
