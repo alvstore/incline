@@ -163,26 +163,19 @@ function baseCampaignKey(raw: unknown): string | null {
   return parts.slice(0, 4).join(':');
 }
 
-function statusRank(status: unknown): number {
-  switch (String(status || '').toLowerCase()) {
-    case 'read': return 5;
-    case 'delivered': return 4;
-    case 'sent': return 3;
-    case 'queued':
-    case 'sending': return 2;
-    case 'failed':
-    case 'bounced':
-    case 'suppressed': return 1;
-    default: return 0;
-  }
+/** Phase 3 authority ranking: a provider FAILURE outranks a send-time ACK,
+ *  but confirmed delivery/read outrank everything. */
+function authorityRank(log: any): number {
+  const s = String(log?.delivery_status || '').toLowerCase();
+  if (s === 'read' || log?.read_at) return 6;
+  if (s === 'delivered' || log?.delivered_at) return 5;
+  if (s === 'failed' || s === 'bounced') return 4;
+  if (s === 'suppressed') return 3;
+  if (s === 'sent') return 2;
+  if (s === 'queued' || s === 'sending') return 1;
+  return 0;
 }
 
-
-function recipientRank(status: unknown): number {
-  switch (String(status || '').toLowerCase()) {
-    case 'sent': return 3;
-    case 'failed': return 2;
-    case 'skipped': return 1;
     default: return 0;
   }
 }
