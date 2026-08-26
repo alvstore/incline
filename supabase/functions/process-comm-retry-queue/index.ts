@@ -1,4 +1,8 @@
-// process-comm-retry-queue v3.0.0
+// process-comm-retry-queue v3.1.0
+// v3.1.0: PHASE 8 — safe claiming. Rows are claimed with a conditional update
+//          that RETURNS the row; if another worker won the race we skip it.
+//          Rows stranded in `processing` (worker crash / edge timeout) are
+//          released back to `pending` after 15 minutes so they are not lost.
 // v3.0.0: PHASE 4 + 7 — never fabricate success, one shared Meta policy.
 //          • Parked `awaiting_confirmation` rows with no provider callback now
 //            close as `unknown`, NOT `succeeded`. Elapsed time is not evidence.
@@ -100,6 +104,15 @@ Deno.serve(async (req) => {
       }
     } catch { /* ignore */ }
 
+    // v3.1.0: release rows stranded in `processing` by a crashed/timed-out
+    // worker. 15 minutes is far beyond any legitimate dispatch round-trip.
+    await supabase
+      .from("communication_retry_queue")
+      .update({ status: "pending" })
+      .eq("status", "processing")
+      .lt("updated_at", new Date(Date.now() - 15 * 60 * 1000).toISOString())
+      .then(() => {}, () => {});
+
     // v3.0.0 (Phase 4): a parked row with no provider callback is NOT a success.
     // Close it as `unknown` — never `succeeded` — and never re-attempt it.
     await supabase
@@ -156,11 +169,19 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      await supabase
+      // ── Claim the row atomically. If no row comes back, another worker
+      //    already claimed it in this tick — skip to avoid duplicate sends.
+      const { data: claimed } = await supabase
         .from("communication_retry_queue")
-        .update({ status: "processing" })
+        .update({ status: "processing", updated_at: new Date().toISOString() })
         .eq("id", row.id)
-        .eq("status", row.status);
+        .eq("status", row.status)
+        .select("id")
+        .maybeSingle();
+      if (!claimed) {
+        results.push({ id: row.id, status: "skipped", reason: "claimed_by_other_worker" });
+        continue;
+      }
 
       // Resolve original log to recover category/attachment when present
       let category: string | null = null;
