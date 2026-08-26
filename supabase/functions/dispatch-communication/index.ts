@@ -1828,7 +1828,12 @@ Deno.serve(async (req) => {
       ...finalMeta,
     };
 
-    await supabase
+    // NOTE: `communication_logs` has no `skip_notification` column — including it
+    // here made PostgREST reject the whole update, leaving every dispatched row
+    // stuck in 'sending' until the 15-minute reaper failed it. Never add fields
+    // to this payload without confirming the column exists, and always inspect
+    // the returned error.
+    const { error: finalizeErr } = await supabase
       .from('communication_logs')
       .update({
         delivery_status: callbackAlreadyTerminal
@@ -1847,10 +1852,12 @@ Deno.serve(async (req) => {
         content: input.payload.body,
         sent_at: new Date().toISOString(),
         attempt_count: 1,
-        // v1.27.0: Propagate skip_notification to the edge function router for handoffs
-        skip_notification: input.skip_notification ?? false,
       })
       .eq('id', log!.id);
+    if (finalizeErr) {
+      console.error('[dispatch] finalize update failed', log!.id, finalizeErr.message);
+    }
+
 
     const providerRoute = (metaErrorFields.provider_route as string | undefined) ?? null;
     if (sendError || callbackAlreadyTerminal) {
