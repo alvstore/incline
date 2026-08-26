@@ -106,6 +106,13 @@ Deno.serve(async (req) => {
     const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename, retry } = body;
     const rawMode: string | undefined = body.mode;
     const retrySuffix = retry ? `:retry:${Date.now()}` : '';
+    // Recurring campaigns re-use the same campaign_id on every run. Without a
+    // per-run key the dispatcher dedupe would swallow every send after the
+    // first occurrence. Callers (run-campaign / process-scheduled-campaigns)
+    // pass `run_key`; ad-hoc sends fall back to no suffix.
+    const runKey: string = typeof body.run_key === 'string' && body.run_key
+      ? `:r${String(body.run_key).replace(/[^a-zA-Z0-9_-]/g, '')}`
+      : '';
 
     const attachment = attachment_url
       ? {
