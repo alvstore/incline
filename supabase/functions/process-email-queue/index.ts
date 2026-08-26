@@ -325,8 +325,49 @@ Deno.serve(async (req) => {
           )
         }
 
-        // 403s are permanent configuration or authorization failures for this
-        // message, so move straight to DLQ and stop processing the rest of the batch.
+        // 403 "no_matching_sender" means the managed sending domain is not
+        // verified for this workspace. Retrying the managed sender never helps —
+        // hand the message to send-email, which routes it over configured SMTP.
+        if (isForbidden(error) && /no_matching_sender|sender domain/i.test(errorMsg)) {
+          let handedOff = false
+          try {
+            const { error: fbErr } = await supabase.functions.invoke('send-email', {
+              body: {
+                to: payload.to,
+                subject: payload.subject,
+                html: payload.html,
+                text: payload.text,
+                label: payload.label || queue,
+                idempotency_key: payload.idempotency_key,
+                source_log_id: payload.source_log_id ?? null,
+                skip_log: true,
+              },
+            })
+            handedOff = !fbErr
+            if (fbErr) console.error('SMTP fallback failed', { msg_id: msg.msg_id, message: fbErr.message })
+          } catch (e) {
+            console.error('SMTP fallback threw', { msg_id: msg.msg_id, error: String(e) })
+          }
+
+          if (handedOff) {
+            await supabase.from('email_send_log').insert({
+              message_id: payload.message_id,
+              template_name: payload.label || queue,
+              recipient_email: payload.to,
+              status: 'sent',
+              error_message: 'sent via SMTP fallback (managed sender domain unverified)',
+            })
+            await supabase.rpc('delete_email', { queue_name: queue, message_id: msg.msg_id })
+            totalProcessed++
+            continue
+          }
+
+          await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
+          continue
+        }
+
+        // Other 403s are permanent authorization failures for this message,
+        // so move straight to DLQ and stop processing the rest of the batch.
         if (isForbidden(error)) {
           await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
           return new Response(
@@ -334,6 +375,7 @@ Deno.serve(async (req) => {
             { headers: { 'Content-Type': 'application/json' } }
           )
         }
+
 
         // Log non-429 failures to track real retry attempts.
         await supabase.from('email_send_log').insert({
