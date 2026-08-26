@@ -1,23 +1,22 @@
-// v1.2.0 — Normalise dedupe keys to `campaign:<cid>:<source_type>:<source_ref_id>`
-//          so variant suffixes (`:a1`, `:retry:<ts>`, `:fallback:<ts>`) are folded
-//          into one recipient outcome. Previously any suffixed log row was never
-//          matched, so provider failures (e.g. Meta 131049) were counted as sent.
-// v1.1.0 — Collapse duplicate retry rows by source key and understand
-//          `:retry:<ts>` dedupe suffixes before counting delivery status.
-// v1.0.0 — Fold provider DLR outcomes back into `campaigns` counters so
-// the Communication Hub card matches what Telinfy/Meta actually delivered.
+// v2.0.0 — PHASE 3 + 6: the provider delivery event is authoritative and
+//          `campaign_recipients` is the single source of truth for statistics.
 //
-// - Reads `campaign_recipients` for the campaign, joins to `communication_logs`
-//   via `dedupe_key` (`campaign:<campaign_id>:<source_type>:<source_ref_id>`)
-//   to pull `delivery_status` (sent/delivered/read/failed) and updates:
-//     campaigns.success_count   = # provider-accepted (sent+delivered+read)
-//     campaigns.delivered_count = # delivered+read
-//     campaigns.read_count      = # read
-//     campaigns.failure_count   = # failed (send + post-send)
-//     campaigns.status          = sent | failed (partial ⇒ sent w/ failures)
+//   • A send-time ACK NEVER permanently wins over a later provider failure.
+//     Precedence: read > delivered > failed/bounced/suppressed > sent > queued.
+//   • Each recipient is transitioned through `apply_campaign_recipient_status`
+//     (monotonic, never regresses read → delivered → sent).
+//   • Counters are then recomputed by `refresh_campaign_stats` from the rows —
+//     no independently incremented totals, so recipient rows and campaign
+//     totals can never disagree.
+//   • `unknown` is NOT success and is reported in its own bucket.
+//
+// v1.2.0 — Normalise dedupe keys to `campaign:<cid>:<source_type>:<source_ref_id>`
+//          so variant suffixes (`:a1`, `:retry:<ts>`, `:fallback:<ts>`) fold into
+//          one recipient outcome.
 // - Also backfills any stuck `status='sending'` older than 30 min that never
 //   got recipient rows — flips them to `failed` with reason `stuck_sending_backfill`.
 // - Invocable: POST { campaign_id?: string }  (no body ⇒ scan last 24 h).
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
