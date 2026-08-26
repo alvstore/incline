@@ -50,8 +50,12 @@ export function mayAdvance(current: string | null | undefined, next: string | nu
   if (!n || n === c) return false;
   if (isTerminalState(n)) return !(CONFIRMED_STATES as readonly string[]).includes(c);
   if (n === "unknown") return rank(c) <= RANK.submitted;
-  return rank(n) > rank(c);
+  // `queued` and `dispatching` are both in-flight handoff states; moving
+  // between them is legal, anything else must strictly advance.
+  const lateral = (c === "dispatching" && n === "queued") || (c === "queued" && n === "dispatching");
+  return lateral || rank(n) > rank(c);
 }
+
 
 /** Applies a transition, returning the resulting state. */
 export function nextState(current: string | null | undefined, incoming: string): string {
