@@ -1,4 +1,3 @@
-// v1.1.0 — Reconcile queue outcomes into the originating communication log.
 import { sendLovableEmail } from 'npm:@lovable.dev/email-js'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -22,9 +21,9 @@ function isRateLimited(error: unknown): boolean {
 // Move straight to DLQ.
 function isForbidden(error: unknown): boolean {
   if (error && typeof error === 'object' && 'status' in error) {
-    return [402, 403].includes((error as { status: number }).status)
+    return (error as { status: number }).status === 403
   }
-  return error instanceof Error && /\b(402|403)\b/.test(error.message)
+  return error instanceof Error && error.message.includes('403')
 }
 
 // Extract Retry-After seconds from a structured EmailAPIError, or default to 60s.
@@ -33,32 +32,6 @@ function getRetryAfterSeconds(error: unknown): number {
     return (error as { retryAfterSeconds: number | null }).retryAfterSeconds ?? 60
   }
   return 60
-}
-
-async function reconcileCommunicationLog(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, unknown>,
-  status: 'sent' | 'failed',
-  messageId: string | null,
-  errorMessage?: string,
-): Promise<void> {
-  const sourceLogId = typeof payload.source_log_id === 'string' ? payload.source_log_id : null;
-  if (!sourceLogId) return;
-  const now = new Date().toISOString();
-  const update: Record<string, unknown> = {
-    status,
-    delivery_status: status,
-    provider_message_id: messageId,
-    error_message: errorMessage ?? null,
-    failed_at: status === 'failed' ? now : null,
-    delivery_metadata: {
-      provider: 'lovable_cloud',
-      queue_reconciled: true,
-      queue_message_id: payload.message_id ?? null,
-    },
-  };
-  if (status === 'sent') update.sent_at = now;
-  await supabase.from('communication_logs').update(update).eq('id', sourceLogId);
 }
 
 function parseJwtClaims(token: string): Record<string, unknown> | null {
@@ -94,7 +67,6 @@ async function moveToDlq(
     status: 'dlq',
     error_message: reason,
   })
-  await reconcileCommunicationLog(supabase, payload, 'failed', null, reason)
   const { error } = await supabase.rpc('move_to_dlq', {
     source_queue: queue,
     dlq_name: `${queue}_dlq`,
@@ -306,7 +278,6 @@ Deno.serve(async (req) => {
           recipient_email: payload.to,
           status: 'sent',
         })
-        await reconcileCommunicationLog(supabase, payload, 'sent', payload.message_id as string, undefined)
 
         // Delete from queue
         const { error: delError } = await supabase.rpc('delete_email', {
