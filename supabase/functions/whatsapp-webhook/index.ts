@@ -404,11 +404,8 @@ async function processStatusUpdates(value: any, branchId: string | null) {
       ? String(status.errors[0]?.code ?? status.errors[0]?.error_code ?? '') || null
       : null;
 
-    // 1. WhatsApp inbox row — MONOTONIC (Phase 2). Meta callbacks can arrive
-    //    out of order; `read` must never regress to `delivered`/`sent`.
-    const WA_RANK: Record<string, number> = {
-      pending: 0, unknown: 1, queued: 1, sent: 2, delivered: 3, read: 4, failed: 9,
-    };
+    // 1. WhatsApp inbox row — MONOTONIC (Phase 2), via the shared state machine.
+    //    Meta callbacks can arrive out of order; `read` must never regress.
     const messagePatch: Record<string, unknown> = {
       status: newStatus,
       updated_at: new Date().toISOString(),
@@ -425,14 +422,10 @@ async function processStatusUpdates(value: any, branchId: string | null) {
     if (branchId) existingQuery = existingQuery.eq("branch_id", branchId);
     const { data: existingRow } = await existingQuery.maybeSingle();
 
-    const curRank = WA_RANK[String(existingRow?.status ?? "pending")] ?? 0;
-    const nextRank = WA_RANK[newStatus] ?? 0;
-    const mayAdvance = !existingRow
-      || (newStatus === "failed"
-        ? !["delivered", "read"].includes(String(existingRow.status))
-        : nextRank > curRank);
+    const canAdvance = !existingRow || mayAdvance(String(existingRow.status ?? "pending"), newStatus);
 
-    if (existingRow && mayAdvance) {
+    if (existingRow && canAdvance) {
+
       const { error } = await supabase
         .from("whatsapp_messages")
         .update(messagePatch)
