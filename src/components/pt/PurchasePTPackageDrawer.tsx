@@ -887,10 +887,99 @@ export function PurchasePTPackageDrawer({
                   <SelectItem value="card">Card</SelectItem>
                   <SelectItem value="upi">UPI</SelectItem>
                   <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="wallet">Wallet</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {paySource === 'in_person' && (
+            <div className="rounded-2xl bg-muted/40 p-3 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Collect now
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: 'full', label: 'Full' },
+                  { key: 'half', label: '50%' },
+                  { key: 'custom', label: 'Custom' },
+                  { key: 'none', label: 'Nothing yet' },
+                ] as { key: CollectMode; label: string }[]).map((opt) => (
+                  <Button
+                    key={opt.key}
+                    type="button"
+                    size="sm"
+                    variant={collectMode === opt.key ? 'default' : 'outline'}
+                    className="rounded-full min-h-[36px] cursor-pointer"
+                    onClick={() => {
+                      setCollectMode(opt.key);
+                      if (opt.key === 'custom' && !collectInput) setCollectInput('');
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+
+              {collectMode === 'custom' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pt-collect" className="text-xs">Amount collected (₹)</Label>
+                  <Input
+                    id="pt-collect"
+                    type="number"
+                    min={0}
+                    max={breakdown.total}
+                    placeholder="e.g. 10000"
+                    value={collectInput}
+                    onChange={(e) => setCollectInput(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {needsReference && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pt-ref" className="text-xs">{refSpec!.label}</Label>
+                  <Input
+                    id="pt-ref"
+                    value={txnRef}
+                    placeholder={refSpec!.placeholder}
+                    onChange={(e) => setTxnRef(e.target.value)}
+                  />
+                  {referenceMissing && (
+                    <p className="text-xs text-warning">Add the reference so this payment can be reconciled.</p>
+                  )}
+                </div>
+              )}
+
+              {needsDueDate && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pt-due" className="text-xs">Balance due date</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {DUE_PRESETS.map((d) => (
+                      <Button
+                        key={d}
+                        type="button"
+                        size="sm"
+                        variant={dueDate === addDaysISO(d) ? 'default' : 'outline'}
+                        className="rounded-full min-h-[36px] cursor-pointer"
+                        onClick={() => setDueDate(addDaysISO(d))}
+                      >
+                        +{d} days
+                      </Button>
+                    ))}
+                  </div>
+                  <Input
+                    id="pt-due"
+                    type="date"
+                    min={todayISO()}
+                    value={dueDate || addDaysISO(7)}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>Subtotal (pre-GST)</span>
@@ -918,20 +1007,35 @@ export function PurchasePTPackageDrawer({
             <span>Final Total</span>
             <span>{formatINR(breakdown.total)}</span>
           </div>
+          {paySource === 'in_person' && balanceDue > 0 && (
+            <>
+              <div className="flex justify-between text-sm font-medium text-slate-700 dark:text-slate-200">
+                <span>Collecting now</span>
+                <span>{formatINR(collectedNow)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold text-warning">
+                <span>Balance due {dueDate || addDaysISO(7)}</span>
+                <span>{formatINR(balanceDue)}</span>
+              </div>
+            </>
+          )}
           <Button
             className="w-full mt-2"
             size="lg"
-            disabled={!canCharge}
+            disabled={!canCharge || referenceMissing}
             onClick={() => purchase.mutate()}
           >
             {purchase.isPending ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing…</>
             ) : awaitingPayment ? (
               <>Waiting for payment…</>
+            ) : paySource === 'in_person' && balanceDue > 0 ? (
+              <>Collect {formatINR(collectedNow)} &amp; Assign</>
             ) : (
               <>Charge &amp; Assign · {formatINR(breakdown.total)}</>
             )}
           </Button>
+
         </div>
       </SheetContent>
     </Sheet>
