@@ -8,6 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import inclineLogoAsset from '@/assets/incline-logo.png';
 import { normalizeDietContent, dayTotals, slotTotals } from '@/lib/fitness/dietContent';
 import { shiftWorkoutPlanDays } from '@/lib/fitness/planRotation';
+import {
+  AGREEMENT_PARTS,
+  AGREEMENT_ACKNOWLEDGEMENTS,
+  AGREEMENT_TITLE,
+  AGREEMENT_VERSION,
+  FINAL_DECLARATION,
+} from '@/lib/registration/agreement';
 
 
 const BRAND = {
@@ -1623,9 +1630,12 @@ export function buildThermalReceiptPdf(data: InvoicePdfInput, brand?: BrandConte
 }
 
 // ============================================================================
-// REGISTRATION FORM — single source of truth for member onboarding waiver PDFs.
+// MEMBERSHIP REGISTRATION & AGREEMENT
+// ONE document · ONE signature · ONE stored PDF. Parts A–I come from
+// `src/lib/registration/agreement.ts` — the same spec the public /register
+// flow renders server-side, so both paths produce the same document.
 // ============================================================================
-export interface RegistrationFormPdfInput {
+export interface MembershipAgreementPdfInput {
   data: {
     memberName: string;
     memberCode: string;
@@ -1650,10 +1660,12 @@ export interface RegistrationFormPdfInput {
   medicalConditions: string;
   parq?: Record<string, string>;
   parqQuestions: string[];
-  customTerms: string;
-  terms: Array<{ title: string; body: string }>;
-  declaration: string;
+  /** Member-specific addendum printed inside Part E. */
+  customTerms?: string;
+  /** Acknowledgement key -> granted. Rendered in their own Parts. */
+  acknowledgements?: Record<string, boolean>;
   signatureDataUrl?: string | null;
+  signedAt?: string | null;
 }
 
 function fmtDate(d?: string) {
@@ -1662,33 +1674,122 @@ function fmtDate(d?: string) {
   catch { return d; }
 }
 
-export function buildRegistrationFormPdf(args: RegistrationFormPdfInput, brand?: BrandContext): Blob {
-  const { data, govIdType, govIdNumber, fitnessGoals, medicalConditions, parq, parqQuestions, customTerms, terms, declaration, signatureDataUrl } = args;
+/**
+ * Branded document chrome shared with invoices/receipts: gradient band, logo,
+ * wordmark + branch block on the left, document title/meta on the right.
+ * Returns the Y coordinate where body content may start.
+ */
+export async function brandedDocHeader(
+  doc: jsPDF,
+  brand: BrandContext,
+  title: string,
+  meta: Array<string> = [],
+): Promise<number> {
+  const PAGE_W = doc.internal.pageSize.width;
+  const INDIGO: [number, number, number] = [79, 70, 229];
+  const VIOLET: [number, number, number] = [124, 58, 237];
+  const logo = await loadLogoDataUrl(brand.logoUrl || inclineLogoAsset);
+
+  const HEADER_H = 38;
+  const STRIPS = 64;
+  for (let i = 0; i < STRIPS; i++) {
+    const t = i / (STRIPS - 1);
+    doc.setFillColor(
+      Math.round(INDIGO[0] + (VIOLET[0] - INDIGO[0]) * t),
+      Math.round(INDIGO[1] + (VIOLET[1] - INDIGO[1]) * t),
+      Math.round(INDIGO[2] + (VIOLET[2] - INDIGO[2]) * t),
+    );
+    doc.rect((PAGE_W / STRIPS) * i, 0, PAGE_W / STRIPS + 0.3, HEADER_H, 'F');
+  }
+
+  let textX = 14;
+  if (logo) {
+    const maxH = 14, maxW = 28;
+    const ratio = logo.w / Math.max(1, logo.h);
+    let lh = maxH, lw = lh * ratio;
+    if (lw > maxW) { lw = maxW; lh = lw / ratio; }
+    const padX = 3, padY = 3;
+    const boxX = 10, boxY = (HEADER_H - lh - padY * 2) / 2;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(boxX, boxY, lw + padX * 2, lh + padY * 2, 1.5, 1.5, 'F');
+    try { doc.addImage(logo.dataUrl, 'PNG', boxX + padX, boxY + padY, lw, lh, undefined, 'FAST'); } catch { /* ignore */ }
+    textX = boxX + lw + padX * 2 + 4;
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text(brand.companyName.toUpperCase(), textX, 17);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(226, 232, 240);
+  doc.text('The Incline Life by Incline', textX, 22);
+  if (brand.branch.name) doc.text(brand.branch.name, textX, 27);
+  const headerContact = [brand.branch.phone, brand.branch.email].filter(Boolean).join('  ·  ');
+  if (headerContact) doc.text(headerContact, textX, 32);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  const titleLines = doc.splitTextToSize(title, 80) as string[];
+  doc.text(titleLines, PAGE_W - 14, 15, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(226, 232, 240);
+  let my = 15 + titleLines.length * 6;
+  meta.forEach((m) => { doc.text(m, PAGE_W - 14, my, { align: 'right' }); my += 5; });
+
+  doc.setFillColor(...VIOLET);
+  doc.rect(0, HEADER_H, PAGE_W, 1, 'F');
+  return HEADER_H + 10;
+}
+
+export async function buildMembershipAgreementPdf(
+  args: MembershipAgreementPdfInput,
+  brand?: BrandContext,
+): Promise<Blob> {
+  const {
+    data, govIdType, govIdNumber, fitnessGoals, medicalConditions,
+    parq, parqQuestions, customTerms, acknowledgements, signatureDataUrl, signedAt,
+  } = args;
+
   const resolvedBrand: BrandContext = brand || {
     ...DEFAULT_BRAND,
     branch: { name: data.branchName || 'Incline' },
   };
+
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW = 210;
   const pageH = 297;
   const margin = 14;
+  const contentW = pageW - margin * 2;
 
-  header(doc, 'MEMBERSHIP REGISTRATION', resolvedBrand, {
-    docNumber: `REG-${data.memberCode}`,
-    issueDate: fmtDate(new Date().toISOString()),
-  });
+  let y = await brandedDocHeader(doc, resolvedBrand, AGREEMENT_TITLE, [
+    `# AGR-${data.memberCode}`,
+    `Date: ${fmtDate(signedAt || new Date().toISOString())}`,
+    `v${AGREEMENT_VERSION}`,
+  ]);
 
-  let y = 56;
+  const ensure = (needed: number) => {
+    if (y + needed > pageH - 22) { doc.addPage(); y = 20; }
+  };
 
-  const section = (title: string) => {
-    if (y > pageH - 40) { doc.addPage(); y = 20; }
-    doc.setFillColor(241, 245, 249);
-    doc.rect(margin, y, pageW - margin * 2, 6, 'F');
+  const partHeading = (id: string, title: string, intro?: string) => {
+    ensure(intro ? 16 : 12);
+    doc.setFillColor(238, 242, 255); // indigo-50
+    doc.roundedRect(margin, y, contentW, 7, 1.5, 1.5, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    setColor(doc, BRAND.primary);
-    doc.text(title.toUpperCase(), margin + 2, y + 4.2);
-    y += 8;
+    setColor(doc, [79, 70, 229]);
+    doc.text(`PART ${id} — ${title.toUpperCase()}`, margin + 3, y + 4.8);
+    y += 9;
+    if (intro) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.8);
+      setColor(doc, BRAND.muted);
+      doc.text(intro, margin + 1, y);
+      y += 4;
+    }
   };
 
   const fieldsTable = (rows: Array<[string, string]>) => {
@@ -1696,134 +1797,161 @@ export function buildRegistrationFormPdf(args: RegistrationFormPdfInput, brand?:
       startY: y,
       body: rows.map(([k, v]) => [k, v || '—']),
       theme: 'plain',
-      bodyStyles: { fontSize: 9, textColor: BRAND.text, cellPadding: { top: 1.5, bottom: 1.5, left: 2, right: 2 } },
+      bodyStyles: { fontSize: 9, textColor: BRAND.text, cellPadding: { top: 1.4, bottom: 1.4, left: 2, right: 2 } },
       columnStyles: { 0: { fontStyle: 'bold', textColor: BRAND.muted, cellWidth: 45 } },
       margin: { left: margin, right: margin },
     });
     y = (doc as any).lastAutoTable.finalY + 4;
   };
 
-  section('Member Information');
-  fieldsTable([
-    ['Full Name', data.memberName],
-    ['Member Code', data.memberCode],
-    ['Email', data.email || ''],
-    ['Phone', data.phone || ''],
-    ['Gender', data.gender || ''],
-    ['Date of Birth', fmtDate(data.dateOfBirth)],
-    ['Address', [data.address, data.city, data.state].filter(Boolean).join(', ')],
-  ]);
+  // jsPDF's built-in Helvetica has no rupee glyph — render it as "Rs.".
+  const pdfSafe = (t: string) => t.replace(/\u20B9\s?/g, 'Rs. ');
 
-  section('Government ID');
-  fieldsTable([
-    ['ID Type', govIdType.toUpperCase()],
-    ['ID Number', govIdNumber],
-  ]);
-
-  section('Emergency Contact');
-  fieldsTable([
-    ['Name', data.emergencyContactName || ''],
-    ['Phone', data.emergencyContactPhone || ''],
-  ]);
-
-  section('Health & Fitness');
-  fieldsTable([
-    ['Fitness Goals', fitnessGoals],
-    ['Medical Conditions', medicalConditions || 'None declared'],
-  ]);
-
-  if (parq && parqQuestions.length) {
-    section('PAR-Q Health Screen');
-    autoTable(doc, {
-      startY: y,
-      head: [['#', 'Question', 'Answer']],
-      body: parqQuestions.map((q, i) => [String(i + 1), q, (parq[q] || 'no').toUpperCase()]),
-      theme: 'striped',
-      headStyles: { fillColor: BRAND.primary as any, fontSize: 8.5, textColor: 255 },
-      bodyStyles: { fontSize: 8.5, textColor: BRAND.text },
-      columnStyles: { 0: { cellWidth: 8 }, 2: { cellWidth: 18, halign: 'center', fontStyle: 'bold' } },
-      margin: { left: margin, right: margin },
+  const clauseList = (clauses: Array<{ title: string; body: string }>, startAt = 1) => {
+    const lineH = 3.4;
+    clauses.forEach((c, i) => {
+      const bodyLines = doc.splitTextToSize(pdfSafe(c.body), contentW - 4) as string[];
+      ensure(lineH * (bodyLines.length + 1) + 3);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.6);
+      setColor(doc, BRAND.text);
+      doc.text(pdfSafe(`${startAt + i}. ${c.title}`), margin + 2, y);
+      y += lineH;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.2);
+      doc.text(bodyLines, margin + 4, y);
+      y += bodyLines.length * lineH + 2.5;
     });
-    y = (doc as any).lastAutoTable.finalY + 4;
+  };
+
+  const acknowledgementList = (partId: string) => {
+    const items = AGREEMENT_ACKNOWLEDGEMENTS.filter((a) => a.part === partId);
+    if (!items.length) return;
+    items.forEach((a) => {
+      const granted = acknowledgements ? acknowledgements[a.key] === true : false;
+      const lines = doc.splitTextToSize(pdfSafe(a.label), contentW - 12) as string[];
+      ensure(lines.length * 3.4 + 4);
+      doc.setDrawColor(148, 163, 184);
+      doc.setLineWidth(0.25);
+      doc.rect(margin + 2, y - 2.6, 3.2, 3.2, 'S');
+      if (granted) {
+        doc.setDrawColor(22, 163, 74);
+        doc.setLineWidth(0.6);
+        doc.line(margin + 2.6, y - 1.1, margin + 3.4, y - 0.1);
+        doc.line(margin + 3.4, y - 0.1, margin + 4.9, y - 2.3);
+        doc.setLineWidth(0.25);
+      }
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.2);
+      setColor(doc, granted ? BRAND.text : BRAND.muted);
+      doc.text(lines, margin + 8, y);
+      y += lines.length * 3.4 + 2.2;
+    });
+    y += 1;
+  };
+
+  for (const part of AGREEMENT_PARTS) {
+    partHeading(part.id, part.title, part.intro);
+
+    if (part.id === 'A') {
+      fieldsTable([
+        ['Full Name', data.memberName],
+        ['Member Code', data.memberCode],
+        ['Email', data.email || ''],
+        ['Phone', data.phone || ''],
+        ['Gender', data.gender || ''],
+        ['Date of Birth', fmtDate(data.dateOfBirth)],
+        ['Address', [data.address, data.city, data.state].filter(Boolean).join(', ')],
+        ['Government ID', [govIdType ? govIdType.toUpperCase().replace('_', ' ') : '', govIdNumber].filter(Boolean).join(' · ')],
+        ['Emergency Contact', [data.emergencyContactName, data.emergencyContactPhone].filter(Boolean).join(' · ')],
+      ]);
+    }
+
+    if (part.id === 'B') {
+      fieldsTable([
+        ['Plan', data.planName || ''],
+        ['Amount', data.pricePaid ? inr(data.pricePaid) : ''],
+        ['Start Date', fmtDate(data.startDate)],
+        ['End Date', fmtDate(data.endDate)],
+        ['Branch', data.branchName || resolvedBrand.branch.name || ''],
+      ]);
+    }
+
+    if (part.id === 'C') {
+      fieldsTable([
+        ['Primary Fitness Goal', fitnessGoals],
+        ['Health Conditions / Injuries', medicalConditions || 'None declared'],
+      ]);
+      if (parq && parqQuestions.length) {
+        autoTable(doc, {
+          startY: y,
+          head: [['#', 'PAR-Q Question', 'Answer']],
+          body: parqQuestions.map((q, i) => [String(i + 1), q, (parq[q] || 'no').toUpperCase()]),
+          theme: 'striped',
+          headStyles: { fillColor: [79, 70, 229] as any, fontSize: 8.5, textColor: 255 },
+          bodyStyles: { fontSize: 8.4, textColor: BRAND.text },
+          columnStyles: { 0: { cellWidth: 8 }, 2: { cellWidth: 18, halign: 'center', fontStyle: 'bold' } },
+          margin: { left: margin, right: margin },
+        });
+        y = (doc as any).lastAutoTable.finalY + 4;
+      }
+    }
+
+    clauseList(part.clauses);
+
+    if (part.id === 'E' && customTerms && customTerms.trim()) {
+      clauseList([{ title: 'Member-Specific Addendum', body: customTerms.trim() }], part.clauses.length + 1);
+    }
+
+    acknowledgementList(part.id);
+
+    if (part.id === 'I') {
+      const declLines = doc.splitTextToSize(pdfSafe(FINAL_DECLARATION), contentW - 4) as string[];
+      ensure(declLines.length * 3.6 + 44);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.6);
+      setColor(doc, BRAND.text);
+      doc.text(declLines, margin + 2, y);
+      y += declLines.length * 3.6 + 6;
+
+      const sigBoxW = (contentW - 10) / 2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      setColor(doc, BRAND.muted);
+      doc.text('MEMBER SIGNATURE', margin, y);
+      doc.text('AUTHORIZED STAFF', margin + sigBoxW + 10, y);
+      y += 3;
+
+      if (signatureDataUrl) {
+        try { doc.addImage(signatureDataUrl, 'PNG', margin, y, sigBoxW, 22); } catch { /* noop */ }
+      }
+      const sigLineY = y + 26;
+      doc.setDrawColor(30, 41, 59);
+      doc.setLineWidth(0.3);
+      doc.line(margin, sigLineY, margin + sigBoxW, sigLineY);
+      doc.line(margin + sigBoxW + 10, sigLineY, pageW - margin, sigLineY);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      setColor(doc, BRAND.muted);
+      doc.text(`${data.memberName} • ${fmtDate(signedAt || new Date().toISOString())}`, margin, sigLineY + 4);
+      doc.text('Date: ____________________', margin + sigBoxW + 10, sigLineY + 4);
+      y = sigLineY + 10;
+    }
   }
 
-  section('Membership Details');
-  fieldsTable([
-    ['Plan', data.planName || ''],
-    ['Amount', data.pricePaid ? inr(data.pricePaid) : ''],
-    ['Start Date', fmtDate(data.startDate)],
-    ['End Date', fmtDate(data.endDate)],
-    ['Branch', data.branchName || ''],
-  ]);
-
-  section('Terms & Conditions');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  setColor(doc, BRAND.text);
-  const allTerms = customTerms ? [...terms, { title: 'Custom Terms', body: customTerms }] : terms;
-  const lineH = 3.4;
-  allTerms.forEach((t, i) => {
-    const titleStr = `${i + 1}. ${t.title}`;
-    const bodyLines = doc.splitTextToSize(t.body, pageW - margin * 2 - 4);
-    const blockH = lineH + bodyLines.length * lineH + 2;
-    if (y + blockH > pageH - 60) { doc.addPage(); y = 20; }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.8);
-    setColor(doc, BRAND.text);
-    doc.text(titleStr, margin + 2, y);
-    y += lineH;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.3);
-    doc.text(bodyLines, margin + 4, y);
-    y += bodyLines.length * lineH + 2;
-  });
-
-  if (y + 16 > pageH - 60) { doc.addPage(); y = 20; }
-  y += 2;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  setColor(doc, BRAND.primary);
-  doc.text('MEMBER DECLARATION', margin + 2, y);
-  y += lineH + 1;
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8.5);
-  setColor(doc, BRAND.text);
-  const decl = doc.splitTextToSize(declaration, pageW - margin * 2 - 4);
-  doc.text(decl, margin + 2, y);
-  y += decl.length * lineH + 2;
-
-  if (y > pageH - 55) { doc.addPage(); y = 20; }
-  y += 8;
-  doc.setDrawColor(203, 213, 225);
-  doc.line(margin, y, pageW - margin, y);
-  y += 6;
-
-  const sigBoxW = (pageW - margin * 2 - 10) / 2;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  setColor(doc, BRAND.muted);
-  doc.text('MEMBER SIGNATURE', margin, y);
-  doc.text('AUTHORIZED STAFF', margin + sigBoxW + 10, y);
-  y += 3;
-
-  if (signatureDataUrl) {
-    try { doc.addImage(signatureDataUrl, 'PNG', margin, y, sigBoxW, 22); } catch { /* noop */ }
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    footer(doc, resolvedBrand);
+    setColor(doc, BRAND.muted);
+    doc.setFontSize(7.5);
+    doc.text(`Page ${p} of ${pages}`, pageW - margin, pageH - 12, { align: 'right' });
   }
 
-  const sigLineY = y + 26;
-  doc.setDrawColor(30, 41, 59);
-  doc.line(margin, sigLineY, margin + sigBoxW, sigLineY);
-  doc.line(margin + sigBoxW + 10, sigLineY, pageW - margin, sigLineY);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  setColor(doc, BRAND.muted);
-  doc.text(`${data.memberName} • ${fmtDate(new Date().toISOString())}`, margin, sigLineY + 4);
-  doc.text('Date: ____________________', margin + sigBoxW + 10, sigLineY + 4);
-
-  footer(doc, resolvedBrand);
   return doc.output('blob');
 }
+
+
 
 // ============================================================================
 // PLAN HELPERS — folded in from former planPdf.ts

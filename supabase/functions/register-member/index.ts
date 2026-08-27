@@ -12,7 +12,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { phoneVariants, normalizePhone } from "../_shared/phone.ts";
-import { FACILITY_TERMS, TERMS_VERSION } from "../_shared/terms.ts";
+import {
+  AGREEMENT_PARTS,
+  AGREEMENT_ACKNOWLEDGEMENTS,
+  AGREEMENT_TITLE,
+  AGREEMENT_VERSION,
+  FINAL_DECLARATION,
+} from "../_shared/agreement.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -325,72 +331,88 @@ async function generateWaiverPdf(input: {
 
   const reg = input.registration;
 
-  draw("THE INCLINE LIFE BY INCLINE", { size: 14, bold: true });
-  draw("Membership Registration, Waiver & Consent", { size: 12, bold: true });
-  draw(`Branch: ${input.branch_name}   |   Document: REG-${input.member_code}`, { size: 9 });
-
-  section("Member Information");
-  field("Full Name", input.full_name);
-  field("Member Code", input.member_code);
-  field("Email", input.email);
-  field("Phone", input.phone);
-  field("Gender", reg.gender);
-  field("Date of Birth", reg.date_of_birth);
-  field("Address", [reg.address, reg.city, reg.state, reg.postal_code].filter(Boolean).join(", "));
-
-  section("Government ID");
-  field("ID Type", reg.government_id_type ? reg.government_id_type.toUpperCase() : null);
-  field("ID Number", reg.government_id_number);
-
-  section("Emergency Contact");
-  field("Name", reg.emergency_contact_name);
-  field("Phone", reg.emergency_contact_phone);
-
-  section("Health & Fitness");
-  field("Primary Fitness Goal", reg.fitness_goals);
-  field("Health Conditions / Injuries", reg.health_conditions || "None declared");
-
-  section("Assumption of Risk & Release");
-  const waiverLines = [
-    "I acknowledge that physical exercise and use of gym facilities involve",
-    "inherent risk of injury. I voluntarily assume all such risks and agree to",
-    "follow all gym rules, trainer instructions, and equipment guidelines. I",
-    "release The Incline Life by Incline, its staff and contractors from",
-    "liability for any injury, loss, or damage arising from my participation,",
-    "except in cases of gross negligence.",
-  ];
-  for (const l of waiverLines) draw(l);
-
-  section("PAR-Q Health Declaration");
-  let qi = 1;
-  for (const [q, a] of Object.entries(input.par_q)) {
-    drawWrapped(`${qi}. ${q} — ${String(a).toUpperCase()}`, { size: 9 });
-    qi++;
-  }
-
-  section(`Facility Terms & Conditions (v${input.terms_version || TERMS_VERSION})`);
-  let ti = 1;
-  for (const clause of FACILITY_TERMS) {
-    drawWrapped(`${ti}. ${clause.title}`, { size: 9 });
-    drawWrapped(clause.body, { size: 8 });
-    ti++;
-  }
-
-  if (input.custom_terms && input.custom_terms.trim()) {
-    section("Additional Terms");
-    drawWrapped(input.custom_terms.trim(), { size: 9 });
-  }
-
-  section("Consents (DPDP Act 2023)");
-  for (const [k, v] of Object.entries(input.consents)) {
-    draw(`• ${k}: ${v ? "GRANTED" : "DECLINED"}`, { size: 9 });
-  }
-
-  section("Declaration & Signature");
-  drawWrapped(
-    "I confirm that the information provided above is true and complete to the best of my knowledge, and that I have read and accepted the waiver, terms and consents recorded in this document.",
-    { size: 9 },
+  // ---- Branded header band (mirrors the in-app branded PDF chrome) --------
+  page.drawRectangle({ x: 0, y: pageH - 92, width: pageW, height: 92, color: rgb(0.31, 0.27, 0.9) });
+  page.drawText(win("THE INCLINE LIFE BY INCLINE"), {
+    x: margin, y: pageH - 40, size: 16, font: fontBold, color: rgb(1, 1, 1),
+  });
+  page.drawText(win(AGREEMENT_TITLE), {
+    x: margin, y: pageH - 58, size: 12, font: fontBold, color: rgb(0.92, 0.94, 1),
+  });
+  page.drawText(
+    win(`${input.branch_name}  |  AGR-${input.member_code}  |  v${input.terms_version || AGREEMENT_VERSION}`),
+    { x: margin, y: pageH - 74, size: 9, font, color: rgb(0.88, 0.9, 1) },
   );
+  y = pageH - 110;
+
+  const partHeading = (id: string, title: string, intro?: string) => {
+    section(`Part ${id} — ${title}`);
+    if (intro) drawWrapped(intro, { size: 8 });
+  };
+
+  const acksForPart = (id: string) => {
+    const items = AGREEMENT_ACKNOWLEDGEMENTS.filter((a) => a.part === id);
+    for (const a of items) {
+      const granted = input.consents[a.key] === true;
+      drawWrapped(`[${granted ? "X" : " "}] ${a.label}`, { size: 8.5 });
+    }
+  };
+
+  for (const part of AGREEMENT_PARTS) {
+    partHeading(part.id, part.title, part.intro);
+
+    if (part.id === "A") {
+      field("Full Name", input.full_name);
+      field("Member Code", input.member_code);
+      field("Email", input.email);
+      field("Phone", input.phone);
+      field("Gender", reg.gender);
+      field("Date of Birth", reg.date_of_birth);
+      field("Address", [reg.address, reg.city, reg.state, reg.postal_code].filter(Boolean).join(", "));
+      field(
+        "Government ID",
+        [reg.government_id_type ? reg.government_id_type.toUpperCase() : null, reg.government_id_number]
+          .filter(Boolean).join(" / "),
+      );
+      field(
+        "Emergency Contact",
+        [reg.emergency_contact_name, reg.emergency_contact_phone].filter(Boolean).join(" / "),
+      );
+    }
+
+    if (part.id === "B") {
+      field("Branch", input.branch_name);
+      field("Plan Interest", (reg as unknown as { pending_plan?: string }).pending_plan ?? null);
+      field("Registered On", input.signed_at);
+    }
+
+    if (part.id === "C") {
+      field("Primary Fitness Goal", reg.fitness_goals);
+      field("Health Conditions / Injuries", reg.health_conditions || "None declared");
+      let qi = 1;
+      for (const [q, a] of Object.entries(input.par_q)) {
+        drawWrapped(`${qi}. ${q} — ${String(a).toUpperCase()}`, { size: 9 });
+        qi++;
+      }
+    }
+
+    let ci = 1;
+    for (const clause of part.clauses) {
+      drawWrapped(`${ci}. ${clause.title}`, { size: 9, bold: true });
+      drawWrapped(clause.body, { size: 8 });
+      ci++;
+    }
+
+    if (part.id === "E" && input.custom_terms && input.custom_terms.trim()) {
+      drawWrapped("Member-Specific Addendum", { size: 9, bold: true });
+      drawWrapped(input.custom_terms.trim(), { size: 8 });
+    }
+
+    acksForPart(part.id);
+  }
+
+  drawWrapped(FINAL_DECLARATION, { size: 9 });
+
   try {
     const sigImg = await pdf.embedPng(input.signature_png_bytes);
     const sigDims = sigImg.scale(0.4);
@@ -438,7 +460,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // Optional branch/campaign-specific terms shown on /register — printed on the
   // contract and persisted so staff reprints match exactly.
   const customTerms = body.custom_terms ? String(body.custom_terms).slice(0, 4000) : null;
-  const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : TERMS_VERSION;
+  const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : AGREEMENT_VERSION;
   if (!consents.dpdp || !consents.whatsapp || !consents.waiver) {
     return json(400, { error: "required_consents_missing" });
   }
@@ -555,7 +577,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   const signedAt = new Date().toISOString();
 
   const sigPath = `${member.id}/signature.png`;
-  const pdfPath = `${member.id}/onboarding-waiver.pdf`;
+  const pdfPath = `${member.id}/membership-agreement.pdf`;
 
   const { error: sigUpErr } = await admin.storage
     .from("member-onboarding")
@@ -572,7 +594,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     signature_path: sigPath,
     waiver_pdf_path: pdfPath,
     par_q,
-    consents,
+    consents: { ...consents, source: "self_register", pdf_bucket: "member-onboarding" },
     custom_terms: customTerms,
     terms_version: termsVersion,
     signer_ip: ip,
