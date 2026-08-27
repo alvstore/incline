@@ -413,11 +413,12 @@ export async function resolveConversationContext(
           }
         }
 
-        if (!outbound && !ambiguous) {
+        if (!outbound && !ambiguous && input.allowRecencyFallback !== false) {
           outbound = top;
           ctx.correlationMethod = "recent_outbound";
           ctx.correlationConfidence = "low";
-        } else if (!outbound && ambiguous) {
+        } else if (!outbound && (ambiguous || input.allowRecencyFallback === false)) {
+
           console.log(
             "[WhatsApp Context Resolver] ambiguous fallback — multiple campaigns in window, no context.id",
             JSON.stringify({ branch_id: input.branchId, campaigns: distinctCampaigns.size }),
