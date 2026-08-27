@@ -97,6 +97,11 @@ export function PurchasePTPackageDrawer({
   const [startDate, setStartDate] = useState<string>(todayISO());
   const [gstExempt, setGstExempt] = useState(false);
   const [chargeOverride, setChargeOverride] = useState<string>('');
+  // Collection: how much money actually changes hands right now.
+  const [collectMode, setCollectMode] = useState<CollectMode>('full');
+  const [collectInput, setCollectInput] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
+  const [txnRef, setTxnRef] = useState<string>('');
   const [custom, setCustom] = useState<CustomForm>({
     name: '',
     sessions: 12,
@@ -114,8 +119,10 @@ export function PurchasePTPackageDrawer({
       setStartDate(todayISO());
       setGstExempt(false);
       setChargeOverride('');
+      setCollectMode('full'); setCollectInput(''); setDueDate(''); setTxnRef('');
     }
   }, [open]);
+
 
   const dbType = mode === 'session' ? 'session_based' : 'monthly';
   const gstRate: 0 | 5 = gstExempt ? 0 : PT_GST_RATE;
