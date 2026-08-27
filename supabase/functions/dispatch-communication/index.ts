@@ -384,7 +384,7 @@ function resolveVarValue(
   const k = key.toLowerCase();
   // v1.30.0: recipient/greeting slot — internal alerts address staff, member
   // journeys address the member. Prefer the most specific key available.
-  if (k === 'recipient_name' || k === 'recipient') tryKeys.push('recipient_name', 'staff_name', 'first_name', 'member_name', 'name', 'full_name', 'contact_name', 'lead_name');
+  if (k === 'recipient_name' || k === 'recipient') tryKeys.push('recipient_name', 'staff_name', 'assignee_name', 'first_name', 'member_name', 'name', 'full_name', 'contact_name', 'lead_name');
   if (k.includes('staff')) tryKeys.push('staff_name', 'assignee_name', 'recipient_name');
   if (k.includes('lead_name')) tryKeys.push('lead_name', 'full_name', 'contact_name', 'name', 'member_name');
   if (k.includes('member') || k === 'name' || k === 'first_name' || k === 'full_name') tryKeys.push('member_name', 'name', 'full_name', 'first_name', 'lead_name', 'contact_name');
