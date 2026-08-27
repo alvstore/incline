@@ -20,8 +20,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
 
 type Mode = 'session' | 'monthly';
-type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer';
+type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque' | 'wallet';
 type PaySource = 'in_person' | 'payment_link';
+type CollectMode = 'full' | 'half' | 'custom' | 'none';
+
+const REFERENCE_LABELS: Record<PayMethod, { label: string; placeholder: string } | null> = {
+  cash: null,
+  wallet: null,
+  upi: { label: 'UPI reference / UTR', placeholder: '12-digit UTR from the UPI app' },
+  card: { label: 'Card auth / RRN', placeholder: 'Approval code on the POS slip' },
+  bank_transfer: { label: 'Bank reference / UTR', placeholder: 'NEFT / IMPS / RTGS reference' },
+  cheque: { label: 'Cheque number', placeholder: 'Cheque no. + bank' },
+};
+
+const DUE_PRESETS = [7, 10, 15, 30] as const;
+
+const addDaysISO = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
 
 // PT GST is 5% inclusive by default; owners/admins/managers may mark a sale exempt (0%).
 const PT_GST_RATE = 5;
