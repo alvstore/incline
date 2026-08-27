@@ -41,7 +41,13 @@ import {
   resolveConversationContext,
   persistThreadContext,
   logAiDecision,
+  isContextResolverEnabled,
 } from "../_shared/whatsapp-context.ts";
+
+/** Internal control-flow signal: resolver v2 is disabled for this recipient. */
+class SkipContextResolution extends Error {}
+
+
 
 
 const corsHeaders = {
