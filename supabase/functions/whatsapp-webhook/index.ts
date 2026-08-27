@@ -582,12 +582,55 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
   // a matching end after 90s is conclusive proof of a worker kill and is
   // surfaced by the System Health "Stalled Conversations" card.
   const brainStartedAt = Date.now();
+
+  // v7.0.0 — CONVERSATION CONTEXT RESOLUTION. Before the brain runs we resolve
+  // WHY this person is writing (campaign reply / transactional / member support
+  // / lead / human handoff) using Meta's context.id as the primary signal.
+  let conversationContext = null as Awaited<ReturnType<typeof resolveConversationContext>> | null;
+  try {
+    conversationContext = await resolveConversationContext(supabase, {
+      branchId,
+      phoneNumber,
+      inboundMessageId: messageId,
+      inboundContent: inboundMsg.content,
+      replyToMessageId: (inboundMsg as { reply_to_message_id?: string | null }).reply_to_message_id ?? null,
+      platform: "whatsapp",
+    });
+
+    if (!conversationContext.shouldInvokeAI) {
+      console.log(`[whatsapp-webhook] AI suppressed by context: ${conversationContext.noReplyReason}`);
+      return;
+    }
+
+    // Stamp the inbound row with resolved provenance (best-effort).
+    await supabase
+      .from("whatsapp_messages")
+      .update({
+        campaign_id: conversationContext.campaignId,
+        communication_log_id: conversationContext.communicationLogId,
+      })
+      .eq("id", messageId);
+
+    await persistThreadContext(supabase, branchId, phoneNumber, conversationContext);
+  } catch (ctxErr) {
+    // Context resolution must NEVER block a reply — degrade to the old behaviour.
+    console.warn("[whatsapp-webhook] context resolution failed (continuing):", ctxErr);
+    conversationContext = null;
+  }
+
   try {
     await supabase.rpc("log_error_event", {
       p_source: "whatsapp_brain",
       p_severity: "info",
       p_message: `brain_start ${phoneNumber}`,
-      p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "start" },
+      p_context: {
+        branch_id: branchId,
+        phone: phoneNumber,
+        message_id: messageId,
+        stage: "start",
+        conversation_context: conversationContext?.conversationContext ?? null,
+        correlation_method: conversationContext?.correlationMethod ?? null,
+      },
     });
   } catch { /* noop */ }
 
@@ -604,8 +647,21 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
         messageContent: inboundMsg.content,
         contactName: inboundMsg.contact_name ?? null,
         messageType: "text",
+        conversationContext,
       },
     );
+
+    if (result.noReply) {
+      logAiDecision({
+        branchId,
+        phoneNumber,
+        action: "no_reply",
+        reason: result.noReplyReason ?? null,
+        context: conversationContext?.conversationContext ?? "unknown",
+      });
+      return;
+    }
+
 
     if (result.skipped || !result.replyText) {
       // v6.3.0 — promote silent skips to error_logs so we can audit why the
