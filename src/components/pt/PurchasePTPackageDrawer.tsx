@@ -148,9 +148,10 @@ export function PurchasePTPackageDrawer({
 
   // Idempotency key stable across retries within this draft
   const [trainerDraftKey, setTrainerDraftKey] = useState<string>('none');
+  const collectDraftKey = `${collectMode}-${collectInput}-${dueDate}`;
   const draftId = selected === 'custom'
-    ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}`
-    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}`;
+    ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}-${collectDraftKey}`
+    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}-${collectDraftKey}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
 
 
