@@ -1207,24 +1207,42 @@ Deno.serve(async (req) => {
             }
           }
           if (!input.template_id) {
+            // v1.36.0: aligned with the trigger_event values that actually exist
+            // in `templates` (previously several categories pointed at event
+            // names nobody uses, e.g. payment_alert → payment_overdue, which
+            // made every dues reminder fail with no_template_for_closed_session).
             const CATEGORY_TO_TRIGGER_EVENTS: Partial<Record<Category, string[]>> = {
-              membership_reminder: ['membership_expiring', 'membership_expired', 'membership_renewal'],
-              payment_receipt: ['payment_received', 'invoice_generated', 'invoice_paid'],
-              payment_alert: ['payment_overdue', 'payment_failed', 'payment_reminder'],
-              class_notification: ['class_booked', 'class_reminder', 'class_cancelled'],
-              new_lead: ['lead_created', 'lead_welcome'],
+              membership_reminder: [
+                'membership_expiring_7d', 'membership_expiring_1d', 'membership_expiring',
+                'membership_expired', 'membership_renewal', 'freeze_confirmed', 'unfreeze_confirmed',
+              ],
+              payment_receipt: [
+                'payment_received', 'receipt_generated', 'invoice_generated', 'invoice_ready',
+                'invoice_paid', 'pos_receipt_ready', 'pos_order_completed',
+              ],
+              payment_alert: [
+                'payment_due', 'membership_overdue', 'payment_overdue',
+                'payment_failed', 'payment_reminder', 'invoice_generated', 'invoice_ready',
+              ],
+              class_notification: [
+                'class_booked', 'class_reminder_24h', 'class_reminder', 'class_cancelled',
+                'class_schedule_weekly', 'pt_session_booked', 'pt_session_reminder',
+              ],
+              new_lead: ['lead_created', 'lead_welcome', 'lead_nurture_followup'],
               task_reminder: ['task_assigned', 'task_reminder'],
               retention_nudge: [
                 'retention_stage_1', 'retention_stage_2', 'retention_stage_3',
                 'retention_nudge_t1', 'retention_nudge_t2',
                 'absent_member_motivation_low', 'absent_member_motivation_high',
                 'retention_nudge', 'inactive_member', 'comeback',
+                'missed_workout_3d', 'win_back_30d',
               ],
 
               review_request: ['review_request', 'feedback_request'],
               low_stock: ['low_stock_alert'],
-              announcement: ['announcement', 'broadcast'],
+              announcement: ['announcement', 'broadcast', 'offer_announcement', 'gym_closure_update'],
             };
+
             const events = CATEGORY_TO_TRIGGER_EVENTS[input.category] ?? [];
             const fallbackTpl = await pickTemplate(events);
             if (fallbackTpl?.id) {
