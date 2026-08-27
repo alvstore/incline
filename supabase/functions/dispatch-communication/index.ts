@@ -392,12 +392,16 @@ function resolveVarValue(
   if (k.includes('trainer')) tryKeys.push('trainer_name');
   if (k.includes('interest')) tryKeys.push('interest', 'plan_interest', 'interest_name');
   if (k.includes('source')) tryKeys.push('source', 'lead_source', 'utm_source');
-  if (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees') || k === 'revenue') tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount', 'total_revenue');
+  const isDateLike = /(date|time|day|when)/.test(k);
+  if (!isDateLike && (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees') || k === 'revenue')) tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount', 'total_revenue');
   if (k.includes('invoice')) tryKeys.push('invoice_number', 'invoice_id');
   if (k.includes('branch')) tryKeys.push('branch_name', 'branch');
-  if (k.includes('date')) tryKeys.push('date', 'report_date');
+  if (k.includes('date')) tryKeys.push('date', 'due_date', 'start_date', 'expiry_date', 'class_date', 'session_date', 'report_date');
+  if (k.includes('time')) tryKeys.push('time', 'due_time', 'class_time', 'session_time', 'start_time');
+  if (k.includes('task') || k.includes('title') || k.includes('subject')) tryKeys.push('task_title', 'title', 'subject', 'task_name');
+  if (k.includes('priority')) tryKeys.push('priority', 'priority_label');
   if (k.includes('checkins')) tryKeys.push('checkins', 'total_checkins');
-  if (k.includes('document') || k.includes('link') || k.includes('url')) tryKeys.push('document_link', 'url', 'link');
+  if (k.includes('document') || k.includes('link') || k.includes('url') || k === 'here') tryKeys.push('document_link', 'url', 'link', 'short_link', 'action_link');
   // Meta positional slots ({{1}}, {{2}}, …). By convention slot #1 is the
   // recipient's first name (matches CampaignWizard's variable legend and
   // manage-whatsapp-templates auto-personalization). Without this the
