@@ -599,6 +599,14 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
   // / lead / human handoff) using Meta's context.id as the primary signal.
   let conversationContext = null as Awaited<ReturnType<typeof resolveConversationContext>> | null;
   try {
+    // Feature flag WHATSAPP_CONTEXT_RESOLVER_V2 — OFF by default. When off the
+    // brain runs exactly as it did before this layer existed.
+    const { enabled: resolverEnabled, flag } = await isContextResolverEnabled(supabase, phoneNumber);
+    if (!resolverEnabled) {
+      console.log("[whatsapp-webhook] context resolver v2 disabled for this recipient");
+      throw new SkipContextResolution();
+    }
+
     conversationContext = await resolveConversationContext(supabase, {
       branchId,
       phoneNumber,
@@ -606,7 +614,9 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
       inboundContent: inboundMsg.content,
       replyToMessageId: (inboundMsg as { reply_to_message_id?: string | null }).reply_to_message_id ?? null,
       platform: "whatsapp",
+      allowRecencyFallback: flag.recencyFallback,
     });
+
 
     if (!conversationContext.shouldInvokeAI) {
       console.log(`[whatsapp-webhook] AI suppressed by context: ${conversationContext.noReplyReason}`);
