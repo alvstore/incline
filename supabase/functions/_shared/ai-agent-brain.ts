@@ -459,6 +459,8 @@ export interface AgentContext {
   messageContent: string;
   contactName: string | null;
   messageType?: string;       // e.g. "story_reply", "text", "image"
+  /** v4.6.0 — resolved provenance/context for this inbound (WhatsApp). */
+  conversationContext?: ResolvedWhatsAppContext | null;
 }
 
 export interface AgentResult {
@@ -468,7 +470,11 @@ export interface AgentResult {
   handoffTriggered: boolean;
   skipped: boolean;
   skipReason?: string;
+  /** v4.6.0 — model decided a reply adds no value (pure acknowledgement). */
+  noReply?: boolean;
+  noReplyReason?: string | null;
 }
+
 
 interface OrgAiConfig {
   auto_reply_enabled?: boolean;
