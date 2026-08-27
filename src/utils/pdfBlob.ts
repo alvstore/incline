@@ -1804,15 +1804,18 @@ export async function buildMembershipAgreementPdf(
     y = (doc as any).lastAutoTable.finalY + 4;
   };
 
-  const clauseList = (clauses: Array<{ title: string; body: string }>) => {
+  // jsPDF's built-in Helvetica has no rupee glyph — render it as "Rs.".
+  const pdfSafe = (t: string) => t.replace(/\u20B9\s?/g, 'Rs. ');
+
+  const clauseList = (clauses: Array<{ title: string; body: string }>, startAt = 1) => {
     const lineH = 3.4;
     clauses.forEach((c, i) => {
-      const bodyLines = doc.splitTextToSize(c.body, contentW - 4) as string[];
+      const bodyLines = doc.splitTextToSize(pdfSafe(c.body), contentW - 4) as string[];
       ensure(lineH * (bodyLines.length + 1) + 3);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.6);
       setColor(doc, BRAND.text);
-      doc.text(`${i + 1}. ${c.title}`, margin + 2, y);
+      doc.text(pdfSafe(`${startAt + i}. ${c.title}`), margin + 2, y);
       y += lineH;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.2);
@@ -1826,7 +1829,7 @@ export async function buildMembershipAgreementPdf(
     if (!items.length) return;
     items.forEach((a) => {
       const granted = acknowledgements ? acknowledgements[a.key] === true : false;
-      const lines = doc.splitTextToSize(a.label, contentW - 12) as string[];
+      const lines = doc.splitTextToSize(pdfSafe(a.label), contentW - 12) as string[];
       ensure(lines.length * 3.4 + 4);
       doc.setDrawColor(148, 163, 184);
       doc.setLineWidth(0.25);
@@ -1897,13 +1900,13 @@ export async function buildMembershipAgreementPdf(
     clauseList(part.clauses);
 
     if (part.id === 'E' && customTerms && customTerms.trim()) {
-      clauseList([{ title: 'Member-Specific Addendum', body: customTerms.trim() }]);
+      clauseList([{ title: 'Member-Specific Addendum', body: customTerms.trim() }], part.clauses.length + 1);
     }
 
     acknowledgementList(part.id);
 
     if (part.id === 'I') {
-      const declLines = doc.splitTextToSize(FINAL_DECLARATION, contentW - 4) as string[];
+      const declLines = doc.splitTextToSize(pdfSafe(FINAL_DECLARATION), contentW - 4) as string[];
       ensure(declLines.length * 3.6 + 44);
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8.6);
