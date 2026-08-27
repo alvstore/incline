@@ -1408,6 +1408,27 @@ ANSWER-FIRST RULE (highest priority in this block):
     }
   }
 
+  // v4.6.0 — STRUCTURED NO-REPLY. The model may decide a reply adds no value
+  // (pure acknowledgement / emoji reaction). Honoured only when the entire
+  // reply is that JSON object, and never when a tool actually ran.
+  {
+    const decision = parseNoReplyDecision(replyText);
+    if (decision.noReply) {
+      return {
+        replyText: null,
+        leadCaptured: false,
+        leadId: null,
+        handoffTriggered: false,
+        skipped: true,
+        skipReason: `no_reply:${decision.reason ?? "model_decision"}`,
+        noReply: true,
+        noReplyReason: decision.reason ?? "model_decision",
+      };
+    }
+  }
+
+
+
   // v3.6.0 — silent-drop fix. The model occasionally returns only a tool_call
   // (with empty `content`) and the follow-up `callAI` also yields empty
   // content. Previously this hit `skip("no_reply_text")` and the user got
