@@ -18,15 +18,16 @@ Provenance of the last outbound message is not persisted in a first-class, query
 
 ## 3. Proposed architecture
 
-New shared module `supabase/functions/_shared/conversation-context.ts` exporting `resolveConversationContext()`, called by both `whatsapp-webhook` and `meta-webhook` **before** the AI:
+New shared module `supabase/functions/_shared/whatsapp-context.ts` exporting `resolveConversationContext()`, called by both `whatsapp-webhook` and `meta-webhook` **before** the AI. It returns `{ contactType, conversationContext, sourceType, campaignId, campaignRecipientId, communicationLogId, originalMessageId, originalOutboundMessage, eventMeta, correlationMethod, correlationConfidence, shouldInvokeAI, noReplyReason, contextExpiresAt }`.
 
 ```text
-inbound row inserted
+inbound row inserted (with reply_to_message_id = Meta message.context.id)
    → resolveConversationContext()
        identity (member / lead / staff / unknown)
        handoff + pause + DNC state
-       explicit correlation: message.context.id -> whatsapp_messages.whatsapp_message_id
-       else latest outbound row for phone within context window
+       PRIMARY: message.context.id -> whatsapp_messages.whatsapp_message_id (exact)
+       then:    stored provenance columns on that outbound row
+       fallback: most recent outbound row in window (low confidence)
        -> source_type, campaign_id, campaign_recipient_id, communication_log_id
        -> campaign row (campaign_type, event_meta, message)
        -> context decision + expiry
@@ -35,17 +36,24 @@ inbound row inserted
        -> <CURRENT_CONVERSATION_CONTEXT> injected via dynamicContext -> <runtime>
 ```
 
+### Correlation priority
+
+Meta `message.context.id` is the **primary** signal, never text similarity or keywords:
+
+1. `meta_context_id` — exact provider-ID match against a stored outbound row → confidence `exact`.
+2. `stored_relationship` — provenance columns on that row (campaign / log / recipient) → `exact`.
+3. `recent_outbound` — most recent outbound in the context window → confidence `low`, used only when 1 and 2 yield nothing and only if a single unambiguous candidate exists.
+
 ### Context priority (validated against existing gates)
 
-1. `bot_active=false` / `bot_paused_until` / `founder_handoff_task_id` → `human_handoff`, AI never runs (this already exists in the brain; we hoist the check into the resolver so it is logged uniformly).
+1. `bot_active=false` / `bot_paused_until` / `founder_handoff_task_id` → `human`, AI never runs (already exists in the brain; hoisted into the resolver so it is logged uniformly).
 2. Do-not-contact / opt-out → existing detector, unchanged.
-3. `transactional` — last outbound was `category ∈ {payment_alert, payment_receipt, membership_reminder, ...}` and inside the window → action-required context.
-4. `campaign_reply` — last outbound `source_type='campaign'` inside the window.
-5. `member_support` — contact resolves to a member, no campaign correlation.
+3. `transactional` — correlated outbound was a payment/membership/booking message.
+4. `campaign_reply` — correlated outbound had `source_type='campaign'`.
+5. `member_support` — contact resolves to a member, no correlation.
 6. `lead` — existing lead flow (unchanged behaviour).
 7. `unknown` — new contact (unchanged behaviour).
 
-Explicit quoted-reply correlation (`message.context.id`) outranks recency in 3–5.
 
 ### Context transition (F)
 
