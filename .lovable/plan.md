@@ -18,15 +18,16 @@ Provenance of the last outbound message is not persisted in a first-class, query
 
 ## 3. Proposed architecture
 
-New shared module `supabase/functions/_shared/conversation-context.ts` exporting `resolveConversationContext()`, called by both `whatsapp-webhook` and `meta-webhook` **before** the AI:
+New shared module `supabase/functions/_shared/whatsapp-context.ts` exporting `resolveConversationContext()`, called by both `whatsapp-webhook` and `meta-webhook` **before** the AI. It returns `{ contactType, conversationContext, sourceType, campaignId, campaignRecipientId, communicationLogId, originalMessageId, originalOutboundMessage, eventMeta, correlationMethod, correlationConfidence, shouldInvokeAI, noReplyReason, contextExpiresAt }`.
 
 ```text
-inbound row inserted
+inbound row inserted (with reply_to_message_id = Meta message.context.id)
    → resolveConversationContext()
        identity (member / lead / staff / unknown)
        handoff + pause + DNC state
-       explicit correlation: message.context.id -> whatsapp_messages.whatsapp_message_id
-       else latest outbound row for phone within context window
+       PRIMARY: message.context.id -> whatsapp_messages.whatsapp_message_id (exact)
+       then:    stored provenance columns on that outbound row
+       fallback: most recent outbound row in window (low confidence)
        -> source_type, campaign_id, campaign_recipient_id, communication_log_id
        -> campaign row (campaign_type, event_meta, message)
        -> context decision + expiry
@@ -35,17 +36,24 @@ inbound row inserted
        -> <CURRENT_CONVERSATION_CONTEXT> injected via dynamicContext -> <runtime>
 ```
 
+### Correlation priority
+
+Meta `message.context.id` is the **primary** signal, never text similarity or keywords:
+
+1. `meta_context_id` — exact provider-ID match against a stored outbound row → confidence `exact`.
+2. `stored_relationship` — provenance columns on that row (campaign / log / recipient) → `exact`.
+3. `recent_outbound` — most recent outbound in the context window → confidence `low`, used only when 1 and 2 yield nothing and only if a single unambiguous candidate exists.
+
 ### Context priority (validated against existing gates)
 
-1. `bot_active=false` / `bot_paused_until` / `founder_handoff_task_id` → `human_handoff`, AI never runs (this already exists in the brain; we hoist the check into the resolver so it is logged uniformly).
+1. `bot_active=false` / `bot_paused_until` / `founder_handoff_task_id` → `human`, AI never runs (already exists in the brain; hoisted into the resolver so it is logged uniformly).
 2. Do-not-contact / opt-out → existing detector, unchanged.
-3. `transactional` — last outbound was `category ∈ {payment_alert, payment_receipt, membership_reminder, ...}` and inside the window → action-required context.
-4. `campaign_reply` — last outbound `source_type='campaign'` inside the window.
-5. `member_support` — contact resolves to a member, no campaign correlation.
+3. `transactional` — correlated outbound was a payment/membership/booking message.
+4. `campaign_reply` — correlated outbound had `source_type='campaign'`.
+5. `member_support` — contact resolves to a member, no correlation.
 6. `lead` — existing lead flow (unchanged behaviour).
 7. `unknown` — new contact (unchanged behaviour).
 
-Explicit quoted-reply correlation (`message.context.id`) outranks recency in 3–5.
 
 ### Context transition (F)
 
@@ -59,37 +67,42 @@ Deterministic pre-LLM only for unambiguous, single-token confirmations against a
 
 `AgentResult` gains `noReply?: boolean` and `contextTag?: string`. The model is instructed, inside `<CURRENT_CONVERSATION_CONTEXT>`, that it may return `{"no_reply": true}` when a reply would add no value. Deterministic reaction detection only *suggests* no-reply; if the thread has an open question or an unanswered transactional ask, the AI still replies. All no-reply decisions are logged with the reason.
 
-## 4. Database changes (minimum, no duplication)
+## 4. Database changes (minimum, additive, non-destructive)
 
-`whatsapp_messages` (promote from JSONB to real columns, backfilled from `media_meta.source_log_id` + dedupe key parsing):
-- `source_type text` — `ai | human | campaign | automation | transactional | system | inbound`
-- `communication_log_id uuid` (FK `communication_logs`)
-- `campaign_id uuid` (FK `campaigns`), `campaign_recipient_id uuid` (FK `campaign_recipients`)
-- `reply_to_whatsapp_message_id text` — Meta quoted-message ID for inbound
-- indexes: `(branch_id, phone_number, direction, created_at desc)`, `(whatsapp_message_id)`, partial index on `campaign_id`
+`whatsapp_messages` — promote provenance out of JSONB into real columns:
+- `source_type text` (CHECK: `campaign | ai | human | automation | transactional | system | inbound`)
+- `communication_log_id uuid` FK → `communication_logs`
+- `campaign_id uuid` FK → `campaigns`
+- `reply_to_message_id text` — Meta `message.context.id` for inbound
+- indexes: `(branch_id, phone_number, direction, created_at desc)`, partial on `reply_to_message_id`, `campaign_id`, `communication_log_id`
+
+**No `campaign_recipient_id` column.** `campaign_recipients.communication_log_id` already links recipient → log, and recipient rows are flushed in batches *after* the send, so the value is not known at insert time. The resolver joins through `communication_log_id` instead — no duplicate data, no ordering dependency.
 
 `whatsapp_chat_settings` (thread-level context, avoids a new table):
-- `conversation_context text`, `context_ref_type text`, `context_ref_id uuid`
+- `conversation_context text` (CHECK against the six context values), `context_ref_type text`, `context_ref_id uuid`
 - `context_set_at timestamptz`, `context_expires_at timestamptz`
 
-Not adding: a separate context table, a duplicate of campaign message text, or per-message context columns — the message rows already carry provenance and the thread carries the live context.
+Backfill (non-destructive, `UPDATE ... WHERE col IS NULL` only): inbound → `source_type='inbound'`; outbound → `communication_log_id` from `media_meta.source_log_id`; `campaign_id` from the `campaign:<id>:…` dedupe-key convention; remaining outbound classified from the log category; leftovers → `human` when `sent_by` is set, else `system`. No column is dropped and no existing value is overwritten.
 
-Grants/RLS follow existing patterns on both tables (no new tables, so existing policies apply; new columns inherit them).
+No new tables, so existing RLS/grants apply unchanged.
 
 ## 5. Files to modify
 
 | File | Change |
 |---|---|
-| `supabase/functions/_shared/conversation-context.ts` | **new** — resolver, priority ladder, no-reply heuristics, structured log emit |
-| `supabase/functions/whatsapp-webhook/index.ts` | capture `message.context.id`; stamp `source_type='inbound'`; call resolver before `runUnifiedAgent`; pass context; honour `noReply`; stamp `source_type='ai'` on `sendAiReply` rows |
-| `supabase/functions/meta-webhook/index.ts` | same resolver call for IG/Messenger (campaign correlation typically null) |
-| `supabase/functions/dispatch-communication/index.ts` | write `source_type`, `communication_log_id`, `campaign_id`, `campaign_recipient_id` on the outbound `whatsapp_messages` insert (keep `media_meta` for back-compat) |
-| `supabase/functions/send-broadcast/index.ts` | pass `campaign_id` / recipient id into the dispatch input so the dispatcher can stamp them |
-| `supabase/functions/_shared/ai-agent-brain.ts` | accept `conversationContext` on `AgentContext`; render `<CURRENT_CONVERSATION_CONTEXT>`; skip its own identity re-resolution when supplied; return `noReply`/`contextTag` |
-| `supabase/functions/_shared/ai-prompt.ts` | no signature change — block rides in `dynamicContext` → `<runtime>` |
-| migration | columns + indexes + backfill above |
+| `supabase/functions/_shared/whatsapp-context.ts` | **new** — resolver, correlation ladder, context transition, no-reply heuristics, structured logging |
+| `supabase/functions/whatsapp-webhook/index.ts` | read `message.context.id` → `reply_to_message_id`; stamp `source_type='inbound'`; call resolver before `runUnifiedAgent`; pass context; honour `no_reply`; stamp `source_type='ai'` on `sendAiReply` rows |
+| `supabase/functions/meta-webhook/index.ts` | same resolver call for IG/Messenger (campaign correlation usually null) |
+| `supabase/functions/dispatch-communication/index.ts` | write `source_type`, `communication_log_id`, `campaign_id` on the outbound `whatsapp_messages` insert (keep `media_meta` for back-compat) |
+| `supabase/functions/send-broadcast/index.ts` | pass `campaign_id` + a source hint into the dispatch input so the dispatcher can stamp provenance |
+| `supabase/functions/run-campaign/index.ts` | verify only — `campaign_id` already flows through; no semantic change |
+| `supabase/functions/_shared/ai-agent-brain.ts` | accept `conversationContext` on `AgentContext`; render `<CURRENT_CONVERSATION_CONTEXT>`; suppress lead onboarding when the contact is a known member replying to a campaign; return `noReply` / `contextTag` |
+| `supabase/functions/_shared/ai-prompt.ts` | no signature change — the block rides in `dynamicContext` → `<runtime>` |
+| Communication Hub debug view | internal-only context badge (context, campaign, correlation method + confidence, AI decision/reason) |
+| migration | columns + constraints + indexes + backfill above |
 
-No frontend change is required; `src/services/campaignService.ts` needs no edit (campaign type/event meta already persisted on `campaigns`).
+`src/services/campaignService.ts` needs no change — campaign type and `event_meta` are already persisted on `campaigns`.
+
 
 ## 6. Race conditions (M)
 
