@@ -594,7 +594,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     signature_path: sigPath,
     waiver_pdf_path: pdfPath,
     par_q,
-    consents,
+    consents: { ...consents, source: "self_register", pdf_bucket: "member-onboarding" },
     custom_terms: customTerms,
     terms_version: termsVersion,
     signer_ip: ip,
