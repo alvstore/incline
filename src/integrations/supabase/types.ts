@@ -13211,6 +13211,11 @@ export type Database = {
           captured_lead_id: string | null
           contact_avatar_url: string | null
           contact_name: string | null
+          context_expires_at: string | null
+          context_ref_id: string | null
+          context_ref_type: string | null
+          context_set_at: string | null
+          conversation_context: string | null
           conversation_summary: string | null
           created_at: string | null
           do_not_contact: boolean
@@ -13251,6 +13256,11 @@ export type Database = {
           captured_lead_id?: string | null
           contact_avatar_url?: string | null
           contact_name?: string | null
+          context_expires_at?: string | null
+          context_ref_id?: string | null
+          context_ref_type?: string | null
+          context_set_at?: string | null
+          conversation_context?: string | null
           conversation_summary?: string | null
           created_at?: string | null
           do_not_contact?: boolean
@@ -13291,6 +13301,11 @@ export type Database = {
           captured_lead_id?: string | null
           contact_avatar_url?: string | null
           contact_name?: string | null
+          context_expires_at?: string | null
+          context_ref_id?: string | null
+          context_ref_type?: string | null
+          context_set_at?: string | null
+          conversation_context?: string | null
           conversation_summary?: string | null
           created_at?: string | null
           do_not_contact?: boolean
@@ -13422,6 +13437,8 @@ export type Database = {
       whatsapp_messages: {
         Row: {
           branch_id: string
+          campaign_id: string | null
+          communication_log_id: string | null
           contact_avatar_url: string | null
           contact_name: string | null
           content: string | null
@@ -13444,15 +13461,19 @@ export type Database = {
           provider_ack_state: string | null
           provider_attempted_at: string | null
           read_at: string | null
+          reply_to_message_id: string | null
           retry_count: number
           sent_at: string | null
           sent_by: string | null
+          source_type: string | null
           status: string | null
           updated_at: string | null
           whatsapp_message_id: string | null
         }
         Insert: {
           branch_id: string
+          campaign_id?: string | null
+          communication_log_id?: string | null
           contact_avatar_url?: string | null
           contact_name?: string | null
           content?: string | null
@@ -13475,15 +13496,19 @@ export type Database = {
           provider_ack_state?: string | null
           provider_attempted_at?: string | null
           read_at?: string | null
+          reply_to_message_id?: string | null
           retry_count?: number
           sent_at?: string | null
           sent_by?: string | null
+          source_type?: string | null
           status?: string | null
           updated_at?: string | null
           whatsapp_message_id?: string | null
         }
         Update: {
           branch_id?: string
+          campaign_id?: string | null
+          communication_log_id?: string | null
           contact_avatar_url?: string | null
           contact_name?: string | null
           content?: string | null
@@ -13506,9 +13531,11 @@ export type Database = {
           provider_ack_state?: string | null
           provider_attempted_at?: string | null
           read_at?: string | null
+          reply_to_message_id?: string | null
           retry_count?: number
           sent_at?: string | null
           sent_by?: string | null
+          source_type?: string | null
           status?: string | null
           updated_at?: string | null
           whatsapp_message_id?: string | null
@@ -13519,6 +13546,20 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_communication_log_id_fkey"
+            columns: ["communication_log_id"]
+            isOneToOne: false
+            referencedRelation: "communication_logs"
             referencedColumns: ["id"]
           },
           {
