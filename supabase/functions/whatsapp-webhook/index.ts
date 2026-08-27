@@ -37,6 +37,12 @@ import { phoneVariants } from "../_shared/phone.ts";
 import { mayAdvance } from "../_shared/deliveryState.ts";
 
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
+import {
+  resolveConversationContext,
+  persistThreadContext,
+  logAiDecision,
+} from "../_shared/whatsapp-context.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
