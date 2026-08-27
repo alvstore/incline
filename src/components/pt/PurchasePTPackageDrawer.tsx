@@ -300,6 +300,25 @@ export function PurchasePTPackageDrawer({
     ? null
     : Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
 
+  // ---- Collection (how much is settled right now) -------------------------
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const customCollect = collectInput.trim() === '' ? 0 : Number(collectInput);
+  const collectedNow = paySource === 'payment_link'
+    ? 0
+    : collectMode === 'full'
+      ? breakdown.total
+      : collectMode === 'none'
+        ? 0
+        : collectMode === 'half'
+          ? round2(breakdown.total / 2)
+          : Math.min(Math.max(0, Number.isNaN(customCollect) ? 0 : customCollect), breakdown.total);
+  const balanceDue = round2(Math.max(0, breakdown.total - collectedNow));
+  const needsDueDate = balanceDue > 0 && paySource === 'in_person';
+  const refSpec = REFERENCE_LABELS[payMethod];
+  const needsReference = paySource === 'in_person' && collectedNow > 0 && !!refSpec;
+  const referenceMissing = needsReference && txnRef.trim().length < 4;
+
+
   const purchase = useMutation({
     mutationFn: async () => {
       if (!trainerId) throw new Error('Select the trainer for this package');
