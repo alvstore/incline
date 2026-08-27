@@ -1,4 +1,9 @@
-// dispatch-communication v1.35.0 — label-aware positional slot resolution.
+// dispatch-communication v1.37.0 — outbound provenance stamping.
+// v1.37.0: Accepts `campaign_id` / `source_type` and writes them (plus
+//          `communication_log_id`) onto every outbound whatsapp_messages row so
+//          inbound replies can be correlated back to what we sent.
+// v1.36.0 — category→trigger_event alignment for template auto-resolution.
+
 // v1.35.0: Positional {{n}} slots now derive their semantic key from the literal
 //          label preceding them ("Task: {{2}}", "Priority: {{3}}", "Due Date: {{4}}",
 //          "…here: {{5}}") and values resolve via alias + fuzzy key matching.
@@ -188,6 +193,9 @@ interface DispatchInput {
    * answer "where is this Meta error coming from?" without manual digging.
    */
   source_caller?: string;
+  /** v1.37.0 — provenance for the WhatsApp conversation-context layer. */
+  campaign_id?: string | null;
+  source_type?: 'campaign' | 'transactional' | 'automation' | 'system' | 'ai' | 'human' | null;
   skip_notification?: boolean;
 }
 
@@ -1574,6 +1582,9 @@ Deno.serve(async (req) => {
                 content: input.payload.body,
                 direction: 'outbound',
                 status: 'pending',
+                source_type: input.source_type ?? (input.campaign_id ? 'campaign' : 'transactional'),
+                campaign_id: input.campaign_id ?? null,
+                communication_log_id: log!.id,
                 message_type: kind,
                 media_url: input.attachment.url,
                 media_meta: {
@@ -1616,6 +1627,9 @@ Deno.serve(async (req) => {
             content: input.payload.body,
             direction: 'outbound',
             status: 'pending',
+            source_type: input.source_type ?? (input.campaign_id ? 'campaign' : 'transactional'),
+            campaign_id: input.campaign_id ?? null,
+            communication_log_id: log!.id,
             message_type: sendAsNativeHeaderTemplate
               ? (templateHeaderType === 'image' ? 'image' : templateHeaderType === 'video' ? 'video' : 'document')
               : messageType,

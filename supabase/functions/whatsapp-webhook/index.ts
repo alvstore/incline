@@ -1,4 +1,9 @@
+// v7.0.0 — Conversation Context & Message Provenance layer: persists Meta
+//          `message.context.id` (reply correlation), resolves campaign /
+//          transactional / member-support context before the AI brain runs,
+//          and honours structured `no_reply` decisions.
 // v6.6.0 — Handle outbound echos to prevent AI loops and sync Meta messages.
+
 //          from Meta statuses after recording the delivery event. The RPC path
 //          is best-effort; direct patch guarantees Communication Hub mirrors
 //          whatsapp_messages for 131049/failed callbacks.
@@ -32,6 +37,12 @@ import { phoneVariants } from "../_shared/phone.ts";
 import { mayAdvance } from "../_shared/deliveryState.ts";
 
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
+import {
+  resolveConversationContext,
+  persistThreadContext,
+  logAiDecision,
+} from "../_shared/whatsapp-context.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -309,6 +320,11 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
     // and store the storage path in media_url + metadata in media_meta.
     const mediaResolved = await resolveInboundMedia(message, integration);
 
+    // v7.0.0 — Provenance: Meta gives us `message.context.id` whenever the user
+    // used WhatsApp's native "reply" on one of our messages. That is the single
+    // strongest correlation signal we will ever get — persist it verbatim.
+    const replyToMessageId: string | null = message?.context?.id ?? null;
+
     const msgPayload = {
       branch_id: branchId,
       phone_number: remotePhone,
@@ -320,7 +336,10 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
       direction: direction,
       status: direction === "inbound" ? "received" : "sent",
       whatsapp_message_id: message.id,
+      source_type: direction === "inbound" ? "inbound" : undefined,
+      reply_to_message_id: replyToMessageId,
     };
+
 
     const { data, error } = await supabase.from("whatsapp_messages").insert(msgPayload).select("id").single();
     if (error) {
@@ -521,11 +540,12 @@ async function processStatusUpdates(value: any, branchId: string | null) {
 async function triggerAiAutoReply(messageId: string, phoneNumber: string, branchId: string) {
   const { data: inboundMsg } = await supabase
     .from("whatsapp_messages")
-    .select("phone_number, contact_name, content, created_at")
+    .select("phone_number, contact_name, content, created_at, reply_to_message_id")
     .eq("id", messageId)
     .single();
 
   if (!inboundMsg?.content) return;
+
 
   // ── Do-Not-Contact opt-out gate ─────────────────────────────────────────────
   // If the inbound message asks us to stop messaging, mark the contact across
@@ -573,12 +593,55 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
   // a matching end after 90s is conclusive proof of a worker kill and is
   // surfaced by the System Health "Stalled Conversations" card.
   const brainStartedAt = Date.now();
+
+  // v7.0.0 — CONVERSATION CONTEXT RESOLUTION. Before the brain runs we resolve
+  // WHY this person is writing (campaign reply / transactional / member support
+  // / lead / human handoff) using Meta's context.id as the primary signal.
+  let conversationContext = null as Awaited<ReturnType<typeof resolveConversationContext>> | null;
+  try {
+    conversationContext = await resolveConversationContext(supabase, {
+      branchId,
+      phoneNumber,
+      inboundMessageId: messageId,
+      inboundContent: inboundMsg.content,
+      replyToMessageId: (inboundMsg as { reply_to_message_id?: string | null }).reply_to_message_id ?? null,
+      platform: "whatsapp",
+    });
+
+    if (!conversationContext.shouldInvokeAI) {
+      console.log(`[whatsapp-webhook] AI suppressed by context: ${conversationContext.noReplyReason}`);
+      return;
+    }
+
+    // Stamp the inbound row with resolved provenance (best-effort).
+    await supabase
+      .from("whatsapp_messages")
+      .update({
+        campaign_id: conversationContext.campaignId,
+        communication_log_id: conversationContext.communicationLogId,
+      })
+      .eq("id", messageId);
+
+    await persistThreadContext(supabase, branchId, phoneNumber, conversationContext);
+  } catch (ctxErr) {
+    // Context resolution must NEVER block a reply — degrade to the old behaviour.
+    console.warn("[whatsapp-webhook] context resolution failed (continuing):", ctxErr);
+    conversationContext = null;
+  }
+
   try {
     await supabase.rpc("log_error_event", {
       p_source: "whatsapp_brain",
       p_severity: "info",
       p_message: `brain_start ${phoneNumber}`,
-      p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "start" },
+      p_context: {
+        branch_id: branchId,
+        phone: phoneNumber,
+        message_id: messageId,
+        stage: "start",
+        conversation_context: conversationContext?.conversationContext ?? null,
+        correlation_method: conversationContext?.correlationMethod ?? null,
+      },
     });
   } catch { /* noop */ }
 
@@ -595,8 +658,21 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
         messageContent: inboundMsg.content,
         contactName: inboundMsg.contact_name ?? null,
         messageType: "text",
+        conversationContext,
       },
     );
+
+    if (result.noReply) {
+      logAiDecision({
+        branchId,
+        phoneNumber,
+        action: "no_reply",
+        reason: result.noReplyReason ?? null,
+        context: conversationContext?.conversationContext ?? "unknown",
+      });
+      return;
+    }
+
 
     if (result.skipped || !result.replyText) {
       // v6.3.0 — promote silent skips to error_logs so we can audit why the

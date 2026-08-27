@@ -296,6 +296,8 @@ Deno.serve(async (req) => {
             category: 'marketing',
             payload: { body: personalized, variables: perVars },
             member_id: r.source_type === 'member' ? r.source_ref_id : null,
+            campaign_id: campaign_id || null,
+            source_type: campaign_id ? 'campaign' : 'automation',
             dedupe_key: campaign_id
               ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:fallback:${Date.now()}`
               : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}:fallback`,
@@ -403,6 +405,10 @@ Deno.serve(async (req) => {
               payload: { subject: subject || undefined, body: personalized, variables: perVars },
               template_id: template_id || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
+              // v3.x — provenance: lets inbound replies be correlated back to
+              // this campaign (WhatsApp Conversation Context layer).
+              campaign_id: campaign_id || null,
+              source_type: campaign_id ? 'campaign' : 'automation',
               dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}${runKey}${retrySuffix}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
               force: true,
               ...(attachment ? { attachment } : {}),

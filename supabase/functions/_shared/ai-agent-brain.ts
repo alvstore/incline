@@ -146,6 +146,12 @@ import {
 
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
+import {
+  renderConversationContextBlock,
+  parseNoReplyDecision,
+  type ResolvedWhatsAppContext,
+} from "./whatsapp-context.ts";
+
 
 // ─── PRICING BLACKOUT & VIP TOUR PROTOCOL — SINGLE SOURCE OF TRUTH ─────────
 // v8.0.0 (blackout): Ananya is strictly forbidden from quoting any prices,
@@ -459,6 +465,8 @@ export interface AgentContext {
   messageContent: string;
   contactName: string | null;
   messageType?: string;       // e.g. "story_reply", "text", "image"
+  /** v4.6.0 — resolved provenance/context for this inbound (WhatsApp). */
+  conversationContext?: ResolvedWhatsAppContext | null;
 }
 
 export interface AgentResult {
@@ -468,7 +476,11 @@ export interface AgentResult {
   handoffTriggered: boolean;
   skipped: boolean;
   skipReason?: string;
+  /** v4.6.0 — model decided a reply adds no value (pure acknowledgement). */
+  noReply?: boolean;
+  noReplyReason?: string | null;
 }
+
 
 interface OrgAiConfig {
   auto_reply_enabled?: boolean;
@@ -1090,7 +1102,13 @@ export async function runUnifiedAgent(
         : "WhatsApp";
 
   const dynamicSegments: string[] = [];
+  // v4.6.0 — resolved conversation context goes FIRST: it decides how every
+  // other block should be interpreted (campaign reply vs cold lead vs support).
+  if (ctx.conversationContext) {
+    dynamicSegments.push(renderConversationContextBlock(ctx.conversationContext));
+  }
   if (memberCtx.contextPrompt) dynamicSegments.push(memberCtx.contextPrompt);
+
   if (summaryBlock) dynamicSegments.push(summaryBlock.trim());
   if (alreadyCaptured) dynamicSegments.push(alreadyCaptured.trim());
   if (memoryBlock) dynamicSegments.push(memoryBlock.trim());
@@ -1198,7 +1216,14 @@ GENERAL RULES:
 
   // v9.0.0 — STRICT MEMBER GUARD: If resolved as a member, skip the funnel entirely.
   // v10.1.0 — internal team members never enter the lead funnel.
-  const shouldCaptureLead = !memberCtx.isMember && !memberCtx.isStaff && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+  // v4.6.0 — a known member/staff replying to a campaign or transactional
+  // message must NEVER be pushed back into onboarding.
+  const contextBlocksFunnel =
+    !!ctx.conversationContext &&
+    (ctx.conversationContext.contactType === "member" ||
+      ctx.conversationContext.contactType === "staff");
+  const shouldCaptureLead = !contextBlocksFunnel && !memberCtx.isMember && !memberCtx.isStaff && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+
 
 
   // v10.0.0 — DETERMINISTIC ASK-LADDER REMOVED.
@@ -1388,6 +1413,27 @@ ANSWER-FIRST RULE (highest priority in this block):
       console.error(`[AI:${ctx.platform}] tool follow-up failed:`, e);
     }
   }
+
+  // v4.6.0 — STRUCTURED NO-REPLY. The model may decide a reply adds no value
+  // (pure acknowledgement / emoji reaction). Honoured only when the entire
+  // reply is that JSON object, and never when a tool actually ran.
+  {
+    const decision = parseNoReplyDecision(replyText);
+    if (decision.noReply) {
+      return {
+        replyText: null,
+        leadCaptured: false,
+        leadId: null,
+        handoffTriggered: false,
+        skipped: true,
+        skipReason: `no_reply:${decision.reason ?? "model_decision"}`,
+        noReply: true,
+        noReplyReason: decision.reason ?? "model_decision",
+      };
+    }
+  }
+
+
 
   // v3.6.0 — silent-drop fix. The model occasionally returns only a tool_call
   // (with empty `content`) and the follow-up `callAI` also yields empty
