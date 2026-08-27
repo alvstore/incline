@@ -1210,7 +1210,14 @@ GENERAL RULES:
 
   // v9.0.0 — STRICT MEMBER GUARD: If resolved as a member, skip the funnel entirely.
   // v10.1.0 — internal team members never enter the lead funnel.
-  const shouldCaptureLead = !memberCtx.isMember && !memberCtx.isStaff && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+  // v4.6.0 — a known member/staff replying to a campaign or transactional
+  // message must NEVER be pushed back into onboarding.
+  const contextBlocksFunnel =
+    !!ctx.conversationContext &&
+    (ctx.conversationContext.contactType === "member" ||
+      ctx.conversationContext.contactType === "staff");
+  const shouldCaptureLead = !contextBlocksFunnel && !memberCtx.isMember && !memberCtx.isStaff && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+
 
 
   // v10.0.0 — DETERMINISTIC ASK-LADDER REMOVED.
