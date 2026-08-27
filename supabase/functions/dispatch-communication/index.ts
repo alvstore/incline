@@ -314,9 +314,19 @@ function inferSlotSemantics(content: string): Record<string, string> {
     else if (/(branch|club|studio|centre|center|from)[^a-z]*$/.test(tail)) key = 'branch_name';
     else if (/(date|on|expires|expiry|valid till|till|by)[^a-z]*$/.test(tail)) key = 'date';
     else if (/(time|at)[^a-z]*$/.test(tail)) key = 'time';
-    else if (/(link|url|download)[^a-z]*$/.test(tail)) key = 'document_link';
+    else if (/(link|url|download|here)[^a-z]*$/.test(tail)) key = 'document_link';
+    else if (/(task|title|subject|regarding)[^a-z]*$/.test(tail)) key = 'task_title';
+    else if (/(priority)[^a-z]*$/.test(tail)) key = 'priority';
+    else if (/(status|stage)[^a-z]*$/.test(tail)) key = 'status';
     else if (/(name)[^a-z]*$/.test(tail)) key = 'lead_name';
     else if (/(hi|hello|hey|dear)[^a-z]*$/.test(tail)) key = 'recipient_name';
+    if (!key) {
+      // Last resort: templates commonly read "Label: {{n}}". Use the literal
+      // label as the semantic key (e.g. "Assigned by: {{3}}" → assigned_by),
+      // which resolveVarValue then fuzzy-matches against the caller payload.
+      const labelled = tail.match(/([a-z][a-z ]{1,24})\s*[:\-]\s*$/);
+      if (labelled) key = labelled[1].trim().replace(/\s+/g, '_');
+    }
     if (key) out[slot] = key;
   }
   return out;
