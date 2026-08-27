@@ -95,7 +95,7 @@ export default function PublicRegistration() {
   const [details, setDetails] = useState<DetailsForm | null>(null);
   const [parq, setParq] = useState<Record<string, string>>(initialDraft?.parq ?? {});
   const [consents, setConsents] = useState({
-    dpdp: false, whatsapp: false, photo: false, waiver: false, facility_rules: false,
+    dpdp: false, whatsapp: false, photo: false, waiver: false, facility_rules: false, health_declaration: false,
     ...(initialDraft?.consents ?? {}),
   });
   const [termsRead, setTermsRead] = useState(false);
@@ -298,8 +298,8 @@ export default function PublicRegistration() {
 
   const submitSign = () => {
     if (sigRef.current?.isEmpty()) return toast.error("Please sign before continuing");
-    if (!consents.dpdp || !consents.whatsapp || !consents.waiver || !consents.facility_rules)
-      return toast.error("All required consents must be accepted");
+    if (REQUIRED_ACKNOWLEDGEMENT_KEYS.some((k) => (consents as Record<string, boolean>)[k] !== true))
+      return toast.error("All required acknowledgements must be accepted");
     setSignatureUrl(sigRef.current!.toDataURL());
     // Re-merge in case the member edited health chips after the details step.
     setDetails((prev) => (prev ? { ...prev, health_conditions: buildHealthConditions() } : prev));
@@ -730,13 +730,7 @@ export default function PublicRegistration() {
               </div>
 
               <div className="space-y-2.5">
-                {[
-                  { k: "waiver", l: "I accept the assumption of risk and waiver above.", required: true },
-                  { k: "facility_rules", l: "I have read and accept the Incline facility terms, including 24/7 unstaffed-hours access, CCTV, turnstile, footwear, locker and parking rules.", required: true },
-                  { k: "dpdp", l: "I consent to processing of my personal data per the DPDP Act, 2023.", required: true },
-                  { k: "whatsapp", l: "I agree to receive WhatsApp / SMS / Email / RCS updates from Incline.", required: true },
-                  { k: "photo", l: "I consent to my photo being used for member identification.", required: false },
-                ].map((c) => (
+                {AGREEMENT_ACKNOWLEDGEMENTS.map((a) => ({ k: a.key, l: a.label, required: a.required })).map((c) => (
                   <label
                     key={c.k}
                     className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-primary-foreground/10 bg-card/5 p-3 text-xs text-primary-foreground/80 transition-colors hover:bg-card/10"
