@@ -529,11 +529,12 @@ async function processStatusUpdates(value: any, branchId: string | null) {
 async function triggerAiAutoReply(messageId: string, phoneNumber: string, branchId: string) {
   const { data: inboundMsg } = await supabase
     .from("whatsapp_messages")
-    .select("phone_number, contact_name, content, created_at")
+    .select("phone_number, contact_name, content, created_at, reply_to_message_id")
     .eq("id", messageId)
     .single();
 
   if (!inboundMsg?.content) return;
+
 
   // ── Do-Not-Contact opt-out gate ─────────────────────────────────────────────
   // If the inbound message asks us to stop messaging, mark the contact across
