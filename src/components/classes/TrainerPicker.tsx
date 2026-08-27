@@ -51,7 +51,7 @@ export function TrainerPicker({ trainers, trainerId, guestName, onChange }: Prop
           </Label>
           <Input
             id="class-guest-trainer"
-            value={guestName.trim()}
+            value={guestName === ' ' ? '' : guestName}
             placeholder="e.g. Anjali Verma (freelance)"
             onChange={(e) => onChange({ trainerId: '', guestName: e.target.value || ' ' })}
           />

@@ -24,6 +24,9 @@ interface Props {
 function statusPill(status: string) {
   switch (status) {
     case 'sent': return { c: 'bg-success/15 text-success', icon: CheckCircle2, label: 'Sent' };
+    case 'delivered': return { c: 'bg-success/15 text-success', icon: CheckCircle2, label: 'Delivered' };
+    case 'read': return { c: 'bg-primary/15 text-primary', icon: MessageCircle, label: 'Read' };
+    case 'submitted': return { c: 'bg-info/15 text-info', icon: CheckCircle2, label: 'Sent' };
     case 'failed': return { c: 'bg-destructive/15 text-destructive', icon: AlertTriangle, label: 'Failed' };
     case 'queued': return { c: 'bg-muted text-foreground', icon: Clock, label: 'Queued' };
     case 'skipped': return { c: 'bg-warning/15 text-warning', icon: AlertTriangle, label: 'Skipped' };
@@ -85,10 +88,10 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
   const totals = useMemo(() => {
     const t = { total: rows.length, sent: 0, failed: 0, queued: 0, read: 0 };
     for (const r of rows) {
-      if (r.status === 'sent') t.sent++;
+      if (['sent', 'submitted', 'delivered', 'read'].includes(r.status)) t.sent++;
       else if (r.status === 'failed') t.failed++;
       else if (r.status === 'queued') t.queued++;
-      if (r.read_at) t.read++;
+      if (r.read_at || r.status === 'read') t.read++;
     }
     return t;
   }, [rows]);
@@ -151,7 +154,8 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
             onChange={(e) => setFilter(e.target.value)}
           >
             <option value="all">All ({totals.total})</option>
-            <option value="sent">Delivered</option>
+            <option value="submitted">Sent</option>
+            <option value="delivered">Delivered</option>
             <option value="failed">Failed</option>
             <option value="queued">Queued</option>
           </select>
