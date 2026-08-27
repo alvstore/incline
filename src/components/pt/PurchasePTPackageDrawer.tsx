@@ -20,8 +20,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
 
 type Mode = 'session' | 'monthly';
-type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer';
+type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque' | 'wallet';
 type PaySource = 'in_person' | 'payment_link';
+type CollectMode = 'full' | 'half' | 'custom' | 'none';
+
+const REFERENCE_LABELS: Record<PayMethod, { label: string; placeholder: string } | null> = {
+  cash: null,
+  wallet: null,
+  upi: { label: 'UPI reference / UTR', placeholder: '12-digit UTR from the UPI app' },
+  card: { label: 'Card auth / RRN', placeholder: 'Approval code on the POS slip' },
+  bank_transfer: { label: 'Bank reference / UTR', placeholder: 'NEFT / IMPS / RTGS reference' },
+  cheque: { label: 'Cheque number', placeholder: 'Cheque no. + bank' },
+};
+
+const DUE_PRESETS = [7, 10, 15, 30] as const;
+
+const addDaysISO = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
 
 // PT GST is 5% inclusive by default; owners/admins/managers may mark a sale exempt (0%).
 const PT_GST_RATE = 5;
@@ -97,6 +116,11 @@ export function PurchasePTPackageDrawer({
   const [startDate, setStartDate] = useState<string>(todayISO());
   const [gstExempt, setGstExempt] = useState(false);
   const [chargeOverride, setChargeOverride] = useState<string>('');
+  // Collection: how much money actually changes hands right now.
+  const [collectMode, setCollectMode] = useState<CollectMode>('full');
+  const [collectInput, setCollectInput] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
+  const [txnRef, setTxnRef] = useState<string>('');
   const [custom, setCustom] = useState<CustomForm>({
     name: '',
     sessions: 12,
@@ -114,17 +138,20 @@ export function PurchasePTPackageDrawer({
       setStartDate(todayISO());
       setGstExempt(false);
       setChargeOverride('');
+      setCollectMode('full'); setCollectInput(''); setDueDate(''); setTxnRef('');
     }
   }, [open]);
+
 
   const dbType = mode === 'session' ? 'session_based' : 'monthly';
   const gstRate: 0 | 5 = gstExempt ? 0 : PT_GST_RATE;
 
   // Idempotency key stable across retries within this draft
   const [trainerDraftKey, setTrainerDraftKey] = useState<string>('none');
+  const collectDraftKey = `${collectMode}-${collectInput}-${dueDate}`;
   const draftId = selected === 'custom'
-    ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}`
-    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}`;
+    ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}-${collectDraftKey}`
+    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}-${collectDraftKey}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
 
 
@@ -273,6 +300,25 @@ export function PurchasePTPackageDrawer({
     ? null
     : Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
 
+  // ---- Collection (how much is settled right now) -------------------------
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const customCollect = collectInput.trim() === '' ? 0 : Number(collectInput);
+  const collectedNow = paySource === 'payment_link'
+    ? 0
+    : collectMode === 'full'
+      ? breakdown.total
+      : collectMode === 'none'
+        ? 0
+        : collectMode === 'half'
+          ? round2(breakdown.total / 2)
+          : Math.min(Math.max(0, Number.isNaN(customCollect) ? 0 : customCollect), breakdown.total);
+  const balanceDue = round2(Math.max(0, breakdown.total - collectedNow));
+  const needsDueDate = balanceDue > 0 && paySource === 'in_person';
+  const refSpec = REFERENCE_LABELS[payMethod];
+  const needsReference = paySource === 'in_person' && collectedNow > 0 && !!refSpec;
+  const referenceMissing = needsReference && txnRef.trim().length < 4;
+
+
   const purchase = useMutation({
     mutationFn: async () => {
       if (!trainerId) throw new Error('Select the trainer for this package');
@@ -325,7 +371,12 @@ export function PurchasePTPackageDrawer({
           _start_date: startDate,
           _reassign_member_trainer: !keepCurrentTrainer,
           _allow_duplicate: duplicateAck,
-
+          _amount_paid: paySource === 'payment_link' ? 0 : collectedNow,
+          _due_date: needsDueDate ? (dueDate || addDaysISO(7)) : null,
+          _transaction_id: txnRef.trim() || null,
+          _payment_notes: balanceDue > 0
+            ? `PT package purchase · part payment (balance ₹${balanceDue.toLocaleString('en-IN')})`
+            : 'PT package purchase',
         } as any,
       );
       if (rpcErr) throw rpcErr;
@@ -355,7 +406,11 @@ export function PurchasePTPackageDrawer({
         if (invoiceId) window.open(`/member/pay?invoice=${invoiceId}`, '_blank');
         return;
       }
-      toast.success('PT package activated');
+      toast.success(
+        balanceDue > 0
+          ? `PT package activated · ₹${balanceDue.toLocaleString('en-IN')} due by ${dueDate || addDaysISO(7)}`
+          : 'PT package activated',
+      );
       onOpenChange(false);
     },
 
@@ -832,10 +887,99 @@ export function PurchasePTPackageDrawer({
                   <SelectItem value="card">Card</SelectItem>
                   <SelectItem value="upi">UPI</SelectItem>
                   <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="wallet">Wallet</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {paySource === 'in_person' && (
+            <div className="rounded-2xl bg-muted/40 p-3 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Collect now
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: 'full', label: 'Full' },
+                  { key: 'half', label: '50%' },
+                  { key: 'custom', label: 'Custom' },
+                  { key: 'none', label: 'Nothing yet' },
+                ] as { key: CollectMode; label: string }[]).map((opt) => (
+                  <Button
+                    key={opt.key}
+                    type="button"
+                    size="sm"
+                    variant={collectMode === opt.key ? 'default' : 'outline'}
+                    className="rounded-full min-h-[36px] cursor-pointer"
+                    onClick={() => {
+                      setCollectMode(opt.key);
+                      if (opt.key === 'custom' && !collectInput) setCollectInput('');
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+
+              {collectMode === 'custom' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pt-collect" className="text-xs">Amount collected (₹)</Label>
+                  <Input
+                    id="pt-collect"
+                    type="number"
+                    min={0}
+                    max={breakdown.total}
+                    placeholder="e.g. 10000"
+                    value={collectInput}
+                    onChange={(e) => setCollectInput(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {needsReference && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pt-ref" className="text-xs">{refSpec!.label}</Label>
+                  <Input
+                    id="pt-ref"
+                    value={txnRef}
+                    placeholder={refSpec!.placeholder}
+                    onChange={(e) => setTxnRef(e.target.value)}
+                  />
+                  {referenceMissing && (
+                    <p className="text-xs text-warning">Add the reference so this payment can be reconciled.</p>
+                  )}
+                </div>
+              )}
+
+              {needsDueDate && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pt-due" className="text-xs">Balance due date</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {DUE_PRESETS.map((d) => (
+                      <Button
+                        key={d}
+                        type="button"
+                        size="sm"
+                        variant={dueDate === addDaysISO(d) ? 'default' : 'outline'}
+                        className="rounded-full min-h-[36px] cursor-pointer"
+                        onClick={() => setDueDate(addDaysISO(d))}
+                      >
+                        +{d} days
+                      </Button>
+                    ))}
+                  </div>
+                  <Input
+                    id="pt-due"
+                    type="date"
+                    min={todayISO()}
+                    value={dueDate || addDaysISO(7)}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>Subtotal (pre-GST)</span>
@@ -863,20 +1007,35 @@ export function PurchasePTPackageDrawer({
             <span>Final Total</span>
             <span>{formatINR(breakdown.total)}</span>
           </div>
+          {paySource === 'in_person' && balanceDue > 0 && (
+            <>
+              <div className="flex justify-between text-sm font-medium text-slate-700 dark:text-slate-200">
+                <span>Collecting now</span>
+                <span>{formatINR(collectedNow)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold text-warning">
+                <span>Balance due {dueDate || addDaysISO(7)}</span>
+                <span>{formatINR(balanceDue)}</span>
+              </div>
+            </>
+          )}
           <Button
             className="w-full mt-2"
             size="lg"
-            disabled={!canCharge}
+            disabled={!canCharge || referenceMissing}
             onClick={() => purchase.mutate()}
           >
             {purchase.isPending ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing…</>
             ) : awaitingPayment ? (
               <>Waiting for payment…</>
+            ) : paySource === 'in_person' && balanceDue > 0 ? (
+              <>Collect {formatINR(collectedNow)} &amp; Assign</>
             ) : (
               <>Charge &amp; Assign · {formatINR(breakdown.total)}</>
             )}
           </Button>
+
         </div>
       </SheetContent>
     </Sheet>
