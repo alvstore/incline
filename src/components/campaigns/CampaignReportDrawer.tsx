@@ -24,6 +24,9 @@ interface Props {
 function statusPill(status: string) {
   switch (status) {
     case 'sent': return { c: 'bg-success/15 text-success', icon: CheckCircle2, label: 'Sent' };
+    case 'delivered': return { c: 'bg-success/15 text-success', icon: CheckCircle2, label: 'Delivered' };
+    case 'read': return { c: 'bg-primary/15 text-primary', icon: MessageCircle, label: 'Read' };
+    case 'submitted': return { c: 'bg-info/15 text-info', icon: CheckCircle2, label: 'Sent' };
     case 'failed': return { c: 'bg-destructive/15 text-destructive', icon: AlertTriangle, label: 'Failed' };
     case 'queued': return { c: 'bg-muted text-foreground', icon: Clock, label: 'Queued' };
     case 'skipped': return { c: 'bg-warning/15 text-warning', icon: AlertTriangle, label: 'Skipped' };
