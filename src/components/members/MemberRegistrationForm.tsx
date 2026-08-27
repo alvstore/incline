@@ -9,14 +9,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Printer, Save, FileSignature, Eraser, Dumbbell, Shield, HeartPulse, User, Calendar, MapPin, ChevronDown, CheckCircle2, Download, Eye, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { format } from 'date-fns';
-import { buildRegistrationFormPdf, printBlob } from '@/utils/pdfBlob';
+import { buildMembershipAgreementPdf, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
-import { FACILITY_TERMS as DEFAULT_TERMS, MEMBER_DECLARATION, TERMS_VERSION } from '@/lib/registration/terms';
+import {
+  AGREEMENT_PARTS,
+  AGREEMENT_ACKNOWLEDGEMENTS,
+  AGREEMENT_VERSION,
+  FINAL_DECLARATION,
+  REQUIRED_ACKNOWLEDGEMENT_KEYS,
+  acknowledgementsForPart,
+} from '@/lib/registration/agreement';
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
@@ -25,6 +33,13 @@ import {
   parseHealthConditions,
   joinHealthConditions,
 } from '@/lib/registration/healthQuestions';
+
+/** Canonical single document — one per member, upserted on re-sign. */
+const AGREEMENT_FILENAME = 'membership-agreement.pdf';
+const partTitle = (id: string) => {
+  const p = AGREEMENT_PARTS.find((x) => x.id === id);
+  return p ? `Part ${p.id} — ${p.title}` : id;
+};
 
 interface RegistrationFormData {
   memberName: string;
@@ -71,6 +86,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
   const [healthOther, setHealthOther] = useState<string>(() => parseHealthConditions(data.medicalConditions).other);
   const [showMoreGoals, setShowMoreGoals] = useState(false);
   const [parq, setParq] = useState<Record<string, 'yes' | 'no'>>({});
+  const [acks, setAcks] = useState<Record<string, boolean>>({});
   const [customTerms, setCustomTerms] = useState('');
   const [saving, setSaving] = useState(false);
   const [existingSignature, setExistingSignature] = useState<{
@@ -78,9 +94,17 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     signature_path: string | null;
     signed_at: string | null;
     source: string | null;
+    bucket: 'documents' | 'member-onboarding';
+    acks: Record<string, boolean>;
   } | null>(null);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+
+  const signAgreementDoc = useCallback(
+    (path: string, bucket: 'documents' | 'member-onboarding') =>
+      bucket === 'documents' ? signMemberDocument(path, 300, 'documents') : signOnboardingDocument(path, 300),
+    [],
+  );
 
   // Re-sync prefilled values when drawer opens or member changes
   useEffect(() => {
@@ -94,9 +118,9 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     setHealthOther(parsed.other);
   }, [open, data.memberId, data.governmentIdType, data.governmentIdNumber, data.fitnessGoals, data.medicalConditions]);
 
-  // Load latest signature/waiver + PAR-Q + custom_terms from member_onboarding_signatures.
-  // This hydrates the backend form with everything the member entered during
-  // /register (public self-onboarding) so staff don't re-collect signatures.
+  // Load the latest agreement signature + PAR-Q + acknowledgements. This
+  // hydrates everything the member entered during /register (public
+  // self-onboarding) so staff never re-collect the same declarations.
   useEffect(() => {
     if (!open || !data.memberId) return;
     let cancelled = false;
@@ -121,17 +145,29 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
       if (typeof (row as any)?.custom_terms === 'string') {
         setCustomTerms((row as any).custom_terms);
       }
+      const consents = (row?.consents as Record<string, unknown> | null) ?? null;
+      const storedAcks: Record<string, boolean> = {};
+      AGREEMENT_ACKNOWLEDGEMENTS.forEach((a) => {
+        if (consents && typeof consents[a.key] === 'boolean') storedAcks[a.key] = consents[a.key] as boolean;
+      });
+      if (Object.keys(storedAcks).length) setAcks(storedAcks);
+
       if (row?.waiver_pdf_path || row?.signature_path) {
-        const source = (row?.consents as any)?.source ?? null;
+        const source = (consents?.source as string | undefined) ?? null;
+        const bucket = ((consents?.pdf_bucket as string | undefined) ?? 'member-onboarding') as
+          | 'documents'
+          | 'member-onboarding';
         setExistingSignature({
           waiver_pdf_path: row?.waiver_pdf_path ?? null,
           signature_path: row?.signature_path ?? null,
           signed_at: row?.signed_at ?? null,
           source,
+          bucket,
+          acks: storedAcks,
         });
         setEditMode(false);
         if (row?.signature_path) {
-          const url = await signOnboardingDocument(row.signature_path, 300).catch(() => null);
+          const url = await signAgreementDoc(row.signature_path, bucket).catch(() => null);
           if (!cancelled) setSignatureUrl(url);
         }
       } else {
@@ -140,7 +176,8 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
       }
     })();
     return () => { cancelled = true; };
-  }, [open, data.memberId]);
+  }, [open, data.memberId, signAgreementDoc]);
+
 
   // Keep medicalConditions string in sync with chips for PDF/print
   useEffect(() => {
@@ -208,71 +245,77 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     setHasSigned(false);
   };
 
+  const missingAcks = REQUIRED_ACKNOWLEDGEMENT_KEYS.filter((k) => acks[k] !== true);
+
+  const buildAgreementBlob = async (signatureDataUrl: string | null, signedAt: string) => {
+    const parqMap: Record<string, string> = {};
+    PARQ_QUESTIONS.forEach((q, i) => { parqMap[q] = parq[`q${i}`] || 'no'; });
+    const blob = await buildMembershipAgreementPdf({
+      data,
+      govIdType,
+      govIdNumber,
+      fitnessGoals,
+      medicalConditions,
+      parq: parqMap,
+      parqQuestions: [...PARQ_QUESTIONS],
+      customTerms,
+      acknowledgements: acks,
+      signatureDataUrl,
+      signedAt,
+    }, brand);
+    return { blob, parqMap };
+  };
+
   const handleSaveDigital = async () => {
     if (!hasSigned) {
-      toast.error('Please sign the form first');
+      toast.error('Please sign the agreement first');
       return;
     }
     if (!data.memberId) {
       toast.error('Member ID missing');
       return;
     }
+    if (missingAcks.length) {
+      toast.error('Please tick every mandatory acknowledgement before signing');
+      return;
+    }
 
     setSaving(true);
     try {
-      const { data: existingRegistrationForm, error: existingError } = await supabase
+      const canvas = canvasRef.current;
+      if (!canvas) throw new Error('Canvas not found');
+      const signatureDataUrl = canvas.toDataURL('image/png');
+      const signedAt = new Date().toISOString();
+
+      const { blob: pdfBlob, parqMap } = await buildAgreementBlob(signatureDataUrl, signedAt);
+
+      // ONE canonical document per member — re-signing overwrites in place.
+      const fileName = `${data.memberId}/${AGREEMENT_FILENAME}`;
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: existingDoc } = await supabase
         .from('member_documents')
         .select('id')
         .eq('member_id', data.memberId)
         .eq('document_type', 'registration_form')
         .maybeSingle();
 
-      if (existingError) throw existingError;
-      if (existingRegistrationForm) {
-        throw new Error('Registration form already uploaded for this member');
-      }
-
-      // Get signature dataURL
-      const canvas = canvasRef.current;
-      if (!canvas) throw new Error('Canvas not found');
-      const signatureDataUrl = canvas.toDataURL('image/png');
-
-      // Snapshot PAR-Q answers (default unanswered → 'no' for storage parity with public flow)
-      const parqMap: Record<string, string> = {};
-      PARQ_QUESTIONS.forEach((q, i) => { parqMap[q] = parq[`q${i}`] || 'no'; });
-
-      // Build full registration form PDF (form fields + signature)
-      const pdfBlob = buildRegistrationFormPdf({
-        data,
-        govIdType,
-        govIdNumber,
-        fitnessGoals,
-        medicalConditions,
-        parq: parqMap,
-        parqQuestions: [...PARQ_QUESTIONS],
-        customTerms,
-        terms: DEFAULT_TERMS,
-        declaration: MEMBER_DECLARATION,
-        signatureDataUrl,
-      }, brand);
-
-      const fileName = `${data.memberId}/registration-form-${Date.now()}.pdf`;
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, pdfBlob, { contentType: 'application/pdf' });
-      if (uploadError) throw uploadError;
-
-      // Save document record
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error: insertError } = await supabase.from('member_documents').insert({
+      const docRow = {
         member_id: data.memberId,
         document_type: 'registration_form',
         file_url: '',
         storage_path: fileName,
-        file_name: `Registration-${data.memberCode}-signed.pdf`,
+        file_name: `Membership-Agreement-${data.memberCode}.pdf`,
         uploaded_by: user?.id,
-      });
-      if (insertError) throw insertError;
+      };
+      const { error: docError } = existingDoc
+        ? await supabase.from('member_documents').update(docRow).eq('id', existingDoc.id)
+        : await supabase.from('member_documents').insert(docRow);
+      if (docError) throw docError;
 
       // Sync edits back to canonical records (best-effort, non-blocking)
       try {
@@ -289,26 +332,32 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
           const { data: m } = await supabase.from('members').select('user_id').eq('id', data.memberId).maybeSingle();
           if (m?.user_id) await (supabase.from('profiles') as any).update(profileUpdates).eq('user_id', m.user_id);
         }
-        // Persist PAR-Q answers + custom terms (staff-authored addendum).
-        try {
-          await supabase.from('member_onboarding_signatures').insert({
-            member_id: data.memberId,
-            signature_path: fileName,
-            waiver_pdf_path: fileName,
-            par_q: parqMap,
-            custom_terms: customTerms || null,
-            terms_version: TERMS_VERSION,
-            consents: { waiver: true, source: 'staff_registration_form' },
-            signed_at: new Date().toISOString(),
-          });
-        } catch (parqErr) {
-          console.warn('[RegistrationForm] par_q snapshot failed', parqErr);
-        }
       } catch (syncErr) {
         console.warn('[RegistrationForm] profile sync failed', syncErr);
       }
 
-      toast.success('Registration form saved digitally with signature!');
+      // ONE signature record for the ONE document.
+      try {
+        await supabase.from('member_onboarding_signatures').insert({
+          member_id: data.memberId,
+          signature_path: fileName,
+          waiver_pdf_path: fileName,
+          par_q: parqMap,
+          custom_terms: customTerms || null,
+          terms_version: AGREEMENT_VERSION,
+          consents: {
+            ...acks,
+            waiver: true,
+            source: 'staff_registration_form',
+            pdf_bucket: 'documents',
+          },
+          signed_at: signedAt,
+        });
+      } catch (sigErr) {
+        console.warn('[RegistrationForm] signature snapshot failed', sigErr);
+      }
+
+      toast.success('Membership agreement signed and stored');
       queryClient.invalidateQueries({ queryKey: ['member-documents', data.memberId] });
       onOpenChange(false);
     } catch (error: any) {
@@ -318,25 +367,12 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     }
   };
 
-  const handlePrint = () => {
-    const signatureDataUrl = hasSigned ? canvasRef.current?.toDataURL('image/png') : null;
-    const parqMap: Record<string, string> = {};
-    PARQ_QUESTIONS.forEach((q, i) => { parqMap[q] = parq[`q${i}`] || 'no'; });
-    const blob = buildRegistrationFormPdf({
-      data,
-      govIdType,
-      govIdNumber,
-      fitnessGoals,
-      medicalConditions,
-      parq: parqMap,
-      parqQuestions: [...PARQ_QUESTIONS],
-      customTerms,
-      terms: DEFAULT_TERMS,
-      declaration: MEMBER_DECLARATION,
-      signatureDataUrl,
-    }, brand);
+  const handlePrint = async () => {
+    const signatureDataUrl = hasSigned ? canvasRef.current?.toDataURL('image/png') ?? null : null;
+    const { blob } = await buildAgreementBlob(signatureDataUrl, new Date().toISOString());
     printBlob(blob);
   };
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -552,17 +588,60 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
           </div>
 
 
-          {/* Custom T&C */}
+          {/* Member-specific addendum (printed inside Part E) */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Dumbbell className="h-4 w-4 text-primary" />
-              <Label className="font-semibold">Custom Terms (Optional)</Label>
+              <Label className="font-semibold">{partTitle('E')} — Member-Specific Addendum (Optional)</Label>
             </div>
             <Textarea value={customTerms} onChange={e => setCustomTerms(e.target.value)}
               placeholder="Add any custom terms or conditions specific to this member..."
               className="min-h-[50px]" />
-            <p className="text-xs text-muted-foreground mt-1">All {DEFAULT_TERMS.length} standard membership terms &amp; conditions are included automatically. Use the field above only for member-specific addendums.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              All standard clauses in Parts D–H are printed in the agreement automatically. Use this field only for member-specific addendums.
+            </p>
           </div>
+
+          <Separator />
+
+          {/* Acknowledgements — one signature, multiple acknowledgements */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+              <Label className="font-semibold">{partTitle('I')} — Acknowledgements</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              One signature covers the whole agreement. Tick each acknowledgement below — mandatory ones are required.
+            </p>
+            {AGREEMENT_PARTS.filter((p) => acknowledgementsForPart(p.id).length).map((p) => (
+              <div key={p.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {partTitle(p.id)}
+                </p>
+                {acknowledgementsForPart(p.id).map((a) => (
+                  <label key={a.key} className="flex items-start gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={acks[a.key] === true}
+                      onCheckedChange={(v) => setAcks((prev) => ({ ...prev, [a.key]: v === true }))}
+                      className="mt-0.5"
+                      aria-label={a.label}
+                    />
+                    <span className="text-xs leading-relaxed text-foreground">
+                      {a.label}
+                      {a.required && <span className="text-destructive"> *</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ))}
+            <p className="text-xs italic text-muted-foreground">{FINAL_DECLARATION}</p>
+            {missingAcks.length > 0 && (
+              <p className="text-xs font-medium text-destructive">
+                {missingAcks.length} mandatory acknowledgement{missingAcks.length > 1 ? 's' : ''} pending.
+              </p>
+            )}
+          </div>
+
 
           <Separator />
 
@@ -593,11 +672,11 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      const url = await signOnboardingDocument(existingSignature.waiver_pdf_path!, 300);
+                      const url = await signAgreementDoc(existingSignature.waiver_pdf_path!, existingSignature.bucket);
                       if (url) window.open(url, '_blank', 'noopener');
                     }}
                   >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> View signed waiver
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View signed agreement
                   </Button>
                 )}
                 <Button variant="ghost" size="sm" onClick={() => setEditMode(true)}>
@@ -652,16 +731,16 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 onClick={async () => {
                   const path = existingSignature.waiver_pdf_path || existingSignature.signature_path;
                   if (!path) return;
-                  const url = await signOnboardingDocument(path, 300);
+                  const url = await signAgreementDoc(path, existingSignature.bucket);
                   if (url) window.open(url, '_blank', 'noopener');
                 }}
               >
                 <Download className="h-4 w-4 mr-2" /> Download signed copy
               </Button>
             ) : (
-              <Button className="flex-1" onClick={handleSaveDigital} disabled={saving || !hasSigned}>
+              <Button className="flex-1" onClick={handleSaveDigital} disabled={saving || !hasSigned || missingAcks.length > 0}>
                 <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Saving...' : 'Save Digital Copy'}
+                {saving ? 'Saving...' : 'Sign & Store Agreement'}
               </Button>
             )}
           </div>

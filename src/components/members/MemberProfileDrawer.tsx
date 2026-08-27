@@ -2597,8 +2597,15 @@ export function MemberProfileDrawer({
             pricePaid: activeMembership?.price_paid,
             branchName: memberDetails?.branch?.name,
             memberId: member.id,
-            fitnessGoals: (member as any).fitness_goals,
-            medicalConditions: (member as any).health_conditions || (member as any).injuries_limitations,
+            // Prefer the fully-hydrated `memberDetails` row (select *) — the
+            // list-page `member` prop omits health_conditions/fitness_goals,
+            // which is why the agreement drawer used to render them blank.
+            fitnessGoals: (memberDetails as any)?.fitness_goals ?? (member as any).fitness_goals,
+            medicalConditions:
+              (memberDetails as any)?.health_conditions ??
+              (memberDetails as any)?.injuries_limitations ??
+              (member as any).health_conditions ??
+              (member as any).injuries_limitations,
             governmentIdType: (profile as any)?.government_id_type,
             governmentIdNumber: (profile as any)?.government_id_number,
           }}
