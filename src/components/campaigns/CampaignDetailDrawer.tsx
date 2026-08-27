@@ -63,9 +63,9 @@ const finalOf = (r: {
   const ds = (r.dlrStatus || '').toLowerCase();
   if (r.readAt || ds === 'read') return 'read';
   if (r.deliveredAt || ds === 'delivered') return 'delivered';
-  if (rs === 'sent' || ds === 'sent' || ds === 'queued') return 'sent';
+  if (rs === 'sent' || rs === 'submitted' || ds === 'sent' || ds === 'queued') return 'sent';
   if (ds === 'failed' || ds === 'bounced' || rs === 'failed') return 'failed';
-  if (rs === 'skipped') return 'skipped';
+  if (rs === 'skipped' || rs === 'suppressed') return 'skipped';
   return 'pending';
 };
 
@@ -104,9 +104,13 @@ const channelIcon = (channel: string) => {
 
 const recipientRank = (status: string | null | undefined) => {
   switch (String(status || '').toLowerCase()) {
+    case 'read': return 5;
+    case 'delivered': return 4;
     case 'sent': return 3;
+    case 'submitted': return 3;
     case 'failed': return 2;
     case 'skipped': return 1;
+    case 'suppressed': return 1;
     default: return 0;
   }
 };
