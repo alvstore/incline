@@ -371,7 +371,12 @@ export function PurchasePTPackageDrawer({
           _start_date: startDate,
           _reassign_member_trainer: !keepCurrentTrainer,
           _allow_duplicate: duplicateAck,
-
+          _amount_paid: paySource === 'payment_link' ? 0 : collectedNow,
+          _due_date: needsDueDate ? (dueDate || addDaysISO(7)) : null,
+          _transaction_id: txnRef.trim() || null,
+          _payment_notes: balanceDue > 0
+            ? `PT package purchase · part payment (balance ₹${balanceDue.toLocaleString('en-IN')})`
+            : 'PT package purchase',
         } as any,
       );
       if (rpcErr) throw rpcErr;
