@@ -1,3 +1,9 @@
+// dispatch-communication v1.35.0 — label-aware positional slot resolution.
+// v1.35.0: Positional {{n}} slots now derive their semantic key from the literal
+//          label preceding them ("Task: {{2}}", "Priority: {{3}}", "Due Date: {{4}}",
+//          "…here: {{5}}") and values resolve via alias + fuzzy key matching.
+//          Fixes 132018 template_param_empty on task_assigned_alert and similar
+//          label:value templates saved with generic variable_N labels.
 // dispatch-communication v1.34.2 — infer positional plan and branch slots.
 // v1.34.2: Generic Meta labels now understand "plan {{n}}" and "from {{n}}"
 //          copy, covering welcome and diet/workout document templates.
