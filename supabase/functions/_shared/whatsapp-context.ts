@@ -131,6 +131,75 @@ export function looksLikeConfirmation(text: string): boolean {
   return CONFIRM_RE.test(String(text || "").trim());
 }
 
+// ─── feature flag: WHATSAPP_CONTEXT_RESOLVER_V2 ───────────────────────────────
+//
+// Default OFF. Rollout order:
+//   1. OFF  — nothing changes, brain behaves exactly as before.
+//   2. Allowlist — { enabled: true, allowlist: ["+919xxxxxxxxx"] } to test with
+//      your own number only.
+//   3. Global — { enabled: true, allowlist: [] } (empty allowlist = everyone).
+//
+// Sources (first match wins):
+//   • env `WHATSAPP_CONTEXT_RESOLVER_V2` = on|true|1  → global ON
+//   • env `WHATSAPP_CONTEXT_RESOLVER_V2` = off|false|0 → global OFF (kill switch)
+//   • settings row (branch_id IS NULL, key='whatsapp_context_resolver_v2')
+
+export interface ContextResolverFlag {
+  enabled: boolean;
+  allowlist: string[];
+  /** Allow the low-confidence recent-outbound fallback when context.id is absent. */
+  recencyFallback: boolean;
+}
+
+const FLAG_KEY = "whatsapp_context_resolver_v2";
+const FLAG_TTL_MS = 60_000;
+let flagCache: { at: number; value: ContextResolverFlag } | null = null;
+
+export async function getContextResolverFlag(
+  supabase: SupabaseClient,
+): Promise<ContextResolverFlag> {
+  const envRaw = (Deno.env.get("WHATSAPP_CONTEXT_RESOLVER_V2") ?? "").trim().toLowerCase();
+  if (["on", "true", "1", "yes"].includes(envRaw)) {
+    return { enabled: true, allowlist: [], recencyFallback: true };
+  }
+  if (["off", "false", "0", "no"].includes(envRaw)) {
+    return { enabled: false, allowlist: [], recencyFallback: true };
+  }
+
+  if (flagCache && Date.now() - flagCache.at < FLAG_TTL_MS) return flagCache.value;
+
+  const value: ContextResolverFlag = { enabled: false, allowlist: [], recencyFallback: true };
+  try {
+    const { data } = await supabase
+      .from("settings")
+      .select("value")
+      .is("branch_id", null)
+      .eq("key", FLAG_KEY)
+      .maybeSingle();
+    const v = (data?.value ?? {}) as Record<string, unknown>;
+    value.enabled = v.enabled === true;
+    value.allowlist = Array.isArray(v.allowlist) ? (v.allowlist as string[]).map(String) : [];
+    value.recencyFallback = v.recency_fallback !== false;
+  } catch { /* fail closed to OFF */ }
+
+  flagCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Is the V2 resolver active for this specific phone number? */
+export async function isContextResolverEnabled(
+  supabase: SupabaseClient,
+  phoneNumber: string,
+): Promise<{ enabled: boolean; flag: ContextResolverFlag }> {
+  const flag = await getContextResolverFlag(supabase);
+  if (!flag.enabled) return { enabled: false, flag };
+  if (flag.allowlist.length === 0) return { enabled: true, flag };
+  const variants = new Set(phoneVariants(phoneNumber).map((p) => String(p).replace(/\D/g, "")));
+  const match = flag.allowlist.some((a) => variants.has(String(a).replace(/\D/g, "")));
+  return { enabled: match, flag };
+}
+
+
 // ─── main resolver ────────────────────────────────────────────────────────────
 
 export interface ResolveInput {
@@ -142,7 +211,10 @@ export interface ResolveInput {
   /** Meta `message.context.id` — the provider id the user replied to. */
   replyToMessageId?: string | null;
   platform?: "whatsapp" | "instagram" | "messenger";
+  /** When false, the low-confidence recent-outbound fallback is disabled. */
+  allowRecencyFallback?: boolean;
 }
+
 
 export async function resolveConversationContext(
   supabase: SupabaseClient,
@@ -341,11 +413,12 @@ export async function resolveConversationContext(
           }
         }
 
-        if (!outbound && !ambiguous) {
+        if (!outbound && !ambiguous && input.allowRecencyFallback !== false) {
           outbound = top;
           ctx.correlationMethod = "recent_outbound";
           ctx.correlationConfidence = "low";
-        } else if (!outbound && ambiguous) {
+        } else if (!outbound && (ambiguous || input.allowRecencyFallback === false)) {
+
           console.log(
             "[WhatsApp Context Resolver] ambiguous fallback — multiple campaigns in window, no context.id",
             JSON.stringify({ branch_id: input.branchId, campaigns: distinctCampaigns.size }),

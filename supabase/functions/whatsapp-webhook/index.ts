@@ -1,4 +1,7 @@
+// v7.1.0 — WHATSAPP_CONTEXT_RESOLVER_V2 feature flag (default OFF, allowlist
+//          rollout) + context.id-only correlation option.
 // v7.0.0 — Conversation Context & Message Provenance layer: persists Meta
+
 //          `message.context.id` (reply correlation), resolves campaign /
 //          transactional / member-support context before the AI brain runs,
 //          and honours structured `no_reply` decisions.
@@ -41,7 +44,13 @@ import {
   resolveConversationContext,
   persistThreadContext,
   logAiDecision,
+  isContextResolverEnabled,
 } from "../_shared/whatsapp-context.ts";
+
+/** Internal control-flow signal: resolver v2 is disabled for this recipient. */
+class SkipContextResolution extends Error {}
+
+
 
 
 const corsHeaders = {
@@ -599,6 +608,14 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
   // / lead / human handoff) using Meta's context.id as the primary signal.
   let conversationContext = null as Awaited<ReturnType<typeof resolveConversationContext>> | null;
   try {
+    // Feature flag WHATSAPP_CONTEXT_RESOLVER_V2 — OFF by default. When off the
+    // brain runs exactly as it did before this layer existed.
+    const { enabled: resolverEnabled, flag } = await isContextResolverEnabled(supabase, phoneNumber);
+    if (!resolverEnabled) {
+      console.log("[whatsapp-webhook] context resolver v2 disabled for this recipient");
+      throw new SkipContextResolution();
+    }
+
     conversationContext = await resolveConversationContext(supabase, {
       branchId,
       phoneNumber,
@@ -606,7 +623,9 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
       inboundContent: inboundMsg.content,
       replyToMessageId: (inboundMsg as { reply_to_message_id?: string | null }).reply_to_message_id ?? null,
       platform: "whatsapp",
+      allowRecencyFallback: flag.recencyFallback,
     });
+
 
     if (!conversationContext.shouldInvokeAI) {
       console.log(`[whatsapp-webhook] AI suppressed by context: ${conversationContext.noReplyReason}`);
@@ -625,9 +644,12 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     await persistThreadContext(supabase, branchId, phoneNumber, conversationContext);
   } catch (ctxErr) {
     // Context resolution must NEVER block a reply — degrade to the old behaviour.
-    console.warn("[whatsapp-webhook] context resolution failed (continuing):", ctxErr);
+    if (!(ctxErr instanceof SkipContextResolution)) {
+      console.warn("[whatsapp-webhook] context resolution failed (continuing):", ctxErr);
+    }
     conversationContext = null;
   }
+
 
   try {
     await supabase.rpc("log_error_event", {
