@@ -146,6 +146,12 @@ import {
 
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
+import {
+  renderConversationContextBlock,
+  parseNoReplyDecision,
+  type ResolvedWhatsAppContext,
+} from "./whatsapp-context.ts";
+
 
 // ─── PRICING BLACKOUT & VIP TOUR PROTOCOL — SINGLE SOURCE OF TRUTH ─────────
 // v8.0.0 (blackout): Ananya is strictly forbidden from quoting any prices,
