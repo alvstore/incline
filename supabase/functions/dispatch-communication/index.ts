@@ -1,3 +1,9 @@
+// dispatch-communication v1.35.0 — label-aware positional slot resolution.
+// v1.35.0: Positional {{n}} slots now derive their semantic key from the literal
+//          label preceding them ("Task: {{2}}", "Priority: {{3}}", "Due Date: {{4}}",
+//          "…here: {{5}}") and values resolve via alias + fuzzy key matching.
+//          Fixes 132018 template_param_empty on task_assigned_alert and similar
+//          label:value templates saved with generic variable_N labels.
 // dispatch-communication v1.34.2 — infer positional plan and branch slots.
 // v1.34.2: Generic Meta labels now understand "plan {{n}}" and "from {{n}}"
 //          copy, covering welcome and diet/workout document templates.
@@ -308,9 +314,19 @@ function inferSlotSemantics(content: string): Record<string, string> {
     else if (/(branch|club|studio|centre|center|from)[^a-z]*$/.test(tail)) key = 'branch_name';
     else if (/(date|on|expires|expiry|valid till|till|by)[^a-z]*$/.test(tail)) key = 'date';
     else if (/(time|at)[^a-z]*$/.test(tail)) key = 'time';
-    else if (/(link|url|download)[^a-z]*$/.test(tail)) key = 'document_link';
+    else if (/(link|url|download|here)[^a-z]*$/.test(tail)) key = 'document_link';
+    else if (/(task|title|subject|regarding)[^a-z]*$/.test(tail)) key = 'task_title';
+    else if (/(priority)[^a-z]*$/.test(tail)) key = 'priority';
+    else if (/(status|stage)[^a-z]*$/.test(tail)) key = 'status';
     else if (/(name)[^a-z]*$/.test(tail)) key = 'lead_name';
     else if (/(hi|hello|hey|dear)[^a-z]*$/.test(tail)) key = 'recipient_name';
+    if (!key) {
+      // Last resort: templates commonly read "Label: {{n}}". Use the literal
+      // label as the semantic key (e.g. "Assigned by: {{3}}" → assigned_by),
+      // which resolveVarValue then fuzzy-matches against the caller payload.
+      const labelled = tail.match(/([a-z][a-z ]{1,24})\s*[:\-]\s*$/);
+      if (labelled) key = labelled[1].trim().replace(/\s+/g, '_');
+    }
     if (key) out[slot] = key;
   }
   return out;
@@ -368,7 +384,7 @@ function resolveVarValue(
   const k = key.toLowerCase();
   // v1.30.0: recipient/greeting slot — internal alerts address staff, member
   // journeys address the member. Prefer the most specific key available.
-  if (k === 'recipient_name' || k === 'recipient') tryKeys.push('recipient_name', 'staff_name', 'first_name', 'member_name', 'name', 'full_name', 'contact_name', 'lead_name');
+  if (k === 'recipient_name' || k === 'recipient') tryKeys.push('recipient_name', 'staff_name', 'assignee_name', 'first_name', 'member_name', 'name', 'full_name', 'contact_name', 'lead_name');
   if (k.includes('staff')) tryKeys.push('staff_name', 'assignee_name', 'recipient_name');
   if (k.includes('lead_name')) tryKeys.push('lead_name', 'full_name', 'contact_name', 'name', 'member_name');
   if (k.includes('member') || k === 'name' || k === 'first_name' || k === 'full_name') tryKeys.push('member_name', 'name', 'full_name', 'first_name', 'lead_name', 'contact_name');
@@ -376,12 +392,16 @@ function resolveVarValue(
   if (k.includes('trainer')) tryKeys.push('trainer_name');
   if (k.includes('interest')) tryKeys.push('interest', 'plan_interest', 'interest_name');
   if (k.includes('source')) tryKeys.push('source', 'lead_source', 'utm_source');
-  if (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees') || k === 'revenue') tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount', 'total_revenue');
+  const isDateLike = /(date|time|day|when)/.test(k);
+  if (!isDateLike && (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees') || k === 'revenue')) tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount', 'total_revenue');
   if (k.includes('invoice')) tryKeys.push('invoice_number', 'invoice_id');
   if (k.includes('branch')) tryKeys.push('branch_name', 'branch');
-  if (k.includes('date')) tryKeys.push('date', 'report_date');
+  if (k.includes('date')) tryKeys.push('date', 'due_date', 'start_date', 'expiry_date', 'class_date', 'session_date', 'report_date');
+  if (k.includes('time')) tryKeys.push('time', 'due_time', 'class_time', 'session_time', 'start_time');
+  if (k.includes('task') || k.includes('title') || k.includes('subject')) tryKeys.push('task_title', 'title', 'subject', 'task_name');
+  if (k.includes('priority')) tryKeys.push('priority', 'priority_label');
   if (k.includes('checkins')) tryKeys.push('checkins', 'total_checkins');
-  if (k.includes('document') || k.includes('link') || k.includes('url')) tryKeys.push('document_link', 'url', 'link');
+  if (k.includes('document') || k.includes('link') || k.includes('url') || k === 'here') tryKeys.push('document_link', 'url', 'link', 'short_link', 'action_link');
   // Meta positional slots ({{1}}, {{2}}, …). By convention slot #1 is the
   // recipient's first name (matches CampaignWizard's variable legend and
   // manage-whatsapp-templates auto-personalization). Without this the
@@ -396,21 +416,31 @@ function resolveVarValue(
     }
   }
 
-  const isAmountKey = k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees');
+  const isAmountKey = !isDateLike && (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees'));
+  const clean = (raw: unknown): string => {
+    let out = String(raw).trim();
+    // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
+    // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
+    if (isAmountKey) out = out.replace(/^(₹|Rs\.?|INR|INR\.|Rs)\s*/i, '').trim();
+    return out;
+  };
   for (const tk of tryKeys) {
     const v = values[tk];
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      let out = String(v).trim();
-      // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
-      // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
-      if (isAmountKey) {
-        // v1.29.1: Broaden stripping to catch multiple variants and whitespace.
-        out = out.replace(/^(₹|Rs\.?|INR|INR\.|Rs)\s*/i, '').trim();
-      }
-      return out;
+    if (v !== undefined && v !== null && String(v).trim() !== '') return clean(v);
+  }
+  // v1.35.0: fuzzy last resort — a label-derived key ("assigned_by", "task")
+  // matches a payload key that contains it (or vice versa). Never applies to
+  // bare positional keys, which carry no semantics.
+  if (!/^\d+$/.test(k) && k.length >= 3) {
+    const token = k.replace(/[^a-z0-9]+/g, '_');
+    for (const [vk, vv] of Object.entries(values)) {
+      if (vv === undefined || vv === null || String(vv).trim() === '') continue;
+      const vkn = String(vk).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      if (vkn === token || vkn.includes(token) || token.includes(vkn)) return clean(vv);
     }
   }
   return '';
+
 
 }
 
