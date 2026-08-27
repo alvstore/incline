@@ -1,4 +1,9 @@
+// v7.0.0 — Conversation Context & Message Provenance layer: persists Meta
+//          `message.context.id` (reply correlation), resolves campaign /
+//          transactional / member-support context before the AI brain runs,
+//          and honours structured `no_reply` decisions.
 // v6.6.0 — Handle outbound echos to prevent AI loops and sync Meta messages.
+
 //          from Meta statuses after recording the delivery event. The RPC path
 //          is best-effort; direct patch guarantees Communication Hub mirrors
 //          whatsapp_messages for 131049/failed callbacks.
