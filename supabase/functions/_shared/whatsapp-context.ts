@@ -16,6 +16,7 @@
 // Never: text similarity, keyword matching against campaign copy, or "latest campaign".
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { phoneVariants } from "./phone.ts";
 
 export type ContactType = "member" | "lead" | "staff" | "unknown";
 
@@ -102,14 +103,6 @@ const ACK_ONLY_RE =
 const CONFIRM_RE = /^(?:yes|y|yeah|yep|yup|sure|ok(?:ay)?|haan|han|ha|confirm(?:ed)?|i'?ll\s+come|coming|count\s+me\s+in)[\s.!]*$/i;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-export function phoneVariants(raw: string): string[] {
-  const digits = String(raw || "").replace(/\D/g, "");
-  if (!digits) return [];
-  const last10 = digits.slice(-10);
-  const set = new Set<string>([digits, last10, `91${last10}`, `+91${last10}`, `+${digits}`, `0${last10}`]);
-  return [...set].filter(Boolean);
-}
 
 function hoursFromNow(h: number): string {
   return new Date(Date.now() + h * 3600 * 1000).toISOString();
