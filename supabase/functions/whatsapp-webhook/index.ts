@@ -1,4 +1,7 @@
+// v7.1.0 — WHATSAPP_CONTEXT_RESOLVER_V2 feature flag (default OFF, allowlist
+//          rollout) + context.id-only correlation option.
 // v7.0.0 — Conversation Context & Message Provenance layer: persists Meta
+
 //          `message.context.id` (reply correlation), resolves campaign /
 //          transactional / member-support context before the AI brain runs,
 //          and honours structured `no_reply` decisions.
