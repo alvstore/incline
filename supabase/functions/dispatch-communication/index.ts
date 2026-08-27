@@ -416,21 +416,31 @@ function resolveVarValue(
     }
   }
 
-  const isAmountKey = k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees');
+  const isAmountKey = !isDateLike && (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees'));
+  const clean = (raw: unknown): string => {
+    let out = String(raw).trim();
+    // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
+    // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
+    if (isAmountKey) out = out.replace(/^(₹|Rs\.?|INR|INR\.|Rs)\s*/i, '').trim();
+    return out;
+  };
   for (const tk of tryKeys) {
     const v = values[tk];
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      let out = String(v).trim();
-      // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
-      // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
-      if (isAmountKey) {
-        // v1.29.1: Broaden stripping to catch multiple variants and whitespace.
-        out = out.replace(/^(₹|Rs\.?|INR|INR\.|Rs)\s*/i, '').trim();
-      }
-      return out;
+    if (v !== undefined && v !== null && String(v).trim() !== '') return clean(v);
+  }
+  // v1.35.0: fuzzy last resort — a label-derived key ("assigned_by", "task")
+  // matches a payload key that contains it (or vice versa). Never applies to
+  // bare positional keys, which carry no semantics.
+  if (!/^\d+$/.test(k) && k.length >= 3) {
+    const token = k.replace(/[^a-z0-9]+/g, '_');
+    for (const [vk, vv] of Object.entries(values)) {
+      if (vv === undefined || vv === null || String(vv).trim() === '') continue;
+      const vkn = String(vk).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      if (vkn === token || vkn.includes(token) || token.includes(vkn)) return clean(vv);
     }
   }
   return '';
+
 
 }
 
