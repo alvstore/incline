@@ -10,9 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Dumbbell, CalendarDays, Plus, Check, AlertTriangle, Info } from 'lucide-react';
+import {
+  Loader2, Dumbbell, CalendarDays, Plus, Check, AlertTriangle, Info,
+  ArrowLeft, ArrowRight, SlidersHorizontal, ChevronDown, PackageOpen, RotateCcw, UserRound, Wallet,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { computePtCheckout, formatINR } from '@/lib/payments/ptCheckout';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
@@ -23,6 +28,7 @@ type Mode = 'session' | 'monthly';
 type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque' | 'wallet';
 type PaySource = 'in_person' | 'payment_link';
 type CollectMode = 'full' | 'half' | 'custom' | 'none';
+type Step = 1 | 2 | 3;
 
 const REFERENCE_LABELS: Record<PayMethod, { label: string; placeholder: string } | null> = {
   cash: null,
@@ -41,9 +47,14 @@ const addDaysISO = (days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-
 // PT GST is 5% inclusive by default; owners/admins/managers may mark a sale exempt (0%).
 const PT_GST_RATE = 5;
+
+const STEP_LABELS: Record<Step, string> = {
+  1: 'Plan & trainer',
+  2: 'Schedule & pricing',
+  3: 'Payment',
+};
 
 interface PurchasePTPackageDrawerProps {
   open: boolean;
@@ -100,6 +111,33 @@ function previewExpiry(startISO: string, months: number | null, validityDays: nu
 const prettyDate = (iso: string | null) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+/** Header progress: three dots + the current step label. */
+function StepDots({ step }: { step: Step }) {
+  return (
+    <div className="flex items-center gap-2" aria-label={`Step ${step} of 3: ${STEP_LABELS[step]}`}>
+      <div className="flex items-center gap-1.5">
+        {([1, 2, 3] as Step[]).map((s) => (
+          <span
+            key={s}
+            className={`h-1.5 rounded-full transition-all duration-200 ${
+              s === step ? 'w-6 bg-primary' : s < step ? 'w-1.5 bg-primary/50' : 'w-1.5 bg-muted-foreground/25'
+            }`}
+          />
+        ))}
+      </div>
+      <span className="text-xs font-medium text-muted-foreground">
+        Step {step} of 3 · {STEP_LABELS[step]}
+      </span>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{children}</p>
+  );
+}
+
 export function PurchasePTPackageDrawer({
   open, onOpenChange, memberId, branchId, memberName,
 }: PurchasePTPackageDrawerProps) {
@@ -108,6 +146,7 @@ export function PurchasePTPackageDrawer({
   const roleList = useMemo(() => roles?.map((r) => r.role) ?? [], [roles]);
   const canEditTax = can.viewFinancials(roleList);
 
+  const [step, setStep] = useState<Step>(1);
   const [mode, setMode] = useState<Mode>('monthly');
   const [selected, setSelected] = useState<string | 'custom' | null>(null);
   const [paySource, setPaySource] = useState<PaySource>('in_person');
@@ -116,6 +155,7 @@ export function PurchasePTPackageDrawer({
   const [startDate, setStartDate] = useState<string>(todayISO());
   const [gstExempt, setGstExempt] = useState(false);
   const [chargeOverride, setChargeOverride] = useState<string>('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   // Collection: how much money actually changes hands right now.
   const [collectMode, setCollectMode] = useState<CollectMode>('full');
   const [collectInput, setCollectInput] = useState<string>('');
@@ -132,16 +172,17 @@ export function PurchasePTPackageDrawer({
   useEffect(() => { setSelected(null); setChargeOverride(''); }, [mode]);
   useEffect(() => {
     if (!open) {
+      setStep(1);
       setMode('monthly'); setSelected(null);
       setPaySource('in_person'); setPayMethod('cash');
       setPendingPackageId(null);
       setStartDate(todayISO());
       setGstExempt(false);
       setChargeOverride('');
+      setAdvancedOpen(false);
       setCollectMode('full'); setCollectInput(''); setDueDate(''); setTxnRef('');
     }
   }, [open]);
-
 
   const dbType = mode === 'session' ? 'session_based' : 'monthly';
   const gstRate: 0 | 5 = gstExempt ? 0 : PT_GST_RATE;
@@ -153,7 +194,6 @@ export function PurchasePTPackageDrawer({
     ? `custom-${mode}-${custom.name}-${custom.price}-${trainerDraftKey}-${collectDraftKey}`
     : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}-${trainerDraftKey}-${collectDraftKey}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
-
 
   // Current general-training trainer on the member (may be null)
   const { data: member } = useQuery({
@@ -190,10 +230,10 @@ export function PurchasePTPackageDrawer({
   const [duplicateAck, setDuplicateAck] = useState(false);
   useEffect(() => { if (!open) setDuplicateAck(false); }, [open]);
 
-
-
   // Branch trainer roster — staff pick who is coaching this PT package.
-  const { data: trainers = [], isLoading: trainersLoading } = useQuery({
+  const {
+    data: trainers = [], isLoading: trainersLoading, isError: trainersError, refetch: refetchTrainers,
+  } = useQuery({
     queryKey: ['pt-branch-trainers', branchId],
     enabled: open && !!branchId,
     queryFn: async () => {
@@ -241,7 +281,6 @@ export function PurchasePTPackageDrawer({
     setTrainerDraftKey(id);
   };
 
-
   const selectedTrainer = useMemo(
     () => trainers.find((t) => t.id === trainerId) ?? null,
     [trainers, trainerId],
@@ -252,11 +291,10 @@ export function PurchasePTPackageDrawer({
   );
   const trainerShare = selectedTrainer ? selectedTrainer.share : null;
   const trainerName: string | null = selectedTrainer?.full_name ?? null;
-  const willReassign = !!trainerId && trainerId !== currentTrainerId && !keepCurrentTrainer;
 
-
-
-  const { data: packages = [], isLoading } = useQuery<CatalogPkg[]>({
+  const {
+    data: packages = [], isLoading, isError: packagesError, refetch: refetchPackages,
+  } = useQuery<CatalogPkg[]>({
     queryKey: ['pt-packages-active', branchId, dbType],
     enabled: open && !!branchId,
     queryFn: async () => {
@@ -318,6 +356,10 @@ export function PurchasePTPackageDrawer({
   const needsReference = paySource === 'in_person' && collectedNow > 0 && !!refSpec;
   const referenceMissing = needsReference && txnRef.trim().length < 4;
 
+  // A partial collection always needs a due date — default it to +7 days.
+  useEffect(() => {
+    if (needsDueDate && !dueDate) setDueDate(addDaysISO(7));
+  }, [needsDueDate, dueDate]);
 
   const purchase = useMutation({
     mutationFn: async () => {
@@ -468,111 +510,142 @@ export function PurchasePTPackageDrawer({
   const awaitingPayment = !!pendingPackageId;
   const canSellDuplicate = canEditTax; // owner / admin / manager
   const duplicateBlocked = !!blockingPackage && !(canSellDuplicate && duplicateAck);
-  const canCharge =
-    !purchase.isPending && !awaitingPayment && !duplicateBlocked && !existingLoading &&
-    !!trainerId && !!startDate && price > 0 &&
 
-    ((selected && selected !== 'custom') ||
-      (selected === 'custom' &&
-        custom.name.trim().length > 0 &&
-        custom.price > 0 &&
-        (mode === 'session' ? custom.sessions > 0 : custom.durationMonths > 0)));
+  const planChosen =
+    (!!selected && selected !== 'custom') ||
+    (selected === 'custom' &&
+      custom.name.trim().length > 0 &&
+      custom.price > 0 &&
+      (mode === 'session' ? custom.sessions > 0 : custom.durationMonths > 0));
+
+  // Why the user can't move on — shown inline instead of a dead button.
+  const step1Blocker: string | null =
+    existingLoading ? 'Checking existing packages…'
+      : duplicateBlocked ? 'Resolve the existing package first'
+        : !trainerId ? 'Select a trainer'
+          : !planChosen ? (selected === 'custom' ? 'Complete the custom plan details' : 'Pick a plan')
+            : null;
+  const step2Blocker: string | null =
+    !startDate ? 'Pick a start date' : price <= 0 ? 'Set a price above zero' : null;
+  const step3Blocker: string | null =
+    awaitingPayment ? 'Waiting for the payment link to settle'
+      : referenceMissing ? `Add the ${refSpec?.label.toLowerCase() ?? 'payment reference'}`
+        : null;
+
+  const canCharge =
+    !purchase.isPending && !step1Blocker && !step2Blocker && !step3Blocker;
+
+  const goNext = () => setStep((s) => (s === 1 ? 2 : 3));
+  const goBack = () => setStep((s) => (s === 3 ? 2 : 1));
+  const currentBlocker = step === 1 ? step1Blocker : step === 2 ? step2Blocker : step3Blocker;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-xl p-0 flex flex-col"
-      >
-        <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <SheetTitle className="flex items-center gap-2">
-            <Dumbbell className="h-5 w-5" /> Purchase PT Package
+      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col gap-0">
+        <SheetHeader className="space-y-2 border-b px-5 py-4 text-left sm:px-6">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-500/10">
+              <Dumbbell className="h-4 w-4" />
+            </span>
+            Purchase PT Package
           </SheetTitle>
-          <SheetDescription>
-            {memberName ? `Add a personal training package for ${memberName}. ` : ''}
-            Pick a plan, set the start date and confirm the tax treatment — commission preview updates live.
+          <SheetDescription className="text-xs">
+            {memberName ? `For ${memberName}` : 'Personal training package'}
           </SheetDescription>
+          <StepDots step={step} />
         </SheetHeader>
 
-        {blockingPackage && (
-          <div className="px-6 pt-4">
-            <Card className="rounded-2xl border-0 shadow-sm bg-amber-50">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-amber-900">
-                      {blockingPackage.status === 'pending_payment'
-                        ? 'This member already has a PT package awaiting payment'
-                        : 'This member already has an active PT package'}
-                    </p>
-                    <p className="text-xs text-amber-800">
-                      {blockingPackage.pt_packages?.name ?? 'PT package'}
-                      {trainers.find((t) => t.id === blockingPackage.trainer_id)
-                        ? ` · ${trainers.find((t) => t.id === blockingPackage.trainer_id)!.full_name}`
-                        : ''}
-                      {blockingPackage.start_date ? ` · from ${prettyDate(blockingPackage.start_date)}` : ''}
-                    </p>
-                  </div>
-                  <Badge
-                    className={`ml-auto shrink-0 rounded-full text-xs ${
-                      blockingPackage.status === 'pending_payment'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-emerald-100 text-emerald-700'
-                    }`}
-                    variant="secondary"
-                  >
-                    {blockingPackage.status === 'pending_payment' ? 'Awaiting payment' : 'Active'}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {blockingPackage.invoice_id && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="min-h-[44px]"
-                      onClick={() => window.open(`/member/pay?invoice=${blockingPackage.invoice_id}`, '_blank')}
-                    >
-                      Open existing invoice
-                    </Button>
-                  )}
-                  {canSellDuplicate ? (
-                    <Button
-                      size="sm"
-                      variant={duplicateAck ? 'secondary' : 'default'}
-                      className="min-h-[44px]"
-                      onClick={() => setDuplicateAck((v) => !v)}
-                    >
-                      {duplicateAck ? 'Additional package confirmed' : 'Sell an additional package anyway'}
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-amber-800">
-                      Ask a manager if an additional package is genuinely needed.
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+        {awaitingPayment && (
+          <div className="mx-5 mt-4 flex items-center justify-between gap-2 rounded-xl bg-info/10 px-3 py-2 text-sm text-info sm:mx-6">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Waiting for payment…
+            </div>
+            <Button
+              size="sm" variant="ghost"
+              className="min-h-[36px]"
+              onClick={() => cancelPending.mutate()}
+              disabled={cancelPending.isPending}
+            >
+              Cancel &amp; reverse
+            </Button>
           </div>
         )}
 
-        <div className="px-6 pt-4">
+        {/* ------------------------------ BODY ------------------------------ */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:px-6">
+          {/* ---------------------- STEP 1 · Plan & trainer ------------------ */}
+          {step === 1 && (
+            <>
+              {blockingPackage && (
+                <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-500/10">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                        {blockingPackage.status === 'pending_payment'
+                          ? 'Already has a package awaiting payment'
+                          : 'Already has an active PT package'}
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-300/90">
+                        {blockingPackage.pt_packages?.name ?? 'PT package'}
+                        {trainers.find((t) => t.id === blockingPackage.trainer_id)
+                          ? ` · ${trainers.find((t) => t.id === blockingPackage.trainer_id)!.full_name}`
+                          : ''}
+                        {blockingPackage.start_date ? ` · from ${prettyDate(blockingPackage.start_date)}` : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {blockingPackage.invoice_id && (
+                          <Button
+                            size="sm" variant="outline" className="min-h-[36px] rounded-full"
+                            onClick={() => window.open(`/member/pay?invoice=${blockingPackage.invoice_id}`, '_blank')}
+                          >
+                            Open invoice
+                          </Button>
+                        )}
+                        {canSellDuplicate ? (
+                          <Button
+                            size="sm"
+                            variant={duplicateAck ? 'secondary' : 'default'}
+                            className="min-h-[36px] rounded-full"
+                            onClick={() => setDuplicateAck((v) => !v)}
+                          >
+                            {duplicateAck ? 'Additional package confirmed' : 'Sell an additional package'}
+                          </Button>
+                        ) : (
+                          <p className="text-xs text-amber-800">Ask a manager to approve an additional package.</p>
+                        )}
+                      </div>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        blockingPackage.status === 'pending_payment'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}
+                    >
+                      {blockingPackage.status === 'pending_payment' ? 'Awaiting payment' : 'Active'}
+                    </Badge>
+                  </div>
+                </div>
+              )}
 
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardContent className="p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Personal trainer
-              </p>
-              <div className="space-y-1.5">
-                <Label htmlFor="pt-trainer" className="text-xs">
-                  Trainer for this package <span className="text-destructive">*</span>
-                </Label>
+              <div className="space-y-2">
+                <SectionLabel>Trainer</SectionLabel>
+                <Label htmlFor="pt-trainer" className="sr-only">Trainer for this package</Label>
                 {trainersLoading ? (
-                  <div className="h-11 rounded-md bg-muted animate-pulse" />
+                  <Skeleton className="h-11 w-full rounded-xl" />
+                ) : trainersError ? (
+                  <div className="flex items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    <span>Couldn't load the trainer roster.</span>
+                    <Button size="sm" variant="ghost" className="min-h-[36px]" onClick={() => refetchTrainers()}>
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry
+                    </Button>
+                  </div>
                 ) : (
                   <Select value={trainerId ?? ''} onValueChange={handleTrainerChange}>
-                    <SelectTrigger id="pt-trainer" className="h-11">
-                      <SelectValue placeholder="Select a trainer" />
+                    <SelectTrigger id="pt-trainer" className="h-11 rounded-xl">
+                      <SelectValue placeholder="Select the coaching trainer" />
                     </SelectTrigger>
                     <SelectContent>
                       {trainers.length === 0 && (
@@ -589,453 +662,490 @@ export function PurchasePTPackageDrawer({
                     </SelectContent>
                   </Select>
                 )}
+                {trainerId && trainerId !== currentTrainerId && (
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {keepCurrentTrainer
+                      ? `${currentTrainer?.full_name ?? 'The current trainer'} stays as the general-training trainer.`
+                      : `${trainerName} will ${currentTrainerId ? `replace ${currentTrainer?.full_name ?? 'the current trainer'} as` : 'become'} this member's trainer.`}
+                  </p>
+                )}
               </div>
 
-              {!trainerId && (
-                <div className="flex items-center gap-2 rounded-lg bg-warning/10 text-warning px-3 py-2 text-xs">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  Pick the trainer who will coach this package — commission is paid to them.
-                </div>
-              )}
+              <div className="space-y-3">
+                <SectionLabel>Plan</SectionLabel>
+                <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+                  <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted p-1">
+                    <TabsTrigger value="monthly" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                      <CalendarDays className="mr-2 h-4 w-4" /> Monthly
+                    </TabsTrigger>
+                    <TabsTrigger value="session" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                      <Dumbbell className="mr-2 h-4 w-4" /> Session pack
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
 
-              {trainerId && trainerId !== currentTrainerId && (
-                <>
-                  <div className="flex items-start gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-xs">
-                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span>
-                      {keepCurrentTrainer
-                        ? `${currentTrainer?.full_name ?? 'The current trainer'} stays as the general-training trainer.`
-                        : `${trainerName} will ${currentTrainerId ? `replace ${currentTrainer?.full_name ?? 'the current trainer'} as` : 'become'} this member's trainer.`}
-                    </span>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2].map((i) => <Skeleton key={i} className="h-[76px] w-full rounded-2xl" />)}
                   </div>
-                  {canEditTax && currentTrainerId && (
+                ) : packagesError ? (
+                  <div className="flex flex-col items-center gap-2 rounded-2xl bg-destructive/5 px-4 py-8 text-center">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <p className="text-sm text-muted-foreground">We couldn't load this branch's PT plans.</p>
+                    <Button size="sm" variant="outline" className="min-h-[40px] rounded-full" onClick={() => refetchPackages()}>
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Try again
+                    </Button>
+                  </div>
+                ) : packages.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 rounded-2xl bg-muted/40 px-4 py-8 text-center">
+                    <span className="rounded-full bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-500/10">
+                      <PackageOpen className="h-5 w-5" />
+                    </span>
+                    <p className="text-sm font-medium text-foreground">
+                      No preset {mode === 'session' ? 'session packs' : 'monthly plans'} here
+                    </p>
+                    <p className="text-xs text-muted-foreground">Build a custom one below and it will be saved to this sale.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {packages.map((pkg) => {
+                      const isSel = selected === pkg.id;
+                      const isMonthly = pkg.package_type === 'monthly';
+                      const meta = [
+                        isMonthly
+                          ? `Monthly access${pkg.duration_months ? ` · ${pkg.duration_months} month${pkg.duration_months > 1 ? 's' : ''}` : ''}`
+                          : `${pkg.total_sessions ?? 0} sessions`,
+                        !isMonthly && pkg.validity_days != null ? `valid ${pkg.validity_days} days` : null,
+                        gstExempt ? 'GST exempt' : 'GST 5% incl.',
+                      ].filter(Boolean).join(' · ');
+                      return (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          onClick={() => setSelected(pkg.id)}
+                          aria-pressed={isSel}
+                          className={`w-full cursor-pointer rounded-2xl bg-card p-4 text-left shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                            isSel ? 'ring-2 ring-primary shadow-md shadow-primary/10' : 'hover:shadow-md hover:shadow-indigo-500/10'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="truncate font-semibold">{pkg.name}</h4>
+                                {isSel && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                              </div>
+                              <p className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
+                            </div>
+                            <div className="shrink-0 text-right text-lg font-bold tabular-nums">
+                              ₹{Number(pkg.price).toLocaleString('en-IN')}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <Card
+                  onClick={() => selected !== 'custom' && setSelected('custom')}
+                  className={`cursor-pointer rounded-2xl border-2 border-dashed shadow-none transition-all duration-200 ${
+                    selected === 'custom' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  <CardContent className="space-y-3 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Plus className="h-4 w-4" />
+                      Build a custom {mode === 'session' ? 'session pack' : 'monthly plan'}
+                    </div>
+
+                    {selected === 'custom' && (
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="custom-name" className="text-xs">Pack name</Label>
+                          <Input
+                            id="custom-name"
+                            value={custom.name}
+                            onChange={(e) => setCustom({ ...custom, name: e.target.value })}
+                            placeholder={mode === 'session' ? '12 PT Sessions — Custom' : 'Monthly PT — Custom'}
+                          />
+                        </div>
+
+                        {mode === 'session' && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="custom-sessions" className="text-xs">Sessions</Label>
+                              <Input id="custom-sessions" type="number" min={1}
+                                value={custom.sessions}
+                                onChange={(e) => setCustom({ ...custom, sessions: parseInt(e.target.value) || 0 })}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="custom-validity" className="text-xs">Validity (months)</Label>
+                              <Input id="custom-validity" type="number" min={1}
+                                value={custom.validityMonths}
+                                onChange={(e) => setCustom({ ...custom, validityMonths: parseInt(e.target.value) || 0 })}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {mode === 'monthly' && (
+                          <div className="space-y-1.5">
+                            <Label htmlFor="custom-duration" className="text-xs">Duration (months)</Label>
+                            <Input id="custom-duration" type="number" min={1}
+                              value={custom.durationMonths}
+                              onChange={(e) => setCustom({ ...custom, durationMonths: parseInt(e.target.value) || 0 })}
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor="custom-price" className="text-xs">
+                            Price (₹, {gstExempt ? 'GST exempt' : 'GST 5% incl.'})
+                          </Label>
+                          <Input id="custom-price" type="number" min={0}
+                            value={custom.price}
+                            onChange={(e) => setCustom({ ...custom, price: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+
+          {/* -------------------- STEP 2 · Schedule & pricing ----------------- */}
+          {step === 2 && (
+            <>
+              <div className="space-y-3">
+                <SectionLabel>Schedule</SectionLabel>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pt-start-date" className="text-xs">Start date</Label>
+                    <Input
+                      id="pt-start-date"
+                      type="date"
+                      className="h-11 rounded-xl"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Ends on</Label>
+                    <div className="flex h-11 items-center rounded-xl bg-muted/50 px-3 text-sm font-medium">
+                      {prettyDate(expiryPreview)}
+                    </div>
+                  </div>
+                </div>
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {trainerName ? `${trainerName} ` : 'The assigned trainer '}
+                  can mark PT attendance from {prettyDate(startDate)}
+                  {expiryPreview ? ` until ${prettyDate(expiryPreview)}` : ''}.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <SectionLabel>Pricing</SectionLabel>
+                <div className="space-y-2 rounded-2xl bg-card p-4 shadow-sm">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">List price</span>
+                    <span className="tabular-nums">{formatINR(listPrice)}</span>
+                  </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-sm text-amber-600">
+                      <span>Discount</span>
+                      <span className="tabular-nums">− {formatINR(discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {gstExempt ? 'GST (exempt sale)' : 'GST 5% (inclusive)'}
+                    </span>
+                    <span className="tabular-nums">{formatINR(breakdown.tax)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-dashed pt-2 text-sm font-bold">
+                    <span>Total</span>
+                    <span className="tabular-nums">{formatINR(breakdown.total)}</span>
+                  </div>
+                  {commissionPreview != null && (
+                    <div className="flex justify-between text-xs text-emerald-600">
+                      <span>{trainerName} · {trainerShare}% commission</span>
+                      <span className="tabular-nums">{formatINR(commissionPreview)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {canEditTax && (
+                <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="min-h-[44px] w-full justify-between rounded-xl"
+                      aria-expanded={advancedOpen}
+                    >
+                      <span className="flex items-center gap-2 text-sm">
+                        <SlidersHorizontal className="h-4 w-4" /> Advanced
+                      </span>
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`} />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 rounded-2xl bg-muted/40 p-4 mt-2">
                     <div className="flex items-center justify-between gap-3">
-                      <Label htmlFor="pt-keep-trainer" className="text-xs font-normal text-muted-foreground">
-                        Keep current trainer for general training
-                      </Label>
+                      <div>
+                        <Label htmlFor="pt-gst-exempt" className="text-sm">GST exempt sale</Label>
+                        <p className="text-xs text-muted-foreground">Off = GST 5% inclusive (standard).</p>
+                      </div>
                       <Switch
-                        id="pt-keep-trainer"
-                        checked={keepCurrentTrainer}
-                        onCheckedChange={setKeepCurrentTrainer}
-                        aria-label="Keep the current trainer assigned for general training"
+                        id="pt-gst-exempt"
+                        checked={gstExempt}
+                        onCheckedChange={setGstExempt}
+                        aria-label="Toggle GST exempt sale"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pt-charge" className="text-xs">
+                        Amount to charge (₹) — blank keeps the list price
+                      </Label>
+                      <Input
+                        id="pt-charge"
+                        type="number"
+                        min={0}
+                        className="h-11 rounded-xl"
+                        placeholder={listPrice ? String(listPrice) : '0'}
+                        value={chargeOverride}
+                        onChange={(e) => setChargeOverride(e.target.value)}
+                      />
+                    </div>
+
+                    {currentTrainerId && trainerId && trainerId !== currentTrainerId && (
+                      <div className="flex items-center justify-between gap-3">
+                        <Label htmlFor="pt-keep-trainer" className="text-xs font-normal text-muted-foreground">
+                          Keep {currentTrainer?.full_name ?? 'the current trainer'} for general training
+                        </Label>
+                        <Switch
+                          id="pt-keep-trainer"
+                          checked={keepCurrentTrainer}
+                          onCheckedChange={setKeepCurrentTrainer}
+                          aria-label="Keep the current trainer assigned for general training"
+                        />
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </>
+          )}
+
+          {/* ------------------------ STEP 3 · Payment ----------------------- */}
+          {step === 3 && (
+            <>
+              <div className="space-y-3">
+                <SectionLabel>How is this being paid?</SectionLabel>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pt-source" className="text-xs">Payment source</Label>
+                    <Select value={paySource} onValueChange={(v) => setPaySource(v as PaySource)}>
+                      <SelectTrigger id="pt-source" className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="in_person">In-person (settle now)</SelectItem>
+                        <SelectItem value="payment_link">Payment link</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pt-method" className="text-xs">Method</Label>
+                    <Select value={payMethod} onValueChange={(v) => setPayMethod(v as PayMethod)} disabled={paySource === 'payment_link'}>
+                      <SelectTrigger id="pt-method" className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="card">Card</SelectItem>
+                        <SelectItem value="upi">UPI</SelectItem>
+                        <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="wallet">Wallet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {paySource === 'payment_link' ? (
+                <p className="flex items-start gap-1.5 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  A payment link opens after you create the package. It activates automatically once the member pays.
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    <SectionLabel>Collect now</SectionLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        { key: 'full', label: 'Full' },
+                        { key: 'half', label: '50%' },
+                        { key: 'custom', label: 'Custom' },
+                        { key: 'none', label: 'Nothing yet' },
+                      ] as { key: CollectMode; label: string }[]).map((opt) => (
+                        <Button
+                          key={opt.key}
+                          type="button"
+                          size="sm"
+                          variant={collectMode === opt.key ? 'default' : 'outline'}
+                          className="min-h-[40px] cursor-pointer rounded-full"
+                          onClick={() => {
+                            setCollectMode(opt.key);
+                            if (opt.key === 'custom' && !collectInput) setCollectInput('');
+                          }}
+                        >
+                          {opt.label}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {collectMode === 'custom' && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pt-collect" className="text-xs">Amount collected (₹)</Label>
+                        <Input
+                          id="pt-collect"
+                          type="number"
+                          min={0}
+                          max={breakdown.total}
+                          className="h-11 rounded-xl"
+                          placeholder="e.g. 10000"
+                          value={collectInput}
+                          onChange={(e) => setCollectInput(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {needsReference && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pt-ref" className="text-xs">{refSpec!.label}</Label>
+                        <Input
+                          id="pt-ref"
+                          value={txnRef}
+                          className="h-11 rounded-xl"
+                          placeholder={refSpec!.placeholder}
+                          onChange={(e) => setTxnRef(e.target.value)}
+                          aria-invalid={referenceMissing}
+                        />
+                        {referenceMissing && (
+                          <p className="text-xs text-amber-600">
+                            Required — this reference is how the payment is reconciled.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {needsDueDate && (
+                    <div className="space-y-2 rounded-2xl bg-amber-50 p-4 dark:bg-amber-500/10">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="h-4 w-4 text-amber-600" />
+                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                          {formatINR(balanceDue)} balance — due when?
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {DUE_PRESETS.map((d) => (
+                          <Button
+                            key={d}
+                            type="button"
+                            size="sm"
+                            variant={dueDate === addDaysISO(d) ? 'default' : 'outline'}
+                            className="min-h-[40px] cursor-pointer rounded-full bg-card"
+                            onClick={() => setDueDate(addDaysISO(d))}
+                          >
+                            +{d} days
+                          </Button>
+                        ))}
+                      </div>
+                      <Label htmlFor="pt-due" className="sr-only">Balance due date</Label>
+                      <Input
+                        id="pt-due"
+                        type="date"
+                        className="h-11 rounded-xl bg-card"
+                        min={todayISO()}
+                        value={dueDate || addDaysISO(7)}
+                        onChange={(e) => setDueDate(e.target.value)}
                       />
                     </div>
                   )}
                 </>
               )}
-            </CardContent>
-          </Card>
-        </div>
-
-
-        {awaitingPayment && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-sm">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Waiting for payment…
-            </div>
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => cancelPending.mutate()}
-              disabled={cancelPending.isPending}
-            >
-              Cancel & reverse
-            </Button>
-          </div>
-        )}
-
-        <div className="px-6 pt-4">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <TabsList className="grid grid-cols-2 w-full bg-muted p-1 rounded-xl">
-              <TabsTrigger value="monthly" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                <CalendarDays className="h-4 w-4 mr-2" /> Monthly Plan
-              </TabsTrigger>
-              <TabsTrigger value="session" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                <Dumbbell className="h-4 w-4 mr-2" /> Session Pack
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <>
-              {packages.length === 0 && (
-                <p className="text-center text-sm text-muted-foreground py-4">
-                  No preset {mode === 'session' ? 'session packs' : 'monthly plans'} — build a custom one below.
-                </p>
-              )}
-
-              {packages.map((pkg) => {
-                const isSel = selected === pkg.id;
-                const isMonthly = pkg.package_type === 'monthly';
-                return (
-                  <Card
-                    key={pkg.id}
-                    onClick={() => setSelected(pkg.id)}
-                    className={`cursor-pointer rounded-2xl border-0 shadow-sm transition-all ${
-                      isSel ? 'ring-2 ring-primary shadow-md shadow-primary/10' : 'hover:shadow-md'
-                    }`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold truncate">{pkg.name}</h4>
-                            {isSel && <Check className="h-4 w-4 text-primary shrink-0" />}
-                          </div>
-                          {pkg.description && (
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                              {pkg.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {isMonthly ? (
-                              <Badge variant="secondary" className="text-xs">
-                                Monthly access
-                                {pkg.duration_months ? ` · ${pkg.duration_months} month${pkg.duration_months > 1 ? 's' : ''}` : ''}
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-xs">
-                                {pkg.total_sessions ?? 0} sessions
-                              </Badge>
-                            )}
-                            {!isMonthly && pkg.validity_days != null && (
-                              <Badge variant="outline" className="text-xs">
-                                Valid {pkg.validity_days} days
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs">
-                              {gstExempt ? 'GST exempt' : 'GST 5% incl.'}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-lg font-bold">
-                            ₹{Number(pkg.price).toLocaleString('en-IN')}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-
-              <Card
-                onClick={() => selected !== 'custom' && setSelected('custom')}
-                className={`cursor-pointer rounded-2xl border-2 border-dashed transition-all ${
-                  selected === 'custom'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-border'
-                }`}
-              >
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center gap-2 font-medium">
-                    <Plus className="h-4 w-4" />
-                    Build a custom {mode === 'session' ? 'session pack' : 'monthly plan'}
-                  </div>
-
-                  {selected === 'custom' && (
-                    <div className="space-y-3 pt-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="custom-name" className="text-xs">Pack name</Label>
-                        <Input
-                          id="custom-name"
-                          value={custom.name}
-                          onChange={(e) => setCustom({ ...custom, name: e.target.value })}
-                          placeholder={mode === 'session' ? '12 PT Sessions — Custom' : 'Monthly PT — Custom'}
-                        />
-                      </div>
-
-                      {mode === 'session' && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="custom-sessions" className="text-xs">Number of sessions</Label>
-                            <Input id="custom-sessions" type="number" min={1}
-                              value={custom.sessions}
-                              onChange={(e) => setCustom({ ...custom, sessions: parseInt(e.target.value) || 0 })}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="custom-validity" className="text-xs">Validity (months)</Label>
-                            <Input id="custom-validity" type="number" min={1}
-                              value={custom.validityMonths}
-                              onChange={(e) => setCustom({ ...custom, validityMonths: parseInt(e.target.value) || 0 })}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {mode === 'monthly' && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="custom-duration" className="text-xs">Duration (months)</Label>
-                          <Input id="custom-duration" type="number" min={1}
-                            value={custom.durationMonths}
-                            onChange={(e) => setCustom({ ...custom, durationMonths: parseInt(e.target.value) || 0 })}
-                          />
-                        </div>
-                      )}
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="custom-price" className="text-xs">
-                          Price (₹, {gstExempt ? 'GST exempt' : 'GST 5% incl.'})
-                        </Label>
-                        <Input id="custom-price" type="number" min={0}
-                          value={custom.price}
-                          onChange={(e) => setCustom({ ...custom, price: parseFloat(e.target.value) || 0 })}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Schedule + tax controls */}
-              <Card className="rounded-2xl border-0 shadow-sm">
-                <CardContent className="p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pt-start-date" className="text-xs">Start date</Label>
-                      <Input
-                        id="pt-start-date"
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Ends on</Label>
-                      <div className="h-10 flex items-center rounded-md border border-input px-3 text-sm text-muted-foreground">
-                        {prettyDate(expiryPreview)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span>
-                      {trainerName ? `${trainerName} ` : 'The assigned trainer '}
-                      can mark PT attendance from {prettyDate(startDate)} onwards
-                      {expiryPreview ? ` until ${prettyDate(expiryPreview)}` : ''}.
-                    </span>
-                  </div>
-
-                  {canEditTax && (
-                    <>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <Label htmlFor="pt-gst-exempt" className="text-sm">GST exempt sale</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Off = GST 5% inclusive (standard). On = 0% on the invoice.
-                          </p>
-                        </div>
-                        <Switch
-                          id="pt-gst-exempt"
-                          checked={gstExempt}
-                          onCheckedChange={setGstExempt}
-                          aria-label="Toggle GST exempt sale"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="pt-charge" className="text-xs">
-                          Amount to charge (₹) — leave blank for list price
-                        </Label>
-                        <Input
-                          id="pt-charge"
-                          type="number"
-                          min={0}
-                          placeholder={listPrice ? String(listPrice) : '0'}
-                          value={chargeOverride}
-                          onChange={(e) => setChargeOverride(e.target.value)}
-                        />
-                        {discount > 0 && (
-                          <p className="text-xs text-warning">
-                            Discount applied: {formatINR(discount)} off list price.
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
             </>
           )}
         </div>
 
-        <div className="border-t bg-card/95 backdrop-blur px-6 py-4 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Payment source</Label>
-              <Select value={paySource} onValueChange={(v) => setPaySource(v as PaySource)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="in_person">In-person (settle now)</SelectItem>
-                  <SelectItem value="payment_link">Payment link</SelectItem>
-                </SelectContent>
-              </Select>
+        {/* ----------------------------- FOOTER ----------------------------- */}
+        <div className="space-y-3 border-t bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-semibold">Total</span>
+              <span className="text-xl font-bold tabular-nums">{formatINR(breakdown.total)}</span>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Method</Label>
-              <Select value={payMethod} onValueChange={(v) => setPayMethod(v as PayMethod)} disabled={paySource === 'payment_link'}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
-                  <SelectItem value="wallet">Wallet</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {paySource === 'in_person' && (
-            <div className="rounded-2xl bg-muted/40 p-3 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Collect now
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  { key: 'full', label: 'Full' },
-                  { key: 'half', label: '50%' },
-                  { key: 'custom', label: 'Custom' },
-                  { key: 'none', label: 'Nothing yet' },
-                ] as { key: CollectMode; label: string }[]).map((opt) => (
-                  <Button
-                    key={opt.key}
-                    type="button"
-                    size="sm"
-                    variant={collectMode === opt.key ? 'default' : 'outline'}
-                    className="rounded-full min-h-[36px] cursor-pointer"
-                    onClick={() => {
-                      setCollectMode(opt.key);
-                      if (opt.key === 'custom' && !collectInput) setCollectInput('');
-                    }}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
-
-              {collectMode === 'custom' && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="pt-collect" className="text-xs">Amount collected (₹)</Label>
-                  <Input
-                    id="pt-collect"
-                    type="number"
-                    min={0}
-                    max={breakdown.total}
-                    placeholder="e.g. 10000"
-                    value={collectInput}
-                    onChange={(e) => setCollectInput(e.target.value)}
-                  />
+            {paySource === 'in_person' && balanceDue > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Collecting now</span>
+                  <span className="tabular-nums">{formatINR(collectedNow)}</span>
                 </div>
-              )}
-
-              {needsReference && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="pt-ref" className="text-xs">{refSpec!.label}</Label>
-                  <Input
-                    id="pt-ref"
-                    value={txnRef}
-                    placeholder={refSpec!.placeholder}
-                    onChange={(e) => setTxnRef(e.target.value)}
-                  />
-                  {referenceMissing && (
-                    <p className="text-xs text-warning">Add the reference so this payment can be reconciled.</p>
-                  )}
+                <div className="flex justify-between text-xs font-medium text-amber-600">
+                  <span>Balance due {prettyDate(dueDate || addDaysISO(7))}</span>
+                  <span className="tabular-nums">{formatINR(balanceDue)}</span>
                 </div>
-              )}
-
-              {needsDueDate && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="pt-due" className="text-xs">Balance due date</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {DUE_PRESETS.map((d) => (
-                      <Button
-                        key={d}
-                        type="button"
-                        size="sm"
-                        variant={dueDate === addDaysISO(d) ? 'default' : 'outline'}
-                        className="rounded-full min-h-[36px] cursor-pointer"
-                        onClick={() => setDueDate(addDaysISO(d))}
-                      >
-                        +{d} days
-                      </Button>
-                    ))}
-                  </div>
-                  <Input
-                    id="pt-due"
-                    type="date"
-                    min={todayISO()}
-                    value={dueDate || addDaysISO(7)}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Subtotal (pre-GST)</span>
-            <span>{formatINR(breakdown.subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{gstExempt ? 'GST (exempt sale)' : 'GST 5% (inclusive)'}</span>
-            <span>{formatINR(breakdown.tax)}</span>
-          </div>
-          {commissionPreview == null ? (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Trainer commission (preview)</span>
-              <span>Select a trainer</span>
-            </div>
-          ) : (
-            <div className="flex justify-between text-sm text-success">
-              <span>
-                {trainerName} · {trainerShare}% of {formatINR(breakdown.subtotal)}
-              </span>
-              <span>{formatINR(commissionPreview)}</span>
-            </div>
-          )}
-
-          <div className="flex justify-between text-base font-bold pt-1 border-t border-dashed border-border">
-            <span>Final Total</span>
-            <span>{formatINR(breakdown.total)}</span>
-          </div>
-          {paySource === 'in_person' && balanceDue > 0 && (
-            <>
-              <div className="flex justify-between text-sm font-medium text-slate-700 dark:text-slate-200">
-                <span>Collecting now</span>
-                <span>{formatINR(collectedNow)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-semibold text-warning">
-                <span>Balance due {dueDate || addDaysISO(7)}</span>
-                <span>{formatINR(balanceDue)}</span>
-              </div>
-            </>
-          )}
-          <Button
-            className="w-full mt-2"
-            size="lg"
-            disabled={!canCharge || referenceMissing}
-            onClick={() => purchase.mutate()}
-          >
-            {purchase.isPending ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing…</>
-            ) : awaitingPayment ? (
-              <>Waiting for payment…</>
-            ) : paySource === 'in_person' && balanceDue > 0 ? (
-              <>Collect {formatINR(collectedNow)} &amp; Assign</>
-            ) : (
-              <>Charge &amp; Assign · {formatINR(breakdown.total)}</>
+              </>
             )}
-          </Button>
+          </div>
 
+          {currentBlocker && (
+            <p className="text-center text-xs text-muted-foreground">{currentBlocker}</p>
+          )}
+
+          <div className="flex gap-2">
+            {step > 1 && (
+              <Button
+                variant="outline"
+                className="min-h-[44px] flex-1 rounded-xl"
+                onClick={goBack}
+                disabled={purchase.isPending}
+              >
+                <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
+              </Button>
+            )}
+            {step < 3 ? (
+              <Button
+                className="min-h-[44px] flex-[2] rounded-xl"
+                onClick={goNext}
+                disabled={!!currentBlocker}
+              >
+                Next <ArrowRight className="ml-1.5 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                className="min-h-[44px] flex-[2] rounded-xl"
+                disabled={!canCharge}
+                onClick={() => purchase.mutate()}
+              >
+                {purchase.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing…</>
+                ) : awaitingPayment ? (
+                  <>Waiting for payment…</>
+                ) : paySource === 'payment_link' ? (
+                  <>Create &amp; send link · {formatINR(breakdown.total)}</>
+                ) : balanceDue > 0 ? (
+                  <>Collect {formatINR(collectedNow)} &amp; assign</>
+                ) : (
+                  <>Charge &amp; assign · {formatINR(breakdown.total)}</>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
