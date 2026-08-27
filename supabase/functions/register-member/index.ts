@@ -460,7 +460,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // Optional branch/campaign-specific terms shown on /register — printed on the
   // contract and persisted so staff reprints match exactly.
   const customTerms = body.custom_terms ? String(body.custom_terms).slice(0, 4000) : null;
-  const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : TERMS_VERSION;
+  const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : AGREEMENT_VERSION;
   if (!consents.dpdp || !consents.whatsapp || !consents.waiver) {
     return json(400, { error: "required_consents_missing" });
   }
@@ -577,7 +577,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   const signedAt = new Date().toISOString();
 
   const sigPath = `${member.id}/signature.png`;
-  const pdfPath = `${member.id}/onboarding-waiver.pdf`;
+  const pdfPath = `${member.id}/membership-agreement.pdf`;
 
   const { error: sigUpErr } = await admin.storage
     .from("member-onboarding")
