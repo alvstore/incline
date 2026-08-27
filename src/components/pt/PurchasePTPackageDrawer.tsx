@@ -406,7 +406,11 @@ export function PurchasePTPackageDrawer({
         if (invoiceId) window.open(`/member/pay?invoice=${invoiceId}`, '_blank');
         return;
       }
-      toast.success('PT package activated');
+      toast.success(
+        balanceDue > 0
+          ? `PT package activated · ₹${balanceDue.toLocaleString('en-IN')} due by ${dueDate || addDaysISO(7)}`
+          : 'PT package activated',
+      );
       onOpenChange(false);
     },
 
