@@ -309,6 +309,11 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
     // and store the storage path in media_url + metadata in media_meta.
     const mediaResolved = await resolveInboundMedia(message, integration);
 
+    // v7.0.0 — Provenance: Meta gives us `message.context.id` whenever the user
+    // used WhatsApp's native "reply" on one of our messages. That is the single
+    // strongest correlation signal we will ever get — persist it verbatim.
+    const replyToMessageId: string | null = message?.context?.id ?? null;
+
     const msgPayload = {
       branch_id: branchId,
       phone_number: remotePhone,
@@ -320,7 +325,10 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
       direction: direction,
       status: direction === "inbound" ? "received" : "sent",
       whatsapp_message_id: message.id,
+      source_type: direction === "inbound" ? "inbound" : undefined,
+      reply_to_message_id: replyToMessageId,
     };
+
 
     const { data, error } = await supabase.from("whatsapp_messages").insert(msgPayload).select("id").single();
     if (error) {
