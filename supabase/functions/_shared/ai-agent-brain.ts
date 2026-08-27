@@ -1096,7 +1096,13 @@ export async function runUnifiedAgent(
         : "WhatsApp";
 
   const dynamicSegments: string[] = [];
+  // v4.6.0 — resolved conversation context goes FIRST: it decides how every
+  // other block should be interpreted (campaign reply vs cold lead vs support).
+  if (ctx.conversationContext) {
+    dynamicSegments.push(renderConversationContextBlock(ctx.conversationContext));
+  }
   if (memberCtx.contextPrompt) dynamicSegments.push(memberCtx.contextPrompt);
+
   if (summaryBlock) dynamicSegments.push(summaryBlock.trim());
   if (alreadyCaptured) dynamicSegments.push(alreadyCaptured.trim());
   if (memoryBlock) dynamicSegments.push(memoryBlock.trim());
