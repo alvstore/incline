@@ -211,7 +211,10 @@ export interface ResolveInput {
   /** Meta `message.context.id` — the provider id the user replied to. */
   replyToMessageId?: string | null;
   platform?: "whatsapp" | "instagram" | "messenger";
+  /** When false, the low-confidence recent-outbound fallback is disabled. */
+  allowRecencyFallback?: boolean;
 }
+
 
 export async function resolveConversationContext(
   supabase: SupabaseClient,
