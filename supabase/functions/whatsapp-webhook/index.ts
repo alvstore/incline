@@ -635,9 +635,12 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     await persistThreadContext(supabase, branchId, phoneNumber, conversationContext);
   } catch (ctxErr) {
     // Context resolution must NEVER block a reply — degrade to the old behaviour.
-    console.warn("[whatsapp-webhook] context resolution failed (continuing):", ctxErr);
+    if (!(ctxErr instanceof SkipContextResolution)) {
+      console.warn("[whatsapp-webhook] context resolution failed (continuing):", ctxErr);
+    }
     conversationContext = null;
   }
+
 
   try {
     await supabase.rpc("log_error_event", {
