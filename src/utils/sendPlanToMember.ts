@@ -224,7 +224,7 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
           <p>Hi ${input.member.full_name},</p>
           <p>Your ${input.plan.trainer_name ? `trainer <b>${input.plan.trainer_name}</b>` : 'trainer'} has assigned you a new <b>${input.plan.type}</b> plan: <b>${input.plan.name}</b>.</p>
           ${input.plan.valid_until ? `<p>Valid until <b>${input.plan.valid_until}</b>.</p>` : ''}
-           <p><a href="${pdfUrl}">Open or download your full PDF plan</a>.</p>
+          <p>The full plan is attached as a PDF. You can also <a href="${pdfUrl}">open it online</a>.</p>
           <p>— Team Incline</p>`;
         const result = await dispatchCommunication({
           branch_id: input.branchId,
@@ -235,6 +235,7 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
           payload: { subject, body: html, use_branded_template: true },
           dedupe_key: `plan:${input.member.id}:${input.plan.type}:${input.plan.name}:email`,
           force: true,
+          attachment: { url: pdfUrl, filename, content_type: 'application/pdf', kind: 'document' },
         });
         if (result.status === 'failed' || result.status === 'suppressed') {
           channels.email = { sent: false, error: result.reason || result.status };

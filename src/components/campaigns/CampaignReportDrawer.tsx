@@ -88,10 +88,10 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
   const totals = useMemo(() => {
     const t = { total: rows.length, sent: 0, failed: 0, queued: 0, read: 0 };
     for (const r of rows) {
-      if (r.status === 'sent') t.sent++;
+      if (['sent', 'submitted', 'delivered', 'read'].includes(r.status)) t.sent++;
       else if (r.status === 'failed') t.failed++;
       else if (r.status === 'queued') t.queued++;
-      if (r.read_at) t.read++;
+      if (r.read_at || r.status === 'read') t.read++;
     }
     return t;
   }, [rows]);
@@ -154,7 +154,8 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
             onChange={(e) => setFilter(e.target.value)}
           >
             <option value="all">All ({totals.total})</option>
-            <option value="sent">Delivered</option>
+            <option value="submitted">Sent</option>
+            <option value="delivered">Delivered</option>
             <option value="failed">Failed</option>
             <option value="queued">Queued</option>
           </select>
