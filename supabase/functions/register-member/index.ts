@@ -12,7 +12,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { phoneVariants, normalizePhone } from "../_shared/phone.ts";
-import { FACILITY_TERMS, TERMS_VERSION } from "../_shared/terms.ts";
+import {
+  AGREEMENT_PARTS,
+  AGREEMENT_ACKNOWLEDGEMENTS,
+  AGREEMENT_TITLE,
+  AGREEMENT_VERSION,
+  FINAL_DECLARATION,
+} from "../_shared/agreement.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
