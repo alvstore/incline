@@ -24,7 +24,15 @@ import inclineLogo from "@/assets/incline-logo.png";
 import { cn } from "@/lib/utils";
 
 import SEO from "@/components/seo/SEO";
-import { FACILITY_TERMS, TERMS_VERSION } from "@/lib/registration/terms";
+import {
+  AGREEMENT_PARTS,
+  AGREEMENT_ACKNOWLEDGEMENTS,
+  AGREEMENT_VERSION,
+  REQUIRED_ACKNOWLEDGEMENT_KEYS,
+} from "@/lib/registration/agreement";
+const AGREEMENT_CLAUSES = AGREEMENT_PARTS.flatMap((p) =>
+  p.clauses.map((c) => ({ ...c, part: p.id })),
+);
 import {
   useInitialRegistrationDraft,
   useRegistrationDraftAutosave,
@@ -207,7 +215,7 @@ export default function PublicRegistration() {
             registration: details,
             par_q: parqMap,
             consents,
-            terms_version: TERMS_VERSION,
+            terms_version: AGREEMENT_VERSION,
             signature_data_url: signatureUrl,
           },
         });
@@ -698,7 +706,7 @@ export default function PublicRegistration() {
                     Incline — Facility Terms &amp; Conditions
                   </p>
                   <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
-                    v{TERMS_VERSION}
+                    v{AGREEMENT_VERSION}
                   </span>
                 </div>
                 <div
@@ -713,7 +721,7 @@ export default function PublicRegistration() {
                     risks, confirm my PAR-Q answers are accurate, and will seek medical clearance if any answer was
                     &ldquo;Yes&rdquo;.
                   </p>
-                  {FACILITY_TERMS.map((t, i) => (
+                  {AGREEMENT_CLAUSES.map((t, i) => (
                     <div key={t.title}>
                       <p className="font-semibold text-primary-foreground/90">
                         {i + 1}. {t.title}
@@ -724,7 +732,7 @@ export default function PublicRegistration() {
                 </div>
                 {!termsRead && (
                   <p className="border-t border-primary-foreground/10 px-4 py-2 text-[11px] text-primary-foreground/50">
-                    Scroll to the end to read all {FACILITY_TERMS.length} clauses.
+                    Scroll to the end to read all {AGREEMENT_CLAUSES.length} clauses.
                   </p>
                 )}
               </div>
