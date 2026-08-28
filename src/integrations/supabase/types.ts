@@ -15275,6 +15275,43 @@ export type Database = {
         Args: { p_waitlist_id: string }
         Returns: Json
       }
+      list_members_page: {
+        Args: {
+          p_branch_id?: string
+          p_dir?: string
+          p_joined_from?: string
+          p_joined_to?: string
+          p_limit?: number
+          p_offset?: number
+          p_plan_id?: string
+          p_search?: string
+          p_sort?: string
+          p_statuses?: string[]
+        }
+        Returns: {
+          assigned_trainer_id: string
+          avatar_url: string
+          branch_id: string
+          branch_name: string
+          days_left: number
+          derived_status: string
+          dues: number
+          email: string
+          end_date: string
+          full_name: string
+          id: string
+          joined_at: string
+          lead_id: string
+          member_code: string
+          membership_id: string
+          phone: string
+          plan_id: string
+          plan_name: string
+          start_date: string
+          total_count: number
+          user_id: string
+        }[]
+      }
       log_error_event: {
         Args: {
           p_branch_id?: string
