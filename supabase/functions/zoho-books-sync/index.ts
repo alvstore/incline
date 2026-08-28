@@ -1,0 +1,317 @@
+// zoho-books-sync v1.0.0
+// Pushes GST invoices (and their settled payments) from Incline into Zoho Books
+// through the Lovable connector gateway. Idempotent: every entity pushed is
+// recorded in public.zoho_sync_log and never sent twice.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const GATEWAY_URL = "https://connector-gateway.lovable.dev/zoho_books";
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const ZOHO_BOOKS_API_KEY = Deno.env.get("ZOHO_BOOKS_API_KEY");
+
+const PLACE_OF_SUPPLY = "RJ";
+
+type Json = Record<string, unknown>;
+
+async function zoho(
+  method: string,
+  path: string,
+  opts: { query?: Record<string, string>; body?: Json } = {},
+): Promise<Json> {
+  if (!LOVABLE_API_KEY || !ZOHO_BOOKS_API_KEY) {
+    throw new Error("Zoho Books connector is not configured");
+  }
+  const qs = opts.query ? `?${new URLSearchParams(opts.query).toString()}` : "";
+  const res = await fetch(`${GATEWAY_URL}${path}${qs}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "X-Connection-Api-Key": ZOHO_BOOKS_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const text = await res.text();
+  let parsed: Json = {};
+  try { parsed = JSON.parse(text); } catch { /* non-json */ }
+  if (!res.ok) {
+    throw new Error(`[${res.status}] ${text.slice(0, 600)}`);
+  }
+  if (typeof parsed.code === "number" && parsed.code !== 0) {
+    throw new Error(`[zoho ${parsed.code}] ${String(parsed.message ?? text).slice(0, 600)}`);
+  }
+  return parsed;
+}
+
+const PAYMENT_MODE: Record<string, string> = {
+  cash: "cash",
+  card: "creditcard",
+  upi: "banktransfer",
+  bank_transfer: "banktransfer",
+  wallet: "other",
+  cheque: "check",
+  other: "other",
+};
+
+function istDate(iso: string | null): string {
+  const d = iso ? new Date(iso) : new Date();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  try {
+    // ---- authz: owner/admin only -------------------------------------------
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData } = await admin.auth.getUser(token);
+    const uid = userData?.user?.id;
+    if (!uid) {
+      return new Response(JSON.stringify({ success: false, error: "Not authenticated" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: roles } = await admin
+      .from("user_roles").select("role").eq("user_id", uid);
+    const allowed = (roles ?? []).some((r) => r.role === "owner" || r.role === "admin");
+    if (!allowed) {
+      return new Response(JSON.stringify({ success: false, error: "Owner or admin access required" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    const limit = Math.min(Number(body.limit) || 25, 50);
+    const dryRun = Boolean(body.dryRun);
+
+    // ---- org + tax lookup ---------------------------------------------------
+    const orgRes = await zoho("GET", "/organizations");
+    const orgs = (orgRes.organizations as Json[]) ?? [];
+    const orgId = String(orgs[0]?.organization_id ?? "");
+    if (!orgId) throw new Error("No Zoho Books organization available");
+    const org = { organization_id: orgId };
+
+    const taxRes = await zoho("GET", "/settings/taxes", { query: org });
+    const taxes = ((taxRes.taxes as Json[]) ?? []).filter(
+      (t) => t.tax_specification === "intra" || t.tax_type === "tax_group",
+    );
+    const taxIdForRate = (rate: number): string | null => {
+      const match = taxes.find((t) => Number(t.tax_percentage) === Number(rate));
+      return match ? String(match.tax_id) : null;
+    };
+
+    // ---- candidate invoices -------------------------------------------------
+    const { data: synced } = await admin
+      .from("zoho_sync_log").select("entity_id, zoho_id, entity_type, status")
+      .in("status", ["synced"]);
+    const syncedInvoices = new Set(
+      (synced ?? []).filter((r) => r.entity_type === "invoice").map((r) => r.entity_id),
+    );
+    const syncedPayments = new Set(
+      (synced ?? []).filter((r) => r.entity_type === "payment").map((r) => r.entity_id),
+    );
+    const contactMap = new Map(
+      (synced ?? []).filter((r) => r.entity_type === "contact").map((r) => [r.entity_id, r.zoho_id!]),
+    );
+    const zohoInvoiceIdByLocal = new Map(
+      (synced ?? []).filter((r) => r.entity_type === "invoice").map((r) => [r.entity_id, r.zoho_id!]),
+    );
+
+    const { data: invoices, error: invErr } = await admin
+      .from("invoices")
+      .select("id, invoice_number, subtotal, tax_amount, total_amount, gst_rate, customer_gstin, customer_name, customer_email, customer_phone, member_id, due_date, notes, created_at, status")
+      .eq("is_gst_invoice", true)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: true });
+    if (invErr) throw invErr;
+
+    const pending = (invoices ?? []).filter((i) => !syncedInvoices.has(i.id));
+
+    if (dryRun) {
+      return new Response(JSON.stringify({
+        success: true, dryRun: true, organization: orgs[0]?.name,
+        gst_invoices: invoices?.length ?? 0, pending: pending.length,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const batch = pending.slice(0, limit);
+    const result = { invoices_synced: 0, invoices_failed: 0, payments_synced: 0, payments_failed: 0, errors: [] as string[] };
+
+    for (const inv of batch) {
+      try {
+        // --- customer -------------------------------------------------------
+        let member: Json | null = null;
+        if (inv.member_id) {
+          const { data } = await admin
+            .from("members").select("id, full_name, email, phone").eq("id", inv.member_id).maybeSingle();
+          member = data as Json | null;
+        }
+        const contactKey = (inv.member_id ?? inv.id) as string;
+        let customerId = contactMap.get(contactKey);
+
+        if (!customerId) {
+          const name = String(inv.customer_name || member?.full_name || "Walk-in Customer").trim();
+          const email = (inv.customer_email || member?.email || null) as string | null;
+          const phone = (inv.customer_phone || member?.phone || null) as string | null;
+          const payload: Json = {
+            contact_name: `${name}${inv.member_id ? "" : ` (${inv.invoice_number})`}`,
+            contact_type: "customer",
+            customer_sub_type: "individual",
+            gst_treatment: inv.customer_gstin ? "business_gst" : "consumer",
+            place_of_contact: PLACE_OF_SUPPLY,
+            ...(inv.customer_gstin ? { gst_no: inv.customer_gstin } : {}),
+            contact_persons: [{
+              first_name: name.split(" ")[0],
+              last_name: name.split(" ").slice(1).join(" ") || undefined,
+              email: email || undefined,
+              phone: phone || undefined,
+              is_primary_contact: true,
+            }],
+          };
+          try {
+            const created = await zoho("POST", "/contacts", { query: org, body: payload });
+            customerId = String((created.contact as Json)?.contact_id);
+          } catch (e) {
+            // duplicate name -> look it up instead
+            const found = await zoho("GET", "/contacts", {
+              query: { ...org, contact_name: String(payload.contact_name) },
+            });
+            const hit = ((found.contacts as Json[]) ?? [])[0];
+            if (!hit) throw e;
+            customerId = String(hit.contact_id);
+          }
+          contactMap.set(contactKey, customerId);
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "contact", entity_id: contactKey, zoho_id: customerId,
+            zoho_org_id: orgId, status: "synced", synced_at: new Date().toISOString(), error: null,
+          }, { onConflict: "entity_type,entity_id" });
+        }
+
+        // --- invoice ---------------------------------------------------------
+        const rate = Number(inv.gst_rate ?? 0);
+        const taxId = taxIdForRate(rate);
+        if (!taxId) throw new Error(`No Zoho tax configured for GST ${rate}%`);
+
+        const { data: items } = await admin
+          .from("invoice_items").select("description, hsn_code").eq("invoice_id", inv.id);
+        const description = (items ?? []).map((i) => i.description).filter(Boolean).join(" · ")
+          || "Gym services";
+        const hsn = (items ?? []).find((i) => i.hsn_code)?.hsn_code ?? undefined;
+
+        const invoicePayload: Json = {
+          customer_id: customerId,
+          invoice_number: inv.invoice_number,
+          reference_number: inv.invoice_number,
+          date: istDate(inv.created_at),
+          ...(inv.due_date ? { due_date: inv.due_date } : {}),
+          place_of_supply: PLACE_OF_SUPPLY,
+          gst_treatment: inv.customer_gstin ? "business_gst" : "consumer",
+          ...(inv.customer_gstin ? { gst_no: inv.customer_gstin } : {}),
+          notes: inv.notes || undefined,
+          line_items: [{
+            name: description.slice(0, 100),
+            description: description.slice(0, 2000),
+            rate: Number(inv.subtotal),
+            quantity: 1,
+            tax_id: taxId,
+            ...(hsn ? { hsn_or_sac: hsn } : {}),
+          }],
+        };
+
+        const createdInv = await zoho("POST", "/invoices", {
+          query: { ...org, ignore_auto_number_generation: "true" },
+          body: invoicePayload,
+        });
+        const zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
+        zohoInvoiceIdByLocal.set(inv.id, zohoInvoiceId);
+
+        await admin.from("zoho_sync_log").upsert({
+          entity_type: "invoice", entity_id: inv.id, zoho_id: zohoInvoiceId,
+          zoho_org_id: orgId, status: "synced", error: null,
+          synced_at: new Date().toISOString(),
+        }, { onConflict: "entity_type,entity_id" });
+        result.invoices_synced++;
+
+        // --- payments ---------------------------------------------------------
+        const { data: payments } = await admin
+          .from("payments")
+          .select("id, amount, payment_method, payment_date, transaction_id, notes, status")
+          .eq("invoice_id", inv.id)
+          .eq("status", "completed")
+          .order("payment_date", { ascending: true });
+
+        for (const p of payments ?? []) {
+          if (syncedPayments.has(p.id) || Number(p.amount) <= 0) continue;
+          try {
+            const created = await zoho("POST", "/customerpayments", {
+              query: org,
+              body: {
+                customer_id: customerId,
+                payment_mode: PAYMENT_MODE[p.payment_method as string] ?? "other",
+                amount: Number(p.amount),
+                date: istDate(p.payment_date),
+                reference_number: p.transaction_id || undefined,
+                description: p.notes || undefined,
+                invoices: [{ invoice_id: zohoInvoiceId, amount_applied: Number(p.amount) }],
+              },
+            });
+            await admin.from("zoho_sync_log").upsert({
+              entity_type: "payment", entity_id: p.id,
+              zoho_id: String((created.payment as Json)?.payment_id ?? ""),
+              zoho_org_id: orgId, status: "synced", error: null,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: "entity_type,entity_id" });
+            result.payments_synced++;
+          } catch (pe) {
+            result.payments_failed++;
+            const msg = pe instanceof Error ? pe.message : String(pe);
+            result.errors.push(`payment ${p.id}: ${msg}`);
+            await admin.from("zoho_sync_log").upsert({
+              entity_type: "payment", entity_id: p.id, zoho_org_id: orgId,
+              status: "failed", error: msg,
+            }, { onConflict: "entity_type,entity_id" });
+          }
+        }
+      } catch (e) {
+        result.invoices_failed++;
+        const msg = e instanceof Error ? e.message : String(e);
+        result.errors.push(`${inv.invoice_number}: ${msg}`);
+        await admin.from("zoho_sync_log").upsert({
+          entity_type: "invoice", entity_id: inv.id, zoho_org_id: orgId,
+          status: "failed", error: msg,
+        }, { onConflict: "entity_type,entity_id" });
+      }
+    }
+
+    const remaining = Math.max(pending.length - batch.length, 0);
+    return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, remaining, ...result }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    try {
+      await admin.rpc("log_error_event", {
+        p_source: "zoho-books-sync", p_severity: "error", p_message: msg,
+      } as never);
+    } catch { /* best effort */ }
+    return new Response(JSON.stringify({ success: false, error: msg }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
