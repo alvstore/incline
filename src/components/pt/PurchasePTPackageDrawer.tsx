@@ -1139,8 +1139,11 @@ export function PurchasePTPackageDrawer({
                   <>Waiting for payment…</>
                 ) : paySource === 'payment_link' ? (
                   <>Create &amp; send link · {formatINR(breakdown.total)}</>
+                ) : collectedNow === 0 ? (
+                  <>Assign now · {formatINR(breakdown.total)} unpaid</>
                 ) : balanceDue > 0 ? (
                   <>Collect {formatINR(collectedNow)} &amp; assign</>
+
                 ) : (
                   <>Charge &amp; assign · {formatINR(breakdown.total)}</>
                 )}
