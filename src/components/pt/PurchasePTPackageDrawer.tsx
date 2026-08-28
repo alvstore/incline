@@ -450,9 +450,10 @@ export function PurchasePTPackageDrawer({
       }
       toast.success(
         balanceDue > 0
-          ? `PT package activated · ₹${balanceDue.toLocaleString('en-IN')} due by ${dueDate || addDaysISO(7)}`
+          ? `PT package activated · ₹${balanceDue.toLocaleString('en-IN')} ${collectedNow > 0 ? 'balance' : 'unpaid'} due by ${dueDate || addDaysISO(7)}`
           : 'PT package activated',
       );
+
       onOpenChange(false);
     },
 
