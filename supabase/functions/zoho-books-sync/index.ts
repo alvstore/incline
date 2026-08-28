@@ -173,8 +173,6 @@ Deno.serve(async (req) => {
           }
         }
         const gstin = inv.customer_gstin || member?.gstin || null;
-
-        }
         const contactKey = (inv.member_id ?? inv.id) as string;
         let customerId = contactMap.get(contactKey);
 
@@ -186,9 +184,10 @@ Deno.serve(async (req) => {
             contact_name: `${name}${inv.member_id ? "" : ` (${inv.invoice_number})`}`,
             contact_type: "customer",
             customer_sub_type: "individual",
-            gst_treatment: inv.customer_gstin ? "business_gst" : "consumer",
+            gst_treatment: gstin ? "business_gst" : "consumer",
             place_of_contact: PLACE_OF_SUPPLY,
-            ...(inv.customer_gstin ? { gst_no: inv.customer_gstin } : {}),
+            ...(gstin ? { gst_no: gstin } : {}),
+
             contact_persons: [{
               first_name: name.split(" ")[0],
               last_name: name.split(" ").slice(1).join(" ") || undefined,
