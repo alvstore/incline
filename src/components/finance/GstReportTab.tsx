@@ -199,7 +199,7 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
               </TableHeader>
               <TableBody>
                 {hsnBuckets.map(b => (
-                  <TableRow key={b.hsn}>
+                  <TableRow key={`${b.hsn}-${b.rate}`}>
                     <TableCell className="font-mono text-xs">{b.hsn}</TableCell>
                     <TableCell className="max-w-[260px] truncate text-sm text-muted-foreground">{b.description}</TableCell>
                     <TableCell>{b.uqc}</TableCell>
@@ -299,7 +299,7 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
               <BookOpen className="h-4 w-4 text-primary" />
               Documents Issued
             </CardTitle>
-            <CardDescription>GSTR-1 Table 13 — separate series for tax invoices (INV) and bills of supply (BOS)</CardDescription>
+            <CardDescription>GSTR-1 Table 13 requires every document series issued in the period — tax invoices (INV) and bills of supply (BOS) for exempt/nil-rated sales. BOS documents carry no tax and are excluded from all tax buckets.</CardDescription>
           </div>
           <Button variant="outline" size="sm" disabled={!documentsIssued.length} onClick={() => exportDocumentsIssued(documentsIssued)}>
             <Download className="mr-2 h-4 w-4" /> Download CSV
