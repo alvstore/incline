@@ -1,4 +1,4 @@
-// zoho-books-sync v1.0.0
+// zoho-books-sync v1.1.0
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice.
@@ -48,6 +48,13 @@ async function zoho(
     throw new Error(`[zoho ${parsed.code}] ${String(parsed.message ?? text).slice(0, 600)}`);
   }
   return parsed;
+}
+
+/** Zoho rejects < and > anywhere in a payload string. */
+function clean(v: string | null | undefined): string | undefined {
+  if (v === null || v === undefined) return undefined;
+  const out = String(v).replace(/[<>]/g, " ").replace(/\s+/g, " ").trim();
+  return out.length ? out : undefined;
 }
 
 const PAYMENT_MODE: Record<string, string> = {
@@ -177,7 +184,7 @@ Deno.serve(async (req) => {
         let customerId = contactMap.get(contactKey);
 
         if (!customerId) {
-          const name = String(inv.customer_name || member?.full_name || "Walk-in Customer").trim();
+          const name = clean(inv.customer_name || member?.full_name) || "Walk-in Customer";
           const email = (inv.customer_email || member?.email || null) as string | null;
           const phone = (inv.customer_phone || member?.phone || null) as string | null;
           const payload: Json = {
@@ -191,8 +198,8 @@ Deno.serve(async (req) => {
             contact_persons: [{
               first_name: name.split(" ")[0],
               last_name: name.split(" ").slice(1).join(" ") || undefined,
-              email: email || undefined,
-              phone: phone || undefined,
+              email: clean(email),
+              phone: clean(phone),
               is_primary_contact: true,
             }],
           };
@@ -245,10 +252,10 @@ Deno.serve(async (req) => {
           ...(adjustment !== 0
             ? { adjustment, adjustment_description: "Rounding" }
             : {}),
-          notes: inv.notes || undefined,
+          notes: clean(inv.notes),
           line_items: [{
-            name: description.slice(0, 100),
-            description: description.slice(0, 2000),
+            name: (clean(description) || "Gym services").slice(0, 100),
+            description: (clean(description) || "Gym services").slice(0, 2000),
             rate: subtotal,
             quantity: 1,
             tax_id: taxId,
@@ -256,11 +263,25 @@ Deno.serve(async (req) => {
           }],
         };
 
-        const createdInv = await zoho("POST", "/invoices", {
-          query: { ...org, ignore_auto_number_generation: "true" },
-          body: invoicePayload,
-        });
-        const zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
+        let zohoInvoiceId: string;
+        try {
+          const createdInv = await zoho("POST", "/invoices", {
+            query: { ...org, ignore_auto_number_generation: "true" },
+            body: invoicePayload,
+          });
+          zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
+        } catch (ce) {
+          // Zoho code 1001 = this invoice number already exists (a prior run
+          // created it but the log write failed). Adopt it instead of failing.
+          const msg = ce instanceof Error ? ce.message : String(ce);
+          if (!msg.includes("already exists")) throw ce;
+          const found = await zoho("GET", "/invoices", {
+            query: { ...org, invoice_number: String(inv.invoice_number) },
+          });
+          const hit = ((found.invoices as Json[]) ?? [])[0];
+          if (!hit) throw ce;
+          zohoInvoiceId = String(hit.invoice_id);
+        }
         zohoInvoiceIdByLocal.set(inv.id, zohoInvoiceId);
 
         // Move out of draft so it appears in receivables / GST reports.
@@ -294,8 +315,8 @@ Deno.serve(async (req) => {
                 payment_mode: PAYMENT_MODE[p.payment_method as string] ?? "other",
                 amount: Number(p.amount),
                 date: istDate(p.payment_date),
-                reference_number: p.transaction_id || undefined,
-                description: p.notes || undefined,
+                reference_number: clean(p.transaction_id),
+                description: clean(p.notes),
                 invoices: [{ invoice_id: zohoInvoiceId, amount_applied: Number(p.amount) }],
               },
             });
