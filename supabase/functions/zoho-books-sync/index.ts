@@ -156,11 +156,24 @@ Deno.serve(async (req) => {
     for (const inv of batch) {
       try {
         // --- customer -------------------------------------------------------
-        let member: Json | null = null;
+        let member: { full_name?: string; email?: string; phone?: string; gstin?: string } | null = null;
         if (inv.member_id) {
-          const { data } = await admin
-            .from("members").select("id, full_name, email, phone").eq("id", inv.member_id).maybeSingle();
-          member = data as Json | null;
+          const { data: mem } = await admin
+            .from("members").select("id, user_id, gstin").eq("id", inv.member_id).maybeSingle();
+          if (mem) {
+            const { data: prof } = mem.user_id
+              ? await admin.from("profiles").select("full_name, email, phone").eq("id", mem.user_id).maybeSingle()
+              : { data: null };
+            member = {
+              full_name: prof?.full_name ?? undefined,
+              email: prof?.email ?? undefined,
+              phone: prof?.phone ?? undefined,
+              gstin: mem.gstin ?? undefined,
+            };
+          }
+        }
+        const gstin = inv.customer_gstin || member?.gstin || null;
+
         }
         const contactKey = (inv.member_id ?? inv.id) as string;
         let customerId = contactMap.get(contactKey);
