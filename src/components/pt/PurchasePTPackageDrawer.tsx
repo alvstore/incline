@@ -450,9 +450,10 @@ export function PurchasePTPackageDrawer({
       }
       toast.success(
         balanceDue > 0
-          ? `PT package activated · ₹${balanceDue.toLocaleString('en-IN')} due by ${dueDate || addDaysISO(7)}`
+          ? `PT package activated · ₹${balanceDue.toLocaleString('en-IN')} ${collectedNow > 0 ? 'balance' : 'unpaid'} due by ${dueDate || addDaysISO(7)}`
           : 'PT package activated',
       );
+
       onOpenChange(false);
     },
 
@@ -1138,8 +1139,11 @@ export function PurchasePTPackageDrawer({
                   <>Waiting for payment…</>
                 ) : paySource === 'payment_link' ? (
                   <>Create &amp; send link · {formatINR(breakdown.total)}</>
+                ) : collectedNow === 0 ? (
+                  <>Assign now · {formatINR(breakdown.total)} unpaid</>
                 ) : balanceDue > 0 ? (
                   <>Collect {formatINR(collectedNow)} &amp; assign</>
+
                 ) : (
                   <>Charge &amp; assign · {formatINR(breakdown.total)}</>
                 )}
