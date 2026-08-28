@@ -154,31 +154,59 @@ export function useGstReport(branchId: string | undefined, range: Range) {
       });
 
       // ---- HSN buckets (Table 12) — taxable supplies only ----
-      const hsnMap = new Map<string, { hsn: string; description: string; uqc: string; qty: number; taxable: number; cgst: number; sgst: number; igst: number; total: number; rate: number }>();
+      // Buckets are keyed by HSN **and** rate: the same SAC can legitimately be
+      // billed at different rates, and collapsing them printed one wrong rate.
+      const hsnMap = new Map<string, { key: string; hsn: string; description: string; uqc: string; qty: number; taxable: number; cgst: number; sgst: number; igst: number; total: number; rate: number }>();
 
-      const addBucket = (h: HsnEntry, qty: number, taxable: number) => {
-        const tax = (taxable * h.rate) / 100;
-        const existing = hsnMap.get(h.code);
-        const entry = existing || { hsn: h.code, description: h.description, uqc: h.uqc, qty: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0, rate: h.rate };
+      const addBucket = (h: HsnEntry, rate: number, qty: number, taxable: number, interState: boolean) => {
+        const tax = (taxable * rate) / 100;
+        const key = `${h.code}@${rate}`;
+        const entry = hsnMap.get(key) || { key, hsn: h.code, description: h.description, uqc: h.uqc, qty: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0, rate };
         entry.qty += qty;
         entry.taxable += taxable;
-        entry.cgst += tax / 2;
-        entry.sgst += tax / 2;
+        if (interState) entry.igst += tax;
+        else { entry.cgst += tax / 2; entry.sgst += tax / 2; }
         entry.total += taxable + tax;
-        hsnMap.set(h.code, entry);
+        hsnMap.set(key, entry);
       };
 
-      const liveInvoiceIds = new Set(invoices.map((i: any) => i.id));
-      items
-        .filter((it: any) => liveInvoiceIds.has(it.invoice?.id))
-        .forEach((it: any) => {
-          const rate = Number(it.tax_rate) || 0;
-          if (rate <= 0) return; // exempt line items don't belong in Table 12
-          const total = Number(it.total_amount || 0);
-          const taxable = total / (1 + rate / 100);
-          const h = resolveHsn({ itemHsn: it.hsn_code, category: it.reference_type, rateOverride: rate });
-          addBucket(h, Number(it.quantity || 1), taxable);
+      // Group line items by invoice so each invoice's taxable value is allocated
+      // across its items. Item-level tax_rate is unreliable (often 0 or a stale
+      // 18 default), so the invoice's gst_rate is authoritative.
+      const itemsByInvoice = new Map<string, any[]>();
+      items.forEach((it: any) => {
+        const id = it.invoice?.id;
+        if (!id) return;
+        const list = itemsByInvoice.get(id) || [];
+        list.push(it);
+        itemsByInvoice.set(id, list);
+      });
+
+      invoices.forEach((inv: any) => {
+        const rate = Number(inv.gst_rate) || 0;
+        if (!inv.is_gst_invoice || rate <= 0) return; // exempt supplies → Table 8
+        const total = Number(inv.total_amount || 0);
+        const invoiceTaxable = Number(inv.subtotal) || total / (1 + rate / 100);
+        const gstin = inv.customer_gstin || inv.member?.gstin || null;
+        const interState = !!gstin && stateCode(gstin) !== homeStateCode;
+
+        const its = itemsByInvoice.get(inv.id) || [];
+        const weightBase = its.reduce((s, it) => s + Math.abs(Number(it.total_amount || 0)), 0);
+
+        if (!its.length || weightBase <= 0) {
+          const h = resolveHsn({ category: classifyInvoice(inv), source: inv.source, rateOverride: rate });
+          addBucket(h, rate, 1, invoiceTaxable, interState);
+          return;
+        }
+
+        its.forEach((it: any, idx: number) => {
+          const share = idx === its.length - 1
+            ? invoiceTaxable - its.slice(0, -1).reduce((s, x) => s + (invoiceTaxable * Math.abs(Number(x.total_amount || 0))) / weightBase, 0)
+            : (invoiceTaxable * Math.abs(Number(it.total_amount || 0))) / weightBase;
+          const h = resolveHsn({ itemHsn: it.hsn_code, category: it.reference_type || classifyInvoice(inv), rateOverride: rate });
+          addBucket(h, rate, Number(it.quantity || 1), share, interState);
         });
+      });
 
       posSales.forEach((p: any) => {
         const its = Array.isArray(p.items) ? p.items : [];
@@ -186,9 +214,10 @@ export function useGstReport(branchId: string | undefined, range: Range) {
           const total = Number(it.total || it.unit_price * it.quantity || 0);
           const taxable = total / 1.18;
           const h = resolveHsn({ itemHsn: it.hsn_code, source: 'pos' });
-          addBucket(h, Number(it.quantity || 1), taxable);
+          addBucket(h, 18, Number(it.quantity || 1), taxable, false);
         });
       });
+
 
       // ---- Stream totals (taxable + exempt so revenue reconciles) ----
       const emptyBucket = () => ({ count: 0, taxable: 0, tax: 0, total: 0 });
