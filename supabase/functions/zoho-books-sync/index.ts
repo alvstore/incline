@@ -233,8 +233,9 @@ Deno.serve(async (req) => {
           date: istDate(inv.created_at),
           ...(inv.due_date ? { due_date: inv.due_date } : {}),
           place_of_supply: PLACE_OF_SUPPLY,
-          gst_treatment: inv.customer_gstin ? "business_gst" : "consumer",
-          ...(inv.customer_gstin ? { gst_no: inv.customer_gstin } : {}),
+          gst_treatment: gstin ? "business_gst" : "consumer",
+          ...(gstin ? { gst_no: gstin } : {}),
+
           notes: inv.notes || undefined,
           line_items: [{
             name: description.slice(0, 100),
