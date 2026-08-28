@@ -226,6 +226,13 @@ Deno.serve(async (req) => {
           || "Gym services";
         const hsn = (items ?? []).find((i) => i.hsn_code)?.hsn_code ?? undefined;
 
+        // Zoho rounds CGST/SGST halves independently; mirror that and post the
+        // 1-paisa delta as an adjustment so Zoho's total equals our invoice total.
+        const subtotal = Number(inv.subtotal);
+        const halfTax = Math.round((subtotal * rate / 200) * 100) / 100;
+        const zohoTotal = Math.round((subtotal + halfTax * 2) * 100) / 100;
+        const adjustment = Math.round((Number(inv.total_amount) - zohoTotal) * 100) / 100;
+
         const invoicePayload: Json = {
           customer_id: customerId,
           invoice_number: inv.invoice_number,
@@ -235,12 +242,14 @@ Deno.serve(async (req) => {
           place_of_supply: PLACE_OF_SUPPLY,
           gst_treatment: gstin ? "business_gst" : "consumer",
           ...(gstin ? { gst_no: gstin } : {}),
-
+          ...(adjustment !== 0
+            ? { adjustment, adjustment_description: "Rounding" }
+            : {}),
           notes: inv.notes || undefined,
           line_items: [{
             name: description.slice(0, 100),
             description: description.slice(0, 2000),
-            rate: Number(inv.subtotal),
+            rate: subtotal,
             quantity: 1,
             tax_id: taxId,
             ...(hsn ? { hsn_or_sac: hsn } : {}),
@@ -253,6 +262,12 @@ Deno.serve(async (req) => {
         });
         const zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
         zohoInvoiceIdByLocal.set(inv.id, zohoInvoiceId);
+
+        // Move out of draft so it appears in receivables / GST reports.
+        try {
+          await zoho("POST", `/invoices/${zohoInvoiceId}/status/sent`, { query: org });
+        } catch (_e) { /* already sent */ }
+
 
         await admin.from("zoho_sync_log").upsert({
           entity_type: "invoice", entity_id: inv.id, zoho_id: zohoInvoiceId,
