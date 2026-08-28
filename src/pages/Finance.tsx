@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useBranchContext } from '@/contexts/BranchContext';
+import { useAuth } from '@/contexts/AuthContext';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -33,6 +35,8 @@ import { paymentChannelLabel } from '@/lib/payments/paymentDisplay';
 export default function FinancePage() {
   const queryClient = useQueryClient();
   const { selectedBranch, effectiveBranchId, branchFilter } = useBranchContext();
+  const { hasAnyRole } = useAuth();
+
   const [expenseTab, setExpenseTab] = useState<string>('approved');
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>({
