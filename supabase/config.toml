@@ -147,3 +147,6 @@ verify_jwt = false
 
 [functions.sweep-biometric-photos]
 verify_jwt = false
+
+[functions.zoho-books-sync]
+verify_jwt = true

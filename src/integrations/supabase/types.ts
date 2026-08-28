@@ -13773,6 +13773,48 @@ export type Database = {
           },
         ]
       }
+      zoho_sync_log: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          error: string | null
+          id: string
+          payload: Json | null
+          status: string
+          synced_at: string | null
+          updated_at: string
+          zoho_id: string | null
+          zoho_org_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string
+          synced_at?: string | null
+          updated_at?: string
+          zoho_id?: string | null
+          zoho_org_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string
+          synced_at?: string | null
+          updated_at?: string
+          zoho_id?: string | null
+          zoho_org_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       ai_brain_health: {

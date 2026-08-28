@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useBranchContext } from '@/contexts/BranchContext';
+import { useAuth } from '@/contexts/AuthContext';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -24,13 +26,17 @@ import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
 import { GstReportTab } from '@/components/finance/GstReportTab';
+import { ZohoBooksSyncCard } from '@/components/finance/ZohoBooksSyncCard';
 import { SalesReportTab } from '@/components/finance/SalesReportTab';
+
 import { toast } from 'sonner';
 import { paymentChannelLabel } from '@/lib/payments/paymentDisplay';
 
 export default function FinancePage() {
   const queryClient = useQueryClient();
   const { selectedBranch, effectiveBranchId, branchFilter } = useBranchContext();
+  const { hasAnyRole } = useAuth();
+
   const [expenseTab, setExpenseTab] = useState<string>('approved');
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | null>({
@@ -747,9 +753,11 @@ export default function FinancePage() {
               </TabsContent>
 
               {/* GST Report Tab */}
-              <TabsContent value="gst">
+              <TabsContent value="gst" className="space-y-6">
                 <GstReportTab branchId={selectedBranch} range={dateRange} formatCurrency={formatCurrency} />
+                {hasAnyRole(['owner', 'admin']) && <ZohoBooksSyncCard />}
               </TabsContent>
+
 
               {/* Sales Report Tab */}
               <TabsContent value="sales">
