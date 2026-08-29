@@ -96,14 +96,26 @@ export function ZohoBooksSyncCard() {
             </CardDescription>
           </div>
         </div>
-        <Button
-          onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending}
-          className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {syncMutation.isPending ? 'Syncing…' : 'Sync now'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => dedupeMutation.mutate()}
+            disabled={dedupeMutation.isPending || syncMutation.isPending}
+            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {dedupeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            {dedupeMutation.isPending ? 'Checking…' : 'Fix duplicates'}
+          </Button>
+          <Button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending || dedupeMutation.isPending}
+            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {syncMutation.isPending ? 'Syncing…' : 'Sync now'}
+          </Button>
+        </div>
+
       </CardHeader>
       <CardContent className="space-y-4">
         {statsQuery.isLoading ? (
