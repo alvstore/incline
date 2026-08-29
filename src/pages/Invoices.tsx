@@ -198,6 +198,21 @@ export default function InvoicesPage() {
   const isSearching = searchTerm.trim().length > 0;
   const SEARCH_SCAN_LIMIT = 500;
 
+  // Converts a renewal offer (proforma) into a real GST tax invoice on demand
+  const issueTaxInvoice = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const { data, error } = await supabase.rpc('convert_proforma_to_invoice', { _invoice_id: invoiceId });
+      if (error) throw error;
+      return data as { invoice_number?: string };
+    },
+    onSuccess: (res) => {
+      toast.success(`Tax invoice issued${res?.invoice_number ? ` — ${res.invoice_number}` : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-stats'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Could not issue the tax invoice'),
+  });
+
   const { data: invoicesResult, isLoading } = useQuery({
     queryKey: ['invoices', branchFilter, statusFilter, docFilter, rangeKey, isSearching ? 'search' : page],
     queryFn: async () => {
@@ -610,6 +625,12 @@ export default function InvoicesPage() {
                                     <DropdownMenuItem onClick={() => setPaymentInvoice(invoice)}>
                                       <IndianRupee className="mr-2 h-4 w-4" />
                                       Record Payment
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canCorrect && invoice.is_proforma && invoice.status !== 'cancelled' && (
+                                    <DropdownMenuItem onClick={() => issueTaxInvoice.mutate(invoice.id)}>
+                                      <FileCheck className="mr-2 h-4 w-4" />
+                                      Issue Tax Invoice
                                     </DropdownMenuItem>
                                   )}
                                   {canCorrect && invoice.status !== 'cancelled' && balance > 0 && (
