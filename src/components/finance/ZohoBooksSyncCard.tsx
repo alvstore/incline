@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpenCheck, Loader2, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { BookOpenCheck, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 
 interface SyncResponse {
   success: boolean;
@@ -17,6 +17,16 @@ interface SyncResponse {
   invoices_failed?: number;
   payments_synced?: number;
   payments_failed?: number;
+  errors?: string[];
+}
+
+interface DedupeResponse {
+  success: boolean;
+  error?: string;
+  checked?: number;
+  duplicates?: number;
+  deleted?: number;
+  needs_review?: string[];
   errors?: string[];
 }
 
@@ -80,6 +90,31 @@ export function ZohoBooksSyncCard() {
     },
   });
 
+  const dedupeMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('zoho-books-sync', {
+        body: { mode: 'dedupe' },
+      });
+      if (error) throw new Error(error.message);
+      const result = data as DedupeResponse;
+      if (!result?.success) throw new Error(result?.error || 'Duplicate check failed');
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['zoho-sync-stats'] });
+      toast({
+        title: 'Duplicate check complete',
+        description: `${result.checked ?? 0} invoices checked · ${result.duplicates ?? 0} duplicates found · ${result.deleted ?? 0} removed${
+          result.needs_review?.length ? ` · ${result.needs_review.length} need manual review in Zoho` : ''
+        }.`,
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: 'Duplicate check failed', description: e.message, variant: 'destructive' });
+    },
+  });
+
+
   const stats = statsQuery.data;
 
   return (
@@ -96,14 +131,26 @@ export function ZohoBooksSyncCard() {
             </CardDescription>
           </div>
         </div>
-        <Button
-          onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending}
-          className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {syncMutation.isPending ? 'Syncing…' : 'Sync now'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => dedupeMutation.mutate()}
+            disabled={dedupeMutation.isPending || syncMutation.isPending}
+            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {dedupeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            {dedupeMutation.isPending ? 'Checking…' : 'Fix duplicates'}
+          </Button>
+          <Button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending || dedupeMutation.isPending}
+            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {syncMutation.isPending ? 'Syncing…' : 'Sync now'}
+          </Button>
+        </div>
+
       </CardHeader>
       <CardContent className="space-y-4">
         {statsQuery.isLoading ? (

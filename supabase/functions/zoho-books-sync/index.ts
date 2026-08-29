@@ -1,7 +1,12 @@
-// zoho-books-sync v1.2.0 — strict GST-only eligibility (positive rate+tax, INV series, no BOS/exempt)
+// zoho-books-sync v1.4.0 — duplicate-proof push + duplicate cleanup mode.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
-// recorded in public.zoho_sync_log and never sent twice.
+// recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
+// with ignore_auto_number_generation, it happily accepts the SAME invoice number
+// twice, so every create is preceded by a lookup on invoice_number and adopts an
+// existing document instead of creating a twin. POST { mode: "dedupe" } scans the
+// synced numbers and removes orphan copies that our log does not own.
+
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -106,6 +111,8 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const limit = Math.min(Number(body.limit) || 25, 50);
     const dryRun = Boolean(body.dryRun);
+    const mode = String(body.mode ?? "sync");
+
 
     // ---- org + tax lookup ---------------------------------------------------
     const orgRes = await zoho("GET", "/organizations");
@@ -122,6 +129,58 @@ Deno.serve(async (req) => {
       const match = taxes.find((t) => Number(t.tax_percentage) === Number(rate));
       return match ? String(match.tax_id) : null;
     };
+
+    /** Every Zoho invoice carrying this exact invoice number. */
+    const invoicesByNumber = async (number: string): Promise<Json[]> => {
+      const found = await zoho("GET", "/invoices", {
+        query: { ...org, invoice_number: number },
+      });
+      return ((found.invoices as Json[]) ?? []).filter(
+        (i) => String(i.invoice_number) === number,
+      );
+    };
+
+    // ---- duplicate cleanup ---------------------------------------------------
+    // Removes twin documents created before v1.4.0 (concurrent/retried runs).
+    // The copy referenced by zoho_sync_log is kept; extra copies are deleted when
+    // they carry no payment, otherwise reported for manual review.
+    if (mode === "dedupe") {
+      const { data: logRows } = await admin
+        .from("zoho_sync_log").select("entity_id, zoho_id")
+        .eq("entity_type", "invoice").eq("status", "synced");
+      const owned = new Map((logRows ?? []).map((r) => [r.entity_id, String(r.zoho_id)]));
+      const { data: localInvoices } = await admin
+        .from("invoices").select("id, invoice_number")
+        .in("id", [...owned.keys()]);
+
+      const report = { checked: 0, duplicates: 0, deleted: 0, needs_review: [] as string[], errors: [] as string[] };
+      for (const inv of (localInvoices ?? []).slice(0, Math.min(Number(body.limit) || 200, 300))) {
+        report.checked++;
+        try {
+          const copies = await invoicesByNumber(String(inv.invoice_number));
+          if (copies.length < 2) continue;
+          const keep = owned.get(inv.id);
+          for (const copy of copies) {
+            const id = String(copy.invoice_id);
+            if (id === keep) continue;
+            report.duplicates++;
+            const paid = Number(copy.total ?? 0) - Number(copy.balance ?? 0);
+            if (paid > 0) { report.needs_review.push(`${inv.invoice_number} (${id}, ₹${paid} applied)`); continue; }
+            try {
+              await zoho("POST", `/invoices/${id}/status/void`, { query: org });
+            } catch { /* draft/void already */ }
+            await zoho("DELETE", `/invoices/${id}`, { query: org });
+            report.deleted++;
+          }
+        } catch (e) {
+          report.errors.push(`${inv.invoice_number}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      return new Response(JSON.stringify({ success: true, mode: "dedupe", ...report }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
 
     // ---- candidate invoices -------------------------------------------------
     const { data: synced } = await admin
@@ -270,25 +329,30 @@ Deno.serve(async (req) => {
           }],
         };
 
+        // Pre-flight: Zoho accepts duplicate numbers when auto-numbering is
+        // ignored, so never create blindly — adopt an existing document first.
         let zohoInvoiceId: string;
-        try {
-          const createdInv = await zoho("POST", "/invoices", {
-            query: { ...org, ignore_auto_number_generation: "true" },
-            body: invoicePayload,
-          });
-          zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
-        } catch (ce) {
-          // Zoho code 1001 = this invoice number already exists (a prior run
-          // created it but the log write failed). Adopt it instead of failing.
-          const msg = ce instanceof Error ? ce.message : String(ce);
-          if (!msg.includes("already exists")) throw ce;
-          const found = await zoho("GET", "/invoices", {
-            query: { ...org, invoice_number: String(inv.invoice_number) },
-          });
-          const hit = ((found.invoices as Json[]) ?? [])[0];
-          if (!hit) throw ce;
-          zohoInvoiceId = String(hit.invoice_id);
+        const existing = await invoicesByNumber(String(inv.invoice_number));
+        if (existing.length) {
+          zohoInvoiceId = String(existing[0].invoice_id);
+        } else {
+          try {
+            const createdInv = await zoho("POST", "/invoices", {
+              query: { ...org, ignore_auto_number_generation: "true" },
+              body: invoicePayload,
+            });
+            zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
+          } catch (ce) {
+            // Zoho code 1001 = this invoice number already exists (a racing run
+            // created it). Adopt it instead of failing.
+            const msg = ce instanceof Error ? ce.message : String(ce);
+            if (!msg.includes("already exists")) throw ce;
+            const hit = (await invoicesByNumber(String(inv.invoice_number)))[0];
+            if (!hit) throw ce;
+            zohoInvoiceId = String(hit.invoice_id);
+          }
         }
+
         zohoInvoiceIdByLocal.set(inv.id, zohoInvoiceId);
 
         // Move out of draft so it appears in receivables / GST reports.
