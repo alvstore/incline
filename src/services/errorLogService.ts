@@ -42,11 +42,18 @@ async function flushErrors() {
 
 function shouldDrop(msg: string): boolean {
   if (!msg) return true;
-  // Don't log connectivity issues — these are user-side, not app bugs.
+  // Don't log connectivity issues — these are user-side (flaky wifi, tab
+  // suspend/resume, captive portals), never actionable app bugs.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg === 'Load failed') {
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-  }
+  if (
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    msg.includes('Network request failed') ||
+    msg.includes('network error') ||
+    msg.includes('Network error - check your internet connection') ||
+    msg === 'Load failed'
+  ) return true;
+
   // Stale chunk errors trigger an auto-reload via main.tsx — don't double-log.
   if (msg.includes('Failed to fetch dynamically imported module')) return true;
   // Browser extension noise.
