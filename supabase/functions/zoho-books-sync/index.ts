@@ -1,4 +1,4 @@
-// zoho-books-sync v1.1.0
+// zoho-books-sync v1.2.0 — strict GST-only eligibility (positive rate+tax, INV series, no BOS/exempt)
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice.
