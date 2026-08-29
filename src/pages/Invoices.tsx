@@ -51,6 +51,8 @@ export default function InvoicesPage() {
   const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
   const [dueDateInvoice, setDueDateInvoice] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // Renewal offers (proformas) are not statutory invoices — hidden by default
+  const [docFilter, setDocFilter] = useState<'invoices' | 'offers' | 'all'>('invoices');
   const [periodFilter, setPeriodFilter] = useState<string>('this_month');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
@@ -184,6 +186,8 @@ export default function InvoicesPage() {
   const applyFilters = (q: any) => {
     if (branchFilter) q = q.eq('branch_id', branchFilter);
     if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
+    if (docFilter === 'invoices') q = q.eq('is_proforma', false);
+    if (docFilter === 'offers') q = q.eq('is_proforma', true);
     if (range.from) q = q.gte('created_at', range.from.toISOString());
     if (range.to) q = q.lte('created_at', range.to.toISOString());
     return q;
@@ -195,13 +199,13 @@ export default function InvoicesPage() {
   const SEARCH_SCAN_LIMIT = 500;
 
   const { data: invoicesResult, isLoading } = useQuery({
-    queryKey: ['invoices', branchFilter, statusFilter, rangeKey, isSearching ? 'search' : page],
+    queryKey: ['invoices', branchFilter, statusFilter, docFilter, rangeKey, isSearching ? 'search' : page],
     queryFn: async () => {
       const query = applyFilters(
         supabase
           .from('invoices')
           .select(`
-            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
+            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id, is_proforma, document_series,
             members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
             invoice_items(description, reference_type)
           `, { count: 'exact' })
@@ -226,6 +230,7 @@ export default function InvoicesPage() {
       let q = supabase
         .from('invoices')
         .select('id, member_id, status, total_amount, amount_paid, created_at')
+        .eq('is_proforma', false)
         .order('created_at', { ascending: false })
         .limit(5000);
       if (branchFilter) q = q.eq('branch_id', branchFilter);
@@ -452,6 +457,17 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
 
+              <Select value={docFilter} onValueChange={(v) => { setDocFilter(v as typeof docFilter); setPage(0); }}>
+                <SelectTrigger className="w-[190px] rounded-xl" aria-label="Document type filter">
+                  <SelectValue placeholder="Document type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invoices">Invoices only</SelectItem>
+                  <SelectItem value="offers">Renewal offers</SelectItem>
+                  <SelectItem value="all">All documents</SelectItem>
+                </SelectContent>
+              </Select>
+
             </div>
           </CardContent>
         </Card>
@@ -533,9 +549,14 @@ export default function InvoicesPage() {
                               {new Date(invoice.created_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              <Badge className={`${getStatusColor(invoice.status)} border`}>
-                                {invoice.status}
-                              </Badge>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge className={`${getStatusColor(invoice.status)} border`}>
+                                  {invoice.status}
+                                </Badge>
+                                {invoice.is_proforma && (
+                                  <Badge variant="outline" className="border-primary/30 text-primary">Renewal offer</Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-right">
                               <DropdownMenu>
