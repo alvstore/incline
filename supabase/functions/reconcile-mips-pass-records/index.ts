@@ -114,35 +114,9 @@ function normalizePersonCodeCandidates(rawCode: string): string[] {
   return Array.from(candidates);
 }
 
-function normalizeScanTime(rawTime: unknown): string {
-  if (rawTime === null || rawTime === undefined || rawTime === "") return new Date().toISOString();
+// Timestamp normalisation is shared with mips-webhook-receiver
+// (../_shared/mipsTime.ts) so both import paths resolve the same instant.
 
-  const asNumber = Number(rawTime);
-  if (Number.isFinite(asNumber)) {
-    const abs = Math.abs(asNumber);
-    let ms = asNumber;
-    if (abs >= 1e18) ms = asNumber / 1e6;
-    else if (abs >= 1e15) ms = asNumber / 1e3;
-    else if (abs >= 1e12) ms = asNumber;
-    else ms = asNumber * 1e3;
-
-    const dateObj = new Date(ms);
-    if (!Number.isNaN(dateObj.getTime())) return dateObj.toISOString();
-  }
-
-  if (typeof rawTime === "string") {
-    const trimmed = rawTime.trim();
-    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-      const parsedIst = new Date(`${trimmed.replace(" ", "T")}+05:30`);
-      if (!Number.isNaN(parsedIst.getTime())) return parsedIst.toISOString();
-    }
-
-    const parsed = new Date(trimmed.replace(" ", "T"));
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
-  }
-
-  return new Date().toISOString();
-}
 
 function getRecordKey(record: MipsPassRecord): string {
   const explicitId = getString(record.id ?? record.recordId);
