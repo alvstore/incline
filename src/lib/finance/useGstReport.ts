@@ -59,6 +59,7 @@ export function useGstReport(branchId: string | undefined, range: Range) {
       let invQ = supabase
         .from('invoices')
         .select('id, invoice_number, document_series, created_at, total_amount, subtotal, tax_amount, gst_rate, is_gst_invoice, customer_gstin, customer_name, source, invoice_type, pos_sale_id, status, branch_id, member:members(member_code, gstin, profiles:user_id(full_name))')
+        .eq('is_proforma', false) // renewal offers are not statutory documents
         .order('created_at', { ascending: false });
       if (branchId && branchId !== 'all') invQ = invQ.eq('branch_id', branchId);
       if (from && to) invQ = invQ.gte('created_at', from).lte('created_at', to);
