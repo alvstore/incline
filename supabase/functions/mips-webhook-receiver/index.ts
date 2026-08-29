@@ -611,7 +611,7 @@ Deno.serve(async (req) => {
         } else {
           // Employee or trainer → staff attendance toggle
           result = person.type === "trainer" ? "trainer" : "staff";
-          message = await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type);
+          message = await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type, scanTime);
         }
       } else {
         // *** CRITICAL FIX: Override result to not_found instead of keeping face_type default ***
