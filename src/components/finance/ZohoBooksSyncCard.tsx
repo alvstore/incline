@@ -33,7 +33,10 @@ export function ZohoBooksSyncCard() {
           .from('invoices')
           .select('id', { count: 'exact', head: true })
           .eq('is_gst_invoice', true)
-          .neq('status', 'cancelled'),
+          .gt('gst_rate', 0)
+          .gt('tax_amount', 0)
+          .not('status', 'in', '(cancelled,draft,refunded)')
+          .not('invoice_number', 'ilike', 'BOS%'),
         supabase.from('zoho_sync_log').select('entity_type, status, error, synced_at'),
       ]);
       const rows = log ?? [];

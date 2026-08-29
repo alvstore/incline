@@ -1,4 +1,4 @@
-// zoho-books-sync v1.1.0
+// zoho-books-sync v1.2.0 — strict GST-only eligibility (positive rate+tax, INV series, no BOS/exempt)
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice.
@@ -140,11 +140,17 @@ Deno.serve(async (req) => {
       (synced ?? []).filter((r) => r.entity_type === "invoice").map((r) => [r.entity_id, r.zoho_id!]),
     );
 
+    // v1.2.0 — strict eligibility: genuine GST tax invoices only.
+    // Requires positive rate AND tax, excludes BOS / legacy-exempt series and
+    // cancelled/draft/refunded documents so exempt invoices never reach Zoho.
     const { data: invoices, error: invErr } = await admin
       .from("invoices")
-      .select("id, invoice_number, subtotal, tax_amount, total_amount, gst_rate, customer_gstin, customer_name, customer_email, customer_phone, member_id, due_date, notes, created_at, status")
+      .select("id, invoice_number, document_series, subtotal, tax_amount, total_amount, gst_rate, customer_gstin, customer_name, customer_email, customer_phone, member_id, due_date, notes, created_at, status")
       .eq("is_gst_invoice", true)
-      .neq("status", "cancelled")
+      .gt("gst_rate", 0)
+      .gt("tax_amount", 0)
+      .not("status", "in", "(cancelled,draft,refunded)")
+      .not("invoice_number", "ilike", "BOS%")
       .order("created_at", { ascending: true });
     if (invErr) throw invErr;
 
