@@ -1,5 +1,10 @@
-// v2.3.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block)
+// v2.4.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block).
+//           Staff punches now carry the REAL hardware scan time (was webhook arrival
+//           time, so a delayed delivery invented lateness), parsed by the shared
+//           canonical parser also used by reconcile-mips-pass-records.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parseScanTime } from "../_shared/mipsTime.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,40 +91,9 @@ function mapFaceType(type: string): { result: string; description: string } {
   }
 }
 
-function normalizeScanTime(rawTime: unknown): string {
-  if (rawTime === null || rawTime === undefined || rawTime === "") {
-    return new Date().toISOString();
-  }
+// Timestamp normalisation lives in ../_shared/mipsTime.ts so that the webhook
+// and the reconciliation cron can never disagree about when a scan happened.
 
-  const asNumber = Number(rawTime);
-  if (!Number.isNaN(asNumber) && Number.isFinite(asNumber)) {
-    const abs = Math.abs(asNumber);
-    let ms = asNumber;
-    if (abs >= 1e18) {
-      ms = asNumber / 1e6;
-    } else if (abs >= 1e15) {
-      ms = asNumber / 1e3;
-    } else if (abs >= 1e12) {
-      ms = asNumber; // already milliseconds
-    } else {
-      ms = asNumber * 1e3; // seconds → ms
-    }
-
-    const dateObj = new Date(ms);
-    if (!Number.isNaN(dateObj.getTime())) {
-      return dateObj.toISOString();
-    }
-  }
-
-  if (typeof rawTime === "string") {
-    const parsed = new Date(rawTime);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
-    }
-  }
-
-  return new Date().toISOString();
-}
 
 /**
  * Lookup person by mips_person_sn first (exact match from sync), 
@@ -326,7 +300,7 @@ async function handleMemberCheckin(
   return { result, message };
 }
 
-async function handleStaffCheckin(supabase: any, userId: string, branchId: string, personName: string, personType: string) {
+async function handleStaffCheckin(supabase: any, userId: string, branchId: string, personName: string, personType: string, scanTime: string) {
   const label = personType === "trainer" ? "Trainer" : "Staff";
   let message = `${label} ${personName} checked in`;
 
@@ -334,10 +308,13 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
     // Check-in-only model: the RPC resolves the roster block for this punch and
     // records at most one attendance row per shift block per day. Repeat gate
     // scans inside the same block are ignored (no false check-outs, no dup alerts).
+    //
+    // check_in is the hardware scan time, never the webhook arrival time — a
+    // delivery delayed by 5 minutes must not add 5 minutes of lateness.
     const { data, error } = await supabase.rpc("staff_record_punch", {
       p_user_id: userId,
       p_branch_id: branchId,
-      p_check_in: new Date().toISOString(),
+      p_check_in: scanTime,
       p_source: "gate",
       p_notes: null,
     });
@@ -566,7 +543,11 @@ Deno.serve(async (req) => {
     const deviceKey = String(payload.deviceKey || payload.deviceSn || deviceName);
 
     const rawTime = payload.createTime || payload.time || payload.timestamp || payload.eventTime;
-    const scanTime = normalizeScanTime(rawTime);
+    const parsedScan = parseScanTime(rawTime);
+    const scanTime = parsedScan.iso;
+    if (!parsedScan.fromHardware) {
+      console.warn("MIPS payload carried no usable event time; falling back to arrival time", { rawTime });
+    }
 
     const imgUri = String(payload.imgUri || payload.img_uri || payload.imgBase64 || "");
     const searchScore = payload.searchScore ? parseFloat(String(payload.searchScore)) : null;
@@ -630,7 +611,7 @@ Deno.serve(async (req) => {
         } else {
           // Employee or trainer → staff attendance toggle
           result = person.type === "trainer" ? "trainer" : "staff";
-          message = await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type);
+          message = await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type, scanTime);
         }
       } else {
         // *** CRITICAL FIX: Override result to not_found instead of keeping face_type default ***

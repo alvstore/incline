@@ -5654,6 +5654,7 @@ export type Database = {
           pf_enabled: boolean
           pf_wage_ceiling: number | null
           posh_ic: Json | null
+          pre_shift_match_min: number
           pt_amount: number | null
           pt_commission_clawback_on_refund: boolean
           pt_enabled: boolean
@@ -5689,6 +5690,7 @@ export type Database = {
           pf_enabled?: boolean
           pf_wage_ceiling?: number | null
           posh_ic?: Json | null
+          pre_shift_match_min?: number
           pt_amount?: number | null
           pt_commission_clawback_on_refund?: boolean
           pt_enabled?: boolean
@@ -5724,6 +5726,7 @@ export type Database = {
           pf_enabled?: boolean
           pf_wage_ceiling?: number | null
           posh_ic?: Json | null
+          pre_shift_match_min?: number
           pt_amount?: number | null
           pt_commission_clawback_on_refund?: boolean
           pt_enabled?: boolean
@@ -15083,6 +15086,7 @@ export type Database = {
           pf_enabled: boolean
           pf_wage_ceiling: number | null
           posh_ic: Json | null
+          pre_shift_match_min: number
           pt_amount: number | null
           pt_commission_clawback_on_refund: boolean
           pt_enabled: boolean

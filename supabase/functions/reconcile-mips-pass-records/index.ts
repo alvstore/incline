@@ -1,12 +1,14 @@
-// v2.2.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
-// v2 fixes: staff check_in is stamped with the real hardware scan time (was
-// the cron run time, which made every lateness figure wrong), repeat scans
-// inside the branch punch-gap no longer open a second attendance row, and a
-// later scan closes the open row as a check-out instead of re-checking in.
+// v2.3.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
+// v2.3 fixes: staff attendance now goes through the canonical `staff_record_punch`
+// RPC (same path as the live webhook), so roster-block resolution, grace and
+// per-block idempotency are identical no matter which path imports the scan.
+// Timestamps come from the shared parser in ../_shared/mipsTime.ts.
 // Pulls the MIPS server's /through/record/list as the hardware source of truth,
 // then idempotently imports missing rows so Live Access Feed works even when
 // terminal webhooks are not landing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeScanTime } from "../_shared/mipsTime.ts";
+
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
   mipsFetch,
@@ -114,35 +116,9 @@ function normalizePersonCodeCandidates(rawCode: string): string[] {
   return Array.from(candidates);
 }
 
-function normalizeScanTime(rawTime: unknown): string {
-  if (rawTime === null || rawTime === undefined || rawTime === "") return new Date().toISOString();
+// Timestamp normalisation is shared with mips-webhook-receiver
+// (../_shared/mipsTime.ts) so both import paths resolve the same instant.
 
-  const asNumber = Number(rawTime);
-  if (Number.isFinite(asNumber)) {
-    const abs = Math.abs(asNumber);
-    let ms = asNumber;
-    if (abs >= 1e18) ms = asNumber / 1e6;
-    else if (abs >= 1e15) ms = asNumber / 1e3;
-    else if (abs >= 1e12) ms = asNumber;
-    else ms = asNumber * 1e3;
-
-    const dateObj = new Date(ms);
-    if (!Number.isNaN(dateObj.getTime())) return dateObj.toISOString();
-  }
-
-  if (typeof rawTime === "string") {
-    const trimmed = rawTime.trim();
-    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-      const parsedIst = new Date(`${trimmed.replace(" ", "T")}+05:30`);
-      if (!Number.isNaN(parsedIst.getTime())) return parsedIst.toISOString();
-    }
-
-    const parsed = new Date(trimmed.replace(" ", "T"));
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
-  }
-
-  return new Date().toISOString();
-}
 
 function getRecordKey(record: MipsPassRecord): string {
   const explicitId = getString(record.id ?? record.recordId);
@@ -361,92 +337,27 @@ async function markAttendance(
   if (!person.user_id) return "Staff profile missing login id; access logged only";
 
   const label = person.type === "trainer" ? "Trainer" : "Staff";
-  const scanMs = new Date(scanTime).getTime();
 
-  // Branch punch policy: minimum gap between two gate scans that may open
-  // separate attendance rows. Repeat scans inside the window are access
-  // events only (no second check-in, no second late alert).
-  let minGapMin = 60;
-  const { data: hr } = await supabase
-    .from("hr_settings")
-    .select("min_punch_gap_min")
-    .eq("branch_id", person.branch_id)
-    .maybeSingle();
-  if ((hr as { min_punch_gap_min?: number } | null)?.min_punch_gap_min != null) {
-    minGapMin = Number((hr as { min_punch_gap_min: number }).min_punch_gap_min);
-  }
-
-  // IST calendar day of the scan — attendance is a per-day concept here.
-  const istDayStart = new Date(scanMs);
-  istDayStart.setTime(scanMs + 5.5 * 3600_000);
-  istDayStart.setUTCHours(0, 0, 0, 0);
-  const dayStartUtc = new Date(istDayStart.getTime() - 5.5 * 3600_000).toISOString();
-  const dayEndUtc = new Date(istDayStart.getTime() + 24 * 3600_000 - 5.5 * 3600_000).toISOString();
-
-  // Night shifts cross midnight (e.g. 21:00 → 06:00). A small-hours scan is
-  // the tail of yesterday's shift, not a brand new — and very late — arrival.
-  const istHour = new Date(scanMs + 5.5 * 3600_000).getUTCHours();
-  if (istHour < 6) {
-    const { data: prevRows } = await supabase
-      .from("staff_attendance")
-      .select("id, check_in")
-      .eq("user_id", person.user_id)
-      .lt("check_in", dayStartUtc)
-      .gte("check_in", new Date(scanMs - 12 * 3600_000).toISOString())
-      .order("check_in", { ascending: false })
-      .limit(1);
-    const prev = (prevRows ?? [])[0] as { id: string } | undefined;
-    if (prev) {
-      await supabase.from("staff_attendance").update({ check_out: scanTime }).eq("id", prev.id);
-      return `${label} ${personName} scan recorded (night shift continues)`;
-    }
-  }
-
-  // Stale rows left open from earlier days must never block today's punch:
-  // the unique "one open row per shift" index rejects the insert otherwise,
-  // which is exactly why present staff were showing up Absent.
-  await supabase
-    .from("staff_attendance")
-    .update({ check_out: dayStartUtc })
-    .eq("user_id", person.user_id)
-    .is("check_out", null)
-    .lt("check_in", dayStartUtc);
-
-  const { data: todays } = await supabase
-    .from("staff_attendance")
-    .select("id, check_in, check_out")
-    .eq("user_id", person.user_id)
-    .gte("check_in", dayStartUtc)
-    .lt("check_in", dayEndUtc)
-    .order("check_in", { ascending: true });
-
-  const rows = (todays ?? []) as Array<{ id: string; check_in: string; check_out: string | null }>;
-
-  if (rows.length > 0) {
-    const last = rows[rows.length - 1];
-    const lastMs = new Date(last.check_in).getTime();
-    if (Math.abs(scanMs - lastMs) < minGapMin * 60_000) {
-      return `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
-    }
-    // No dedicated exit reader yet: a later scan on the same day is treated as
-    // the latest seen time, not as a fresh (late) check-in.
-    if (scanMs > lastMs) {
-      await supabase.from("staff_attendance").update({ check_out: scanTime }).eq("id", last.id);
-    }
-    return `${label} ${personName} already checked in today`;
-  }
-
-  // check_in must be the real hardware scan time — never the import time, or
-  // lateness gets measured against whenever the cron happened to run.
-  const { error } = await supabase.from("staff_attendance").insert({
-    user_id: person.user_id,
-    branch_id: person.branch_id,
-    check_in: scanTime,
-    notes: "Imported from MIPS pass records",
+  // Single source of truth: the same RPC the live webhook uses. It resolves the
+  // roster block for the punch time (morning / evening / night / full_day),
+  // applies the roster grace, and records at most one row per block per day —
+  // so a scan imported here and the same scan arriving by webhook collapse into
+  // one attendance row instead of two contradicting ones.
+  //
+  // check_in is the hardware scan time, never the cron run time.
+  const { data, error } = await supabase.rpc("staff_record_punch", {
+    p_user_id: person.user_id,
+    p_branch_id: person.branch_id,
+    p_check_in: scanTime,
+    p_source: "gate",
+    p_notes: "Imported from MIPS pass records",
   });
+
   if (error) return `Staff attendance error: ${error.message}`;
+  if (!data) return `${label} ${personName} scan recorded (already checked in for this shift)`;
   return `${label} ${personName} checked in`;
 }
+
 
 
 async function authorize(req: Request, supabase: ReturnType<typeof createClient>, serviceKey: string): Promise<Response | null> {
