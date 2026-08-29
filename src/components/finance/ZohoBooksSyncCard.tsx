@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpenCheck, Loader2, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { BookOpenCheck, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 
 interface SyncResponse {
   success: boolean;
@@ -17,6 +17,16 @@ interface SyncResponse {
   invoices_failed?: number;
   payments_synced?: number;
   payments_failed?: number;
+  errors?: string[];
+}
+
+interface DedupeResponse {
+  success: boolean;
+  error?: string;
+  checked?: number;
+  duplicates?: number;
+  deleted?: number;
+  needs_review?: string[];
   errors?: string[];
 }
 
