@@ -6180,6 +6180,7 @@ export type Database = {
           invoice_number: string | null
           invoice_type: string | null
           is_gst_invoice: boolean | null
+          is_proforma: boolean
           member_id: string | null
           next_reminder_at: string | null
           notes: string | null
@@ -6214,6 +6215,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_type?: string | null
           is_gst_invoice?: boolean | null
+          is_proforma?: boolean
           member_id?: string | null
           next_reminder_at?: string | null
           notes?: string | null
@@ -6248,6 +6250,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_type?: string | null
           is_gst_invoice?: boolean | null
+          is_proforma?: boolean
           member_id?: string | null
           next_reminder_at?: string | null
           notes?: string | null
@@ -14680,6 +14683,10 @@ export type Database = {
           p_lead_id: string
           p_payload?: Json
         }
+        Returns: Json
+      }
+      convert_proforma_to_invoice: {
+        Args: { _gst_rate?: number; _invoice_id: string }
         Returns: Json
       }
       convert_referral: {
