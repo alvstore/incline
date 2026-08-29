@@ -300,7 +300,7 @@ async function handleMemberCheckin(
   return { result, message };
 }
 
-async function handleStaffCheckin(supabase: any, userId: string, branchId: string, personName: string, personType: string) {
+async function handleStaffCheckin(supabase: any, userId: string, branchId: string, personName: string, personType: string, scanTime: string) {
   const label = personType === "trainer" ? "Trainer" : "Staff";
   let message = `${label} ${personName} checked in`;
 
