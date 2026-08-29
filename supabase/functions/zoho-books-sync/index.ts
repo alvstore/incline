@@ -329,25 +329,30 @@ Deno.serve(async (req) => {
           }],
         };
 
+        // Pre-flight: Zoho accepts duplicate numbers when auto-numbering is
+        // ignored, so never create blindly — adopt an existing document first.
         let zohoInvoiceId: string;
-        try {
-          const createdInv = await zoho("POST", "/invoices", {
-            query: { ...org, ignore_auto_number_generation: "true" },
-            body: invoicePayload,
-          });
-          zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
-        } catch (ce) {
-          // Zoho code 1001 = this invoice number already exists (a prior run
-          // created it but the log write failed). Adopt it instead of failing.
-          const msg = ce instanceof Error ? ce.message : String(ce);
-          if (!msg.includes("already exists")) throw ce;
-          const found = await zoho("GET", "/invoices", {
-            query: { ...org, invoice_number: String(inv.invoice_number) },
-          });
-          const hit = ((found.invoices as Json[]) ?? [])[0];
-          if (!hit) throw ce;
-          zohoInvoiceId = String(hit.invoice_id);
+        const existing = await invoicesByNumber(String(inv.invoice_number));
+        if (existing.length) {
+          zohoInvoiceId = String(existing[0].invoice_id);
+        } else {
+          try {
+            const createdInv = await zoho("POST", "/invoices", {
+              query: { ...org, ignore_auto_number_generation: "true" },
+              body: invoicePayload,
+            });
+            zohoInvoiceId = String((createdInv.invoice as Json)?.invoice_id);
+          } catch (ce) {
+            // Zoho code 1001 = this invoice number already exists (a racing run
+            // created it). Adopt it instead of failing.
+            const msg = ce instanceof Error ? ce.message : String(ce);
+            if (!msg.includes("already exists")) throw ce;
+            const hit = (await invoicesByNumber(String(inv.invoice_number)))[0];
+            if (!hit) throw ce;
+            zohoInvoiceId = String(hit.invoice_id);
+          }
         }
+
         zohoInvoiceIdByLocal.set(inv.id, zohoInvoiceId);
 
         // Move out of draft so it appears in receivables / GST reports.
