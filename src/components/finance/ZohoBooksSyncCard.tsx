@@ -80,6 +80,31 @@ export function ZohoBooksSyncCard() {
     },
   });
 
+  const dedupeMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('zoho-books-sync', {
+        body: { mode: 'dedupe' },
+      });
+      if (error) throw new Error(error.message);
+      const result = data as DedupeResponse;
+      if (!result?.success) throw new Error(result?.error || 'Duplicate check failed');
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['zoho-sync-stats'] });
+      toast({
+        title: 'Duplicate check complete',
+        description: `${result.checked ?? 0} invoices checked · ${result.duplicates ?? 0} duplicates found · ${result.deleted ?? 0} removed${
+          result.needs_review?.length ? ` · ${result.needs_review.length} need manual review in Zoho` : ''
+        }.`,
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: 'Duplicate check failed', description: e.message, variant: 'destructive' });
+    },
+  });
+
+
   const stats = statsQuery.data;
 
   return (
