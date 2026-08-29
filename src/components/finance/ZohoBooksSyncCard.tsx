@@ -33,6 +33,7 @@ export function ZohoBooksSyncCard() {
           .from('invoices')
           .select('id', { count: 'exact', head: true })
           .eq('is_gst_invoice', true)
+          .eq('is_proforma', false)
           .gt('gst_rate', 0)
           .gt('tax_amount', 0)
           .not('status', 'in', '(cancelled,draft,refunded)')
