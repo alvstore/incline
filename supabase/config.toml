@@ -150,3 +150,6 @@ verify_jwt = false
 
 [functions.zoho-books-sync]
 verify_jwt = true
+
+[functions.send-birthday-greeting]
+verify_jwt = true
