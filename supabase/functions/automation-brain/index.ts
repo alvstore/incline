@@ -9,6 +9,7 @@
 // v1.4.0 — apikey must be ANON_KEY (gateway requirement); Authorization stays SERVICE_KEY for service-role bypass.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
+import { sendBirthdayGreeting, istToday } from "../_shared/birthday-greeting.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
