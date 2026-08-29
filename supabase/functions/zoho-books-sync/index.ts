@@ -111,6 +111,8 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const limit = Math.min(Number(body.limit) || 25, 50);
     const dryRun = Boolean(body.dryRun);
+    const mode = String(body.mode ?? "sync");
+
 
     // ---- org + tax lookup ---------------------------------------------------
     const orgRes = await zoho("GET", "/organizations");
