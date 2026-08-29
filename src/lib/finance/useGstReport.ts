@@ -90,6 +90,7 @@ export function useGstReport(branchId: string | undefined, range: Range) {
       // Documents issued (Table 13) — computed on EVERY invoice incl. cancelled
       const seriesMap = new Map<string, { series: string; from: string; to: string; issued: number; cancelled: number }>();
       allInvoices.forEach((inv: any) => {
+        if (isBos(inv)) return; // BOS never appears in GST filing / Documents Issued
         const key = seriesOf(inv);
         const entry = seriesMap.get(key) || { series: key, from: inv.invoice_number, to: inv.invoice_number, issued: 0, cancelled: 0 };
         entry.issued += 1;
@@ -142,28 +143,8 @@ export function useGstReport(branchId: string | undefined, range: Range) {
         (isTaxable ? lines : exemptLines).push(line);
       });
 
-      // POS sales without invoice → B2C taxable supplies @ 18%
-      posSales.forEach((p: any) => {
-        const total = Number(p.total_amount || 0);
-        const rate = 18;
-        const taxable = total / 1.18;
-        const tax = total - taxable;
-        const firstItem = Array.isArray(p.items) && p.items[0];
-        lines.push({
-          invoice_number: `POS-${String(p.id).slice(0, 8)}`,
-          date: p.sale_date,
-          customer_name: p.customer_name || (p as any).members?.member_code || 'Walk-in',
-          customer_gstin: null,
-          hsn: firstItem?.hsn_code || HSN_FALLBACK.code,
-          taxable,
-          rate,
-          cgst: tax / 2,
-          sgst: tax / 2,
-          igst: 0,
-          total,
-          source: 'pos',
-        });
-      });
+      // POS sales without a GST invoice are NOT injected into the GST return —
+      // only genuine GST tax invoices feed the taxable buckets.
 
       // ---- HSN buckets (Table 12) — taxable supplies only ----
       // Buckets are keyed by HSN **and** rate: the same SAC can legitimately be
@@ -196,7 +177,7 @@ export function useGstReport(branchId: string | undefined, range: Range) {
 
       invoices.forEach((inv: any) => {
         const rate = Number(inv.gst_rate) || 0;
-        if (!inv.is_gst_invoice || rate <= 0) return; // exempt supplies → Table 8
+        if (!isTaxableInvoice(inv)) return; // exempt supplies → Table 8
         const total = Number(inv.total_amount || 0);
         const invoiceTaxable = Number(inv.subtotal) || total / (1 + rate / 100);
         const gstin = inv.customer_gstin || inv.member?.gstin || null;
@@ -220,15 +201,7 @@ export function useGstReport(branchId: string | undefined, range: Range) {
         });
       });
 
-      posSales.forEach((p: any) => {
-        const its = Array.isArray(p.items) ? p.items : [];
-        its.forEach((it: any) => {
-          const total = Number(it.total || it.unit_price * it.quantity || 0);
-          const taxable = total / 1.18;
-          const h = resolveHsn({ itemHsn: it.hsn_code, source: 'pos' });
-          addBucket(h, 18, Number(it.quantity || 1), taxable, false);
-        });
-      });
+      // Un-invoiced POS sales are excluded from HSN buckets (no GST invoice = not in this return).
 
 
       // ---- Stream totals (taxable + exempt so revenue reconciles) ----
@@ -268,7 +241,7 @@ export function useGstReport(branchId: string | undefined, range: Range) {
         byRate[l.rate].total += l.total;
       });
 
-      const exemptInvoices = invoices.filter((i: any) => !i.is_gst_invoice || !Number(i.gst_rate));
+      const exemptInvoices = invoices.filter((i: any) => !isTaxableInvoice(i));
 
       return {
         lines,
