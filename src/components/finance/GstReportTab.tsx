@@ -66,7 +66,27 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Active filing period — makes it obvious the report follows the date filter */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-4 shadow-lg shadow-primary/10">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filing Period</p>
+          <p className="text-lg font-bold text-foreground">
+            {range
+              ? `${format(range.from, 'd MMM yyyy')} → ${format(range.to, 'd MMM yyyy')}`
+              : 'All time (no date filter applied)'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="rounded-full">{lines.length} tax invoice{lines.length === 1 ? '' : 's'}</Badge>
+          <Badge variant="outline" className="rounded-full">{exemptLines.length} exempt</Badge>
+          {cancelledInvoices.length > 0 && (
+            <Badge variant="outline" className="rounded-full text-destructive">{cancelledInvoices.length} cancelled</Badge>
+          )}
+        </div>
+      </div>
+
       {/* Hero KPI strip */}
+
       <Card className="rounded-2xl border-none bg-gradient-to-r from-primary to-primary text-primary-foreground shadow-lg shadow-primary/20">
         <CardContent className="grid grid-cols-2 gap-6 p-6 md:grid-cols-6">
           <Kpi label="Taxable Value" value={formatCurrency(totals.taxable)} />
