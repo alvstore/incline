@@ -22,3 +22,9 @@ actual punch time → IST date → `staff_shift_overrides` (date override wins) 
 
 ## MIPS timestamps
 - `supabase/functions/_shared/mipsTime.ts` is the single parser used by both `mips-webhook-receiver` and `reconcile-mips-pass-records`. Naive `YYYY-MM-DD HH:mm:ss` values are IST (terminal local time); numeric values are epoch (unit inferred from magnitude). Both paths must resolve the same instant or the two importers disagree.
+
+## Scheduled datetimes (Aug 2026)
+- `resolve_staff_shift` also returns `scheduled_start_at` / `scheduled_end_at` (timestamptz, IST-built, end rolled +1 day for overnight blocks). `staff_attendance` persists both.
+- Lateness is a true instant difference (`check_in - scheduled_start_at`), no midnight-wrap heuristic. Negative = early arrival.
+- Candidate selection scores the previous-day night block against today's block; the previous night wins only when strictly the better match, ties go to the current day.
+- Grace has ONE source: the resolver (`roster > branch hr_settings > 15`). The trigger no longer has its own fallback.

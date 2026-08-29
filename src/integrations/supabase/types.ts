@@ -11844,7 +11844,9 @@ export type Database = {
           late_minutes: number | null
           notes: string | null
           recorded_by: string | null
+          scheduled_end_at: string | null
           scheduled_start: string | null
+          scheduled_start_at: string | null
           shift_date: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
           source: string
@@ -11863,7 +11865,9 @@ export type Database = {
           late_minutes?: number | null
           notes?: string | null
           recorded_by?: string | null
+          scheduled_end_at?: string | null
           scheduled_start?: string | null
+          scheduled_start_at?: string | null
           shift_date?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           source?: string
@@ -11882,7 +11886,9 @@ export type Database = {
           late_minutes?: number | null
           notes?: string | null
           recorded_by?: string | null
+          scheduled_end_at?: string | null
           scheduled_start?: string | null
+          scheduled_start_at?: string | null
           shift_date?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           source?: string
@@ -15677,7 +15683,9 @@ export type Database = {
           late_minutes: number | null
           notes: string | null
           recorded_by: string | null
+          scheduled_end_at: string | null
           scheduled_start: string | null
+          scheduled_start_at: string | null
           shift_date: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
           source: string
@@ -16053,7 +16061,9 @@ export type Database = {
           has_schedule: boolean
           is_off: boolean
           is_overnight: boolean
+          scheduled_end_at: string
           scheduled_start: string
+          scheduled_start_at: string
           shift_date: string
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
         }[]
