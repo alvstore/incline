@@ -543,7 +543,11 @@ Deno.serve(async (req) => {
     const deviceKey = String(payload.deviceKey || payload.deviceSn || deviceName);
 
     const rawTime = payload.createTime || payload.time || payload.timestamp || payload.eventTime;
-    const scanTime = normalizeScanTime(rawTime);
+    const parsedScan = parseScanTime(rawTime);
+    const scanTime = parsedScan.iso;
+    if (!parsedScan.fromHardware) {
+      console.warn("MIPS payload carried no usable event time; falling back to arrival time", { rawTime });
+    }
 
     const imgUri = String(payload.imgUri || payload.img_uri || payload.imgBase64 || "");
     const searchScore = payload.searchScore ? parseFloat(String(payload.searchScore)) : null;
