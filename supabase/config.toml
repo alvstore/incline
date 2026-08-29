@@ -153,6 +153,3 @@ verify_jwt = true
 
 [functions.send-birthday-greeting]
 verify_jwt = true
-
-[functions.seed-birthday-video-template]
-verify_jwt = false
