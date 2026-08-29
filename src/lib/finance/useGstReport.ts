@@ -34,6 +34,16 @@ function seriesOf(inv: any): string {
   return m ? m[1].toUpperCase() : 'OTHER';
 }
 
+/** Bills of supply are internal exempt documents — never part of GST filing output. */
+function isBos(inv: any): boolean {
+  return seriesOf(inv) === 'BOS' || String(inv.invoice_number || '').toUpperCase().startsWith('BOS');
+}
+
+/** A genuine GST tax invoice: flagged, positive rate AND positive tax amount. */
+function isTaxableInvoice(inv: any): boolean {
+  return Boolean(inv.is_gst_invoice) && Number(inv.gst_rate) > 0 && Number(inv.tax_amount) > 0 && !isBos(inv);
+}
+
 function numericSuffix(num: string): number | null {
   const m = String(num || '').match(/(\d+)\s*$/);
   return m ? Number(m[1]) : null;
@@ -93,8 +103,10 @@ export function useGstReport(branchId: string | undefined, range: Range) {
       });
       const documentsIssued = Array.from(seriesMap.values()).sort((a, b) => a.series.localeCompare(b.series));
 
-      const cancelledInvoices = allInvoices.filter((i: any) => EXCLUDED_STATUSES.has(String(i.status)));
-      const invoices = allInvoices.filter((i: any) => !EXCLUDED_STATUSES.has(String(i.status)));
+      // BOS (bills of supply) are excluded from every GST report surface.
+      const filingInvoices = allInvoices.filter((i: any) => !isBos(i));
+      const cancelledInvoices = filingInvoices.filter((i: any) => EXCLUDED_STATUSES.has(String(i.status)));
+      const invoices = filingInvoices.filter((i: any) => !EXCLUDED_STATUSES.has(String(i.status)));
 
       // ---- Taxable supplies (B2B/B2C) vs exempt/nil-rated supplies (Table 8) ----
       const lines: GstLine[] = [];
@@ -102,7 +114,7 @@ export function useGstReport(branchId: string | undefined, range: Range) {
 
       invoices.forEach((inv: any) => {
         const rate = Number(inv.gst_rate) || 0;
-        const isTaxable = Boolean(inv.is_gst_invoice) && rate > 0;
+        const isTaxable = isTaxableInvoice(inv);
         const total = Number(inv.total_amount || 0);
         const taxable = isTaxable
           ? (Number(inv.subtotal) || total / (1 + rate / 100))
