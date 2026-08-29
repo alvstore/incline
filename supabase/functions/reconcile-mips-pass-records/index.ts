@@ -1,12 +1,14 @@
-// v2.2.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
-// v2 fixes: staff check_in is stamped with the real hardware scan time (was
-// the cron run time, which made every lateness figure wrong), repeat scans
-// inside the branch punch-gap no longer open a second attendance row, and a
-// later scan closes the open row as a check-out instead of re-checking in.
+// v2.3.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
+// v2.3 fixes: staff attendance now goes through the canonical `staff_record_punch`
+// RPC (same path as the live webhook), so roster-block resolution, grace and
+// per-block idempotency are identical no matter which path imports the scan.
+// Timestamps come from the shared parser in ../_shared/mipsTime.ts.
 // Pulls the MIPS server's /through/record/list as the hardware source of truth,
 // then idempotently imports missing rows so Live Access Feed works even when
 // terminal webhooks are not landing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeScanTime } from "../_shared/mipsTime.ts";
+
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
   mipsFetch,
