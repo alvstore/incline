@@ -1,4 +1,5 @@
-import { Cake, Gift, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Cake, Gift, Loader2, Sparkles } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUpcomingBirthdays, type BirthdayMember } from '@/hooks/useDashboardData';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
 interface BirthdayWidgetProps {
@@ -17,6 +19,18 @@ const personTypeBadge: Record<string, { label: string; className: string }> = {
   trainer: { label: 'Trainer', className: 'bg-violet-100 text-violet-700' },
   staff: { label: 'Staff', className: 'bg-sky-100 text-sky-700' },
 };
+
+const CHANNEL_LABEL: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  in_app: 'in-app',
+};
+
+interface GreetChannelResult {
+  channel: string;
+  status: string;
+  reason?: string;
+}
 
 function PersonTypeBadge({ type }: { type?: string }) {
   const cfg = type ? personTypeBadge[type] : undefined;
@@ -41,15 +55,59 @@ function initials(name?: string | null): string {
 export default function BirthdayWidget({ branchId, className }: BirthdayWidgetProps) {
   const { data, isLoading, isFetching } = useUpcomingBirthdays(branchId, 7);
   const { toast } = useToast();
+  const [greetingId, setGreetingId] = useState<string | null>(null);
   const today = data?.today ?? [];
   const upcoming = data?.upcoming ?? [];
 
-  const handleGreet = (m: BirthdayMember) => {
-    toast({
-      title: 'Greeting queued',
-      description: `Birthday wish will be sent to ${m.full_name ?? 'member'}.`,
-    });
+  const handleGreet = async (m: BirthdayMember) => {
+    setGreetingId(m.member_id);
+    try {
+      const { data: res, error } = await supabase.functions.invoke('send-birthday-greeting', {
+        body: {
+          user_id: m.user_id,
+          person_id: m.member_id,
+          person_type: m.person_type ?? 'member',
+          branch_id: m.branch_id ?? branchId ?? null,
+          full_name: m.full_name,
+        },
+      });
+      if (error) throw error;
+
+      const results = (res?.results ?? []) as GreetChannelResult[];
+      const delivered = results.filter((r) => r.status === 'sent' || r.status === 'queued');
+      const external = delivered.filter((r) => r.channel !== 'in_app');
+
+      if (external.length > 0) {
+        toast({
+          title: 'Birthday greeting sent',
+          description: `${m.full_name ?? 'Member'} was greeted via ${external
+            .map((r) => CHANNEL_LABEL[r.channel] ?? r.channel)
+            .join(' + ')} with the Incline birthday card.`,
+        });
+      } else if (delivered.length > 0) {
+        toast({
+          title: 'In-app greeting only',
+          description:
+            'No WhatsApp/email channel was available or allowed — the wish shows in their portal.',
+        });
+      } else {
+        toast({
+          title: 'Greeting not delivered',
+          description: results[0]?.reason ?? 'No enabled channel accepted the message.',
+          variant: 'destructive',
+        });
+      }
+    } catch (e) {
+      toast({
+        title: 'Could not send greeting',
+        description: e instanceof Error ? e.message : 'Unexpected error',
+        variant: 'destructive',
+      });
+    } finally {
+      setGreetingId(null);
+    }
   };
+
 
   return (
     <div
@@ -120,8 +178,14 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
                     className="h-8 rounded-lg"
                     onClick={() => handleGreet(m)}
                     aria-label={`Send birthday greeting to ${m.full_name ?? 'member'}`}
+                    disabled={greetingId === m.member_id}
                   >
-                    <Gift className="h-3.5 w-3.5 mr-1" /> Greet
+                    {greetingId === m.member_id ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <Gift className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {greetingId === m.member_id ? 'Sending' : 'Greet'}
                   </Button>
                 </div>
               ))}

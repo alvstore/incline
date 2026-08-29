@@ -24,6 +24,7 @@ export interface BirthdayMember {
   turning_age: number;
   /** member | trainer | staff — the widget labels non-members */
   person_type?: 'member' | 'trainer' | 'staff';
+  branch_id?: string | null;
 }
 
 export interface BirthdayBuckets {
