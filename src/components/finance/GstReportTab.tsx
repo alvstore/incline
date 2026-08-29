@@ -285,7 +285,7 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
           </Table>
           {posSales.length > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Note: {posSales.length} POS sale(s) without a linked invoice are reported as B2C taxable supplies @ 18% (HSN 2106 default).
+              Note: {posSales.length} POS sale(s) without a linked GST invoice are excluded from this return. Raise a GST invoice for any POS sale that must be reported.
             </p>
           )}
         </CardContent>
@@ -299,7 +299,7 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
               <BookOpen className="h-4 w-4 text-primary" />
               Documents Issued
             </CardTitle>
-            <CardDescription>GSTR-1 Table 13 requires every document series issued in the period — tax invoices (INV) and bills of supply (BOS) for exempt/nil-rated sales. BOS documents carry no tax and are excluded from all tax buckets.</CardDescription>
+            <CardDescription>GSTR-1 Table 13 — document series issued in the period. Only tax-invoice series (INV) are reported here; bills of supply (BOS) are internal exempt documents and are never included in GST filing output.</CardDescription>
           </div>
           <Button variant="outline" size="sm" disabled={!documentsIssued.length} onClick={() => exportDocumentsIssued(documentsIssued)}>
             <Download className="mr-2 h-4 w-4" /> Download CSV
