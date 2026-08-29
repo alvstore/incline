@@ -1,7 +1,12 @@
-// zoho-books-sync v1.2.0 — strict GST-only eligibility (positive rate+tax, INV series, no BOS/exempt)
+// zoho-books-sync v1.4.0 — duplicate-proof push + duplicate cleanup mode.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
-// recorded in public.zoho_sync_log and never sent twice.
+// recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
+// with ignore_auto_number_generation, it happily accepts the SAME invoice number
+// twice, so every create is preceded by a lookup on invoice_number and adopts an
+// existing document instead of creating a twin. POST { mode: "dedupe" } scans the
+// synced numbers and removes orphan copies that our log does not own.
+
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
