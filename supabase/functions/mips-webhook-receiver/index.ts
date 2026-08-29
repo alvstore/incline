@@ -91,40 +91,9 @@ function mapFaceType(type: string): { result: string; description: string } {
   }
 }
 
-function normalizeScanTime(rawTime: unknown): string {
-  if (rawTime === null || rawTime === undefined || rawTime === "") {
-    return new Date().toISOString();
-  }
+// Timestamp normalisation lives in ../_shared/mipsTime.ts so that the webhook
+// and the reconciliation cron can never disagree about when a scan happened.
 
-  const asNumber = Number(rawTime);
-  if (!Number.isNaN(asNumber) && Number.isFinite(asNumber)) {
-    const abs = Math.abs(asNumber);
-    let ms = asNumber;
-    if (abs >= 1e18) {
-      ms = asNumber / 1e6;
-    } else if (abs >= 1e15) {
-      ms = asNumber / 1e3;
-    } else if (abs >= 1e12) {
-      ms = asNumber; // already milliseconds
-    } else {
-      ms = asNumber * 1e3; // seconds → ms
-    }
-
-    const dateObj = new Date(ms);
-    if (!Number.isNaN(dateObj.getTime())) {
-      return dateObj.toISOString();
-    }
-  }
-
-  if (typeof rawTime === "string") {
-    const parsed = new Date(rawTime);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
-    }
-  }
-
-  return new Date().toISOString();
-}
 
 /**
  * Lookup person by mips_person_sn first (exact match from sync), 
