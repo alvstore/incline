@@ -308,10 +308,13 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
     // Check-in-only model: the RPC resolves the roster block for this punch and
     // records at most one attendance row per shift block per day. Repeat gate
     // scans inside the same block are ignored (no false check-outs, no dup alerts).
+    //
+    // check_in is the hardware scan time, never the webhook arrival time — a
+    // delivery delayed by 5 minutes must not add 5 minutes of lateness.
     const { data, error } = await supabase.rpc("staff_record_punch", {
       p_user_id: userId,
       p_branch_id: branchId,
-      p_check_in: new Date().toISOString(),
+      p_check_in: scanTime,
       p_source: "gate",
       p_notes: null,
     });
