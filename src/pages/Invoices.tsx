@@ -19,11 +19,11 @@ import { SetInvoiceDueDateDrawer } from '@/components/invoices/SetInvoiceDueDate
 import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
   ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle,
-  IndianRupee, Pencil, CalendarRange, CalendarClock
+  IndianRupee, Pencil, CalendarRange, CalendarClock, FileCheck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
 import {
@@ -51,6 +51,8 @@ export default function InvoicesPage() {
   const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
   const [dueDateInvoice, setDueDateInvoice] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // Renewal offers (proformas) are not statutory invoices — hidden by default
+  const [docFilter, setDocFilter] = useState<'invoices' | 'offers' | 'all'>('invoices');
   const [periodFilter, setPeriodFilter] = useState<string>('this_month');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
@@ -184,6 +186,8 @@ export default function InvoicesPage() {
   const applyFilters = (q: any) => {
     if (branchFilter) q = q.eq('branch_id', branchFilter);
     if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
+    if (docFilter === 'invoices') q = q.eq('is_proforma', false);
+    if (docFilter === 'offers') q = q.eq('is_proforma', true);
     if (range.from) q = q.gte('created_at', range.from.toISOString());
     if (range.to) q = q.lte('created_at', range.to.toISOString());
     return q;
@@ -194,14 +198,29 @@ export default function InvoicesPage() {
   const isSearching = searchTerm.trim().length > 0;
   const SEARCH_SCAN_LIMIT = 500;
 
+  // Converts a renewal offer (proforma) into a real GST tax invoice on demand
+  const issueTaxInvoice = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const { data, error } = await supabase.rpc('convert_proforma_to_invoice', { _invoice_id: invoiceId });
+      if (error) throw error;
+      return data as { invoice_number?: string };
+    },
+    onSuccess: (res) => {
+      toast.success(`Tax invoice issued${res?.invoice_number ? ` — ${res.invoice_number}` : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-stats'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Could not issue the tax invoice'),
+  });
+
   const { data: invoicesResult, isLoading } = useQuery({
-    queryKey: ['invoices', branchFilter, statusFilter, rangeKey, isSearching ? 'search' : page],
+    queryKey: ['invoices', branchFilter, statusFilter, docFilter, rangeKey, isSearching ? 'search' : page],
     queryFn: async () => {
       const query = applyFilters(
         supabase
           .from('invoices')
           .select(`
-            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
+            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id, is_proforma, document_series,
             members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
             invoice_items(description, reference_type)
           `, { count: 'exact' })
@@ -226,6 +245,7 @@ export default function InvoicesPage() {
       let q = supabase
         .from('invoices')
         .select('id, member_id, status, total_amount, amount_paid, created_at')
+        .eq('is_proforma', false)
         .order('created_at', { ascending: false })
         .limit(5000);
       if (branchFilter) q = q.eq('branch_id', branchFilter);
@@ -452,6 +472,17 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
 
+              <Select value={docFilter} onValueChange={(v) => { setDocFilter(v as typeof docFilter); setPage(0); }}>
+                <SelectTrigger className="w-[190px] rounded-xl" aria-label="Document type filter">
+                  <SelectValue placeholder="Document type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invoices">Invoices only</SelectItem>
+                  <SelectItem value="offers">Renewal offers</SelectItem>
+                  <SelectItem value="all">All documents</SelectItem>
+                </SelectContent>
+              </Select>
+
             </div>
           </CardContent>
         </Card>
@@ -533,9 +564,14 @@ export default function InvoicesPage() {
                               {new Date(invoice.created_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              <Badge className={`${getStatusColor(invoice.status)} border`}>
-                                {invoice.status}
-                              </Badge>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge className={`${getStatusColor(invoice.status)} border`}>
+                                  {invoice.status}
+                                </Badge>
+                                {invoice.is_proforma && (
+                                  <Badge variant="outline" className="border-primary/30 text-primary">Renewal offer</Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-right">
                               <DropdownMenu>
@@ -589,6 +625,12 @@ export default function InvoicesPage() {
                                     <DropdownMenuItem onClick={() => setPaymentInvoice(invoice)}>
                                       <IndianRupee className="mr-2 h-4 w-4" />
                                       Record Payment
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canCorrect && invoice.is_proforma && invoice.status !== 'cancelled' && (
+                                    <DropdownMenuItem onClick={() => issueTaxInvoice.mutate(invoice.id)}>
+                                      <FileCheck className="mr-2 h-4 w-4" />
+                                      Issue Tax Invoice
                                     </DropdownMenuItem>
                                   )}
                                   {canCorrect && invoice.status !== 'cancelled' && balance > 0 && (
