@@ -123,56 +123,35 @@ async function callRpc(fn: string): Promise<{ ok: boolean; body: string }> {
 }
 
 // ---------- Built-in: birthday wishes ----------
+// v2.4.0 — IST birthday matching, covers members + trainers + staff, and routes
+// through the shared sender (correct dispatch-communication contract + branded
+// card image). The previous payload shape ({event, channels, body}) was silently
+// rejected by the dispatcher, so no birthday message ever went out.
 async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?: string }> {
-  const today = new Date();
-  const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(today.getUTCDate()).padStart(2, "0");
+  const day = istToday();                    // YYYY-MM-DD in Asia/Kolkata
+  const mmdd = day.slice(5);                 // MM-DD
 
-  // Step 1 — active members with a user_id (no FK alias).
-  const { data: members, error: mErr } = await admin
-    .from("members")
-    .select("id, branch_id, user_id")
-    .eq("status", "active")
-    .not("user_id", "is", null)
-    .limit(2000);
-  if (mErr) return { dispatched: 0, error: mErr.message };
-
-  const userIds = Array.from(new Set((members ?? []).map((m: any) => m.user_id).filter(Boolean)));
-  if (!userIds.length) return { dispatched: 0 };
-
-  // Step 2 — profiles for those user_ids. profiles.id == auth.users.id, so we
-  // join on `id`, not `user_id` (which doesn't exist on profiles).
-  const { data: profiles, error: pErr } = await admin
-    .from("profiles")
-    .select("id, full_name, date_of_birth")
-    .in("id", userIds);
-  if (pErr) return { dispatched: 0, error: pErr.message };
-
-  const profileByUser = new Map<string, { full_name: string | null; date_of_birth: string | null }>();
-  for (const p of profiles ?? []) {
-    profileByUser.set((p as any).id as string, { full_name: (p as any).full_name, date_of_birth: (p as any).date_of_birth });
-  }
-
-  const todays = (members ?? []).filter((m: any) => {
-    const p = profileByUser.get(m.user_id);
-    const dob = p?.date_of_birth;
-    if (!dob) return false;
-    const s = String(dob);
-    return s.length >= 10 && s.slice(5, 7) === mm && s.slice(8, 10) === dd;
+  const { data, error } = await admin.rpc("get_upcoming_birthdays", {
+    p_days_ahead: 0,
+    p_branch_id: rule.branch_id ?? null,
   });
+  if (error) return { dispatched: 0, error: error.message };
+
+  const row: any = Array.isArray(data) ? data[0] : data;
+  const todays: any[] = Array.isArray(row?.today) ? row.today : [];
 
   let count = 0;
-  for (const m of todays) {
-    const profile = profileByUser.get((m as any).user_id);
-    const memberName = profile?.full_name ?? "there";
-    let body = `Happy birthday, ${memberName}! 🎉 Wishing you an amazing year ahead from all of us at Incline.`;
+  for (const person of todays) {
+    if (String(person.dob ?? "").slice(5, 10) !== mmdd) continue;
+    const personName = String(person.full_name ?? "there").split(" ")[0];
+    let body: string | undefined;
     if (rule.use_ai) {
       try {
         const r = await generateOnce({
           purpose: "automation_rule",
-          branchId: m.branch_id,
-          userMessage: `Member name: ${memberName}`,
-          systemOverride: `Compose a short, warm WhatsApp birthday message (under 280 chars) in a ${rule.ai_tone || "friendly"} tone. No emojis overload. Sign off as "Incline".`,
+          branchId: person.branch_id ?? null,
+          userMessage: `Name: ${personName}`,
+          systemOverride: `Compose a short, warm WhatsApp birthday message (under 280 chars) in a ${rule.ai_tone || "friendly"} tone. No emoji overload. Sign off as "Incline".`,
           supabase: admin,
         });
         const text = r.content?.trim();
@@ -180,20 +159,19 @@ async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?:
       } catch (_) { /* fall back to default */ }
     }
     try {
-      await callEdge("dispatch-communication", {
-        member_id: m.id,
-        branch_id: m.branch_id,
-        event: "birthday_wish",
-        category: "engagement",
-        channels: ["whatsapp", "in_app"],
-        body,
-        dedupe_key: `birthday_wish:${m.id}:${today.toISOString().slice(0, 10)}`,
-      });
-      count++;
+      const res = await sendBirthdayGreeting(admin as never, {
+        user_id: person.user_id,
+        person_id: person.member_id ?? null,
+        person_type: person.person_type ?? "member",
+        branch_id: person.branch_id ?? null,
+        full_name: person.full_name ?? null,
+      }, { body, source_caller: "automation-brain:birthday_wish" });
+      if (res.delivered) count++;
     } catch (_) { /* keep going */ }
   }
   return { dispatched: count };
 }
+
 
 // ---------- Process one rule ----------
 async function processRule(rule: any) {
