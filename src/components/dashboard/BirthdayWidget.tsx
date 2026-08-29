@@ -178,8 +178,14 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
                     className="h-8 rounded-lg"
                     onClick={() => handleGreet(m)}
                     aria-label={`Send birthday greeting to ${m.full_name ?? 'member'}`}
+                    disabled={greetingId === m.member_id}
                   >
-                    <Gift className="h-3.5 w-3.5 mr-1" /> Greet
+                    {greetingId === m.member_id ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <Gift className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {greetingId === m.member_id ? 'Sending' : 'Greet'}
                   </Button>
                 </div>
               ))}
