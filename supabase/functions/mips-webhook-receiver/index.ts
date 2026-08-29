@@ -1,5 +1,10 @@
-// v2.3.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block)
+// v2.4.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block).
+//           Staff punches now carry the REAL hardware scan time (was webhook arrival
+//           time, so a delayed delivery invented lateness), parsed by the shared
+//           canonical parser also used by reconcile-mips-pass-records.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parseScanTime } from "../_shared/mipsTime.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
