@@ -130,6 +130,58 @@ Deno.serve(async (req) => {
       return match ? String(match.tax_id) : null;
     };
 
+    /** Every Zoho invoice carrying this exact invoice number. */
+    const invoicesByNumber = async (number: string): Promise<Json[]> => {
+      const found = await zoho("GET", "/invoices", {
+        query: { ...org, invoice_number: number },
+      });
+      return ((found.invoices as Json[]) ?? []).filter(
+        (i) => String(i.invoice_number) === number,
+      );
+    };
+
+    // ---- duplicate cleanup ---------------------------------------------------
+    // Removes twin documents created before v1.4.0 (concurrent/retried runs).
+    // The copy referenced by zoho_sync_log is kept; extra copies are deleted when
+    // they carry no payment, otherwise reported for manual review.
+    if (mode === "dedupe") {
+      const { data: logRows } = await admin
+        .from("zoho_sync_log").select("entity_id, zoho_id")
+        .eq("entity_type", "invoice").eq("status", "synced");
+      const owned = new Map((logRows ?? []).map((r) => [r.entity_id, String(r.zoho_id)]));
+      const { data: localInvoices } = await admin
+        .from("invoices").select("id, invoice_number")
+        .in("id", [...owned.keys()]);
+
+      const report = { checked: 0, duplicates: 0, deleted: 0, needs_review: [] as string[], errors: [] as string[] };
+      for (const inv of (localInvoices ?? []).slice(0, Math.min(Number(body.limit) || 200, 300))) {
+        report.checked++;
+        try {
+          const copies = await invoicesByNumber(String(inv.invoice_number));
+          if (copies.length < 2) continue;
+          const keep = owned.get(inv.id);
+          for (const copy of copies) {
+            const id = String(copy.invoice_id);
+            if (id === keep) continue;
+            report.duplicates++;
+            const paid = Number(copy.total ?? 0) - Number(copy.balance ?? 0);
+            if (paid > 0) { report.needs_review.push(`${inv.invoice_number} (${id}, ₹${paid} applied)`); continue; }
+            try {
+              await zoho("POST", `/invoices/${id}/status/void`, { query: org });
+            } catch { /* draft/void already */ }
+            await zoho("DELETE", `/invoices/${id}`, { query: org });
+            report.deleted++;
+          }
+        } catch (e) {
+          report.errors.push(`${inv.invoice_number}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      return new Response(JSON.stringify({ success: true, mode: "dedupe", ...report }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // ---- candidate invoices -------------------------------------------------
     const { data: synced } = await admin
       .from("zoho_sync_log").select("entity_id, zoho_id, entity_type, status")
