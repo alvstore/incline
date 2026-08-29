@@ -1,19 +1,26 @@
-// v1.0.0 — canonical birthday greeting sender.
+// v1.1.0 — canonical birthday greeting sender (video greeting).
 //
 // One place decides HOW a birthday wish goes out so the dashboard "Greet"
-// button and the nightly `builtin:birthday_wish` automation behave identically:
+// button and the noon-IST `builtin:birthday_wish` automation behave identically:
 //
-//   1. WhatsApp  — when the person has a phone (branded image + approved
-//                  `member_birthday_wish` template via event_key='birthday').
+//   1. WhatsApp  — when the person has a phone (branded birthday VIDEO sent as
+//                  the media header / freeform video with the wish as caption).
 //   2. Email     — when there is no phone (or WhatsApp is suppressed) and an
-//                  email exists; branded HTML shell with the same card image.
+//                  email exists; branded HTML with a clickable video poster
+//                  (email clients cannot autoplay MP4, so the poster links to
+//                  the hosted video).
 //   3. In-app    — always, so the greeting shows in the member portal too.
 //
 // Everything routes through `dispatch-communication`, which owns template
 // resolution, member preferences, quiet hours and communication_logs.
 
-export const BIRTHDAY_CARD_URL =
-  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-card.jpg";
+export const BIRTHDAY_VIDEO_URL =
+  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-video.mp4";
+
+/** Still frame of the video — used where a video cannot render (email). */
+export const BIRTHDAY_POSTER_URL =
+  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-poster.jpg";
+
 
 export type BirthdayPersonType = "member" | "trainer" | "staff";
 
@@ -75,12 +82,16 @@ function defaultBody(name: string): string {
 function emailHtml(name: string, body: string): string {
   return `
     <div style="text-align:center">
-      <img src="${BIRTHDAY_CARD_URL}" alt="Happy Birthday from Incline" width="520" style="max-width:100%;border-radius:16px;margin-bottom:20px" />
+      <a href="${BIRTHDAY_VIDEO_URL}" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">
+        <img src="${BIRTHDAY_POSTER_URL}" alt="Happy Birthday from Incline — tap to play" width="520" style="max-width:100%;border-radius:16px;margin-bottom:8px" />
+        <div style="font-size:13px;color:#4f46e5;font-weight:600;margin-bottom:20px">▶ Play your birthday video</div>
+      </a>
     </div>
     <h2 style="color:#4f46e5;margin:0 0 12px">Happy Birthday, ${name}! 🎂</h2>
     <p style="font-size:15px;line-height:1.6;color:#334155;margin:0">${body}</p>
   `;
 }
+
 
 /**
  * Resolve contact details and send the greeting. Safe to call repeatedly —
@@ -135,11 +146,12 @@ export async function sendBirthdayGreeting(
       recipient: phone,
       payload: { body, variables },
       attachment: {
-        url: BIRTHDAY_CARD_URL,
-        filename: "incline-birthday.jpg",
-        content_type: "image/jpeg",
-        kind: "image",
+        url: BIRTHDAY_VIDEO_URL,
+        filename: "incline-birthday.mp4",
+        content_type: "video/mp4",
+        kind: "video",
       },
+
       dedupe_key: `birthday_wish:${target.user_id}:${day}:whatsapp`,
     });
     results.push({ channel: "whatsapp", ...r });

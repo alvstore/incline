@@ -38,7 +38,13 @@ async function uploadSampleAsHandle(opts: {
       console.warn(`[uploadSampleAsHandle] fetch ${opts.sampleUrl} → ${fileRes.status}`);
       return null;
     }
-    const contentType = fileRes.headers.get("content-type") || opts.fallbackContentType;
+    // Storage/CDNs frequently serve assets as application/octet-stream; Meta
+    // rejects that with "File type not supported", so trust the expected type.
+    const servedType = (fileRes.headers.get("content-type") || "").split(";")[0].trim();
+    const contentType =
+      servedType && servedType !== "application/octet-stream" && servedType !== "binary/octet-stream"
+        ? servedType
+        : opts.fallbackContentType;
     const bytes = new Uint8Array(await fileRes.arrayBuffer());
     if (bytes.byteLength < 256) return null;
 
