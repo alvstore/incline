@@ -863,8 +863,12 @@ function AttendanceMatrix({
   branchId: string | undefined; ym: string; staff: TrainerRosterRow[];
 }) {
   const { data: logs = [], isLoading } = useStaffAttendanceMonth(branchId, ym);
+  const { hasAnyRole } = useAuth();
+  const canManage = hasAnyRole(['owner', 'admin', 'manager']);
+  const [detail, setDetail] = useState<{ userId: string; name: string; date: string } | null>(null);
   const [showOnlyLate, setShowOnlyLate] = useState(false);
   const [search, setSearch] = useState('');
+
 
   const [year, monthNum] = ym.split('-').map(Number);
   const month = monthNum - 1;
