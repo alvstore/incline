@@ -127,6 +127,35 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Attendance corrections flag payroll lines as stale; HR recalculates deliberately.
+  const recalcMut = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.rpc('payroll_recalculate_item', {
+        p_item_id: itemId, p_reason: 'attendance corrected',
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success('Recalculated from attendance'); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const reopenMut = useMutation({
+    mutationFn: async () => {
+      if (!activeRunId) return;
+      const { error } = await supabase.rpc('payroll_reopen_run', {
+        p_run_id: activeRunId, p_reason: reopenReason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Run reopened as draft');
+      setReopenOpen(false); setReopenReason('');
+      qc.invalidateQueries({ queryKey: ['payroll-runs'] });
+      qc.invalidateQueries({ queryKey: ['payroll-items'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
 
   const payMut = useMutation({
     mutationFn: async () => {
