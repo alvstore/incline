@@ -250,7 +250,7 @@ export default function SarvamVoiceCard() {
       const { data, error } = await supabase.functions.invoke('sarvam-voice', {
         body: { action: 'test_call', to: testPhone, confirmed: true },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readEdgeError(error, 'Test call failed'));
       const res = data as { ok: boolean; error?: string; code?: string };
       if (!res.ok) {
         // Sarvam does not expose Instant Outbound for this workspace/agent —
@@ -287,7 +287,7 @@ export default function SarvamVoiceCard() {
       const { data, error } = await supabase.functions.invoke('sarvam-voice', {
         body: { action: 'run_eligibility_check' },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readEdgeError(error, 'Eligibility check failed'));
       const res = data as { ok: boolean; error?: string; eligibility?: EligibilitySummary };
       if (!res.ok) throw new Error(res.error || 'Eligibility check failed');
       return res.eligibility as EligibilitySummary;
