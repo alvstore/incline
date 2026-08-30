@@ -338,3 +338,37 @@ export function normalizeCallStatus(s: string | null | undefined): string {
       return "failed";
   }
 }
+
+/** The exact agent-variable contract Incline sends to Sarvam on every outbound
+ *  call. These names must match the Input variables configured on the agent. */
+export const AGENT_INPUT_VARIABLES = [
+  "member_name",
+  "member_code",
+  "branch_name",
+  "days_absent",
+  "last_visit_date",
+  "plan_name",
+  "plan_expiry",
+  "trainer_name",
+  "preferred_language",
+  "call_reason",
+] as const;
+
+/** Output variables Sarvam returns in final_agent_variables after the call. */
+export const AGENT_OUTPUT_VARIABLES = [
+  "call_disposition",
+  "callback_datetime",
+  "reason_for_absence",
+  "next_step_agreed",
+] as const;
+
+export type AgentVariables = Partial<Record<typeof AGENT_INPUT_VARIABLES[number], string>>;
+
+/** Fill every input variable so the agent never sees an undefined slot. */
+export function buildAgentVariables(input: AgentVariables): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of AGENT_INPUT_VARIABLES) {
+    out[key] = (input[key] ?? "").toString();
+  }
+  return out;
+}
