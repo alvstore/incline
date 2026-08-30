@@ -427,6 +427,9 @@ export default function VoiceAIPage() {
                     </Table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
 
           <TabsContent value="callbacks">
