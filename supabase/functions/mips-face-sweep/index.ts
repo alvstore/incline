@@ -105,6 +105,101 @@ async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceC
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Tier A verification — attribute face templates from real recognitions.
+ *
+ * The firmware never says WHO it holds, but every accepted face scan in
+ * `access_logs` names a person AND the gate serial that recognised them. A
+ * successful face scan is proof that this gate carries a usable template for
+ * that person, so the matching ledger rows can be marked `enrolled` without
+ * touching the MIPS server at all.
+ */
+async function verifyByRecognition(
+  supabase: any,
+  branchId: string,
+  devices: LedgerDevice[],
+  roster: LedgerPerson[],
+): Promise<number> {
+  if (!devices.length || !roster.length) return 0;
+
+  // serial → mips_device_id
+  const { data: deviceRows } = await supabase
+    .from("access_devices")
+    .select("serial_number, mips_device_id")
+    .eq("branch_id", branchId)
+    .not("mips_device_id", "is", null);
+  const snToMips = new Map<string, number>();
+  for (const d of deviceRows || []) {
+    if (d.serial_number) snToMips.set(String(d.serial_number).toUpperCase(), Number(d.mips_device_id));
+  }
+  if (!snToMips.size) return 0;
+
+  const since = new Date(Date.now() - RECOGNITION_WINDOW_DAYS * 86_400_000).toISOString();
+  const { data: logs } = await supabase
+    .from("access_logs")
+    .select("device_sn, member_id, profile_id")
+    .eq("branch_id", branchId)
+    .eq("event_type", "face_scan")
+    .gte("captured_at", since)
+    .limit(20000);
+  if (!logs?.length) return 0;
+
+  // person_id → person_sn (members are keyed by member id, staff by profile id)
+  const memberIds = roster.filter((p) => p.type === "member").map((p) => p.id);
+  const staff = roster.filter((p) => p.type !== "member");
+  const snByMemberId = new Map<string, string>();
+  for (const p of roster) if (p.type === "member") snByMemberId.set(p.id, p.sn);
+
+  const snByProfileId = new Map<string, string>();
+  if (staff.length) {
+    const [emp, trn] = await Promise.all([
+      supabase.from("employees").select("id, user_id").in("id", staff.filter((s) => s.type === "employee").map((s) => s.id)),
+      supabase.from("trainers").select("id, user_id").in("id", staff.filter((s) => s.type === "trainer").map((s) => s.id)),
+    ]);
+    for (const row of [...(emp.data || []), ...(trn.data || [])]) {
+      const person = staff.find((s) => s.id === row.id);
+      if (person && row.user_id) snByProfileId.set(row.user_id, person.sn);
+    }
+  }
+
+  // (mips_device_id, person_sn) pairs proven by a real recognition
+  const proven = new Map<number, Set<string>>();
+  for (const l of logs) {
+    const mipsId = snToMips.get(String(l.device_sn || "").toUpperCase());
+    if (!mipsId) continue;
+    const sn = (l.member_id && snByMemberId.get(l.member_id))
+      || (l.profile_id && snByProfileId.get(l.profile_id));
+    if (!sn) continue;
+    const set = proven.get(mipsId) || new Set<string>();
+    set.add(sn);
+    proven.set(mipsId, set);
+  }
+  if (!proven.size) return 0;
+
+  let marked = 0;
+  for (const [mipsId, sns] of proven.entries()) {
+    const list = [...sns];
+    for (let i = 0; i < list.length; i += 200) {
+      const { data } = await supabase
+        .from("mips_device_face_state")
+        .update({
+          state: "enrolled",
+          reason: "Verified by a successful face recognition at this gate",
+          enrolled_at: new Date().toISOString(),
+        })
+        .eq("branch_id", branchId)
+        .eq("mips_device_id", mipsId)
+        .in("person_sn", list.slice(i, i + 200))
+        .neq("state", "enrolled")
+        .select("id");
+      marked += (data || []).length;
+    }
+  }
+  if (marked) console.log(`[mips-face-sweep] recognition-verified ${marked} ledger rows (memberIds=${memberIds.length})`);
+  return marked;
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
