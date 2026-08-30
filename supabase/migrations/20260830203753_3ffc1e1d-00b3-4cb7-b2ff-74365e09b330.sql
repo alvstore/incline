@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.voice_retention_candidates(integer, integer, uuid[]) TO service_role;

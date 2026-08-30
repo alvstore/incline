@@ -254,33 +254,82 @@ async function computeReadiness(
   };
 }
 
+/** Agent context for one member: the exact input variables the Sarvam agent
+ *  expects, sourced live from the CRM (no cached copies). */
+async function memberCallContext(
+  sb: ReturnType<typeof admin>,
+  memberId: string,
+): Promise<{ phone: string; branch_id: string | null; vars: Record<string, string> } | null> {
+  const { data: m } = await sb
+    .from("members")
+    .select("id, member_code, branch_id, user_id, assigned_trainer_id")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!m) return null;
 
+  const [{ data: profile }, { data: branch }, { data: membership }, { data: lastVisit }] = await Promise.all([
+    m.user_id
+      ? sb.from("profiles").select("full_name, phone, gender").eq("id", m.user_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    m.branch_id ? sb.from("branches").select("name").eq("id", m.branch_id).maybeSingle() : Promise.resolve({ data: null }),
+    sb.from("memberships")
+      .select("end_date, plan_id, membership_plans(name)")
+      .eq("member_id", memberId)
+      .eq("status", "active")
+      .order("end_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    sb.from("member_attendance")
+      .select("check_in")
+      .eq("member_id", memberId)
+      .order("check_in", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  let trainerName = "";
+  if (m.assigned_trainer_id) {
+    const { data: t } = await sb.from("trainers").select("user_id").eq("id", m.assigned_trainer_id).maybeSingle();
+    const tUser = (t as { user_id?: string } | null)?.user_id;
+    if (tUser) {
+      const { data: tp } = await sb.from("profiles").select("full_name").eq("id", tUser).maybeSingle();
+      trainerName = (tp as { full_name?: string } | null)?.full_name ?? "";
+    }
+  }
+
+  const lastCheckIn = (lastVisit as { check_in?: string } | null)?.check_in ?? null;
+  const daysAbsent = lastCheckIn
+    ? Math.max(0, Math.floor((Date.now() - new Date(lastCheckIn).getTime()) / 86_400_000))
+    : 0;
+  const planRel = (membership as { membership_plans?: unknown } | null)?.membership_plans;
+  const planName = Array.isArray(planRel)
+    ? ((planRel[0] as { name?: string })?.name ?? "")
+    : ((planRel as { name?: string } | null)?.name ?? "");
+
+  return {
+    phone: (profile as { phone?: string } | null)?.phone ?? "",
+    branch_id: (m.branch_id as string) ?? null,
+    vars: {
+      member_name: (profile as { full_name?: string } | null)?.full_name ?? "",
+      member_code: (m.member_code as string) ?? "",
+      branch_name: (branch as { name?: string } | null)?.name ?? "Incline",
+      days_absent: String(daysAbsent),
+      last_visit_date: lastCheckIn ? new Date(lastCheckIn).toISOString().slice(0, 10) : "",
+      plan_name: planName,
+      plan_expiry: String((membership as { end_date?: string } | null)?.end_date ?? ""),
+      trainer_name: trainerName,
+      gender: (profile as { gender?: string } | null)?.gender ?? "",
+      preferred_language: "Hindi",
+    },
+  };
+}
 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Unauthorized" }, 401);
-
-    const sbAuth = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims } = await sbAuth.auth.getClaims(token);
-    const userId = claims?.claims?.sub as string | undefined;
-    if (!userId) return json({ ok: false, error: "Unauthorized" }, 401);
-
     const sb = admin();
-    const { data: roleRows } = await sb.from("user_roles").select("role").eq("user_id", userId);
-    const roles = (roleRows || []).map((r: { role: string }) => r.role);
-    if (!roles.some((r) => r === "owner" || r === "admin")) {
-      return json({ ok: false, error: "Forbidden — owner or admin only" }, 403);
-    }
-
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = String(body.action || "get_state");
     const branchId: string | null = body.branch_id && body.branch_id !== "all" ? body.branch_id : null;
@@ -295,6 +344,49 @@ Deno.serve(async (req) => {
       : await baseQuery.is("branch_id", null).maybeSingle();
 
     const cfg: SarvamConfig = { ...DEFAULT_CONFIG, ...((row?.config as SarvamConfig) || {}) };
+
+    // ---- authorization -----------------------------------------------------
+    // Two accepted identities:
+    //  1. Owner/admin JWT (the Settings UI and the Voice AI console).
+    //  2. The internal shared key (X-Incline-Tool-Key) for server-side
+    //     operator runs. It can only reach the read + call-placement actions,
+    //     never configuration or the retention master switch.
+    const SYSTEM_ACTIONS = new Set([
+      "get_state",
+      "get_readiness",
+      "run_eligibility_check",
+      "place_call",
+      "run_batch",
+      "metrics",
+    ]);
+    const systemKey = req.headers.get("x-incline-tool-key") ?? "";
+    const isSystem = !!cfg.tool_token && systemKey.length === cfg.tool_token.length &&
+      systemKey === cfg.tool_token;
+
+    let userId: string | null = null;
+    if (isSystem) {
+      if (!SYSTEM_ACTIONS.has(action)) {
+        return json({ ok: false, error: "Forbidden — system key cannot perform this action" }, 403);
+      }
+    } else {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Unauthorized" }, 401);
+      const sbAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claims } = await sbAuth.auth.getClaims(token);
+      userId = (claims?.claims?.sub as string | undefined) ?? null;
+      if (!userId) return json({ ok: false, error: "Unauthorized" }, 401);
+      const { data: roleRows } = await sb.from("user_roles").select("role").eq("user_id", userId);
+      const roles = (roleRows || []).map((r: { role: string }) => r.role);
+      if (!roles.some((r) => r === "owner" || r === "admin")) {
+        return json({ ok: false, error: "Forbidden — owner or admin only" }, 403);
+      }
+    }
+
 
     const loadKey = async (): Promise<string | null> => {
       if (!row?.id) return null;
@@ -515,41 +607,38 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (action === "test_call") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
-      if (body.confirmed !== true) {
-        return json({ ok: false, error: "Confirmation is required before placing a test call.", code: "not_confirmed" });
-      }
-      const to = normalizePhone(String(body.to || ""));
+    // ---- shared call-placement engine --------------------------------------
+    // Every outbound call in the product funnels through here: readiness →
+    // window → do-not-contact → atomic slot claim → Sarvam Instant Outbound →
+    // ledger update. No other path may dial.
+    type PlaceResult = {
+      ok: boolean;
+      error?: string;
+      code?: string;
+      attempt_id?: string;
+      call_record_id?: string;
+      phone?: string;
+      member_id?: string | null;
+    };
+
+    const placeOne = async (
+      opts: {
+        to: string;
+        source: string;
+        reason: string;
+        memberId?: string | null;
+        branchIdForCall?: string | null;
+        cooldownDays?: number;
+        vars?: Record<string, string>;
+        apiKey: string;
+      },
+    ): Promise<PlaceResult> => {
+      const to = normalizePhone(opts.to);
       if (!isValidIndianMobile(to)) {
-        return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX).", code: "invalid_number" });
+        return { ok: false, error: "Not a valid Indian mobile number.", code: "invalid_number", phone: to };
       }
 
-      // 1. Provider readiness (live probe — never trust the browser).
-      const key = await loadKey();
-      const readiness = await computeReadiness(sb, row, cfg, key, true);
-      if (!readiness.test_call_available) {
-        return json({
-          ok: false,
-          error: setupBlocker(readiness) ?? "Sarvam is not ready for outbound calls.",
-          code: "not_ready",
-          readiness,
-        });
-      }
-
-      // 2. Calling window (Asia/Kolkata, server-side).
-      const nowMin = istMinutesNow();
-      const startMin = hhmmToMinutes(cfg.window_start, 600);
-      const endMin = hhmmToMinutes(cfg.window_end, 1140);
-      if (nowMin < startMin || nowMin >= endMin) {
-        return json({
-          ok: false,
-          error: `Outside the configured calling window (${cfg.window_start}–${cfg.window_end} IST).`,
-          code: "outside_window",
-        });
-      }
-
-      // 3. Do-not-contact across members (via profile phone), leads and chat settings.
+      // Do-not-contact across members (via profile phone), leads and chat settings.
       const [{ data: dncProfiles }, { data: dncLead }, { data: dncChat }] = await Promise.all([
         sb.from("profiles").select("id, full_name, gender").eq("phone", to).limit(5),
         sb.from("leads").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
@@ -567,34 +656,33 @@ Deno.serve(async (req) => {
         memberBlocked = (mem?.length ?? 0) > 0;
       }
       if (memberBlocked || (dncLead?.length ?? 0) > 0 || (dncChat?.length ?? 0) > 0) {
-        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" });
+        return { ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact", phone: to };
       }
 
-      // 4. Atomic slot claim: daily cap + concurrency + duplicate live call.
-      //    Serialised in Postgres so concurrent workers cannot overshoot.
+      // Atomic slot claim: daily cap + concurrency + duplicate live call.
       const { data: claim, error: claimErr } = await sb.rpc("voice_claim_call_slot", {
         _provider: PROVIDER,
-        _branch_id: branchId,
-        _source: "manual_test",
-        _reason: "manual_test",
+        _branch_id: opts.branchIdForCall ?? branchId,
+        _source: opts.source,
+        _reason: opts.reason,
         _phone: to,
-        _member_id: null,
+        _member_id: opts.memberId ?? null,
         _lead_id: null,
         _agent_id: cfg.app_id ?? null,
         _agent_version: cfg.app_version ?? null,
         _daily_cap: cfg.daily_call_cap ?? 25,
         _max_concurrent: cfg.max_concurrent_calls ?? 1,
-        _cooldown_days: 0,
+        _cooldown_days: opts.cooldownDays ?? 0,
         _eligibility: {
           checked: ["readiness", "window", "do_not_contact", "daily_cap", "concurrency", "duplicate"],
           window: `${cfg.window_start}-${cfg.window_end} IST`,
         },
         _created_by: userId,
       });
-      if (claimErr) return json({ ok: false, error: claimErr.message }, 500);
+      if (claimErr) return { ok: false, error: claimErr.message, code: "claim_failed", phone: to };
       const claimed = claim as { ok: boolean; attempt_row_id?: string; error?: string; error_code?: string };
       if (!claimed?.ok) {
-        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code });
+        return { ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code, phone: to };
       }
       const attemptRowId = claimed.attempt_row_id!;
 
@@ -602,10 +690,10 @@ Deno.serve(async (req) => {
       const callerProfile = (dncProfiles || [])[0] as
         | { id: string; full_name?: string | null; gender?: string | null }
         | undefined;
-      let calleeName = callerProfile?.full_name ?? "";
-      let calleeCode = "";
-      let calleeBranch = "Incline";
-      if (callerProfile) {
+      let calleeName = opts.vars?.member_name || callerProfile?.full_name || "";
+      let calleeCode = opts.vars?.member_code ?? "";
+      let calleeBranch = opts.vars?.branch_name || "Incline";
+      if (callerProfile && (!calleeCode || calleeBranch === "Incline")) {
         const { data: memberRow } = await sb
           .from("members")
           .select("member_code, branch_id")
@@ -613,12 +701,11 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        calleeCode = (memberRow as { member_code?: string } | null)?.member_code ?? "";
+        calleeCode = calleeCode || ((memberRow as { member_code?: string } | null)?.member_code ?? "");
         const bId = (memberRow as { branch_id?: string } | null)?.branch_id;
-        if (bId) {
+        if (bId && calleeBranch === "Incline") {
           const { data: br } = await sb.from("branches").select("name").eq("id", bId).maybeSingle();
           calleeBranch = (br as { name?: string } | null)?.name ?? calleeBranch;
-          
         }
       }
       if (!calleeName) calleeName = "there";
@@ -626,25 +713,26 @@ Deno.serve(async (req) => {
       const webhookUrl =
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`;
       try {
-        const { attempt_id } = await createOutboundCall(key!, cfg, {
+        const { attempt_id } = await createOutboundCall(opts.apiKey, cfg, {
           to,
           agentVariables: buildAgentVariables({
-            call_reason: "manual_test",
-            branch_name: calleeBranch,
             preferred_language: "Hindi",
+            ...(opts.vars ?? {}),
+            call_reason: opts.reason,
+            branch_name: calleeBranch,
             phone: to,
             member_name: calleeName,
             member_code: calleeCode,
-            gender: callerProfile?.gender ?? "",
+            gender: opts.vars?.gender || (callerProfile?.gender ?? ""),
           }),
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
-          webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
+          webhookMetadata: { attempt_ref: attemptRowId, source: opts.source },
         });
         await sb.from("voice_call_attempts").update({
           provider_call_id: attempt_id,
           status: "initiated",
         }).eq("id", attemptRowId);
-        return json({ ok: true, attempt_id, call_record_id: attemptRowId });
+        return { ok: true, attempt_id, call_record_id: attemptRowId, phone: to, member_id: opts.memberId ?? null };
       } catch (e) {
         const err = e instanceof SarvamError ? e : new SarvamError(redact((e as Error).message), "sarvam_unknown");
         await sb.from("voice_call_attempts").update({
@@ -653,9 +741,207 @@ Deno.serve(async (req) => {
           error_message: err.message.slice(0, 500),
           ended_at: new Date().toISOString(),
         }).eq("id", attemptRowId);
-        return json({ ok: false, error: err.message, code: err.code }, 200);
+        return { ok: false, error: err.message, code: err.code, phone: to, call_record_id: attemptRowId };
       }
+    };
+
+    /** Readiness + calling window gate shared by every dialling action. */
+    const dialGate = async (): Promise<{ blocked?: Response; key?: string }> => {
+      const key = await loadKey();
+      const readiness = await computeReadiness(sb, row!, cfg, key, true);
+      if (!readiness.test_call_available) {
+        return {
+          blocked: json({
+            ok: false,
+            error: setupBlocker(readiness) ?? "Sarvam is not ready for outbound calls.",
+            code: "not_ready",
+            readiness,
+          }),
+        };
+      }
+      const nowMin = istMinutesNow();
+      const startMin = hhmmToMinutes(cfg.window_start, 600);
+      const endMin = hhmmToMinutes(cfg.window_end, 1140);
+      if (nowMin < startMin || nowMin >= endMin) {
+        return {
+          blocked: json({
+            ok: false,
+            error: `Outside the configured calling window (${cfg.window_start}–${cfg.window_end} IST).`,
+            code: "outside_window",
+          }),
+        };
+      }
+      return { key: key! };
+    };
+
+    if (action === "test_call") {
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
+      if (body.confirmed !== true) {
+        return json({ ok: false, error: "Confirmation is required before placing a test call.", code: "not_confirmed" });
+      }
+      const to = normalizePhone(String(body.to || ""));
+      if (!isValidIndianMobile(to)) {
+        return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX).", code: "invalid_number" });
+      }
+      const gate = await dialGate();
+      if (gate.blocked) return gate.blocked;
+      const res = await placeOne({ to, source: "manual_test", reason: "manual_test", apiKey: gate.key! });
+      return json(res);
     }
+
+    // Operator-triggered single call to one member (no automation, no cron).
+    if (action === "place_call") {
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
+      if (body.confirmed !== true) {
+        return json({ ok: false, error: "Confirmation is required before placing a call.", code: "not_confirmed" });
+      }
+      const gate = await dialGate();
+      if (gate.blocked) return gate.blocked;
+
+      const memberId: string | null = typeof body.member_id === "string" ? body.member_id : null;
+      let to = normalizePhone(String(body.to || ""));
+      let vars: Record<string, string> = {};
+      let callBranch: string | null = null;
+      if (memberId) {
+        const ctx = await memberCallContext(sb, memberId);
+        if (!ctx) return json({ ok: false, error: "Member not found.", code: "not_found" });
+        to = to || ctx.phone;
+        vars = ctx.vars;
+        callBranch = ctx.branch_id;
+      }
+      if (!isValidIndianMobile(to)) {
+        return json({ ok: false, error: "No valid mobile number for this member.", code: "invalid_number" });
+      }
+      const res = await placeOne({
+        to,
+        source: memberId ? "member_retention" : "manual_test",
+        reason: String(body.reason || (memberId ? "member_retention" : "manual_test")),
+        memberId,
+        branchIdForCall: callBranch,
+        cooldownDays: memberId ? Number(body.cooldown_days ?? 7) : 0,
+        vars,
+        apiKey: gate.key!,
+      });
+      return json(res);
+    }
+
+    // Operator-triggered batch over the existing retention eligibility engine.
+    // Nothing here runs on a schedule — a human must call it.
+    if (action === "run_batch") {
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
+      if (body.confirmed !== true) {
+        return json({ ok: false, error: "Confirmation is required before running a batch.", code: "not_confirmed" });
+      }
+      const gate = await dialGate();
+      if (gate.blocked) return gate.blocked;
+
+      const a = ((row.retention_automation || {}) as Record<string, unknown>) ?? {};
+      // Retention runs obey the retention window, which is stricter than the
+      // integration-wide calling window used for test calls.
+      const rNow = istMinutesNow();
+      const rStart = hhmmToMinutes(String(a.window_start ?? "10:00"), 600);
+      const rEnd = hhmmToMinutes(String(a.window_end ?? "19:00"), 1140);
+      if (rNow < rStart || rNow >= rEnd) {
+        return json({
+          ok: false,
+          error: `Outside the retention calling window (${a.window_start ?? "10:00"}–${a.window_end ?? "19:00"} IST).`,
+          code: "outside_window",
+        });
+      }
+      const minAbsent = Number(body.min_absent_days ?? a.min_absent_days ?? 7);
+      const cooldown = Number(body.cooldown_days ?? a.cooldown_days ?? 7);
+      const limit = Math.min(50, Math.max(1, Number(body.limit ?? 5)));
+      const branchIds = branchId
+        ? [branchId]
+        : (Array.isArray(a.branch_ids) && a.branch_ids.length ? a.branch_ids as string[] : null);
+
+      const { data: candidates, error: candErr } = await sb.rpc("voice_retention_candidates", {
+        _min_absent_days: minAbsent,
+        _cooldown_days: cooldown,
+        _branch_ids: branchIds,
+      });
+      if (candErr) return json({ ok: false, error: candErr.message, code: "candidates_failed" }, 500);
+
+      const eligible = ((candidates || []) as Array<Record<string, unknown>>)
+        .filter((c) =>
+          !c.missing_phone && !c.dnd && !c.paused && !c.too_recent && !c.in_cooldown && !c.contacted_today
+        )
+        .slice(0, limit);
+
+      const results: PlaceResult[] = [];
+      for (const c of eligible) {
+        const memberId = String(c.member_id);
+        const ctx = await memberCallContext(sb, memberId);
+        const res = await placeOne({
+          to: String(ctx?.phone || c.phone || ""),
+          source: "member_retention",
+          reason: "member_retention",
+          memberId,
+          branchIdForCall: (c.branch_id as string) ?? null,
+          cooldownDays: cooldown,
+          vars: ctx?.vars ?? {},
+          apiKey: gate.key!,
+        });
+        results.push(res);
+        // Serialise: concurrency is capped at max_concurrent_calls anyway and
+        // the slot claim will reject overshoot, so pace politely.
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      const placed = results.filter((r) => r.ok).length;
+      return json({
+        ok: true,
+        candidates: eligible.length,
+        placed,
+        skipped: results.length - placed,
+        results,
+      });
+    }
+
+    // Live success-ratio metrics straight off the ledger.
+    if (action === "metrics") {
+      const days = Math.min(90, Math.max(1, Number(body.days ?? 7)));
+      const since = new Date(Date.now() - days * 86_400_000).toISOString();
+      const { data: rows, error } = await sb
+        .from("voice_call_attempts")
+        .select("status, source, disposition, duration_seconds, started_at, error_code")
+        .eq("provider", PROVIDER)
+        .gte("started_at", since)
+        .order("started_at", { ascending: false })
+        .limit(2000);
+      if (error) return json({ ok: false, error: error.message }, 500);
+      const list = (rows || []) as Array<Record<string, unknown>>;
+      const byStatus: Record<string, number> = {};
+      const byDisposition: Record<string, number> = {};
+      const byError: Record<string, number> = {};
+      let connected = 0;
+      let durationTotal = 0;
+      for (const r of list) {
+        const s = String(r.status ?? "unknown");
+        byStatus[s] = (byStatus[s] ?? 0) + 1;
+        if (["connected", "answered", "completed"].includes(s)) connected++;
+        if (r.disposition) {
+          const d = String(r.disposition);
+          byDisposition[d] = (byDisposition[d] ?? 0) + 1;
+        }
+        if (r.error_code) {
+          const e = String(r.error_code);
+          byError[e] = (byError[e] ?? 0) + 1;
+        }
+        durationTotal += Number(r.duration_seconds ?? 0) || 0;
+      }
+      return json({
+        ok: true,
+        window_days: days,
+        total: list.length,
+        connected,
+        connect_rate: list.length ? Math.round((connected / list.length) * 1000) / 10 : 0,
+        avg_duration_seconds: connected ? Math.round(durationTotal / connected) : 0,
+        by_status: byStatus,
+        by_disposition: byDisposition,
+        by_error: byError,
+      });
+    }
+
 
 
     return json({ ok: false, error: `Unknown action: ${action}`, code: "unknown_action" });
