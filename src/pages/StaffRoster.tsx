@@ -1103,7 +1103,8 @@ function AttendanceMatrix({
   );
 }
 
-function AttCell({ cell, day }: { cell: ReturnType<typeof Object> & any; day: number }) {
+function AttCell({ cell, day, onOpen }: { cell: ReturnType<typeof Object> & any; day: number; onOpen?: () => void }) {
+
   const tone = {
     ontime: 'bg-success/15 text-success',
     late: 'bg-warning/15 text-warning',
