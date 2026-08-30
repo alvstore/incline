@@ -9748,6 +9748,7 @@ export type Database = {
       payroll_items: {
         Row: {
           adjustment_reason: string | null
+          attendance_changed_at: string | null
           calc_attendance: Json
           calc_base: number
           calc_deductions: number
@@ -9777,6 +9778,7 @@ export type Database = {
         }
         Insert: {
           adjustment_reason?: string | null
+          attendance_changed_at?: string | null
           calc_attendance?: Json
           calc_base?: number
           calc_deductions?: number
@@ -9806,6 +9808,7 @@ export type Database = {
         }
         Update: {
           adjustment_reason?: string | null
+          attendance_changed_at?: string | null
           calc_attendance?: Json
           calc_base?: number
           calc_deductions?: number
@@ -14326,6 +14329,10 @@ export type Database = {
         Returns: Json
       }
       archive_approval_audit_log: { Args: never; Returns: Json }
+      assert_can_manage_staff_attendance: {
+        Args: { p_target_user: string }
+        Returns: string
+      }
       assert_measurement_range: {
         Args: { _field: string; _max: number; _min: number; _value: number }
         Returns: number
@@ -15618,6 +15625,10 @@ export type Database = {
         Args: { p_item_ids: string[] }
         Returns: undefined
       }
+      payroll_reopen_run: {
+        Args: { p_reason: string; p_run_id: string }
+        Returns: undefined
+      }
       payroll_review_items: {
         Args: { p_item_ids: string[] }
         Returns: undefined
@@ -16325,7 +16336,15 @@ export type Database = {
       }
       staff_check_out: { Args: { p_user_id: string }; Returns: Json }
       staff_correct_attendance: {
-        Args: { p_check_in?: string; p_id: string; p_notes?: string }
+        Args: {
+          p_check_in?: string
+          p_check_out?: string
+          p_clear_check_out?: boolean
+          p_id: string
+          p_notes?: string
+          p_reason?: string
+          p_shift_date?: string
+        }
         Returns: string
       }
       staff_day_blocks: {
@@ -16352,7 +16371,10 @@ export type Database = {
           state: string
         }[]
       }
-      staff_delete_attendance: { Args: { p_id: string }; Returns: boolean }
+      staff_delete_attendance: {
+        Args: { p_id: string; p_reason?: string }
+        Returns: boolean
+      }
       staff_mark_block: {
         Args: {
           p_branch_id?: string
@@ -16360,6 +16382,18 @@ export type Database = {
           p_reason?: string
           p_shift_type: string
           p_state: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      staff_mark_manual_attendance: {
+        Args: {
+          p_branch_id?: string
+          p_check_in?: string
+          p_check_out?: string
+          p_reason?: string
+          p_shift_date: string
+          p_shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           p_user_id: string
         }
         Returns: string
@@ -16384,6 +16418,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      staff_primary_branch: { Args: { p_user_id: string }; Returns: string }
       staff_record_punch: {
         Args: {
           p_branch_id: string
