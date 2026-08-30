@@ -1,3 +1,8 @@
+// v2.7.0 — personnel routing fix: every synced person is `personType: 1`
+// (Personnel). Staff/trainers were previously pushed as `personType: 2`, which
+// filed them under MIPS Visitor Management. Department IDs 101/102 do not exist
+// on the server, so all people now use the real root department (100 Incline)
+// with a role-descriptive deptName.
 // v2.6.0 — no-membership probation window REMOVED. Members without a valid
 // membership sync with the canonical revoked date (2000-01-01), and every
 // member sync is re-checked against `member_access_status` before the write.
@@ -35,6 +40,8 @@ const corsHeaders = {
 };
 
 const PERMANENT_END = "2099-12-31 23:59:59";
+// The MIPS server only has departments 100 (Incline) and 103 (Visitors).
+const STAFF_DEPT_ID = 100;
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 // Photos are never decoded in this worker (see fetchDeviceReadyBytes).
@@ -882,7 +889,7 @@ Deno.serve(async (req) => {
 
     } else if (person_type === "employee") {
       tableName = "employees";
-      deptId = 101;
+      deptId = STAFF_DEPT_ID;
       const { data: emp, error } = await supabase
         .from("employees")
         .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth)")
@@ -915,7 +922,7 @@ Deno.serve(async (req) => {
       validTimeEnd = PERMANENT_END;
     } else if (person_type === "trainer") {
       tableName = "trainers";
-      deptId = 102;
+      deptId = STAFF_DEPT_ID;
       const { data: trainer, error } = await supabase
         .from("trainers")
         .select("id, branch_id, biometric_photo_url, biometric_photo_path, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type, specializations")
@@ -1009,7 +1016,9 @@ Deno.serve(async (req) => {
     }
 
     // Step 3: Create or update person — omit empty strings so MIPS keeps prior values
-    const personType = person_type === "member" ? 1 : 2;
+    // personType 1 = Personnel, 2 = Visitor. Staff and trainers are personnel —
+    // sending 2 filed them under MIPS Visitor Management (v2.7.0 fix).
+    const personType = 1;
     const personPayload: Record<string, unknown> = {
       personSn: mipsPersonSn,
       personType,
