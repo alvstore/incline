@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Recipient rows are the source of truth; superseded duplicates excluded.
     const { data: recips } = await admin
       .from('campaign_recipients')
-      .select('id, source_type, source_ref_id, status, error')
+      .select('id, source_type, source_ref_id, status, error, last_retried_at, dispatched_at, created_at')
       .eq('campaign_id', cid)
       .eq('superseded', false);
 
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       .select('id, dedupe_key, delivery_status, read_at, delivered_at, failed_at, error_message, provider_message_id, created_at')
       .like('dedupe_key', `campaign:${cid}:%`);
 
-    // v1.1.0 — attempt-aware precedence. A retry (`:a2`, `:retry:<ts>`, …)
+    // v2.1.0 — attempt-aware precedence. A retry (`:a2`, `:retry:<ts>`, …)
     // supersedes every earlier attempt for the same recipient; only within the
     // SAME attempt does the outcome ranking (read > delivered > failed > sent)
     // decide. Previously a stale failed attempt outranked a newer successful
@@ -91,6 +91,17 @@ Deno.serve(async (req) => {
       const key = `campaign:${cid}:${(r as any).source_type}:${(r as any).source_ref_id}`;
       const dlr = dlrByKey.get(key);
       if (!dlr) continue;
+
+      // v2.1.0 — never resurrect an outcome that predates the current attempt.
+      // A row that was re-queued (pending/dispatching after a retry) must wait
+      // for its own provider outcome instead of inheriting the previous one.
+      const rStatus = String((r as any).status || '');
+      if (rStatus === 'pending' || rStatus === 'dispatching') {
+        const retriedAt = Date.parse(String((r as any).last_retried_at || '')) || 0;
+        const logAt = Date.parse(String((dlr as any).created_at || '')) || 0;
+        if (retriedAt && logAt <= retriedAt) continue;
+      }
+
 
       const ds = String(dlr.delivery_status || '').toLowerCase();
       const mapped =
