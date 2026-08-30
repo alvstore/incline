@@ -95,10 +95,13 @@ export interface SarvamReadiness {
   agent_version: string | null;
   agent_committed: boolean;
   deployment_configured: boolean;
+  deployment_active: boolean;
   outbound_enabled: boolean;
   phone_number_configured: boolean;
+  /** Alias of deployment_active — the number is live only if its deployment is. */
   phone_number_active: boolean;
   phone_number_assigned: boolean;
+
   test_call_available: boolean;
   successful_test_call: boolean;
   integration_enabled: boolean;
