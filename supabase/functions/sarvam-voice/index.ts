@@ -165,14 +165,17 @@ async function computeReadiness(
             `Configured agent version (${agent_version}) does not match the deployed version (${deployment!.app_version}).`,
           );
         }
-        phone_number_active = status === "active";
-        if (!phone_number_active) blockers.push(`Deployment status is "${status || "unknown"}" — it must be active.`);
-        outbound_enabled = direction.includes("outbound") || direction === "bidirectional" || direction === "both";
+        deployment_active = status === "active";
+        if (!deployment_active) {
+          blockers.push(`Deployment status is "${status || "unknown"}" — it must be active (not paused).`);
+        }
+        outbound_enabled = isOutboundCapable(direction);
         if (!outbound_enabled) {
           blockers.push(
-            `Deployment channel direction is "${direction || "unknown"}" — outbound calling is not enabled on it.`,
+            `Deployment channel direction is "${direction || "unknown"}" — it must be "outbound" or "inbound_outbound".`,
           );
         }
+
         const wanted = normalizePhone(cfg.agent_phone_number ?? "");
         phone_number_assigned = !!wanted && numbers.includes(wanted);
         if (!phone_number_assigned) {
