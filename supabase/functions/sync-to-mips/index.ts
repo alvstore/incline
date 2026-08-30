@@ -1043,12 +1043,33 @@ Deno.serve(async (req) => {
       baseUrl, token, personPayload, existing
     );
 
+    // v2.7.0 — a `failed` status with no audit row is how Rajat and Yogita went
+    // missing for weeks. Every failure now leaves a trace in mips_sync_failures.
+    const recordFailure = async (reason: string) => {
+      try {
+        await supabase.from("mips_sync_failures").insert({
+          branch_id: effectiveBranchId ?? null,
+          entity_type: person_type,
+          entity_id: person_id,
+          operation: "person_upsert",
+          error_message: reason.substring(0, 1000),
+          payload: { personSn: mipsPersonSn, name },
+          status: "open",
+          attempts: 1,
+          last_attempt_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error(`Failed to record mips_sync_failure: ${(e as Error).message}`);
+      }
+    };
+
     if (!success) {
       console.error(`MIPS upsert FAILED: ${JSON.stringify(mipsResponse)}`);
       await supabase.from(tableName).update({
         mips_sync_status: "failed",
         mips_person_id: null,
       }).eq("id", person_id);
+      await recordFailure(mipsResponse?.msg || "MIPS person create/update failed");
 
       return new Response(JSON.stringify({
         success: false,
@@ -1065,6 +1086,7 @@ Deno.serve(async (req) => {
         mips_sync_status: "failed",
         mips_person_id: null,
       }).eq("id", person_id);
+      await recordFailure("Person created but personId not retrievable");
 
       return new Response(JSON.stringify({
         success: false,
@@ -1073,6 +1095,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     console.log(`MIPS person ${existing ? "updated" : "created"}: personId=${personId}`);
 
