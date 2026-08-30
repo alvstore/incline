@@ -526,9 +526,8 @@ export default function SarvamVoiceCard() {
                 <ul className="space-y-1 text-xs">
                   {([
                     ['Sarvam connected', !!readiness?.connected],
-                    ['Agent configured', !!readiness?.agent_configured && !!readiness?.agent_version],
-                    ['Outbound deployment', !!readiness?.deployment_configured && !!readiness?.outbound_enabled],
-                    ['Deployment active & number assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
+                    ['Agent ID & version', !!readiness?.agent_configured && !!readiness?.agent_version],
+                    ['Telephony connection & agent number', !!readiness?.phone_number_configured],
                     ['Integration switched on', !!readiness?.integration_enabled],
                     ['Successful test call', !!readiness?.successful_test_call],
                   ] as Array<[string, boolean]>).map(([label, done]) => (
