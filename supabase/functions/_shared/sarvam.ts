@@ -1,4 +1,4 @@
-// v1.1.0 — Sarvam Voice Agents adapter.
+// v1.2.0 — Sarvam Voice Agents adapter.
 //
 // Single server-side boundary for every Sarvam call. Nothing else in the code
 // base may talk to Sarvam directly. Endpoints below are the officially
@@ -353,6 +353,8 @@ export const AGENT_INPUT_VARIABLES = [
   "trainer_name",
   "preferred_language",
   "call_reason",
+  "gender",
+  "phone",
 ] as const;
 
 /** Output variables Sarvam returns in final_agent_variables after the call. */

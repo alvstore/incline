@@ -591,6 +591,7 @@ Deno.serve(async (req) => {
             call_reason: "manual_test",
             branch_name: "Incline",
             preferred_language: "Hindi",
+            phone: to,
           }),
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
           webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
