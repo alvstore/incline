@@ -602,7 +602,7 @@ Deno.serve(async (req) => {
         if (bId) {
           const { data: br } = await sb.from("branches").select("name").eq("id", bId).maybeSingle();
           calleeBranch = (br as { name?: string } | null)?.name ?? calleeBranch;
-          if (!branchId) branchId = bId;
+          
         }
       }
       if (!calleeName) calleeName = "there";
