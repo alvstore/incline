@@ -42,6 +42,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { AttendanceDetailDrawer } from '@/components/attendance/AttendanceDetailDrawer';
+
 import { canEditAnyRoster, canEditRosterRow, canExportRoster } from '@/lib/auth/permissions';
 import { LatePolicySheet } from '@/components/hrm/LatePolicySheet';
 
@@ -863,8 +865,12 @@ function AttendanceMatrix({
   branchId: string | undefined; ym: string; staff: TrainerRosterRow[];
 }) {
   const { data: logs = [], isLoading } = useStaffAttendanceMonth(branchId, ym);
+  const { hasAnyRole } = useAuth();
+  const canManage = hasAnyRole(['owner', 'admin', 'manager']);
+  const [detail, setDetail] = useState<{ userId: string; name: string; date: string } | null>(null);
   const [showOnlyLate, setShowOnlyLate] = useState(false);
   const [search, setSearch] = useState('');
+
 
   const [year, monthNum] = ym.split('-').map(Number);
   const month = monthNum - 1;
@@ -1072,8 +1078,18 @@ function AttendanceMatrix({
                   </div>
                 </td>
                 {cells.map((c, i) => (
-                  <AttCell key={i} cell={c} day={i + 1} />
+                  <AttCell
+                    key={i}
+                    cell={c}
+                    day={i + 1}
+                    onOpen={() => setDetail({
+                      userId: s.user_id,
+                      name: s.full_name,
+                      date: `${ym}-${String(i + 1).padStart(2, '0')}`,
+                    })}
+                  />
                 ))}
+
                 <td className="text-center font-semibold text-success">{stats.present}</td>
                 <td className="text-center font-semibold text-warning">{stats.late}</td>
                 <td className="text-center font-semibold text-destructive">{stats.absent}</td>
@@ -1087,13 +1103,25 @@ function AttendanceMatrix({
 
       <p className="text-[11px] text-muted-foreground">
         Late = check-in after the roster shift start plus the branch grace period (set in Late policy). Absent = scheduled day with no check-in.
-
+        Click any cell to review the day and correct attendance.
       </p>
+
+      <AttendanceDetailDrawer
+        open={!!detail}
+        onOpenChange={(o) => !o && setDetail(null)}
+        userId={detail?.userId ?? null}
+        staffName={detail?.name ?? ''}
+        date={detail?.date ?? null}
+        branchId={branchId && branchId !== 'all' ? branchId : null}
+        canManage={canManage}
+      />
     </div>
+
   );
 }
 
-function AttCell({ cell, day }: { cell: ReturnType<typeof Object> & any; day: number }) {
+function AttCell({ cell, day, onOpen }: { cell: ReturnType<typeof Object> & any; day: number; onOpen?: () => void }) {
+
   const tone = {
     ontime: 'bg-success/15 text-success',
     late: 'bg-warning/15 text-warning',
@@ -1122,14 +1150,18 @@ function AttCell({ cell, day }: { cell: ReturnType<typeof Object> & any; day: nu
 
   return (
     <td className="px-0.5 py-1 text-center">
-      <span
-        title={title}
-        className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold ${tone}`}
+      <button
+        type="button"
+        title={`${title} — click to review or correct`}
+        aria-label={`${title}. Open attendance details`}
+        onClick={onOpen}
+        className={`inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-[10px] font-semibold transition-colors duration-150 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary ${tone}`}
       >
         {symbol}
-      </span>
+      </button>
     </td>
   );
+
 }
 
 function KpiCard({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: 'indigo' | 'emerald' | 'amber' | 'red' }) {

@@ -82,6 +82,8 @@ export function StaffAttendanceBoard({
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<StaffPunch | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+
 
   const { data: punches = [], isLoading, isError } = useQuery({
     queryKey: ['staff-attendance-board', branchId, dateISO],
@@ -159,8 +161,13 @@ export function StaffAttendanceBoard({
 
   async function confirmDelete() {
     if (!deleting) return;
+    const reason = deleteReason.trim();
+    if (!reason) {
+      toast.error('A reason is required to remove a punch');
+      return;
+    }
     try {
-      await staffAttendanceService.deletePunch(deleting.id);
+      await staffAttendanceService.deletePunch(deleting.id, reason);
       toast.success('Punch removed');
       queryClient.invalidateQueries({ queryKey: ['staff-attendance-board'] });
       queryClient.invalidateQueries({ queryKey: ['staff-attendance'] });
@@ -168,8 +175,10 @@ export function StaffAttendanceBoard({
       toast.error(e instanceof Error ? e.message : 'Could not remove punch');
     } finally {
       setDeleting(null);
+      setDeleteReason('');
     }
   }
+
 
   return (
     <div className="space-y-4">
@@ -330,21 +339,30 @@ export function StaffAttendanceBoard({
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+      <AlertDialog open={!!deleting} onOpenChange={(o) => { if (!o) { setDeleting(null); setDeleteReason(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this punch?</AlertDialogTitle>
             <AlertDialogDescription>
               The attendance record for {deleting?.name} on {deleting ? format(new Date(deleting.check_in), 'd MMM, h:mm a') : ''} will
-              be deleted. This is audited.
+              be deleted. This is audited and a reason is required.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="delete-reason">Reason</Label>
+            <Input
+              id="delete-reason" value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="e.g. duplicate punch from the turnstile"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Remove</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} disabled={!deleteReason.trim()}>Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

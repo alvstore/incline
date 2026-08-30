@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye } from 'lucide-react';
+import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw } from 'lucide-react';
 import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
 import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,6 +49,9 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [payRef, setPayRef] = useState('');
   const [payOpen, setPayOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+
 
   const { data: runs = [] } = useQuery({
     queryKey: ['payroll-runs', branchId, periodStart, periodEnd],
@@ -127,6 +130,35 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Attendance corrections flag payroll lines as stale; HR recalculates deliberately.
+  const recalcMut = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.rpc('payroll_recalculate_item', {
+        p_item_id: itemId, p_reason: 'attendance corrected',
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success('Recalculated from attendance'); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const reopenMut = useMutation({
+    mutationFn: async () => {
+      if (!activeRunId) return;
+      const { error } = await supabase.rpc('payroll_reopen_run', {
+        p_run_id: activeRunId, p_reason: reopenReason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Run reopened as draft');
+      setReopenOpen(false); setReopenReason('');
+      qc.invalidateQueries({ queryKey: ['payroll-runs'] });
+      qc.invalidateQueries({ queryKey: ['payroll-items'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
 
   const payMut = useMutation({
     mutationFn: async () => {
@@ -181,11 +213,18 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {activeRun && !['processed', 'paid'].includes(activeRun.status) && activeRun.status !== 'draft'
+            && hasAnyRole(['owner', 'admin']) && (
+            <Button variant="outline" onClick={() => setReopenOpen(true)}>
+              <RotateCcw className="h-4 w-4 mr-2" /> Reopen Run
+            </Button>
+          )}
           <Button onClick={() => createRun.mutate()} disabled={createRun.isPending} variant="default">
             {createRun.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />}
             Calculate Run
           </Button>
         </div>
+
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
@@ -246,7 +285,11 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         <TableCell>
                           <Badge className={STATUS_BADGE[(it.status as Status) || 'draft']}>{it.status}</Badge>
                           {adjusted && <Badge variant="outline" className="ml-1 text-[10px]">adjusted</Badge>}
+                          {it.attendance_changed_at && (
+                            <Badge className="ml-1 bg-warning/15 text-warning text-[10px]">attendance changed</Badge>
+                          )}
                         </TableCell>
+
                         <TableCell className="text-right font-mono text-sm">₹{Number(it.final_base).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-sm">₹{Number(it.final_pt_commission).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-sm">₹{Number(it.final_bonus).toLocaleString()}</TableCell>
@@ -256,6 +299,15 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         <TableCell className="text-right font-bold">₹{Number(it.final_net).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1 justify-end">
+                            {it.attendance_changed_at && (
+                              <Button size="sm" variant="ghost" aria-label="Recalculate from attendance"
+                                disabled={['processed','paid'].includes(it.status) || !isAdmin || recalcMut.isPending}
+                                onClick={() => recalcMut.mutate(it.id)}
+                                className="text-warning hover:bg-warning/10"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalculate
+                              </Button>
+                            )}
                             <Button size="sm" variant="ghost"
                               disabled={['processed','paid'].includes(it.status)}
                               onClick={() => { setPreviewItem(it); setPreviewDrawerOpen(true); }}
@@ -263,7 +315,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" /> Preview
                             </Button>
-                            <Button size="sm" variant="ghost"
+                            <Button size="sm" variant="ghost" aria-label="Adjust payroll item"
                               disabled={['processed','paid'].includes(it.status) || !isAdmin}
                               onClick={() => { setAdjustItem(it); setAdjustDrawerOpen(true); }}
                             >
@@ -271,6 +323,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             </Button>
                           </div>
                         </TableCell>
+
                       </TableRow>
                     );
                   })}
@@ -293,7 +346,35 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         item={previewItem}
       />
 
+      {/* Reopen Drawer */}
+      <Sheet open={reopenOpen} onOpenChange={setReopenOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Reopen payroll run</SheetTitle>
+            <SheetDescription>
+              The run returns to <strong>draft</strong> so attendance corrections can be recalculated.
+              Approvals are cleared and the change is recorded in the payroll audit trail.
+              Processed or paid runs can never be reopened.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-2 py-6">
+            <Label htmlFor="reopen-reason">Reason</Label>
+            <Input id="reopen-reason" value={reopenReason} onChange={(e) => setReopenReason(e.target.value)}
+              placeholder="e.g. night-shift attendance corrected after approval" />
+          </div>
+          <SheetFooter className="mt-auto pt-4 flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setReopenOpen(false)}>Cancel</Button>
+            <Button className="flex-1" disabled={!reopenReason.trim() || reopenMut.isPending}
+              onClick={() => reopenMut.mutate()}>
+              {reopenMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Reopen as draft
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
       {/* Pay Drawer */}
+
       <Sheet open={payOpen} onOpenChange={setPayOpen}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>

@@ -39,22 +39,66 @@ export const staffAttendanceService = {
     return { success: true, attendance_id: data as unknown as string };
   },
 
-  // Correct a wrong punch (owner / admin / manager only).
-  async correctPunch(id: string, checkIn?: string, notes?: string) {
+  // Correct a wrong punch (owner / admin / branch manager only).
+  // The server recomputes shift block, lateness and hours — never the client.
+  async correctPunch(
+    id: string,
+    checkIn?: string,
+    notes?: string,
+    opts?: { checkOut?: string | null; shiftDate?: string; reason?: string; clearCheckOut?: boolean },
+  ) {
     const { error } = await supabase.rpc('staff_correct_attendance', {
       p_id: id,
       p_check_in: checkIn ?? null,
       p_notes: notes ?? null,
+      p_check_out: opts?.checkOut ?? null,
+      p_shift_date: opts?.shiftDate ?? null,
+      p_reason: opts?.reason ?? null,
+      p_clear_check_out: opts?.clearCheckOut ?? false,
     });
     if (error) throw error;
     return { success: true };
   },
 
-  async deletePunch(id: string) {
-    const { error } = await supabase.rpc('staff_delete_attendance', { p_id: id });
+  async deletePunch(id: string, reason: string) {
+    const { error } = await supabase.rpc('staff_delete_attendance', { p_id: id, p_reason: reason });
     if (error) throw error;
     return { success: true };
   },
+
+  /** Per-block schedule + attendance + marks for one staff member on one day. */
+  async getDayBlocks(userId: string, date: string) {
+    const { data, error } = await supabase.rpc('staff_day_blocks', {
+      p_user_id: userId,
+      p_date: date,
+    });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  /** Manually record attendance for a block that has no punch (HR correction). */
+  async markManualAttendance(params: {
+    userId: string;
+    shiftDate: string;
+    shiftType?: 'morning' | 'evening' | 'night' | 'full_day' | null;
+    checkIn?: string | null;
+    checkOut?: string | null;
+    reason: string;
+    branchId?: string | null;
+  }) {
+    const { data, error } = await supabase.rpc('staff_mark_manual_attendance', {
+      p_user_id: params.userId,
+      p_shift_date: params.shiftDate,
+      p_shift_type: params.shiftType ?? null,
+      p_check_in: params.checkIn ?? null,
+      p_check_out: params.checkOut ?? null,
+      p_reason: params.reason,
+      p_branch_id: params.branchId ?? null,
+    });
+    if (error) throw error;
+    return data as unknown as string;
+  },
+
 
   /**
    * Record a punch for one specific roster block.
