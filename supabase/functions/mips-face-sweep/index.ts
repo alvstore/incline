@@ -139,14 +139,22 @@ async function verifyByRecognition(
   if (!snToMips.size) return 0;
 
   const since = new Date(Date.now() - RECOGNITION_WINDOW_DAYS * 86_400_000).toISOString();
-  const { data: logs } = await supabase
-    .from("access_logs")
-    .select("device_sn, member_id, profile_id")
-    .eq("branch_id", branchId)
-    .eq("event_type", "face_scan")
-    .gte("captured_at", since)
-    .limit(20000);
-  if (!logs?.length) return 0;
+  // PostgREST caps a response at 1000 rows, so page explicitly.
+  const logs: Array<{ device_sn: string | null; member_id: string | null; profile_id: string | null }> = [];
+  const PAGE = 1000;
+  for (let from = 0; from < 40_000; from += PAGE) {
+    const { data: page } = await supabase
+      .from("access_logs")
+      .select("device_sn, member_id, profile_id")
+      .eq("branch_id", branchId)
+      .eq("event_type", "face_scan")
+      .gte("captured_at", since)
+      .range(from, from + PAGE - 1);
+    if (!page?.length) break;
+    logs.push(...(page as any));
+    if (page.length < PAGE) break;
+  }
+  if (!logs.length) return 0;
 
   // person_id → person_sn (members are keyed by member id, staff by profile id)
   const memberIds = roster.filter((p) => p.type === "member").map((p) => p.id);
