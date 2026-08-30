@@ -16825,6 +16825,26 @@ export type Database = {
       }
       voice_mask_phone: { Args: { _phone: string }; Returns: string }
       voice_ops_summary: { Args: { p_branch?: string }; Returns: Json }
+      voice_retention_candidates: {
+        Args: {
+          _branch_ids?: string[]
+          _cooldown_days?: number
+          _min_absent_days?: number
+        }
+        Returns: {
+          branch_id: string
+          contacted_today: boolean
+          dnd: boolean
+          in_cooldown: boolean
+          last_call: string
+          last_seen: string
+          member_id: string
+          missing_phone: boolean
+          paused: boolean
+          phone: string
+          too_recent: boolean
+        }[]
+      }
       voice_retention_eligibility: {
         Args: {
           _branch_ids?: string[]
@@ -16835,6 +16855,27 @@ export type Database = {
           _window_start?: string
         }
         Returns: Json
+      }
+      voice_retention_queue: {
+        Args: { p_branch?: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          days_absent: number
+          eligible_at: string
+          last_call_at: string
+          last_call_id: string
+          last_disposition: string
+          last_visit: string
+          masked_phone: string
+          member_code: string
+          member_id: string
+          member_name: string
+          plan_expiry: string
+          plan_name: string
+          total_count: number
+          trainer_name: string
+        }[]
       }
       void_payment: {
         Args: { p_payment_id: string; p_reason?: string }
