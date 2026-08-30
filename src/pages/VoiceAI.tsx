@@ -192,6 +192,7 @@ export default function VoiceAIPage() {
   const complaintsQ = useVoiceCalls({ ...baseFilters, offset: 0, disposition: 'complaint' });
   const dndQ = useVoiceCalls({ ...baseFilters, offset: 0, disposition: 'wrong_person' });
   const analyticsQ = useVoiceAnalytics(branchId, analyticsDays);
+  const queueQ = useVoiceQueue(branchId);
 
   useRealtimeInvalidate({
     channel: 'voice-ops',
