@@ -172,6 +172,23 @@ export function useVoiceOpsSummary(branchId?: string | null) {
   });
 }
 
+export function useVoiceQueue(branchId?: string | null, limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['voice-queue', branchId ?? 'all', limit, offset],
+    queryFn: async (): Promise<VoiceQueueRow[]> => {
+      const { data, error } = await rpc('voice_retention_queue', {
+        p_branch: branchId ?? null,
+        p_limit: limit,
+        p_offset: offset,
+      });
+      if (error) throw error;
+      return (data ?? []) as VoiceQueueRow[];
+    },
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useVoiceCalls(filters: VoiceFeedFilters) {
   const {
     branchId = null, from = null, to = null, status = null,
