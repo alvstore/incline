@@ -108,6 +108,15 @@ interface SarvamState {
   } | null;
   config: SarvamConfig;
   readiness?: SarvamReadiness;
+  endpoints?: {
+    webhook_url: string;
+    tools_url: string;
+    tools_header: string;
+    tools_token: string;
+    agent_input_variables?: string[];
+    agent_output_variables?: string[];
+  };
+
   test?: { ok: boolean; error?: string; deployment?: SarvamDeployment | null; deployments?: SarvamDeployment[]; agent_found?: boolean | null };
   error?: string;
 }
