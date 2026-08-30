@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye } from 'lucide-react';
+import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw } from 'lucide-react';
 import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
 import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
 import { useAuth } from '@/contexts/AuthContext';
