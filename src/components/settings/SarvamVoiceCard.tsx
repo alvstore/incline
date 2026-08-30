@@ -65,6 +65,7 @@ interface SarvamReadiness {
   outbound_enabled: boolean;
   phone_number_configured: boolean;
   phone_number_active: boolean;
+  deployment_active?: boolean;
   phone_number_assigned: boolean;
   test_call_available: boolean;
   successful_test_call: boolean;
@@ -502,7 +503,7 @@ export default function SarvamVoiceCard() {
                     ['Sarvam connected', !!readiness?.connected],
                     ['Agent configured', !!readiness?.agent_configured && !!readiness?.agent_version],
                     ['Outbound deployment', !!readiness?.deployment_configured && !!readiness?.outbound_enabled],
-                    ['Phone number active & assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
+                    ['Deployment active & number assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
                     ['Integration switched on', !!readiness?.integration_enabled],
                     ['Successful test call', !!readiness?.successful_test_call],
                   ] as Array<[string, boolean]>).map(([label, done]) => (
