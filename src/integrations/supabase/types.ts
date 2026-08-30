@@ -13769,6 +13769,65 @@ export type Database = {
           },
         ]
       }
+      whatsapp_recipient_state: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          id: string
+          last_marketing_attempt_at: string | null
+          last_marketing_delivered_at: string | null
+          last_marketing_read_at: string | null
+          last_meta_error_code: string | null
+          last_pace_limited_at: string | null
+          last_reply_at: string | null
+          marketing_cooldown_until: string | null
+          pace_events_30d: number
+          phone: string | null
+          phone_last10: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          last_marketing_attempt_at?: string | null
+          last_marketing_delivered_at?: string | null
+          last_marketing_read_at?: string | null
+          last_meta_error_code?: string | null
+          last_pace_limited_at?: string | null
+          last_reply_at?: string | null
+          marketing_cooldown_until?: string | null
+          pace_events_30d?: number
+          phone?: string | null
+          phone_last10: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          last_marketing_attempt_at?: string | null
+          last_marketing_delivered_at?: string | null
+          last_marketing_read_at?: string | null
+          last_meta_error_code?: string | null
+          last_pace_limited_at?: string | null
+          last_reply_at?: string | null
+          marketing_cooldown_until?: string | null
+          pace_events_30d?: number
+          phone?: string | null
+          phone_last10?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_recipient_state_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_send_locks: {
         Row: {
           acquired_at: string
@@ -16130,6 +16189,14 @@ export type Database = {
             }
             Returns: Json
           }
+      record_whatsapp_marketing_event: {
+        Args: { _branch_id?: string; _kind: string; _phone: string }
+        Returns: undefined
+      }
+      record_whatsapp_pace_event: {
+        Args: { _branch_id?: string; _code?: string; _phone: string }
+        Returns: string
+      }
       redeem_coupon: {
         Args: {
           p_branch_id: string
@@ -16892,6 +16959,17 @@ export type Database = {
       whatsapp_breaker_open: {
         Args: { _phone_number_id: string }
         Returns: boolean
+      }
+      whatsapp_pace_cooldown_hours: { Args: never; Returns: number }
+      whatsapp_recipient_eligibility: {
+        Args: { _category?: string; _phones: string[] }
+        Returns: {
+          cooldown_until: string
+          eligible: boolean
+          pace_events_30d: number
+          phone_last10: string
+          reason: string
+        }[]
       }
       whatsapp_record_pacing_error: {
         Args: { _error_code?: string; _phone_number_id: string }
