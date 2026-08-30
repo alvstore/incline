@@ -170,14 +170,26 @@ Deno.serve(async (req) => {
 
       await seedLedger(supabase, branchId, branchDevices, roster);
       const pruned = await pruneLedger(supabase, branchId, branchDevices, roster);
+
+      // ---- Tier A proof: real face recognition at the gate ------------------
+      // If a person has actually been recognised BY FACE on a given gate, that
+      // gate demonstrably holds a usable template for them. This is stronger
+      // evidence than any counter delta and costs the MIPS server nothing.
+      const recognised = await verifyByRecognition(supabase, branchId, branchDevices, roster);
+
       const ledger = await readLedger(supabase, branchId);
 
       const outstanding = ledger.filter((r) => r.state === "pending" || r.state === "missing");
       const rejected = ledger.filter((r) => r.state === "rejected");
       const unverified = ledger.filter((r) => r.state === "unverified");
+      // `unverified` rows are retried on a slow cadence so the ledger keeps
+      // converting guesswork into proof even when every gate is at parity.
+      const verifyDue = unverified.filter(
+        (r) => !r.last_attempt_at || Date.now() - Date.parse(r.last_attempt_at) > VERIFY_COOLDOWN_MS,
+      );
 
       // Nothing queued → do not even touch the MIPS server.
-      if (outstanding.length === 0 && !force) {
+      if (outstanding.length === 0 && verifyDue.length === 0 && !force) {
         summary.push({
           branch_id: branchId,
           nothing_queued: true,
@@ -185,11 +197,13 @@ Deno.serve(async (req) => {
           verified: ledger.filter((r) => r.state === "enrolled").length,
           unverified: unverified.length,
           rejected: rejected.length,
+          recognised,
           pruned,
           processed: 0,
         });
         continue;
       }
+
 
       // ---- Credentials + breaker -------------------------------------------
       let serverUrl = Deno.env.get("MIPS_SERVER_URL") || "";
