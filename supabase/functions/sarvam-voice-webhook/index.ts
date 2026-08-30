@@ -89,6 +89,13 @@ Deno.serve(async (req) => {
       const phone = String(existing.phone);
       const callback = typeof vars.callback_datetime === "string" ? vars.callback_datetime : null;
       const reason = typeof vars.reason_for_absence === "string" ? vars.reason_for_absence : null;
+      const summary = typeof vars.call_summary === "string" ? vars.call_summary.slice(0, 600) : null;
+      const nextStep = typeof vars.next_step_agreed === "string" ? vars.next_step_agreed.slice(0, 400) : null;
+      const trail = [
+        summary ? `Summary: ${summary}` : null,
+        reason ? `Reason given: ${reason}` : null,
+        nextStep ? `Next step: ${nextStep}` : null,
+      ].filter(Boolean).join(" ");
 
       const makeTask = async (title: string, description: string, priority: string) => {
         if (!branchId) return;
@@ -106,18 +113,20 @@ Deno.serve(async (req) => {
       if (disposition === "callback_requested") {
         await makeTask(
           "Voice AI: member requested a callback",
-          `Retention call outcome: callback requested${callback ? ` for ${callback}` : ""}. Phone ${phone}.${
-            reason ? ` Reason given: ${reason}.` : ""
-          }`,
+          `Retention call outcome: callback requested${callback ? ` for ${callback}` : ""}. Phone ${phone}. ${trail}`,
           "high",
         );
       } else if (disposition === "complaint") {
         await makeTask(
           "Voice AI: complaint raised on retention call",
-          `The member raised a complaint during the Voice AI retention call. Phone ${phone}.${
-            reason ? ` Details: ${reason}.` : ""
-          }`,
+          `The member raised a complaint during the Voice AI retention call. Phone ${phone}. ${trail}`,
           "urgent",
+        );
+      } else if (disposition === "needs_human") {
+        await makeTask(
+          "Voice AI: human follow-up needed",
+          `The agent could not resolve the member's request on the call. Phone ${phone}. ${trail}`,
+          "high",
         );
       } else if (disposition === "wrong_person") {
         await sb.rpc("mark_do_not_contact", {
@@ -127,9 +136,9 @@ Deno.serve(async (req) => {
           p_source: "sarvam_voice",
         });
       }
-      // "not_interested" intentionally triggers no CRM action: the attempt row
-      // itself enforces the retention cooldown. Opting the member out of every
-      // channel is a decision only a human should make.
+      // "not_interested" and "no_clear_outcome" intentionally trigger no CRM
+      // action: the attempt row itself enforces the retention cooldown. Opting
+      // a member out of every channel is a decision only a human should make.
     } catch (followUpError) {
       console.error("sarvam-voice-webhook follow-up failed:", redact((followUpError as Error)?.message));
     }
