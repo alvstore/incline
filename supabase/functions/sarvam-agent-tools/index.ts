@@ -1,4 +1,4 @@
-// v1.0.0 — Sarvam Voice Agent API tools (HTTPS tool endpoint).
+// v1.1.0 — Sarvam Voice Agent API tools (HTTPS tool endpoint).
 //
 // Registered in Sarvam → Build → Tools as HTTPS tools. Authenticated with the
 // shared tool token stored in the integration config and sent by Sarvam as the
