@@ -178,52 +178,53 @@ export function IntegrationSettings() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold">Integrations</h2>
-          <p className="text-sm text-muted-foreground">Configure payment, SMS, email, Meta (WhatsApp, Instagram, Messenger), Google and lead capture</p>
-        </div>
+  const voiceSummary = useVoiceOpsSummary(null);
+  const voiceActive = voiceSummary.data?.integration?.is_active ? 1 : 0;
+
+  const tiles = [
+    { tab: 'payment', label: 'Payment', value: activePaymentGateways, icon: CreditCard },
+    { tab: 'sms', label: 'SMS', value: activeSmsProviders, icon: Phone },
+    { tab: 'email', label: 'Email', value: activeEmailProviders, icon: Mail },
+    { tab: 'meta', label: 'Meta', value: activeWhatsApp + activeInstagram + activeMessenger, icon: Facebook },
+    { tab: 'rcs', label: 'RCS', value: activeRcs, icon: Radio },
+    { tab: 'google', label: 'Google', value: activeGoogle, icon: Globe },
+    { tab: 'voice', label: 'Voice AI', value: voiceActive, icon: PhoneCall },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold">Integrations</h2>
+        <p className="text-sm text-muted-foreground">Payment, SMS, RCS, email, Meta, Google, lead capture and Voice AI</p>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <StatCard
-          title="Payment Gateways"
-          value={activePaymentGateways}
-          icon={CreditCard}
-          variant={activePaymentGateways > 0 ? 'success' : 'default'}
-        />
-        <StatCard
-          title="SMS Providers"
-          value={activeSmsProviders}
-          icon={Phone}
-          variant={activeSmsProviders > 0 ? 'success' : 'default'}
-        />
-        <StatCard
-          title="Email Providers"
-          value={activeEmailProviders}
-          icon={Mail}
-          variant={activeEmailProviders > 0 ? 'success' : 'default'}
-        />
-        <StatCard
-          title="Meta Integrations"
-          value={activeWhatsApp + activeInstagram + activeMessenger}
-          icon={Facebook}
-          variant={(activeWhatsApp + activeInstagram + activeMessenger) > 0 ? 'success' : 'default'}
-        />
-        <StatCard
-          title="RCS Providers"
-          value={activeRcs}
-          icon={Radio}
-          variant={activeRcs > 0 ? 'success' : 'default'}
-        />
-        <StatCard
-          title="Google Business"
-          value={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length}
-          icon={Globe}
-          variant={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length > 0 ? 'success' : 'default'}
-        />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        {tiles.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.tab;
+          const on = t.value > 0;
+          return (
+            <button
+              key={t.tab}
+              type="button"
+              onClick={() => setTab(t.tab)}
+              aria-label={`${t.label} integrations: ${t.value} active`}
+              className={cn(
+                'flex items-center gap-2 rounded-2xl border bg-card px-3 py-2.5 text-left shadow-sm transition-all duration-200',
+                'cursor-pointer hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/50',
+                active && 'border-primary/40 bg-primary/5',
+              )}
+            >
+              <span className={cn('rounded-full p-1.5', on ? 'bg-emerald-50 text-emerald-600' : 'bg-muted text-muted-foreground')}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{t.label}</span>
+              <span className="text-sm font-bold tabular-nums text-foreground">{t.value}</span>
+            </button>
+          );
+        })}
       </div>
+
 
       <Tabs defaultValue="payment" className="space-y-4">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1 w-full max-w-5xl">
