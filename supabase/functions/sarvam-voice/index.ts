@@ -315,6 +315,38 @@ Deno.serve(async (req) => {
     // ---- actions -----------------------------------------------------------
     if (action === "get_state") return await stateResponse();
 
+    // Structured backend readiness — the ONLY thing the UI may gate on.
+    if (action === "get_readiness" || action === "get_sarvam_voice_readiness") {
+      const probe = body.probe !== false;
+      const key = row?.id ? await loadKey() : null;
+      const readiness = await computeReadiness(row ?? null, cfg, key, probe, sb);
+      if (row?.id && probe) {
+        await sb.from("voice_provider_integrations").update({
+          last_check_at: new Date().toISOString(),
+          last_check_status: readiness.connected ? "connected" : "error",
+          last_check_error: readiness.probe_error === "not_probed" ? null : readiness.probe_error,
+        }).eq("id", row.id);
+      }
+      return await stateResponse({ readiness });
+    }
+
+    // Read-only eligibility preview. Places no calls, contacts nobody.
+    if (action === "run_eligibility_check") {
+      const a = ((row?.retention_automation || {}) as Record<string, unknown>) ?? {};
+      const branchIds = Array.isArray(a.branch_ids) && a.branch_ids.length ? a.branch_ids : null;
+      const { data, error } = await sb.rpc("voice_retention_eligibility", {
+        _min_absent_days: Number(a.min_absent_days ?? 7),
+        _cooldown_days: Number(a.cooldown_days ?? 7),
+        _daily_cap: Number(a.max_calls_per_day ?? 25),
+        _window_start: String(a.window_start ?? cfg.window_start ?? "10:00"),
+        _window_end: String(a.window_end ?? cfg.window_end ?? "19:00"),
+        _branch_ids: branchIds,
+      });
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, eligibility: data });
+    }
+
+
     if (action === "save_config") {
       const nextCfg = sanitizeConfig((body.config || {}) as Record<string, unknown>, cfg);
       const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
