@@ -339,21 +339,30 @@ export function StaffAttendanceBoard({
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+      <AlertDialog open={!!deleting} onOpenChange={(o) => { if (!o) { setDeleting(null); setDeleteReason(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this punch?</AlertDialogTitle>
             <AlertDialogDescription>
               The attendance record for {deleting?.name} on {deleting ? format(new Date(deleting.check_in), 'd MMM, h:mm a') : ''} will
-              be deleted. This is audited.
+              be deleted. This is audited and a reason is required.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="delete-reason">Reason</Label>
+            <Input
+              id="delete-reason" value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="e.g. duplicate punch from the turnstile"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Remove</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} disabled={!deleteReason.trim()}>Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }
