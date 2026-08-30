@@ -127,6 +127,12 @@ export interface SarvamReadiness {
  *  app_version, connection_id, agent_phone_number. A deployment record is NOT
  *  part of that contract — it only binds an agent to a number for inbound
  *  calls and campaigns, so it is reported as a warning, never a blocker. */
+/** First blocker that actually prevents dialling (ignores post-call gates). */
+function setupBlocker(r: { blockers: string[] }): string | null {
+  const ignore = ["No successful test call", "master switch is off"];
+  return r.blockers.find((b) => !ignore.some((i) => b.includes(i))) ?? null;
+}
+
 async function computeReadiness(
   sb: ReturnType<typeof admin>,
   row: { id?: string; is_active?: boolean; api_key_last4?: string | null } | null,
