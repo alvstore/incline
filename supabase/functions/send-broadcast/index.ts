@@ -821,6 +821,38 @@ function finalizeFreeformBody(
     .trim();
 }
 
+/** v5.1.0: email subjects carry the same `{{class_name}}` style placeholders as
+ *  the body. Without this the inbox literally shows the raw braces (and spam
+ *  filters penalise it). Unresolved keys collapse to an empty string. */
+function personalizeSubject(
+  subject: string | null | undefined,
+  vars: Record<string, string>,
+): string | undefined {
+  const raw = String(subject ?? '').trim();
+  if (!raw) return undefined;
+  return raw
+    .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k: string) => vars[k] ?? vars[String(k).toLowerCase()] ?? '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([—–-])\s*$/, '')
+    .trim() || undefined;
+}
+
+/** v5.1.0: HTML email bodies already embed the campaign poster via
+ *  `{{poster_url}}`. Passing the same file as an attachment renders the image
+ *  a second time — drop it for email when the body already references it. */
+function attachmentForChannel(
+  attachment: any,
+  channel: string,
+  body: string,
+): any {
+  if (!attachment) return undefined;
+  if (channel !== 'email') return attachment;
+  const url = String(attachment.url || '');
+  if (url && String(body || '').includes(url.split('?')[0])) return undefined;
+  return attachment;
+}
+
+
 // Detect Meta pacing / low-quality throttle codes in an error string.
 // 131049 = "not delivered to maintain healthy ecosystem engagement"
 // 130472 = "user is in an experiment"
