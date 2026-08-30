@@ -278,7 +278,11 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         <TableCell>
                           <Badge className={STATUS_BADGE[(it.status as Status) || 'draft']}>{it.status}</Badge>
                           {adjusted && <Badge variant="outline" className="ml-1 text-[10px]">adjusted</Badge>}
+                          {it.attendance_changed_at && (
+                            <Badge className="ml-1 bg-warning/15 text-warning text-[10px]">attendance changed</Badge>
+                          )}
                         </TableCell>
+
                         <TableCell className="text-right font-mono text-sm">₹{Number(it.final_base).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-sm">₹{Number(it.final_pt_commission).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-sm">₹{Number(it.final_bonus).toLocaleString()}</TableCell>
