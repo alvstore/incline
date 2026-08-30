@@ -13022,6 +13022,7 @@ export type Database = {
           disposition: string | null
           duration_seconds: number | null
           eligibility_snapshot: Json
+          eligible_at: string | null
           ended_at: string | null
           error_code: string | null
           error_message: string | null
@@ -13032,6 +13033,7 @@ export type Database = {
           provider: string
           provider_call_id: string | null
           provider_interaction_id: string | null
+          reason: string | null
           source: string
           started_at: string
           status: string
@@ -13048,6 +13050,7 @@ export type Database = {
           disposition?: string | null
           duration_seconds?: number | null
           eligibility_snapshot?: Json
+          eligible_at?: string | null
           ended_at?: string | null
           error_code?: string | null
           error_message?: string | null
@@ -13058,6 +13061,7 @@ export type Database = {
           provider?: string
           provider_call_id?: string | null
           provider_interaction_id?: string | null
+          reason?: string | null
           source: string
           started_at?: string
           status?: string
@@ -13074,6 +13078,7 @@ export type Database = {
           disposition?: string | null
           duration_seconds?: number | null
           eligibility_snapshot?: Json
+          eligible_at?: string | null
           ended_at?: string | null
           error_code?: string | null
           error_message?: string | null
@@ -13084,6 +13089,7 @@ export type Database = {
           provider?: string
           provider_call_id?: string | null
           provider_interaction_id?: string | null
+          reason?: string | null
           source?: string
           started_at?: string
           status?: string
@@ -16753,6 +16759,36 @@ export type Database = {
       }
       validate_member_checkin: {
         Args: { _branch_id: string; _member_id: string }
+        Returns: Json
+      }
+      voice_claim_call_slot: {
+        Args: {
+          _agent_id: string
+          _agent_version: number
+          _branch_id: string
+          _cooldown_days: number
+          _created_by: string
+          _daily_cap: number
+          _eligibility: Json
+          _lead_id: string
+          _max_concurrent: number
+          _member_id: string
+          _phone: string
+          _provider: string
+          _reason: string
+          _source: string
+        }
+        Returns: Json
+      }
+      voice_retention_eligibility: {
+        Args: {
+          _branch_ids?: string[]
+          _cooldown_days?: number
+          _daily_cap?: number
+          _min_absent_days?: number
+          _window_end?: string
+          _window_start?: string
+        }
         Returns: Json
       }
       void_payment: {
