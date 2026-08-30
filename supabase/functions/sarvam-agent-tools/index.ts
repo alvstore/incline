@@ -46,6 +46,8 @@ Deno.serve(async (req) => {
     tool = String(body?.tool || body?.name || "");
     const args = (body?.arguments ?? body?.args ?? body ?? {}) as Record<string, unknown>;
     phone = normalizePhone(String(args.phone ?? args.user_phone_number ?? ""));
+    const memberCode = String(args.member_code ?? "").trim();
+    const branchName = String(args.branch_name ?? "").trim();
 
     // Cheap rate limit: tool calls in the last minute across the ledger.
     const since = new Date(Date.now() - 60_000).toISOString();
@@ -58,14 +60,60 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "Rate limit reached, try again shortly." }, 429);
     }
 
+    /** Resolve a branch id from a branch name (exact, then case-insensitive). */
+    const resolveBranchByName = async (): Promise<string | null> => {
+      if (!branchName) return null;
+      const { data } = await sb
+        .from("branches")
+        .select("id")
+        .ilike("name", branchName)
+        .limit(1)
+        .maybeSingle();
+      return (data as { id?: string } | null)?.id ?? null;
+    };
+
+    const MEMBER_COLUMNS =
+      "id, user_id, member_code, branch_id, status, lifecycle_state, do_not_contact, assigned_trainer_id";
+
+    const withProfileName = async (member: Record<string, unknown> | null) => {
+      if (!member) return null;
+      branchId = (member.branch_id as string | null) ?? null;
+      let fullName: string | null = null;
+      if (member.user_id) {
+        const { data: profile } = await sb
+          .from("profiles")
+          .select("full_name")
+          .eq("id", member.user_id as string)
+          .maybeSingle();
+        fullName = (profile as { full_name?: string } | null)?.full_name ?? null;
+      }
+      return { ...member, full_name: fullName } as Record<string, unknown> & {
+        id: string;
+        user_id: string | null;
+        member_code: string | null;
+        branch_id: string | null;
+        do_not_contact: boolean | null;
+        assigned_trainer_id: string | null;
+        full_name: string | null;
+      };
+    };
+
+    /** Identify the caller by member_code first, then by phone number. */
     const resolveMember = async () => {
+      if (memberCode) {
+        let q = sb.from("members").select(MEMBER_COLUMNS).eq("member_code", memberCode);
+        const scopedBranch = await resolveBranchByName();
+        if (scopedBranch) q = q.eq("branch_id", scopedBranch);
+        const { data: byCode } = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (byCode) return await withProfileName(byCode as Record<string, unknown>);
+      }
       if (!phone) return null;
       const { data: profiles } = await sb.from("profiles").select("id, full_name, phone").eq("phone", phone).limit(5);
       const ids = (profiles || []).map((p: { id: string }) => p.id);
       if (!ids.length) return null;
       const { data: member } = await sb
         .from("members")
-        .select("id, user_id, member_code, branch_id, status, lifecycle_state, do_not_contact, assigned_trainer_id")
+        .select(MEMBER_COLUMNS)
         .in("user_id", ids)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -77,6 +125,7 @@ Deno.serve(async (req) => {
         | undefined;
       return { ...member, full_name: profile?.full_name ?? null };
     };
+
 
     let result: Record<string, unknown>;
 
