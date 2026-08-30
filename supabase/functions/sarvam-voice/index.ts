@@ -1,7 +1,7 @@
-// v1.0.0 — Sarvam Voice AI control plane (owner/admin only).
+// v1.1.0 — Sarvam Voice AI control plane (owner/admin only).
 //
-// Actions: get_state | save_config | save_automation | set_active |
-//          test_connection | test_call
+// Actions: get_state | get_readiness | run_eligibility_check | save_config |
+//          save_automation | set_active | test_connection | test_call
 //
 // The Sarvam API key lives in public.voice_provider_secrets, which has no
 // grants and no policies — only this function (service role) can read it.
@@ -49,13 +49,6 @@ function hhmmToMinutes(v: string | undefined, fallback: number): number {
   const m = /^(\d{1,2}):(\d{2})$/.exec(v ?? "");
   if (!m) return fallback;
   return Number(m[1]) * 60 + Number(m[2]);
-}
-
-function istDayStartUtc(): string {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 3600_000);
-  ist.setUTCHours(0, 0, 0, 0);
-  return new Date(ist.getTime() - 5.5 * 3600_000).toISOString();
 }
 
 /** Only these keys are ever persisted; anything else the client sends is dropped. */
@@ -435,8 +428,13 @@ Deno.serve(async (req) => {
       if (enable) {
         const key = await loadKey();
         if (!key) return json({ ok: false, error: "Add the Sarvam API key before enabling." }, 400);
-        if (!cfg.org_id || !cfg.workspace_id || !cfg.app_id) {
-          return json({ ok: false, error: "Organization, workspace and agent IDs are required before enabling." }, 400);
+        const readiness = await computeReadiness(sb, row, cfg, key, true);
+        if (!readiness.test_call_available) {
+          return json({
+            ok: false,
+            error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calling.",
+            readiness,
+          }, 400);
         }
       }
       const { error } = await sb
