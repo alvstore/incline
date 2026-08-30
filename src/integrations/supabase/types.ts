@@ -13010,6 +13010,183 @@ export type Database = {
           },
         ]
       }
+      voice_call_attempts: {
+        Row: {
+          agent_id: string | null
+          agent_version: number | null
+          branch_id: string | null
+          campaign_ref: string | null
+          context_payload: Json
+          created_at: string
+          created_by: string | null
+          disposition: string | null
+          duration_seconds: number | null
+          eligibility_snapshot: Json
+          ended_at: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          lead_id: string | null
+          member_id: string | null
+          phone: string
+          provider: string
+          provider_call_id: string | null
+          provider_interaction_id: string | null
+          source: string
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          agent_version?: number | null
+          branch_id?: string | null
+          campaign_ref?: string | null
+          context_payload?: Json
+          created_at?: string
+          created_by?: string | null
+          disposition?: string | null
+          duration_seconds?: number | null
+          eligibility_snapshot?: Json
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          member_id?: string | null
+          phone: string
+          provider?: string
+          provider_call_id?: string | null
+          provider_interaction_id?: string | null
+          source: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          agent_version?: number | null
+          branch_id?: string | null
+          campaign_ref?: string | null
+          context_payload?: Json
+          created_at?: string
+          created_by?: string | null
+          disposition?: string | null
+          duration_seconds?: number | null
+          eligibility_snapshot?: Json
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          member_id?: string | null
+          phone?: string
+          provider?: string
+          provider_call_id?: string | null
+          provider_interaction_id?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_call_attempts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_provider_integrations: {
+        Row: {
+          api_key_last4: string | null
+          api_key_set_at: string | null
+          branch_id: string | null
+          config: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          last_check_at: string | null
+          last_check_error: string | null
+          last_check_status: string | null
+          provider: string
+          retention_automation: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key_last4?: string | null
+          api_key_set_at?: string | null
+          branch_id?: string | null
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          last_check_at?: string | null
+          last_check_error?: string | null
+          last_check_status?: string | null
+          provider?: string
+          retention_automation?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key_last4?: string | null
+          api_key_set_at?: string | null
+          branch_id?: string | null
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          last_check_at?: string | null
+          last_check_error?: string | null
+          last_check_status?: string | null
+          provider?: string
+          retention_automation?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_provider_integrations_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_provider_secrets: {
+        Row: {
+          api_key: string
+          integration_id: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          integration_id: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          integration_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_provider_secrets_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: true
+            referencedRelation: "voice_provider_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wallet_transactions: {
         Row: {
           amount: number
