@@ -1,4 +1,8 @@
-// mips-face-sweep v2.0.0
+// mips-face-sweep v2.1.0
+// v2.1.0: adds Tier-A verification (a real face recognition at a gate proves
+// that gate holds the template), keeps `unverified` rows retry-eligible on a
+// cooldown instead of freezing at counter parity, only degrades rows that were
+// actually pushed, and never escalates `unverified` to `rejected`.
 // Ledger-driven face enrolment worker.
 //
 // v1.x pushed a rotating batch of people every 5 minutes and hoped the gates'
@@ -488,6 +492,7 @@ Deno.serve(async (req) => {
       summary.push({
         branch_id: branchId,
         expected: roster.length,
+        recognised,
         processed: candidates.length,
         enrolled_now: enrolledNow,
         stalled,
