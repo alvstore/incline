@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       const localDeviceIds = brDevices.map((d) => d.localId);
 
       // 2. Build the complete branch roster, including trainers.
-      const cols = "id, mips_person_id, updated_at";
+      const cols = "id, mips_person_id";
       const [{ data: members }, { data: employees }, { data: trainers }] = await Promise.all([
         supabase.from("members").select(cols)
           .eq("branch_id", branchId).not("mips_person_id", "is", null),
@@ -100,11 +100,7 @@ Deno.serve(async (req) => {
         ...((members || []).map((m: any) => ({ type: "member", ...m }))),
         ...((employees || []).map((e: any) => ({ type: "employee", ...e }))),
         ...((trainers || []).map((t: any) => ({ type: "trainer", ...t }))),
-      ].map((p: any) => ({
-        type: p.type as string,
-        id: p.id as string,
-        changedAt: ts(p.updated_at),
-      }));
+      ].map((p: any) => ({ type: p.type as string, id: p.id as string }));
 
       // 3. Advance a rotating SCAN window (cheap: local comparison only).
       const windowNo = Math.floor(Date.now() / (15 * 60_000));
@@ -132,13 +128,19 @@ Deno.serve(async (req) => {
         if (t > (lastOk.get(key) ?? 0)) lastOk.set(key, t);
       }
 
-      // 5. Drift = any device without a successful dispatch after the person's
-      //    last change (or with no dispatch at all / a very stale one).
+      // 5. Drift = a device that has NEVER received this person, or whose last
+      //    successful delivery is older than MAX_SYNC_AGE_MS.
+      //
+      //    Real changes (new photo, access revoked/restored, name edits) are
+      //    pushed immediately by the event-driven sync path, so reconciliation
+      //    is only a slow safety net. Deliberately NOT keyed off `updated_at`:
+      //    unrelated row updates fire constantly and would put every person
+      //    back into the queue, which is exactly the 24x7 churn we removed.
       const now = Date.now();
       const drifted = scanned.filter((p) =>
         localDeviceIds.some((dev) => {
           const seen = lastOk.get(`${p.id}|${dev}`) ?? 0;
-          return seen === 0 || seen < p.changedAt || now - seen > MAX_SYNC_AGE_MS;
+          return seen === 0 || now - seen > MAX_SYNC_AGE_MS;
         })
       );
 
