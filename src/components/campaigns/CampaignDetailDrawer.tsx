@@ -434,19 +434,29 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
 
           {/* Filter chips + search */}
           <div className="flex flex-wrap items-center gap-2">
-            {(['all', 'delivered', 'failed', 'pending'] as const).map((k) => (
+            {([
+              ['all', counts.total],
+              ['sent', counts.sent],
+              ['delivered', counts.delivered],
+              ['read', counts.read],
+              ['failed', counts.failed],
+              ['pending', counts.pending],
+              ...(counts.skipped > 0 ? [['skipped', counts.skipped] as const] : []),
+            ] as [FilterKey, number][]).map(([k, n]) => (
               <button
                 key={k}
                 onClick={() => setFilter(k)}
-                className={`text-xs rounded-full px-3 py-1 border transition-colors ${
+                aria-pressed={filter === k}
+                className={`text-xs rounded-full px-3 py-1 border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                   filter === k
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-card text-foreground border-border hover:bg-muted'
                 }`}
               >
-                {k.charAt(0).toUpperCase() + k.slice(1)}
+                {k.charAt(0).toUpperCase() + k.slice(1)} ({n})
               </button>
             ))}
+
             <div className="relative flex-1 min-w-[160px]">
               <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
               <Input
