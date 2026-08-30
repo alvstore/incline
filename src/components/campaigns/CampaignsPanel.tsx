@@ -28,6 +28,7 @@ import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawe
 import { CampaignReportDrawer } from '@/components/campaigns/CampaignReportDrawer';
 import { CampaignFailureBreakdown } from '@/components/campaigns/CampaignFailureBreakdown';
 import { format, formatDistanceToNow } from 'date-fns';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
 const statusBadge = (s: string) => {
@@ -78,6 +79,14 @@ export function CampaignsPanel() {
     },
   });
 
+  useRealtimeInvalidate({
+    channel: `campaign-counters-${branchId || 'none'}`,
+    tables: ['campaigns', 'campaign_recipients', 'communication_logs'],
+    invalidateKeys: [['campaigns', branchId]],
+    enabled: !!branchId,
+    debounceMs: 500,
+  });
+
   const refresh = () => qc.invalidateQueries({ queryKey: ['campaigns', branchId] });
 
   const delMut = useMutation({
@@ -113,6 +122,10 @@ export function CampaignsPanel() {
     }
     return out;
   }, [campaigns, statusFilter, search]);
+
+  const currentDetailCampaign = detailCampaign
+    ? campaigns.find((campaign) => campaign.id === detailCampaign.id) || detailCampaign
+    : null;
 
   return (
     <div className="space-y-4">
@@ -306,7 +319,7 @@ export function CampaignsPanel() {
           prefillClassId={announceClassId}
         />
       )}
-      <CampaignDetailDrawer open={!!detailCampaign} onOpenChange={(o) => !o && setDetailCampaign(null)} campaign={detailCampaign} />
+      <CampaignDetailDrawer open={!!detailCampaign} onOpenChange={(o) => !o && setDetailCampaign(null)} campaign={currentDetailCampaign} />
       <CampaignReportDrawer open={!!reportCampaign} onOpenChange={(o) => !o && setReportCampaign(null)} campaign={reportCampaign} />
 
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>

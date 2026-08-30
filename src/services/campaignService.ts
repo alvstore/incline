@@ -460,11 +460,21 @@ export async function resumePausedCampaign(campaignId: string): Promise<void> {
 }
 
 /** Ask the reconciler to refresh this campaign's stats immediately (no cron wait). */
-export async function reconcileCampaignStats(campaignId: string): Promise<void> {
-  const { error } = await supabase.functions.invoke('reconcile-campaign-stats', {
+export type CampaignReconcileResult = {
+  ok: boolean;
+  reconciled?: number;
+  results?: Array<Record<string, unknown>>;
+  error?: string;
+};
+
+export async function reconcileCampaignStats(campaignId: string): Promise<CampaignReconcileResult> {
+  const { data, error } = await supabase.functions.invoke('reconcile-campaign-stats', {
     body: { campaign_id: campaignId },
   });
   if (error) throw error;
+  const result = (data || {}) as CampaignReconcileResult;
+  if (!result.ok) throw new Error(result.error || 'Campaign reconciliation failed');
+  return result;
 }
 
 

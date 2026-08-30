@@ -27,6 +27,15 @@ import {
 
 import { parseCommError } from '@/lib/comms/metaErrorLabels';
 import { formatPhoneDisplay } from '@/lib/contacts/phone';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import {
+  campaignDeliveryFilterMatches,
+  campaignDeliveryRank,
+  deriveCampaignDeliveryCounts,
+  normalizeCampaignDeliveryStatus,
+  type CampaignDeliveryFilter,
+  type CampaignDeliveryStatus,
+} from '@/lib/campaigns/deliveryStats';
 
 interface Props {
   open: boolean;
@@ -50,23 +59,7 @@ type MergedRecipient = {
   timestamp: string | null;
   errorLabel: string | null;
   errorRaw: string | null;
-  final: 'delivered' | 'read' | 'sent' | 'failed' | 'pending' | 'skipped';
-};
-
-const finalOf = (r: {
-  recipientStatus: string;
-  dlrStatus: string | null;
-  deliveredAt: string | null;
-  readAt: string | null;
-}): MergedRecipient['final'] => {
-  const rs = (r.recipientStatus || '').toLowerCase();
-  const ds = (r.dlrStatus || '').toLowerCase();
-  if (r.readAt || ds === 'read') return 'read';
-  if (r.deliveredAt || ds === 'delivered') return 'delivered';
-  if (rs === 'sent' || rs === 'submitted' || ds === 'sent' || ds === 'queued') return 'sent';
-  if (ds === 'failed' || ds === 'bounced' || rs === 'failed') return 'failed';
-  if (rs === 'skipped' || rs === 'suppressed') return 'skipped';
-  return 'pending';
+  final: CampaignDeliveryStatus;
 };
 
 const statusBadgeClass = (s: MergedRecipient['final']) => {
@@ -102,40 +95,26 @@ const channelIcon = (channel: string) => {
   return MessageSquare;
 };
 
-const recipientRank = (status: string | null | undefined) => {
-  switch (String(status || '').toLowerCase()) {
-    case 'read': return 5;
-    case 'delivered': return 4;
-    case 'sent': return 3;
-    case 'submitted': return 3;
-    case 'failed': return 2;
-    case 'skipped': return 1;
-    case 'suppressed': return 1;
-    default: return 0;
-  }
-};
-
-type FilterKey = 'all' | 'sent' | 'delivered' | 'read' | 'failed' | 'pending' | 'skipped';
-
-/** Each chip matches EXACTLY the same set of rows its KPI tile counts. */
-const FILTER_MATCH: Record<FilterKey, (f: MergedRecipient['final']) => boolean> = {
-  all: () => true,
-  sent: (f) => f === 'sent' || f === 'delivered' || f === 'read',
-  delivered: (f) => f === 'delivered' || f === 'read',
-  read: (f) => f === 'read',
-  failed: (f) => f === 'failed',
-  pending: (f) => f === 'pending',
-  skipped: (f) => f === 'skipped',
-};
-
 export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<FilterKey>('all');
+  const [filter, setFilter] = useState<CampaignDeliveryFilter>('all');
   const [search, setSearch] = useState('');
 
   const [confirmRetrigger, setConfirmRetrigger] = useState(false);
 
   const enabled = !!campaign?.id && open;
+
+  useRealtimeInvalidate({
+    channel: `campaign-detail-${campaign?.id || 'none'}`,
+    tables: ['campaigns', 'campaign_recipients', 'communication_logs'],
+    invalidateKeys: [
+      ['campaigns'],
+      ['campaign-recipients', campaign?.id],
+      ['campaign-logs', campaign?.id],
+    ],
+    enabled,
+    debounceMs: 500,
+  });
 
   const { data: recipients = [], isLoading: recLoading } = useQuery({
     queryKey: ['campaign-recipients', campaign?.id],
@@ -182,7 +161,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     for (const r of recipients as any[]) {
       const key = `${r.source_type}:${r.source_ref_id}`;
       const existing = byRecipient.get(key);
-      if (!existing || recipientRank(r.status) > recipientRank(existing.status)) {
+      if (!existing || campaignDeliveryRank(r.status) > campaignDeliveryRank(existing.status)) {
         byRecipient.set(key, r);
       }
     }
@@ -209,26 +188,23 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
         errorLabel: label,
         errorRaw: errRaw,
       };
-      return { ...base, final: finalOf(base) };
+      return {
+        ...base,
+        final: normalizeCampaignDeliveryStatus({
+          recipientStatus: base.recipientStatus,
+          deliveryStatus: base.dlrStatus,
+          deliveredAt: base.deliveredAt,
+          readAt: base.readAt,
+        }),
+      };
     });
   }, [recipients, logs, campaign?.id]);
 
-  const counts = useMemo(() => {
-    const c = { total: merged.length, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0, skipped: 0 };
-    for (const m of merged) {
-      if (m.final === 'read') { c.read++; c.delivered++; c.sent++; }
-      else if (m.final === 'delivered') { c.delivered++; c.sent++; }
-      else if (m.final === 'sent') { c.sent++; }
-      else if (m.final === 'failed') { c.failed++; }
-      else if (m.final === 'skipped') { c.skipped++; }
-      else { c.pending++; }
-    }
-    return c;
-  }, [merged]);
+  const counts = useMemo(() => deriveCampaignDeliveryCounts(merged), [merged]);
 
   const filtered = useMemo(() => {
     return merged.filter((m) => {
-      if (!FILTER_MATCH[filter](m.final)) return false;
+      if (!campaignDeliveryFilterMatches(filter, m.final)) return false;
       if (search) {
         const q = search.toLowerCase();
         const hay = `${m.full_name || ''} ${m.phone || ''} ${m.email || ''}`.toLowerCase();
@@ -263,11 +239,13 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
 
   const reconcileMut = useMutation({
     mutationFn: () => reconcileCampaignStats(campaign!.id),
-    onSuccess: () => {
-      toast.success('Stats refreshed');
-      qc.invalidateQueries({ queryKey: ['campaigns'] });
-      qc.invalidateQueries({ queryKey: ['campaign-recipients', campaign?.id] });
-      qc.invalidateQueries({ queryKey: ['campaign-logs', campaign?.id] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.refetchQueries({ queryKey: ['campaigns'], type: 'active' }),
+        qc.refetchQueries({ queryKey: ['campaign-recipients', campaign?.id], type: 'active' }),
+        qc.refetchQueries({ queryKey: ['campaign-logs', campaign?.id], type: 'active' }),
+      ]);
+      toast.success('Stats reconciled with provider receipts');
     },
     onError: (e: any) => toast.error(e?.message || 'Reconcile failed'),
   });
@@ -442,7 +420,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
               ['failed', counts.failed],
               ['pending', counts.pending],
               ...(counts.skipped > 0 ? [['skipped', counts.skipped] as const] : []),
-            ] as [FilterKey, number][]).map(([k, n]) => (
+            ] as [CampaignDeliveryFilter, number][]).map(([k, n]) => (
               <button
                 key={k}
                 onClick={() => setFilter(k)}
