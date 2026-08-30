@@ -153,3 +153,9 @@ verify_jwt = true
 
 [functions.send-birthday-greeting]
 verify_jwt = true
+
+[functions.sarvam-voice]
+verify_jwt = true
+
+[functions.sarvam-voice-webhook]
+verify_jwt = false
