@@ -102,9 +102,12 @@ Deno.serve(async (req) => {
         }
         let trainerName: string | null = null;
         if (member.assigned_trainer_id) {
-          const { data: trainer } = await sb.from("trainers").select("full_name").eq("id", member.assigned_trainer_id)
+          const { data: trainer } = await sb.from("trainers").select("user_id").eq("id", member.assigned_trainer_id)
             .maybeSingle();
-          trainerName = (trainer as { full_name?: string } | null)?.full_name ?? null;
+          if (trainer?.user_id) {
+            const { data: tp } = await sb.from("profiles").select("full_name").eq("id", trainer.user_id).maybeSingle();
+            trainerName = (tp as { full_name?: string } | null)?.full_name ?? null;
+          }
         }
         const last = lastVisit?.check_in ? new Date(lastVisit.check_in as string) : null;
         result = {

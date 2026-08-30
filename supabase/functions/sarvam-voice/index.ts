@@ -9,6 +9,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   admin,
+  AGENT_INPUT_VARIABLES,
+  AGENT_OUTPUT_VARIABLES,
   checkConnection,
   corsHeaders,
   buildAgentVariables,
@@ -83,11 +85,12 @@ function sanitizeConfig(input: Record<string, unknown>, current: SarvamConfig): 
     retry_enabled: typeof input.retry_enabled === "boolean" ? input.retry_enabled : (current.retry_enabled ?? false),
     test_phone: str("test_phone") ? normalizePhone(str("test_phone")) : current.test_phone,
     webhook_token: current.webhook_token || crypto.randomUUID().replace(/-/g, ""),
+    tool_token: current.tool_token || crypto.randomUUID().replace(/-/g, ""),
   };
 }
 
 function publicConfig(cfg: SarvamConfig) {
-  const { webhook_token: _t, ...rest } = cfg;
+  const { webhook_token: _t, tool_token: _tt, ...rest } = cfg;
   return rest;
 }
 
@@ -318,6 +321,23 @@ Deno.serve(async (req) => {
 
     // ---- actions -----------------------------------------------------------
     if (action === "get_state") return await stateResponse();
+
+    // Owner/admin only: the URLs + shared tokens to paste into the Sarvam
+    // dashboard (webhook receiver and agent tool endpoint).
+    if (action === "get_endpoints") {
+      const base = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
+      return json({
+        ok: true,
+        endpoints: {
+          webhook_url: `${base}/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`,
+          tools_url: `${base}/sarvam-agent-tools`,
+          tools_header: "X-Incline-Tool-Key",
+          tools_token: cfg.tool_token ?? "",
+          agent_input_variables: AGENT_INPUT_VARIABLES,
+          agent_output_variables: AGENT_OUTPUT_VARIABLES,
+        },
+      });
+    }
 
     // Structured backend readiness — the ONLY thing the UI may gate on.
     if (action === "get_readiness" || action === "get_sarvam_voice_readiness") {
