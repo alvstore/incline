@@ -91,6 +91,7 @@ export default function SarvamVoiceCard() {
   const [apiKey, setApiKey] = useState('');
   const [form, setForm] = useState<SarvamConfig>({});
   const [testPhone, setTestPhone] = useState('');
+  const [outboundUnsupported, setOutboundUnsupported] = useState(false);
   const [lastCheck, setLastCheck] = useState<SarvamState['test'] | null>(null);
 
   const stateQuery = useQuery({
@@ -158,8 +159,14 @@ export default function SarvamVoiceCard() {
         body: { action: 'test_call', to: testPhone, confirmed: true },
       });
       if (error) throw new Error(error.message);
-      const res = data as { ok: boolean; error?: string };
-      if (!res.ok) throw new Error(res.error || 'Test call failed');
+      const res = data as { ok: boolean; error?: string; code?: string };
+      if (!res.ok) {
+        // Sarvam does not expose Instant Outbound for this workspace/agent —
+        // fall back to a manual test in the Sarvam dashboard.
+        setOutboundUnsupported(res.code === 'sarvam_not_found');
+        throw new Error(res.error || 'Test call failed');
+      }
+      setOutboundUnsupported(false);
       return res;
     },
     onSuccess: () => {
@@ -344,7 +351,10 @@ export default function SarvamVoiceCard() {
               />
               <Button
                 onClick={() => setConfirmOpen(true)}
-                disabled={!integration?.is_active || testPhone.trim().length < 10 || testCallMutation.isPending}
+                disabled={
+                  !integration?.is_active || outboundUnsupported ||
+                  testPhone.trim().length < 10 || testCallMutation.isPending
+                }
                 className="gap-1.5 cursor-pointer"
               >
                 {testCallMutation.isPending
@@ -353,10 +363,27 @@ export default function SarvamVoiceCard() {
                 Place test call
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Places one real outbound call through Sarvam's Instant Outbound API. Blocked outside the calling window,
-              for do-not-contact numbers, past the daily cap, or while another call is live.
-            </p>
+            {outboundUnsupported ? (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 space-y-2">
+                <p>
+                  Sarvam's Instant Outbound API is not available for this workspace/agent, so a call cannot be placed
+                  from Incline. Run the test from the Sarvam dashboard instead.
+                </p>
+                <a
+                  href="https://dashboard.sarvam.ai/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium underline cursor-pointer"
+                >
+                  Manual test in Sarvam Voice Agents <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Places one real outbound call through Sarvam's Instant Outbound API. Blocked outside the calling window,
+                for do-not-contact numbers, past the daily cap, or while another call is live.
+              </p>
+            )}
           </div>
 
           <Separator />

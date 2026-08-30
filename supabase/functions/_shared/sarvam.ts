@@ -1,4 +1,4 @@
-// v1.0.0 — Sarvam Voice Agents adapter.
+// v1.1.0 — Sarvam Voice Agents adapter.
 //
 // Single server-side boundary for every Sarvam call. Nothing else in the code
 // base may talk to Sarvam directly. Endpoints below are the officially
@@ -78,6 +78,8 @@ export function redact(input: unknown): string {
   return s.slice(0, 800);
 }
 
+export type Json = unknown;
+
 export function maskKey(key: string | null | undefined): string {
   if (!key) return "";
   if (key.length <= 8) return "•".repeat(key.length);
@@ -96,7 +98,7 @@ async function call(
   apiKey: string,
   url: string,
   opts: RequestOpts = {},
-): Promise<any> {
+): Promise<Json> {
   const method = opts.method ?? "GET";
   const retries = method === "GET" ? (opts.retries ?? 1) : 0;
   const timeoutMs = opts.timeoutMs ?? 20_000;
@@ -116,14 +118,15 @@ async function call(
         body: opts.body ? JSON.stringify(opts.body) : undefined,
       });
       const text = await res.text();
-      let parsed: any = null;
+      let parsed: Json = null;
       try {
         parsed = text ? JSON.parse(text) : null;
       } catch {
         parsed = { raw: text.slice(0, 500) };
       }
       if (!res.ok) {
-        const detail = redact(parsed?.detail ?? parsed?.message ?? parsed?.raw ?? text);
+        const p = (parsed ?? {}) as Record<string, unknown>;
+        const detail = redact(p.detail ?? p.message ?? p.raw ?? text);
         const err = new SarvamError(
           detail || `Sarvam returned HTTP ${res.status}`,
           res.status === 401 || res.status === 403
@@ -173,11 +176,11 @@ export async function listDeployments(apiKey: string, cfg: SarvamConfig, limit =
   requireScope(cfg);
   const url =
     `${BASE.deployments}/v1/orgs/${encodeURIComponent(cfg.org_id!)}/workspaces/${encodeURIComponent(cfg.workspace_id!)}/deployments?limit=${limit}`;
-  const data = await call(apiKey, url);
-  const items = Array.isArray(data?.items) ? data.items : [];
+  const data = (await call(apiKey, url)) as { items?: unknown; total?: unknown } | null;
+  const items = (Array.isArray(data?.items) ? data.items : []) as Array<Record<string, unknown>>;
   return {
     total: typeof data?.total === "number" ? data.total : items.length,
-    items: items.map((d: any) => ({
+    items: items.map((d) => ({
       deployment_id: d.deployment_id,
       name: d.name ?? null,
       app_id: d.app_id,
@@ -249,7 +252,9 @@ export async function createOutboundCall(
       ? { webhook_config: { url: args.webhookUrl, metadata: args.webhookMetadata ?? null } }
       : {}),
   };
-  const data = await call(apiKey, url, { method: "POST", body, timeoutMs: 25_000 });
+  const data = (await call(apiKey, url, { method: "POST", body, timeoutMs: 25_000 })) as
+    | { attempt_id?: unknown }
+    | null;
   if (!data?.attempt_id) {
     throw new SarvamError("Sarvam accepted the request but returned no attempt_id.", "sarvam_bad_response");
   }
