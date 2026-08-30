@@ -203,7 +203,7 @@ async function computeReadiness(
   }
 
   const test_call_available = connected && agent_configured && !!agent_version && deployment_configured &&
-    outbound_enabled && phone_number_configured && phone_number_active && phone_number_assigned;
+    outbound_enabled && phone_number_configured && deployment_active && phone_number_assigned;
 
   const integration_enabled = !!row?.is_active;
   const production_ready = test_call_available && integration_enabled;
@@ -219,9 +219,10 @@ async function computeReadiness(
     agent_version,
     agent_committed,
     deployment_configured,
+    deployment_active,
     outbound_enabled,
     phone_number_configured,
-    phone_number_active,
+    phone_number_active: deployment_active,
     phone_number_assigned,
     test_call_available,
     successful_test_call,
@@ -232,6 +233,7 @@ async function computeReadiness(
     blockers,
   };
 }
+
 
 
 Deno.serve(async (req) => {
