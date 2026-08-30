@@ -353,6 +353,8 @@ export const AGENT_INPUT_VARIABLES = [
   "trainer_name",
   "preferred_language",
   "call_reason",
+  "gender",
+  "phone",
 ] as const;
 
 /** Output variables Sarvam returns in final_agent_variables after the call. */
