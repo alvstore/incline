@@ -48,6 +48,11 @@ const PER_TICK = 2;
 const MAX_PER_TICK = 6;
 const SETTLE_MS = 6_000;
 const INVOCATION_BUDGET_MS = 45_000;
+// How long an `unverified` row rests before we try to prove it again.
+const VERIFY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+// How far back a face recognition still counts as proof of a live template.
+const RECOGNITION_WINDOW_DAYS = 120;
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
