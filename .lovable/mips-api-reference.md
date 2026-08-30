@@ -269,9 +269,8 @@ Payroll = (Base Salary / Calendar Days × Days Present) + PT Commissions − 12%
 | `profiles.email` | `email` | |
 | `membership.start_date` | `validTimeBegin` | Members only |
 | `membership.end_date` | `validTimeEnd` | Members only; staff/trainers = `2099-12-31 23:59:59` |
-| (hardcoded) | `personType` | Always `1` |
-| Members | `deptId` | `100` (Member department) |
-| Staff/Trainers | `deptId` | `101` (Staff department) |
+| (hardcoded) | `personType` | Always `1` (Personnel). **Never `2` — `2` = Visitor and files the person under Visitor Management.** |
+| Everyone | `deptId` | `100` (Incline). The server only has departments `100 Incline` and `103 Visitors`; `101`/`102` do NOT exist. |
 | (hardcoded) | `attendance` | Always `"1"` |
 | (hardcoded) | `holiday` | Always `"1"` |
 

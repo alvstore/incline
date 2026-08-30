@@ -1,3 +1,8 @@
+// v2.7.0 — personnel routing fix: every synced person is `personType: 1`
+// (Personnel). Staff/trainers were previously pushed as `personType: 2`, which
+// filed them under MIPS Visitor Management. Department IDs 101/102 do not exist
+// on the server, so all people now use the real root department (100 Incline)
+// with a role-descriptive deptName.
 // v2.6.0 — no-membership probation window REMOVED. Members without a valid
 // membership sync with the canonical revoked date (2000-01-01), and every
 // member sync is re-checked against `member_access_status` before the write.
@@ -35,6 +40,8 @@ const corsHeaders = {
 };
 
 const PERMANENT_END = "2099-12-31 23:59:59";
+// The MIPS server only has departments 100 (Incline) and 103 (Visitors).
+const STAFF_DEPT_ID = 100;
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 // Photos are never decoded in this worker (see fetchDeviceReadyBytes).
@@ -882,7 +889,7 @@ Deno.serve(async (req) => {
 
     } else if (person_type === "employee") {
       tableName = "employees";
-      deptId = 101;
+      deptId = STAFF_DEPT_ID;
       const { data: emp, error } = await supabase
         .from("employees")
         .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth)")
@@ -915,7 +922,7 @@ Deno.serve(async (req) => {
       validTimeEnd = PERMANENT_END;
     } else if (person_type === "trainer") {
       tableName = "trainers";
-      deptId = 102;
+      deptId = STAFF_DEPT_ID;
       const { data: trainer, error } = await supabase
         .from("trainers")
         .select("id, branch_id, biometric_photo_url, biometric_photo_path, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type, specializations")
@@ -1009,7 +1016,9 @@ Deno.serve(async (req) => {
     }
 
     // Step 3: Create or update person — omit empty strings so MIPS keeps prior values
-    const personType = person_type === "member" ? 1 : 2;
+    // personType 1 = Personnel, 2 = Visitor. Staff and trainers are personnel —
+    // sending 2 filed them under MIPS Visitor Management (v2.7.0 fix).
+    const personType = 1;
     const personPayload: Record<string, unknown> = {
       personSn: mipsPersonSn,
       personType,
@@ -1034,12 +1043,33 @@ Deno.serve(async (req) => {
       baseUrl, token, personPayload, existing
     );
 
+    // v2.7.0 — a `failed` status with no audit row is how Rajat and Yogita went
+    // missing for weeks. Every failure now leaves a trace in mips_sync_failures.
+    const recordFailure = async (reason: string) => {
+      try {
+        await supabase.from("mips_sync_failures").insert({
+          branch_id: effectiveBranchId ?? null,
+          entity_type: person_type,
+          entity_id: person_id,
+          operation: "person_upsert",
+          error_message: reason.substring(0, 1000),
+          payload: { personSn: mipsPersonSn, name },
+          status: "open",
+          attempts: 1,
+          last_attempt_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error(`Failed to record mips_sync_failure: ${(e as Error).message}`);
+      }
+    };
+
     if (!success) {
       console.error(`MIPS upsert FAILED: ${JSON.stringify(mipsResponse)}`);
       await supabase.from(tableName).update({
         mips_sync_status: "failed",
         mips_person_id: null,
       }).eq("id", person_id);
+      await recordFailure(mipsResponse?.msg || "MIPS person create/update failed");
 
       return new Response(JSON.stringify({
         success: false,
@@ -1056,6 +1086,7 @@ Deno.serve(async (req) => {
         mips_sync_status: "failed",
         mips_person_id: null,
       }).eq("id", person_id);
+      await recordFailure("Person created but personId not retrievable");
 
       return new Response(JSON.stringify({
         success: false,
@@ -1064,6 +1095,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     console.log(`MIPS person ${existing ? "updated" : "created"}: personId=${personId}`);
 
