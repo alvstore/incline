@@ -159,3 +159,6 @@ verify_jwt = true
 
 [functions.sarvam-voice-webhook]
 verify_jwt = false
+
+[functions.sarvam-agent-tools]
+verify_jwt = false

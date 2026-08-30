@@ -56,6 +56,7 @@ export interface SarvamConfig {
   retry_enabled?: boolean;
   test_phone?: string;
   webhook_token?: string;
+  tool_token?: string;
 }
 
 /** Internal, provider-neutral error model. */
@@ -171,33 +172,80 @@ export function requireScope(cfg: SarvamConfig) {
   }
 }
 
-/** GET /app-authoring/v1/orgs/{org}/workspaces/{ws}/deployments */
-export async function listDeployments(apiKey: string, cfg: SarvamConfig, limit = 50) {
+export interface SarvamDeployment {
+  deployment_id: unknown;
+  name: unknown;
+  app_id: unknown;
+  app_version: unknown;
+  status: unknown;
+  channel_direction: unknown;
+  phone_numbers: unknown[];
+  updated_at: unknown;
+}
+
+/** Docs: channel_direction is exactly inbound | outbound | inbound_outbound. */
+export function isOutboundCapable(direction: unknown): boolean {
+  const d = String(direction ?? "").toLowerCase();
+  return d === "outbound" || d === "inbound_outbound";
+}
+
+function mapDeployment(d: Record<string, unknown>): SarvamDeployment {
+  return {
+    deployment_id: d.deployment_id,
+    name: d.name ?? null,
+    app_id: d.app_id,
+    app_version: d.app_version,
+    status: d.status ?? null,
+    channel_direction: d.channel_direction ?? null,
+    phone_numbers: Array.isArray(d.phone_numbers) ? d.phone_numbers : [],
+    updated_at: d.updated_at ?? null,
+  };
+}
+
+/** GET /app-authoring/v1/orgs/{org}/workspaces/{ws}/deployments (limit max 100). */
+export async function listDeployments(
+  apiKey: string,
+  cfg: SarvamConfig,
+  opts: { limit?: number; offset?: number; search?: string } = {},
+) {
   requireScope(cfg);
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 100));
+  const params = new URLSearchParams({ limit: String(limit), offset: String(opts.offset ?? 0) });
+  if (opts.search) params.set("search", opts.search);
   const url =
-    `${BASE.deployments}/v1/orgs/${encodeURIComponent(cfg.org_id!)}/workspaces/${encodeURIComponent(cfg.workspace_id!)}/deployments?limit=${limit}`;
+    `${BASE.deployments}/v1/orgs/${encodeURIComponent(cfg.org_id!)}/workspaces/${encodeURIComponent(cfg.workspace_id!)}/deployments?${params}`;
   const data = (await call(apiKey, url)) as { items?: unknown; total?: unknown } | null;
   const items = (Array.isArray(data?.items) ? data.items : []) as Array<Record<string, unknown>>;
   return {
     total: typeof data?.total === "number" ? data.total : items.length,
-    items: items.map((d) => ({
-      deployment_id: d.deployment_id,
-      name: d.name ?? null,
-      app_id: d.app_id,
-      app_version: d.app_version,
-      status: d.status ?? null,
-      channel_direction: d.channel_direction ?? null,
-      phone_numbers: Array.isArray(d.phone_numbers) ? d.phone_numbers : [],
-      updated_at: d.updated_at ?? null,
-    })),
+    items: items.map(mapDeployment),
   };
+}
+
+/** Walk pages (bounded) until the agent's deployment is found. */
+async function findDeploymentForAgent(apiKey: string, cfg: SarvamConfig) {
+  const seen: SarvamDeployment[] = [];
+  let total = 0;
+  for (let page = 0; page < 5; page++) {
+    const res = await listDeployments(apiKey, cfg, { limit: 100, offset: page * 100 });
+    total = res.total;
+    seen.push(...res.items);
+    const matching = cfg.app_id ? res.items.filter((d) => d.app_id === cfg.app_id) : [];
+    if (matching.length) {
+      const preferred = matching.find((d) =>
+        d.status === "active" && isOutboundCapable(d.channel_direction)
+      ) ?? matching.find((d) => d.status === "active") ?? matching[0];
+      return { total, items: seen, matching, deployment: preferred };
+    }
+    if (seen.length >= total || res.items.length === 0) break;
+  }
+  return { total, items: seen, matching: [] as SarvamDeployment[], deployment: null };
 }
 
 /** Credential + scope health check. Never asserts "agent deployed". */
 export async function checkConnection(apiKey: string, cfg: SarvamConfig) {
-  const { items, total } = await listDeployments(apiKey, cfg, 50);
-  const matching = cfg.app_id ? items.filter((d) => d.app_id === cfg.app_id) : [];
-  const active = matching.find((d) => d.status === "active") ?? matching[0] ?? null;
+  const { items, total, matching, deployment: active } = await findDeploymentForAgent(apiKey, cfg);
+
   return {
     ok: true,
     deployments_total: total,
@@ -290,4 +338,38 @@ export function normalizeCallStatus(s: string | null | undefined): string {
     default:
       return "failed";
   }
+}
+
+/** The exact agent-variable contract Incline sends to Sarvam on every outbound
+ *  call. These names must match the Input variables configured on the agent. */
+export const AGENT_INPUT_VARIABLES = [
+  "member_name",
+  "member_code",
+  "branch_name",
+  "days_absent",
+  "last_visit_date",
+  "plan_name",
+  "plan_expiry",
+  "trainer_name",
+  "preferred_language",
+  "call_reason",
+] as const;
+
+/** Output variables Sarvam returns in final_agent_variables after the call. */
+export const AGENT_OUTPUT_VARIABLES = [
+  "call_disposition",
+  "callback_datetime",
+  "reason_for_absence",
+  "next_step_agreed",
+] as const;
+
+export type AgentVariables = Partial<Record<typeof AGENT_INPUT_VARIABLES[number], string>>;
+
+/** Fill every input variable so the agent never sees an undefined slot. */
+export function buildAgentVariables(input: AgentVariables): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of AGENT_INPUT_VARIABLES) {
+    out[key] = (input[key] ?? "").toString();
+  }
+  return out;
 }

@@ -1,4 +1,4 @@
-// v1.1.0 — Sarvam Voice AI control plane (owner/admin only).
+// v1.2.0 — Sarvam Voice AI control plane (owner/admin only).
 //
 // Actions: get_state | get_readiness | run_eligibility_check | save_config |
 //          save_automation | set_active | test_connection | test_call
@@ -9,9 +9,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   admin,
+  AGENT_INPUT_VARIABLES,
+  AGENT_OUTPUT_VARIABLES,
   checkConnection,
   corsHeaders,
+  buildAgentVariables,
   createOutboundCall,
+  isOutboundCapable,
   json,
   maskKey,
   redact,
@@ -19,6 +23,7 @@ import {
   type SarvamConfig,
 } from "../_shared/sarvam.ts";
 import { normalizePhone, isValidIndianMobile } from "../_shared/phone.ts";
+
 
 const PROVIDER = "sarvam";
 
@@ -28,7 +33,7 @@ const DEFAULT_CONFIG: SarvamConfig = {
   window_start: "10:00",
   window_end: "19:00",
   max_concurrent_calls: 1,
-  daily_call_cap: 50,
+  daily_call_cap: 25,
   retry_enabled: false,
 };
 
@@ -80,11 +85,12 @@ function sanitizeConfig(input: Record<string, unknown>, current: SarvamConfig): 
     retry_enabled: typeof input.retry_enabled === "boolean" ? input.retry_enabled : (current.retry_enabled ?? false),
     test_phone: str("test_phone") ? normalizePhone(str("test_phone")) : current.test_phone,
     webhook_token: current.webhook_token || crypto.randomUUID().replace(/-/g, ""),
+    tool_token: current.tool_token || crypto.randomUUID().replace(/-/g, ""),
   };
 }
 
 function publicConfig(cfg: SarvamConfig) {
-  const { webhook_token: _t, ...rest } = cfg;
+  const { webhook_token: _t, tool_token: _tt, ...rest } = cfg;
   return rest;
 }
 
@@ -95,10 +101,13 @@ export interface SarvamReadiness {
   agent_version: string | null;
   agent_committed: boolean;
   deployment_configured: boolean;
+  deployment_active: boolean;
   outbound_enabled: boolean;
   phone_number_configured: boolean;
+  /** Alias of deployment_active — the number is live only if its deployment is. */
   phone_number_active: boolean;
   phone_number_assigned: boolean;
+
   test_call_available: boolean;
   successful_test_call: boolean;
   integration_enabled: boolean;
@@ -137,7 +146,7 @@ async function computeReadiness(
   let deployment: Record<string, unknown> | null = null;
   let deployment_configured = false;
   let outbound_enabled = false;
-  let phone_number_active = false;
+  let deployment_active = false;
   let phone_number_assigned = false;
   let agent_committed = false;
 
@@ -162,14 +171,17 @@ async function computeReadiness(
             `Configured agent version (${agent_version}) does not match the deployed version (${deployment!.app_version}).`,
           );
         }
-        phone_number_active = status === "active";
-        if (!phone_number_active) blockers.push(`Deployment status is "${status || "unknown"}" — it must be active.`);
-        outbound_enabled = direction.includes("outbound") || direction === "bidirectional" || direction === "both";
+        deployment_active = status === "active";
+        if (!deployment_active) {
+          blockers.push(`Deployment status is "${status || "unknown"}" — it must be active (not paused).`);
+        }
+        outbound_enabled = isOutboundCapable(direction);
         if (!outbound_enabled) {
           blockers.push(
-            `Deployment channel direction is "${direction || "unknown"}" — outbound calling is not enabled on it.`,
+            `Deployment channel direction is "${direction || "unknown"}" — it must be "outbound" or "inbound_outbound".`,
           );
         }
+
         const wanted = normalizePhone(cfg.agent_phone_number ?? "");
         phone_number_assigned = !!wanted && numbers.includes(wanted);
         if (!phone_number_assigned) {
@@ -197,7 +209,7 @@ async function computeReadiness(
   }
 
   const test_call_available = connected && agent_configured && !!agent_version && deployment_configured &&
-    outbound_enabled && phone_number_configured && phone_number_active && phone_number_assigned;
+    outbound_enabled && phone_number_configured && deployment_active && phone_number_assigned;
 
   const integration_enabled = !!row?.is_active;
   const production_ready = test_call_available && integration_enabled;
@@ -213,9 +225,10 @@ async function computeReadiness(
     agent_version,
     agent_committed,
     deployment_configured,
+    deployment_active,
     outbound_enabled,
     phone_number_configured,
-    phone_number_active,
+    phone_number_active: deployment_active,
     phone_number_assigned,
     test_call_available,
     successful_test_call,
@@ -226,6 +239,7 @@ async function computeReadiness(
     blockers,
   };
 }
+
 
 
 Deno.serve(async (req) => {
@@ -307,6 +321,23 @@ Deno.serve(async (req) => {
 
     // ---- actions -----------------------------------------------------------
     if (action === "get_state") return await stateResponse();
+
+    // Owner/admin only: the URLs + shared tokens to paste into the Sarvam
+    // dashboard (webhook receiver and agent tool endpoint).
+    if (action === "get_endpoints") {
+      const base = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
+      return json({
+        ok: true,
+        endpoints: {
+          webhook_url: `${base}/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`,
+          tools_url: `${base}/sarvam-agent-tools`,
+          tools_header: "X-Incline-Tool-Key",
+          tools_token: cfg.tool_token ?? "",
+          agent_input_variables: AGENT_INPUT_VARIABLES,
+          agent_output_variables: AGENT_OUTPUT_VARIABLES,
+        },
+      });
+    }
 
     // Structured backend readiness — the ONLY thing the UI may gate on.
     if (action === "get_readiness" || action === "get_sarvam_voice_readiness") {
@@ -535,7 +566,7 @@ Deno.serve(async (req) => {
         _lead_id: null,
         _agent_id: cfg.app_id ?? null,
         _agent_version: cfg.app_version ?? null,
-        _daily_cap: cfg.daily_call_cap ?? 50,
+        _daily_cap: cfg.daily_call_cap ?? 25,
         _max_concurrent: cfg.max_concurrent_calls ?? 1,
         _cooldown_days: 0,
         _eligibility: {
@@ -556,7 +587,11 @@ Deno.serve(async (req) => {
       try {
         const { attempt_id } = await createOutboundCall(key!, cfg, {
           to,
-          agentVariables: { call_reason: "manual_test", source: "incline_crm" },
+          agentVariables: buildAgentVariables({
+            call_reason: "manual_test",
+            branch_name: "Incline",
+            preferred_language: "Hindi",
+          }),
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
           webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
         });

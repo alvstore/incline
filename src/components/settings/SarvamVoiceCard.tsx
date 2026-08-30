@@ -65,6 +65,7 @@ interface SarvamReadiness {
   outbound_enabled: boolean;
   phone_number_configured: boolean;
   phone_number_active: boolean;
+  deployment_active?: boolean;
   phone_number_assigned: boolean;
   test_call_available: boolean;
   successful_test_call: boolean;
@@ -107,6 +108,15 @@ interface SarvamState {
   } | null;
   config: SarvamConfig;
   readiness?: SarvamReadiness;
+  endpoints?: {
+    webhook_url: string;
+    tools_url: string;
+    tools_header: string;
+    tools_token: string;
+    agent_input_variables?: string[];
+    agent_output_variables?: string[];
+  };
+
   test?: { ok: boolean; error?: string; deployment?: SarvamDeployment | null; deployments?: SarvamDeployment[]; agent_found?: boolean | null };
   error?: string;
 }
@@ -143,6 +153,22 @@ export default function SarvamVoiceCard() {
     queryFn: () => invokeSarvam({ action: 'get_readiness' }),
     staleTime: 60_000,
   });
+
+  const endpointsQuery = useQuery({
+    queryKey: ['sarvam-voice', 'endpoints'],
+    queryFn: () => invokeSarvam({ action: 'get_endpoints' }),
+    enabled: false,
+  });
+  const endpoints = endpointsQuery.data?.endpoints as
+    | {
+      webhook_url: string;
+      tools_url: string;
+      tools_header: string;
+      tools_token: string;
+      agent_input_variables?: string[];
+      agent_output_variables?: string[];
+    }
+    | undefined;
 
   const attemptsQuery = useQuery({
     queryKey: ['sarvam-voice', 'attempts'],
@@ -350,9 +376,11 @@ export default function SarvamVoiceCard() {
             <div className="rounded-xl border p-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Calling window (IST)</p>
               <p className="text-sm font-medium mt-1">
-                {cfg.window_start || '10:00'}–{cfg.window_end || '19:00'} · cap {cfg.daily_call_cap ?? 50}/day
+                {automation.window_start || cfg.window_start || '10:00'}–{automation.window_end || cfg.window_end || '19:00'}
+                {' '}· cap {automation.max_calls_per_day ?? 25}/day
               </p>
             </div>
+
           </div>
 
           {/* Connection test */}
@@ -500,7 +528,7 @@ export default function SarvamVoiceCard() {
                     ['Sarvam connected', !!readiness?.connected],
                     ['Agent configured', !!readiness?.agent_configured && !!readiness?.agent_version],
                     ['Outbound deployment', !!readiness?.deployment_configured && !!readiness?.outbound_enabled],
-                    ['Phone number active & assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
+                    ['Deployment active & number assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
                     ['Integration switched on', !!readiness?.integration_enabled],
                     ['Successful test call', !!readiness?.successful_test_call],
                   ] as Array<[string, boolean]>).map(([label, done]) => (
@@ -700,7 +728,7 @@ export default function SarvamVoiceCard() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="sarvam-cap">Daily call cap</Label>
-                <Input id="sarvam-cap" type="number" min={1} value={form.daily_call_cap ?? 50}
+                <Input id="sarvam-cap" type="number" min={1} value={form.daily_call_cap ?? 25}
                   onChange={(e) => set('daily_call_cap', Number(e.target.value))} />
               </div>
               <div className="space-y-1.5">
@@ -713,6 +741,39 @@ export default function SarvamVoiceCard() {
                 <Input id="sarvam-testnum" value={form.test_phone ?? ''} placeholder="+91XXXXXXXXXX"
                   onChange={(e) => set('test_phone', e.target.value)} />
               </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">Sarvam dashboard endpoints</p>
+                  <p className="text-xs text-muted-foreground">
+                    Paste these into the agent's webhook and HTTPS tool configuration.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={() => endpointsQuery.refetch()}
+                  disabled={endpointsQuery.isFetching}
+                >
+                  {endpointsQuery.isFetching
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    : 'Reveal'}
+                </Button>
+              </div>
+              {endpoints && (
+                <div className="space-y-2 rounded-xl bg-muted/50 p-3 text-xs break-all">
+                  <p><span className="font-semibold">Webhook URL:</span> {endpoints.webhook_url}</p>
+                  <p><span className="font-semibold">Tools URL:</span> {endpoints.tools_url}</p>
+                  <p><span className="font-semibold">Tools header:</span> {endpoints.tools_header}: {endpoints.tools_token}</p>
+                  <p><span className="font-semibold">Input variables:</span> {(endpoints.agent_input_variables || []).join(', ')}</p>
+                  <p><span className="font-semibold">Output variables:</span> {(endpoints.agent_output_variables || []).join(', ')}</p>
+                </div>
+              )}
             </div>
           </div>
 
