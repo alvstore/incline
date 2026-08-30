@@ -145,6 +145,22 @@ export default function SarvamVoiceCard() {
     staleTime: 60_000,
   });
 
+  const endpointsQuery = useQuery({
+    queryKey: ['sarvam-voice', 'endpoints'],
+    queryFn: () => invokeSarvam({ action: 'get_endpoints' }),
+    enabled: false,
+  });
+  const endpoints = endpointsQuery.data?.endpoints as
+    | {
+      webhook_url: string;
+      tools_url: string;
+      tools_header: string;
+      tools_token: string;
+      agent_input_variables?: string[];
+      agent_output_variables?: string[];
+    }
+    | undefined;
+
   const attemptsQuery = useQuery({
     queryKey: ['sarvam-voice', 'attempts'],
     queryFn: async () => {
