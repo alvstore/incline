@@ -11,6 +11,7 @@ import {
   admin,
   checkConnection,
   corsHeaders,
+  buildAgentVariables,
   createOutboundCall,
   isOutboundCapable,
   json,
@@ -566,7 +567,11 @@ Deno.serve(async (req) => {
       try {
         const { attempt_id } = await createOutboundCall(key!, cfg, {
           to,
-          agentVariables: { call_reason: "manual_test", source: "incline_crm" },
+          agentVariables: buildAgentVariables({
+            call_reason: "manual_test",
+            branch_name: "Incline",
+            preferred_language: "Hindi",
+          }),
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
           webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
         });
