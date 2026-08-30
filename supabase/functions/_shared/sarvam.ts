@@ -360,6 +360,7 @@ export const AGENT_INPUT_VARIABLES = [
 /** Output variables Sarvam returns in final_agent_variables after the call. */
 export const AGENT_OUTPUT_VARIABLES = [
   "call_disposition",
+  "call_summary",
   "callback_datetime",
   "reason_for_absence",
   "next_step_agreed",

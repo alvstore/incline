@@ -535,7 +535,7 @@ Deno.serve(async (req) => {
 
       // 3. Do-not-contact across members (via profile phone), leads and chat settings.
       const [{ data: dncProfiles }, { data: dncLead }, { data: dncChat }] = await Promise.all([
-        sb.from("profiles").select("id").eq("phone", to).limit(5),
+        sb.from("profiles").select("id, full_name, gender").eq("phone", to).limit(5),
         sb.from("leads").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
         sb.from("whatsapp_chat_settings").select("id").eq("phone_number", to).eq("do_not_contact", true).limit(1),
       ]);
@@ -582,6 +582,31 @@ Deno.serve(async (req) => {
       }
       const attemptRowId = claimed.attempt_row_id!;
 
+      // Personalisation: greet the callee by name when the number is known.
+      const callerProfile = (dncProfiles || [])[0] as
+        | { id: string; full_name?: string | null; gender?: string | null }
+        | undefined;
+      let calleeName = callerProfile?.full_name ?? "";
+      let calleeCode = "";
+      let calleeBranch = "Incline";
+      if (callerProfile) {
+        const { data: memberRow } = await sb
+          .from("members")
+          .select("member_code, branch_id")
+          .eq("user_id", callerProfile.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        calleeCode = (memberRow as { member_code?: string } | null)?.member_code ?? "";
+        const bId = (memberRow as { branch_id?: string } | null)?.branch_id;
+        if (bId) {
+          const { data: br } = await sb.from("branches").select("name").eq("id", bId).maybeSingle();
+          calleeBranch = (br as { name?: string } | null)?.name ?? calleeBranch;
+          
+        }
+      }
+      if (!calleeName) calleeName = "there";
+
       const webhookUrl =
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`;
       try {
@@ -589,9 +614,12 @@ Deno.serve(async (req) => {
           to,
           agentVariables: buildAgentVariables({
             call_reason: "manual_test",
-            branch_name: "Incline",
+            branch_name: calleeBranch,
             preferred_language: "Hindi",
             phone: to,
+            member_name: calleeName,
+            member_code: calleeCode,
+            gender: callerProfile?.gender ?? "",
           }),
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
           webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
