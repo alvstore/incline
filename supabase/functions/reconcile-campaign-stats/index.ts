@@ -1,4 +1,6 @@
+// v2.1.0 — attempt-aware precedence (a newer retry supersedes stale attempts).
 // v2.0.0 — PHASE 3 + 6: the provider delivery event is authoritative and
+
 //          `campaign_recipients` is the single source of truth for statistics.
 //
 //   • A send-time ACK NEVER permanently wins over a later provider failure.
@@ -56,31 +58,50 @@ Deno.serve(async (req) => {
     // Recipient rows are the source of truth; superseded duplicates excluded.
     const { data: recips } = await admin
       .from('campaign_recipients')
-      .select('id, source_type, source_ref_id, status, error')
+      .select('id, source_type, source_ref_id, status, error, last_retried_at, dispatched_at, created_at')
       .eq('campaign_id', cid)
       .eq('superseded', false);
 
     // Pull every provider outcome for this campaign via dedupe_key prefix.
     const { data: logs } = await admin
       .from('communication_logs')
-      .select('id, dedupe_key, delivery_status, read_at, delivered_at, failed_at, error_message, provider_message_id')
+      .select('id, dedupe_key, delivery_status, read_at, delivered_at, failed_at, error_message, provider_message_id, created_at')
       .like('dedupe_key', `campaign:${cid}:%`);
 
-    // Phase 3 precedence: read > delivered > failed > sent > queued.
-    // A later provider failure therefore beats an earlier send-time ACK.
+    // v2.1.0 — attempt-aware precedence. A retry (`:a2`, `:retry:<ts>`, …)
+    // supersedes every earlier attempt for the same recipient; only within the
+    // SAME attempt does the outcome ranking (read > delivered > failed > sent)
+    // decide. Previously a stale failed attempt outranked a newer successful
+    // retry, so "Retry failed" silently reverted to failed on the next cron.
     const dlrByKey = new Map<string, any>();
     for (const l of logs || []) {
       const base = baseCampaignKey((l as any).dedupe_key);
       if (!base) continue;
       const existing = dlrByKey.get(base);
-      if (!existing || authorityRank(l) > authorityRank(existing)) dlrByKey.set(base, l);
+      if (!existing) { dlrByKey.set(base, l); continue; }
+      const a = attemptRank(l), b = attemptRank(existing);
+      if (a > b || (a === b && authorityRank(l) > authorityRank(existing))) {
+        dlrByKey.set(base, l);
+      }
     }
+
 
     let applied = 0;
     for (const r of recips || []) {
       const key = `campaign:${cid}:${(r as any).source_type}:${(r as any).source_ref_id}`;
       const dlr = dlrByKey.get(key);
       if (!dlr) continue;
+
+      // v2.1.0 — never resurrect an outcome that predates the current attempt.
+      // A row that was re-queued (pending/dispatching after a retry) must wait
+      // for its own provider outcome instead of inheriting the previous one.
+      const rStatus = String((r as any).status || '');
+      if (rStatus === 'pending' || rStatus === 'dispatching') {
+        const retriedAt = Date.parse(String((r as any).last_retried_at || '')) || 0;
+        const logAt = Date.parse(String((dlr as any).created_at || '')) || 0;
+        if (retriedAt && logAt <= retriedAt) continue;
+      }
+
 
       const ds = String(dlr.delivery_status || '').toLowerCase();
       const mapped =
@@ -175,3 +196,14 @@ function authorityRank(log: any): number {
   if (s === 'queued' || s === 'sending') return 1;
   return 0;
 }
+
+/** Ordering key for retry attempts of the same recipient. Uses the `:aN`
+ *  suffix when present, else falls back to log creation time. */
+function attemptRank(log: any): number {
+  const key = String(log?.dedupe_key || '');
+  const m = key.match(/:a(\d+)(?::|$)/);
+  const attempt = m ? Number(m[1]) : 0;
+  const ts = Date.parse(String(log?.created_at || '')) || 0;
+  return attempt * 1e13 + ts;
+}
+
