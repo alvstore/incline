@@ -49,6 +49,9 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [payRef, setPayRef] = useState('');
   const [payOpen, setPayOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+
 
   const { data: runs = [] } = useQuery({
     queryKey: ['payroll-runs', branchId, periodStart, periodEnd],
