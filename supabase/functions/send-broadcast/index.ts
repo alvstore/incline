@@ -711,12 +711,13 @@ Deno.serve(async (req) => {
             channel,
             recipient,
             category: 'marketing',
-            payload: { subject: subject || undefined, body: personalizedMsg, variables: perVars },
+            payload: { subject: personalizeSubject(subject, perVars), body: personalizedMsg, variables: perVars },
             template_id: template_id || null,
             member_id: member.id,
             dedupe_key: campaign_id ? `campaign:${campaign_id}:member:${member.id}${runKey}${retrySuffix}` : `broadcast:${Date.now()}:member:${member.id}`,
             force: true,
-            ...(attachment ? { attachment } : {}),
+            ...(attachmentForChannel(attachment, channel, personalizedMsg) ? { attachment: attachmentForChannel(attachment, channel, personalizedMsg) } : {}),
+
           },
         });
         const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
