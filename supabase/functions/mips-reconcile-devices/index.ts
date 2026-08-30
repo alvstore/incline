@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       const localDeviceIds = brDevices.map((d) => d.localId);
 
       // 2. Build the complete branch roster, including trainers.
-      const cols = "id, mips_person_id, updated_at, biometric_updated_at";
+      const cols = "id, mips_person_id, updated_at";
       const [{ data: members }, { data: employees }, { data: trainers }] = await Promise.all([
         supabase.from("members").select(cols)
           .eq("branch_id", branchId).not("mips_person_id", "is", null),
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       ].map((p: any) => ({
         type: p.type as string,
         id: p.id as string,
-        changedAt: Math.max(ts(p.updated_at), ts(p.biometric_updated_at)),
+        changedAt: ts(p.updated_at),
       }));
 
       // 3. Advance a rotating SCAN window (cheap: local comparison only).
