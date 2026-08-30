@@ -213,11 +213,18 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {activeRun && !['processed', 'paid'].includes(activeRun.status) && activeRun.status !== 'draft'
+            && hasAnyRole(['owner', 'admin']) && (
+            <Button variant="outline" onClick={() => setReopenOpen(true)}>
+              <RotateCcw className="h-4 w-4 mr-2" /> Reopen Run
+            </Button>
+          )}
           <Button onClick={() => createRun.mutate()} disabled={createRun.isPending} variant="default">
             {createRun.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />}
             Calculate Run
           </Button>
         </div>
+
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
