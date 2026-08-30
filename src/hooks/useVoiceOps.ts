@@ -125,6 +125,25 @@ export interface VoiceCallDetail {
   }>;
 }
 
+export interface VoiceQueueRow {
+  member_id: string;
+  member_name: string | null;
+  member_code: string | null;
+  masked_phone: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  last_visit: string | null;
+  days_absent: number | null;
+  plan_name: string | null;
+  plan_expiry: string | null;
+  trainer_name: string | null;
+  last_call_at: string | null;
+  last_call_id: string | null;
+  last_disposition: string | null;
+  eligible_at: string | null;
+  total_count: number;
+}
+
 export interface VoiceFeedFilters {
   branchId?: string | null;
   from?: string | null;
@@ -150,6 +169,23 @@ export function useVoiceOpsSummary(branchId?: string | null) {
       return (data ?? {}) as VoiceOpsSummary;
     },
     staleTime: 30_000,
+  });
+}
+
+export function useVoiceQueue(branchId?: string | null, limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['voice-queue', branchId ?? 'all', limit, offset],
+    queryFn: async (): Promise<VoiceQueueRow[]> => {
+      const { data, error } = await rpc('voice_retention_queue', {
+        p_branch: branchId ?? null,
+        p_limit: limit,
+        p_offset: offset,
+      });
+      if (error) throw error;
+      return (data ?? []) as VoiceQueueRow[];
+    },
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 }
 
