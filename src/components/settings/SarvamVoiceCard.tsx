@@ -725,6 +725,41 @@ export default function SarvamVoiceCard() {
         </SheetContent>
       </Sheet>
 
+      <AlertDialog open={blockersOpen} onOpenChange={setBlockersOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Voice AI readiness</AlertDialogTitle>
+            <AlertDialogDescription>
+              These checks run against Sarvam on every load. Calling stays locked until all of them pass.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {readiness?.blockers?.length
+            ? (
+              <ul className="space-y-2 text-sm">
+                {readiness.blockers.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" aria-hidden="true" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )
+            : <p className="text-sm text-muted-foreground">No blockers reported.</p>}
+          {readiness?.probe_error && (
+            <p className="text-xs text-red-600">Provider check failed: {readiness.probe_error}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel className="cursor-pointer">Close</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); readinessQuery.refetch(); }}
+              className="cursor-pointer"
+            >
+              Re-check
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
