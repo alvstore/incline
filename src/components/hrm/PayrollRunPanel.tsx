@@ -292,6 +292,15 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         <TableCell className="text-right font-bold">₹{Number(it.final_net).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1 justify-end">
+                            {it.attendance_changed_at && (
+                              <Button size="sm" variant="ghost" aria-label="Recalculate from attendance"
+                                disabled={['processed','paid'].includes(it.status) || !isAdmin || recalcMut.isPending}
+                                onClick={() => recalcMut.mutate(it.id)}
+                                className="text-warning hover:bg-warning/10"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalculate
+                              </Button>
+                            )}
                             <Button size="sm" variant="ghost"
                               disabled={['processed','paid'].includes(it.status)}
                               onClick={() => { setPreviewItem(it); setPreviewDrawerOpen(true); }}
@@ -299,7 +308,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" /> Preview
                             </Button>
-                            <Button size="sm" variant="ghost"
+                            <Button size="sm" variant="ghost" aria-label="Adjust payroll item"
                               disabled={['processed','paid'].includes(it.status) || !isAdmin}
                               onClick={() => { setAdjustItem(it); setAdjustDrawerOpen(true); }}
                             >
@@ -307,6 +316,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             </Button>
                           </div>
                         </TableCell>
+
                       </TableRow>
                     );
                   })}
