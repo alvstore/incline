@@ -124,9 +124,25 @@ interface SarvamState {
 
 const SARVAM_CONSOLE_URL = 'https://dashboard.sarvam.ai/';
 
+/** Edge errors carry the real reason in the response body — supabase-js only
+ *  surfaces "Edge Function returned a non-2xx status code" unless we read it. */
+async function readEdgeError(error: unknown, fallback: string): Promise<string> {
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.clone().json();
+      const msg = (body as { error?: string })?.error;
+      if (msg) return msg;
+    } catch {
+      /* body not JSON — fall through */
+    }
+  }
+  return (error as Error)?.message || fallback;
+}
+
 async function invokeSarvam(payload: Record<string, unknown>): Promise<SarvamState> {
   const { data, error } = await supabase.functions.invoke('sarvam-voice', { body: payload });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await readEdgeError(error, 'Sarvam request failed'));
   const res = data as SarvamState;
   if (!res?.ok && res?.error) throw new Error(res.error);
   return res;
