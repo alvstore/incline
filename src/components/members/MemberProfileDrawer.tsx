@@ -15,8 +15,9 @@ import {
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
-  ChevronLeft, ChevronRight, Pencil, KeyRound, Library
+  ChevronLeft, ChevronRight, Pencil, KeyRound, Library, PhoneCall
 } from 'lucide-react';
+import { MemberVoiceAIHistory } from '@/components/voice/MemberVoiceAIHistory';
 
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -2388,6 +2389,20 @@ export function MemberProfileDrawer({
 
 
             <TabsContent value="activity" className="space-y-4 mt-4">
+              {member?.id && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <PhoneCall className="h-4 w-4" />
+                      Voice AI calls
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <MemberVoiceAIHistory memberId={member.id} />
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">

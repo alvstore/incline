@@ -1,4 +1,4 @@
-// v1.1.0 — Sarvam Instant Outbound webhook receiver.
+// v1.2.0 — Sarvam Instant Outbound webhook receiver.
 //
 // Public endpoint, authenticated by the ?t=<webhook_token> shared secret stored
 // in the integration config (constant-time compared). Persists the full
@@ -97,6 +97,33 @@ Deno.serve(async (req) => {
         nextStep ? `Next step: ${nextStep}` : null,
       ].filter(Boolean).join(" ");
 
+      // Notify the existing in-app notification system (no second system).
+      const notifyStaff = async (title: string, message: string) => {
+        try {
+          const { data: staffRoles } = await sb
+            .from("user_roles")
+            .select("user_id, role")
+            .in("role", ["owner", "admin", "manager"]);
+          const seen = new Set<string>();
+          const rows = (staffRoles || [])
+            .filter((r: { user_id: string }) => r.user_id && !seen.has(r.user_id) && seen.add(r.user_id))
+            .map((r: { user_id: string }) => ({
+              user_id: r.user_id,
+              branch_id: branchId,
+              title,
+              message,
+              type: "info",
+              category: "voice_ai",
+              action_url: "/voice-ai",
+              metadata: { call_id: existing.id, disposition },
+              is_read: false,
+            }));
+          if (rows.length > 0) await sb.from("notifications").insert(rows);
+        } catch (notifyError) {
+          console.error("sarvam-voice-webhook notify failed:", redact((notifyError as Error)?.message));
+        }
+      };
+
       const makeTask = async (title: string, description: string, priority: string) => {
         if (!branchId) return;
         await sb.from("tasks").insert({
@@ -116,18 +143,24 @@ Deno.serve(async (req) => {
           `Retention call outcome: callback requested${callback ? ` for ${callback}` : ""}. Phone ${phone}. ${trail}`,
           "high",
         );
+        await notifyStaff(
+          "Voice AI callback requested",
+          `A member asked for a callback${callback ? ` around ${callback}` : ""}.`,
+        );
       } else if (disposition === "complaint") {
         await makeTask(
           "Voice AI: complaint raised on retention call",
           `The member raised a complaint during the Voice AI retention call. Phone ${phone}. ${trail}`,
           "urgent",
         );
+        await notifyStaff("Voice AI complaint received", "A member raised a complaint on a Voice AI retention call.");
       } else if (disposition === "needs_human") {
         await makeTask(
           "Voice AI: human follow-up needed",
           `The agent could not resolve the member's request on the call. Phone ${phone}. ${trail}`,
           "high",
         );
+        await notifyStaff("Voice AI needs human follow-up", "A Voice AI call needs a human to follow up.");
       } else if (disposition === "wrong_person") {
         await sb.rpc("mark_do_not_contact", {
           p_phone: phone,
@@ -135,7 +168,9 @@ Deno.serve(async (req) => {
           p_reason: "voice_ai_wrong_person",
           p_source: "sarvam_voice",
         });
+        await notifyStaff("Voice AI wrong number / DND", "A Voice AI call reached the wrong person; the number is now do-not-contact.");
       }
+
       // "not_interested" and "no_clear_outcome" intentionally trigger no CRM
       // action: the attempt row itself enforces the retention cooldown. Opting
       // a member out of every channel is a decision only a human should make.

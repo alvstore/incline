@@ -4,7 +4,7 @@ import {
   Settings, ClipboardList, Megaphone, BarChart3, Wallet, Clock,
   Lock, Sparkles, ShoppingBag, ShoppingCart, Gift, FileText, Wrench, CheckSquare, 
   Briefcase, MessageSquare, Tags, Activity, UtensilsCrossed, Target, 
-  Bell, Snowflake, UserCog, TrendingUp, Heart, Router, BookUser, Instagram
+  Bell, Snowflake, UserCog, TrendingUp, Heart, Router, BookUser, Instagram, PhoneCall
 } from 'lucide-react';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -148,6 +148,7 @@ export const staffMenuConfig: MenuSection[] = [
       { label: 'Chats', href: '/whatsapp-chat', icon: MessageSquare, roles: ['staff'] },
       { label: 'Contact Book', href: '/contact-book', icon: BookUser, roles: ['staff'] },
       { label: 'Announcements', href: '/announcements', icon: Megaphone, roles: ['staff'] },
+      { label: 'Voice AI', href: '/voice-ai', icon: PhoneCall, roles: ['staff'] },
     ],
   },
   {
@@ -220,6 +221,7 @@ export const adminMenuConfig: MenuSection[] = [
       { label: 'Chats', href: '/whatsapp-chat', icon: MessageSquare, roles: ['owner', 'admin', 'manager'] },
       { label: 'Contact Book', href: '/contact-book', icon: BookUser, roles: ['owner', 'admin', 'manager'] },
       { label: 'Communication Hub', href: '/announcements', icon: Megaphone, roles: ['owner', 'admin', 'manager'] },
+      { label: 'Voice AI', href: '/voice-ai', icon: PhoneCall, roles: ['owner', 'admin', 'manager'] },
       { label: 'Equipment', href: '/equipment-maintenance', icon: Wrench, roles: ['owner', 'admin', 'manager'] },
       { label: 'Lockers', href: '/lockers', icon: Lock, roles: ['owner', 'admin', 'manager'] },
       { label: 'Devices', href: '/devices', icon: Router, roles: ['owner', 'admin'] },
@@ -298,6 +300,7 @@ export const managerMenuConfig: MenuSection[] = [
       { label: 'Chats', href: '/whatsapp-chat', icon: MessageSquare, roles: ['manager'] },
       { label: 'Contact Book', href: '/contact-book', icon: BookUser, roles: ['manager'] },
       { label: 'Communication Hub', href: '/announcements', icon: Megaphone, roles: ['manager'] },
+      { label: 'Voice AI', href: '/voice-ai', icon: PhoneCall, roles: ['manager'] },
       { label: 'Equipment', href: '/equipment-maintenance', icon: Wrench, roles: ['manager'] },
       { label: 'Lockers', href: '/lockers', icon: Lock, roles: ['manager'] },
     ],

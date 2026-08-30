@@ -120,6 +120,7 @@ const StaffRosterPage = lazy(() => import("./pages/StaffRoster"));
 const ApprovalQueue = lazy(() => import("./pages/ApprovalQueue"));
 const DiscountCouponsPage = lazy(() => import("./pages/DiscountCoupons"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealth"));
+const VoiceAIPage = lazy(() => import("./pages/VoiceAI"));
 const DRReadinessPage = lazy(() => import("./pages/DRReadiness"));
 
 // Profile
@@ -287,6 +288,7 @@ function RoutedContent() {
           <Route path="/attendance-dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><AttendanceDashboardPage /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><AnalyticsPage /></ProtectedRoute>} />
           <Route path="/audit-logs" element={<ProtectedRoute requiredRoles={['owner', 'admin']}><AuditLogsPage /></ProtectedRoute>} />
+          <Route path="/voice-ai" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><VoiceAIPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><SettingsPage /></ProtectedRoute>} />
           <Route path="/ai-control-center" element={<Navigate to="/settings?tab=ai-agent" replace />} />
