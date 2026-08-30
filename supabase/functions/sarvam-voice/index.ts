@@ -1,7 +1,7 @@
-// v1.0.0 — Sarvam Voice AI control plane (owner/admin only).
+// v1.1.0 — Sarvam Voice AI control plane (owner/admin only).
 //
-// Actions: get_state | save_config | save_automation | set_active |
-//          test_connection | test_call
+// Actions: get_state | get_readiness | run_eligibility_check | save_config |
+//          save_automation | set_active | test_connection | test_call
 //
 // The Sarvam API key lives in public.voice_provider_secrets, which has no
 // grants and no policies — only this function (service role) can read it.
@@ -51,13 +51,6 @@ function hhmmToMinutes(v: string | undefined, fallback: number): number {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
-function istDayStartUtc(): string {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 3600_000);
-  ist.setUTCHours(0, 0, 0, 0);
-  return new Date(ist.getTime() - 5.5 * 3600_000).toISOString();
-}
-
 /** Only these keys are ever persisted; anything else the client sends is dropped. */
 function sanitizeConfig(input: Record<string, unknown>, current: SarvamConfig): SarvamConfig {
   const str = (k: keyof SarvamConfig) =>
@@ -94,6 +87,146 @@ function publicConfig(cfg: SarvamConfig) {
   const { webhook_token: _t, ...rest } = cfg;
   return rest;
 }
+
+export interface SarvamReadiness {
+  connected: boolean;
+  api_key_configured: boolean;
+  agent_configured: boolean;
+  agent_version: string | null;
+  agent_committed: boolean;
+  deployment_configured: boolean;
+  outbound_enabled: boolean;
+  phone_number_configured: boolean;
+  phone_number_active: boolean;
+  phone_number_assigned: boolean;
+  test_call_available: boolean;
+  successful_test_call: boolean;
+  integration_enabled: boolean;
+  production_ready: boolean;
+  probe_error: string | null;
+  deployment: Record<string, unknown> | null;
+  blockers: string[];
+}
+
+/** Single source of truth for "can we call". Never optimistic: every positive
+ *  flag is derived from a real Sarvam response or stored configuration. */
+async function computeReadiness(
+  sb: ReturnType<typeof admin>,
+  row: { id?: string; is_active?: boolean; api_key_last4?: string | null } | null,
+  cfg: SarvamConfig,
+  apiKey: string | null,
+  probe: boolean,
+): Promise<SarvamReadiness> {
+  const blockers: string[] = [];
+  const api_key_configured = !!row?.api_key_last4 && !!apiKey;
+  if (!api_key_configured) blockers.push("Sarvam API key is not stored.");
+
+  const agent_configured = !!cfg.org_id && !!cfg.workspace_id && !!cfg.app_id;
+  if (!cfg.org_id || !cfg.workspace_id) blockers.push("Organization ID / Workspace ID missing.");
+  if (!cfg.app_id) blockers.push("Sarvam Agent ID (app_id) is not configured.");
+
+  const agent_version = cfg.app_version ? String(cfg.app_version) : null;
+  if (!agent_version) blockers.push("Agent version is not set — Sarvam's outbound API requires a committed version.");
+
+  const phone_number_configured = !!cfg.agent_phone_number && !!cfg.connection_id;
+  if (!cfg.agent_phone_number) blockers.push("Agent phone number is not configured.");
+  if (!cfg.connection_id) blockers.push("Telephony connection ID is not configured.");
+
+  let connected = false;
+  let probe_error: string | null = null;
+  let deployment: Record<string, unknown> | null = null;
+  let deployment_configured = false;
+  let outbound_enabled = false;
+  let phone_number_active = false;
+  let phone_number_assigned = false;
+  let agent_committed = false;
+
+  if (api_key_configured && cfg.org_id && cfg.workspace_id && probe) {
+    try {
+      const res = await checkConnection(apiKey!, cfg);
+      connected = true;
+      deployment = (res.deployment as Record<string, unknown> | null) ?? null;
+      deployment_configured = !!deployment;
+      if (!deployment_configured) {
+        blockers.push("No Sarvam deployment matches this Agent ID — deploy/release the agent first.");
+      } else {
+        const status = String(deployment!.status ?? "").toLowerCase();
+        const direction = String(deployment!.channel_direction ?? "").toLowerCase();
+        const numbers = (Array.isArray(deployment!.phone_numbers) ? deployment!.phone_numbers : []).map((n) =>
+          normalizePhone(String(n))
+        );
+        agent_committed = deployment!.app_version !== null && deployment!.app_version !== undefined;
+        if (!agent_committed) blockers.push("Deployment reports no committed agent version.");
+        if (agent_version && String(deployment!.app_version) !== agent_version) {
+          blockers.push(
+            `Configured agent version (${agent_version}) does not match the deployed version (${deployment!.app_version}).`,
+          );
+        }
+        phone_number_active = status === "active";
+        if (!phone_number_active) blockers.push(`Deployment status is "${status || "unknown"}" — it must be active.`);
+        outbound_enabled = direction.includes("outbound") || direction === "bidirectional" || direction === "both";
+        if (!outbound_enabled) {
+          blockers.push(
+            `Deployment channel direction is "${direction || "unknown"}" — outbound calling is not enabled on it.`,
+          );
+        }
+        const wanted = normalizePhone(cfg.agent_phone_number ?? "");
+        phone_number_assigned = !!wanted && numbers.includes(wanted);
+        if (!phone_number_assigned) {
+          blockers.push("The configured agent phone number is not assigned to this deployment.");
+        }
+      }
+    } catch (e) {
+      const err = e instanceof SarvamError ? e : new SarvamError(redact((e as Error).message), "sarvam_unknown");
+      probe_error = `${err.code}: ${err.message}`;
+      blockers.push(`Sarvam check failed — ${err.message}`);
+    }
+  } else if (!probe) {
+    probe_error = "not_probed";
+  }
+
+  let successful_test_call = false;
+  {
+    const { count } = await sb
+      .from("voice_call_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("provider", PROVIDER)
+      .eq("source", "manual_test")
+      .in("status", ["connected", "answered", "completed"]);
+    successful_test_call = (count ?? 0) > 0;
+  }
+
+  const test_call_available = connected && agent_configured && !!agent_version && deployment_configured &&
+    outbound_enabled && phone_number_configured && phone_number_active && phone_number_assigned;
+
+  const integration_enabled = !!row?.is_active;
+  const production_ready = test_call_available && integration_enabled;
+  if (test_call_available && !integration_enabled) {
+    blockers.push("Sarvam Voice AI master switch is off.");
+  }
+  if (!successful_test_call) blockers.push("No successful test call has been completed yet.");
+
+  return {
+    connected,
+    api_key_configured,
+    agent_configured,
+    agent_version,
+    agent_committed,
+    deployment_configured,
+    outbound_enabled,
+    phone_number_configured,
+    phone_number_active,
+    phone_number_assigned,
+    test_call_available,
+    successful_test_call,
+    integration_enabled,
+    production_ready,
+    probe_error,
+    deployment,
+    blockers,
+  };
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -175,6 +308,38 @@ Deno.serve(async (req) => {
     // ---- actions -----------------------------------------------------------
     if (action === "get_state") return await stateResponse();
 
+    // Structured backend readiness — the ONLY thing the UI may gate on.
+    if (action === "get_readiness" || action === "get_sarvam_voice_readiness") {
+      const probe = body.probe !== false;
+      const key = row?.id ? await loadKey() : null;
+      const readiness = await computeReadiness(sb, row ?? null, cfg, key, probe);
+      if (row?.id && probe) {
+        await sb.from("voice_provider_integrations").update({
+          last_check_at: new Date().toISOString(),
+          last_check_status: readiness.connected ? "connected" : "error",
+          last_check_error: readiness.probe_error === "not_probed" ? null : readiness.probe_error,
+        }).eq("id", row.id);
+      }
+      return await stateResponse({ readiness });
+    }
+
+    // Read-only eligibility preview. Places no calls, contacts nobody.
+    if (action === "run_eligibility_check") {
+      const a = ((row?.retention_automation || {}) as Record<string, unknown>) ?? {};
+      const branchIds = Array.isArray(a.branch_ids) && a.branch_ids.length ? a.branch_ids : null;
+      const { data, error } = await sb.rpc("voice_retention_eligibility", {
+        _min_absent_days: Number(a.min_absent_days ?? 7),
+        _cooldown_days: Number(a.cooldown_days ?? 7),
+        _daily_cap: Number(a.max_calls_per_day ?? 25),
+        _window_start: String(a.window_start ?? cfg.window_start ?? "10:00"),
+        _window_end: String(a.window_end ?? cfg.window_end ?? "19:00"),
+        _branch_ids: branchIds,
+      });
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, eligibility: data });
+    }
+
+
     if (action === "save_config") {
       const nextCfg = sanitizeConfig((body.config || {}) as Record<string, unknown>, cfg);
       const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
@@ -217,6 +382,21 @@ Deno.serve(async (req) => {
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
       const a = (body.retention_automation || {}) as Record<string, unknown>;
       const current = (row.retention_automation || {}) as Record<string, unknown>;
+      // Turning retention calls ON is the single most dangerous switch here:
+      // it may only flip once the provider itself reports a working outbound
+      // path AND a real test call has already succeeded.
+      if (a.enabled === true && !current.enabled) {
+        const key = await loadKey();
+        const readiness = await computeReadiness(sb, row, cfg, key, true);
+        if (!readiness.production_ready || !readiness.test_call_available || !readiness.successful_test_call) {
+          return json({
+            ok: false,
+            error: "Complete Voice AI setup before enabling retention calls.",
+            readiness,
+          }, 400);
+        }
+      }
+
       const next = {
         ...current,
         enabled: typeof a.enabled === "boolean" ? a.enabled : !!current.enabled,
@@ -248,8 +428,13 @@ Deno.serve(async (req) => {
       if (enable) {
         const key = await loadKey();
         if (!key) return json({ ok: false, error: "Add the Sarvam API key before enabling." }, 400);
-        if (!cfg.org_id || !cfg.workspace_id || !cfg.app_id) {
-          return json({ ok: false, error: "Organization, workspace and agent IDs are required before enabling." }, 400);
+        const readiness = await computeReadiness(sb, row, cfg, key, true);
+        if (!readiness.test_call_available) {
+          return json({
+            ok: false,
+            error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calling.",
+            readiness,
+          }, 400);
         }
       }
       const { error } = await sb
@@ -285,7 +470,6 @@ Deno.serve(async (req) => {
 
     if (action === "test_call") {
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
-      if (!row.is_active) return json({ ok: false, error: "Enable the Sarvam integration before placing calls." }, 400);
       if (body.confirmed !== true) {
         return json({ ok: false, error: "Confirmation is required before placing a test call." }, 400);
       }
@@ -294,7 +478,19 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX)." }, 400);
       }
 
-      // Calling window (Asia/Kolkata)
+      // 1. Provider readiness (live probe — never trust the browser).
+      const key = await loadKey();
+      const readiness = await computeReadiness(sb, row, cfg, key, true);
+      if (!readiness.test_call_available) {
+        return json({
+          ok: false,
+          error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calls.",
+          code: "not_ready",
+          readiness,
+        }, 400);
+      }
+
+      // 2. Calling window (Asia/Kolkata, server-side).
       const nowMin = istMinutesNow();
       const startMin = hhmmToMinutes(cfg.window_start, 600);
       const endMin = hhmmToMinutes(cfg.window_end, 1140);
@@ -302,90 +498,73 @@ Deno.serve(async (req) => {
         return json({
           ok: false,
           error: `Outside the configured calling window (${cfg.window_start}–${cfg.window_end} IST).`,
+          code: "outside_window",
         }, 400);
       }
 
-      // Do-not-contact
-      const [{ data: dncMember }, { data: dncLead }] = await Promise.all([
-        sb.from("members").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
+      // 3. Do-not-contact across members (via profile phone), leads and chat settings.
+      const [{ data: dncProfiles }, { data: dncLead }, { data: dncChat }] = await Promise.all([
+        sb.from("profiles").select("id").eq("phone", to).limit(5),
         sb.from("leads").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
+        sb.from("whatsapp_chat_settings").select("id").eq("phone_number", to).eq("do_not_contact", true).limit(1),
       ]);
-      if ((dncMember?.length ?? 0) > 0 || (dncLead?.length ?? 0) > 0) {
-        return json({ ok: false, error: "This number is marked do-not-contact." }, 400);
+      let memberBlocked = false;
+      const profileIds = (dncProfiles || []).map((p: { id: string }) => p.id);
+      if (profileIds.length) {
+        const { data: mem } = await sb
+          .from("members")
+          .select("id")
+          .in("user_id", profileIds)
+          .eq("do_not_contact", true)
+          .limit(1);
+        memberBlocked = (mem?.length ?? 0) > 0;
+      }
+      if (memberBlocked || (dncLead?.length ?? 0) > 0 || (dncChat?.length ?? 0) > 0) {
+        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" }, 400);
       }
 
-      // Daily cap (IST day)
-      const { count: todayCount } = await sb
-        .from("voice_call_attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("provider", PROVIDER)
-        .gte("started_at", istDayStartUtc());
-      if ((todayCount ?? 0) >= (cfg.daily_call_cap ?? 50)) {
-        return json({ ok: false, error: "Daily call cap reached." }, 400);
+      // 4. Atomic slot claim: daily cap + concurrency + duplicate live call.
+      //    Serialised in Postgres so concurrent workers cannot overshoot.
+      const { data: claim, error: claimErr } = await sb.rpc("voice_claim_call_slot", {
+        _provider: PROVIDER,
+        _branch_id: branchId,
+        _source: "manual_test",
+        _reason: "manual_test",
+        _phone: to,
+        _member_id: null,
+        _lead_id: null,
+        _agent_id: cfg.app_id ?? null,
+        _agent_version: cfg.app_version ?? null,
+        _daily_cap: cfg.daily_call_cap ?? 50,
+        _max_concurrent: cfg.max_concurrent_calls ?? 1,
+        _cooldown_days: 0,
+        _eligibility: {
+          checked: ["readiness", "window", "do_not_contact", "daily_cap", "concurrency", "duplicate"],
+          window: `${cfg.window_start}-${cfg.window_end} IST`,
+        },
+        _created_by: userId,
+      });
+      if (claimErr) return json({ ok: false, error: claimErr.message }, 500);
+      const claimed = claim as { ok: boolean; attempt_row_id?: string; error?: string; error_code?: string };
+      if (!claimed?.ok) {
+        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code }, 409);
       }
-
-      // Concurrency guard
-      const { count: liveCount } = await sb
-        .from("voice_call_attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("provider", PROVIDER)
-        .in("status", ["queued", "ringing"]);
-      if ((liveCount ?? 0) >= (cfg.max_concurrent_calls ?? 1)) {
-        return json({ ok: false, error: "Another voice call is already in progress. Wait for it to finish." }, 409);
-      }
-
-      // Claim the phone number — partial unique index rejects a duplicate live call.
-      const { data: attempt, error: claimErr } = await sb
-        .from("voice_call_attempts")
-        .insert({
-          branch_id: branchId,
-          provider: PROVIDER,
-          source: "manual_test",
-          phone: to,
-          agent_id: cfg.app_id ?? null,
-          agent_version: cfg.app_version ?? null,
-          status: "queued",
-          created_by: userId,
-          eligibility_snapshot: {
-            checked: ["window", "do_not_contact", "daily_cap", "concurrency"],
-            window: `${cfg.window_start}-${cfg.window_end} IST`,
-          },
-        })
-        .select("id")
-        .single();
-      if (claimErr) {
-        const dup = /duplicate key|unique/i.test(claimErr.message);
-        return json({
-          ok: false,
-          error: dup ? "A call to this number is already in progress." : claimErr.message,
-        }, dup ? 409 : 500);
-      }
-
-      const key = await loadKey();
-      if (!key) {
-        await sb.from("voice_call_attempts").update({
-          status: "failed",
-          error_code: "config_incomplete",
-          error_message: "No Sarvam API key stored.",
-          ended_at: new Date().toISOString(),
-        }).eq("id", attempt.id);
-        return json({ ok: false, error: "No Sarvam API key stored." }, 400);
-      }
+      const attemptRowId = claimed.attempt_row_id!;
 
       const webhookUrl =
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`;
       try {
-        const { attempt_id } = await createOutboundCall(key, cfg, {
+        const { attempt_id } = await createOutboundCall(key!, cfg, {
           to,
           agentVariables: { call_reason: "manual_test", source: "incline_crm" },
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
-          webhookMetadata: { attempt_ref: attempt.id, source: "manual_test" },
+          webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
         });
         await sb.from("voice_call_attempts").update({
           provider_call_id: attempt_id,
-          status: "ringing",
-        }).eq("id", attempt.id);
-        return json({ ok: true, attempt_id, call_record_id: attempt.id });
+          status: "initiated",
+        }).eq("id", attemptRowId);
+        return json({ ok: true, attempt_id, call_record_id: attemptRowId });
       } catch (e) {
         const err = e instanceof SarvamError ? e : new SarvamError(redact((e as Error).message), "sarvam_unknown");
         await sb.from("voice_call_attempts").update({
@@ -393,10 +572,11 @@ Deno.serve(async (req) => {
           error_code: err.code,
           error_message: err.message.slice(0, 500),
           ended_at: new Date().toISOString(),
-        }).eq("id", attempt.id);
+        }).eq("id", attemptRowId);
         return json({ ok: false, error: err.message, code: err.code }, 200);
       }
     }
+
 
     return json({ ok: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {

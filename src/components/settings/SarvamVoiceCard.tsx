@@ -55,6 +55,42 @@ interface SarvamDeployment {
   phone_numbers?: string[];
 }
 
+interface SarvamReadiness {
+  connected: boolean;
+  api_key_configured: boolean;
+  agent_configured: boolean;
+  agent_version: string | null;
+  agent_committed: boolean;
+  deployment_configured: boolean;
+  outbound_enabled: boolean;
+  phone_number_configured: boolean;
+  phone_number_active: boolean;
+  phone_number_assigned: boolean;
+  test_call_available: boolean;
+  successful_test_call: boolean;
+  integration_enabled: boolean;
+  production_ready: boolean;
+  probe_error: string | null;
+  blockers: string[];
+}
+
+interface EligibilitySummary {
+  considered: number;
+  eligible: number;
+  missing_phone: number;
+  dnd: number;
+  paused_handoff: number;
+  not_absent_enough: number;
+  already_contacted_today: number;
+  cooldown: number;
+  in_calling_window: boolean;
+  calling_window: string;
+  daily_cap: number;
+  used_today: number;
+  remaining_today: number;
+  checked_at_ist: string;
+}
+
 interface SarvamState {
   ok: boolean;
   configured: boolean;
@@ -70,6 +106,7 @@ interface SarvamState {
     retention_automation: RetentionAutomation | null;
   } | null;
   config: SarvamConfig;
+  readiness?: SarvamReadiness;
   test?: { ok: boolean; error?: string; deployment?: SarvamDeployment | null; deployments?: SarvamDeployment[]; agent_found?: boolean | null };
   error?: string;
 }
@@ -93,10 +130,18 @@ export default function SarvamVoiceCard() {
   const [testPhone, setTestPhone] = useState('');
   const [outboundUnsupported, setOutboundUnsupported] = useState(false);
   const [lastCheck, setLastCheck] = useState<SarvamState['test'] | null>(null);
+  const [blockersOpen, setBlockersOpen] = useState(false);
+  const [eligibility, setEligibility] = useState<EligibilitySummary | null>(null);
 
   const stateQuery = useQuery({
     queryKey: ['sarvam-voice', 'state'],
     queryFn: () => invokeSarvam({ action: 'get_state' }),
+  });
+
+  const readinessQuery = useQuery({
+    queryKey: ['sarvam-voice', 'readiness'],
+    queryFn: () => invokeSarvam({ action: 'get_readiness' }),
+    staleTime: 60_000,
   });
 
   const attemptsQuery = useQuery({
@@ -117,6 +162,10 @@ export default function SarvamVoiceCard() {
   const cfg = state?.config ?? {};
   const integration = state?.integration ?? null;
   const automation = integration?.retention_automation ?? {};
+  const readiness = readinessQuery.data?.readiness ?? null;
+  const canTestCall = !!readiness?.test_call_available;
+  const canEnableRetention =
+    !!readiness?.production_ready && !!readiness?.test_call_available && !!readiness?.successful_test_call;
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['sarvam-voice'] });
@@ -190,6 +239,20 @@ export default function SarvamVoiceCard() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const eligibilityMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sarvam-voice', {
+        body: { action: 'run_eligibility_check' },
+      });
+      if (error) throw new Error(error.message);
+      const res = data as { ok: boolean; error?: string; eligibility?: EligibilitySummary };
+      if (!res.ok) throw new Error(res.error || 'Eligibility check failed');
+      return res.eligibility as EligibilitySummary;
+    },
+    onSuccess: (d) => setEligibility(d),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const openSheet = () => {
     setForm({ ...cfg });
     setApiKey('');
@@ -244,6 +307,13 @@ export default function SarvamVoiceCard() {
                   {integration?.is_active
                     ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
                     : <Badge variant="secondary">Inactive</Badge>}
+                  {readinessQuery.isLoading
+                    ? <Badge variant="outline">Checking…</Badge>
+                    : readiness?.production_ready
+                      ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Ready</Badge>
+                      : readiness?.connected
+                        ? <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Action required</Badge>
+                        : <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Blocked</Badge>}
                 </CardTitle>
                 <CardDescription>
                   Outbound AI voice agent for member follow-ups. API key is stored server-side only.
@@ -352,7 +422,7 @@ export default function SarvamVoiceCard() {
               <Button
                 onClick={() => setConfirmOpen(true)}
                 disabled={
-                  !integration?.is_active || outboundUnsupported ||
+                  !canTestCall || outboundUnsupported ||
                   testPhone.trim().length < 10 || testCallMutation.isPending
                 }
                 className="gap-1.5 cursor-pointer"
@@ -379,10 +449,20 @@ export default function SarvamVoiceCard() {
                 </a>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Places one real outbound call through Sarvam's Instant Outbound API. Blocked outside the calling window,
-                for do-not-contact numbers, past the daily cap, or while another call is live.
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Places one real outbound call through Sarvam's Instant Outbound API. Blocked outside the calling
+                  window, for do-not-contact numbers, past the daily cap, or while another call is live.
+                </p>
+                {!canTestCall && !readinessQuery.isLoading && (
+                  <p className="text-xs text-amber-700">
+                    Test calls are locked until Sarvam reports a working outbound deployment.{' '}
+                    <button type="button" onClick={() => setBlockersOpen(true)} className="underline cursor-pointer">
+                      Why is this disabled?
+                    </button>
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -392,18 +472,99 @@ export default function SarvamVoiceCard() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="font-medium text-sm">Member Retention Calls — 7+ days absent</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-sm">Member Retention Calls — 7+ days absent</p>
+                  {automation.enabled
+                    ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
+                    : canEnableRetention
+                      ? <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Ready</Badge>
+                      : <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">Blocked</Badge>}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Foundation only. Nothing is dialled automatically while this is off.
                 </p>
               </div>
               <Switch
                 checked={!!automation.enabled}
-                disabled={!state?.configured || automationMutation.isPending}
+                disabled={(!automation.enabled && !canEnableRetention) || automationMutation.isPending}
                 onCheckedChange={(v) => automationMutation.mutate({ ...automation, enabled: v })}
                 aria-label="Enable retention calls"
               />
             </div>
+
+            {!canEnableRetention && (
+              <div className="rounded-xl bg-muted/50 p-3 space-y-2">
+                <p className="text-sm font-medium">Complete Voice AI setup before enabling retention calls.</p>
+                <ul className="space-y-1 text-xs">
+                  {([
+                    ['Sarvam connected', !!readiness?.connected],
+                    ['Agent configured', !!readiness?.agent_configured && !!readiness?.agent_version],
+                    ['Outbound deployment', !!readiness?.deployment_configured && !!readiness?.outbound_enabled],
+                    ['Phone number active & assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
+                    ['Integration switched on', !!readiness?.integration_enabled],
+                    ['Successful test call', !!readiness?.successful_test_call],
+                  ] as Array<[string, boolean]>).map(([label, done]) => (
+                    <li key={label} className="flex items-center gap-2">
+                      {done
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                        : <XCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
+                      <span className={done ? 'text-emerald-700' : 'text-muted-foreground'}>{label}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs cursor-pointer"
+                  onClick={() => setBlockersOpen(true)}
+                >
+                  Why is this disabled?
+                </Button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => eligibilityMutation.mutate()}
+                disabled={eligibilityMutation.isPending}
+                className="gap-1.5 cursor-pointer"
+              >
+                {eligibilityMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Clock className="h-3.5 w-3.5" />}
+                Run eligibility check
+              </Button>
+              <span className="text-xs text-muted-foreground">Read-only — places no calls.</span>
+            </div>
+
+            {eligibility && (
+              <div className="grid gap-2 sm:grid-cols-3 rounded-xl border p-3 text-sm">
+                {([
+                  ['Eligible today', eligibility.eligible],
+                  ['Already contacted today', eligibility.already_contacted_today],
+                  ['DND / opted out', eligibility.dnd],
+                  ['Cooldown', eligibility.cooldown],
+                  ['Missing phone', eligibility.missing_phone],
+                  ['Paused / handoff', eligibility.paused_handoff],
+                  ['Absent < minimum', eligibility.not_absent_enough],
+                  ['Remaining daily cap', eligibility.remaining_today],
+                ] as Array<[string, number]>).map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="font-semibold">{value}</p>
+                  </div>
+                ))}
+                <div className="sm:col-span-3 text-xs text-muted-foreground">
+                  {eligibility.in_calling_window
+                    ? `Inside the calling window (${eligibility.calling_window})`
+                    : `Outside the calling window (${eligibility.calling_window}) — nothing would be dialled now`}
+                  {` · checked ${eligibility.checked_at_ist} IST`}
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="sarvam-absent-days">Minimum days absent</Label>
@@ -563,6 +724,41 @@ export default function SarvamVoiceCard() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={blockersOpen} onOpenChange={setBlockersOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Voice AI readiness</AlertDialogTitle>
+            <AlertDialogDescription>
+              These checks run against Sarvam on every load. Calling stays locked until all of them pass.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {readiness?.blockers?.length
+            ? (
+              <ul className="space-y-2 text-sm">
+                {readiness.blockers.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" aria-hidden="true" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )
+            : <p className="text-sm text-muted-foreground">No blockers reported.</p>}
+          {readiness?.probe_error && (
+            <p className="text-xs text-red-600">Provider check failed: {readiness.probe_error}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel className="cursor-pointer">Close</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); readinessQuery.refetch(); }}
+              className="cursor-pointer"
+            >
+              Re-check
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
