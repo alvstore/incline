@@ -82,6 +82,8 @@ export function StaffAttendanceBoard({
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<StaffPunch | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+
 
   const { data: punches = [], isLoading, isError } = useQuery({
     queryKey: ['staff-attendance-board', branchId, dateISO],
