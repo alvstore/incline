@@ -42,6 +42,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { AttendanceDetailDrawer } from '@/components/attendance/AttendanceDetailDrawer';
+
 import { canEditAnyRoster, canEditRosterRow, canExportRoster } from '@/lib/auth/permissions';
 import { LatePolicySheet } from '@/components/hrm/LatePolicySheet';
 
