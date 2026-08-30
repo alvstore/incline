@@ -535,7 +535,7 @@ Deno.serve(async (req) => {
 
       // 3. Do-not-contact across members (via profile phone), leads and chat settings.
       const [{ data: dncProfiles }, { data: dncLead }, { data: dncChat }] = await Promise.all([
-        sb.from("profiles").select("id").eq("phone", to).limit(5),
+        sb.from("profiles").select("id, full_name, gender").eq("phone", to).limit(5),
         sb.from("leads").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
         sb.from("whatsapp_chat_settings").select("id").eq("phone_number", to).eq("do_not_contact", true).limit(1),
       ]);
