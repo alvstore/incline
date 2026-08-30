@@ -103,9 +103,24 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename, retry } = body;
+    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, attachment_url, attachment_kind, attachment_filename, retry } = body;
+    let variables = body.variables;
+    // v5.1.0: retries / re-runs invoked from the UI only pass campaign_id.
+    // Without the campaign's fixed slot values ({{2}}, {{3}}, …) the dispatcher
+    // pre-flight blocks the send with `template_param_empty` — hydrate them here.
+    if (campaign_id && (!variables || typeof variables !== 'object' || Object.keys(variables).length === 0)) {
+      const { data: campVars } = await adminClient
+        .from('campaigns')
+        .select('template_variables')
+        .eq('id', campaign_id)
+        .maybeSingle();
+      if (campVars?.template_variables && typeof campVars.template_variables === 'object') {
+        variables = campVars.template_variables;
+      }
+    }
     const rawMode: string | undefined = body.mode;
     const retrySuffix = retry ? `:retry:${Date.now()}` : '';
+
     // Recurring campaigns re-use the same campaign_id on every run. Without a
     // per-run key the dispatcher dedupe would swallow every send after the
     // first occurrence. Callers (run-campaign / process-scheduled-campaigns)
