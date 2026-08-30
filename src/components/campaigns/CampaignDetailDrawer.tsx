@@ -115,10 +115,24 @@ const recipientRank = (status: string | null | undefined) => {
   }
 };
 
+type FilterKey = 'all' | 'sent' | 'delivered' | 'read' | 'failed' | 'pending' | 'skipped';
+
+/** Each chip matches EXACTLY the same set of rows its KPI tile counts. */
+const FILTER_MATCH: Record<FilterKey, (f: MergedRecipient['final']) => boolean> = {
+  all: () => true,
+  sent: (f) => f === 'sent' || f === 'delivered' || f === 'read',
+  delivered: (f) => f === 'delivered' || f === 'read',
+  read: (f) => f === 'read',
+  failed: (f) => f === 'failed',
+  pending: (f) => f === 'pending',
+  skipped: (f) => f === 'skipped',
+};
+
 export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<'all' | 'delivered' | 'failed' | 'pending'>('all');
+  const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
+
   const [confirmRetrigger, setConfirmRetrigger] = useState(false);
 
   const enabled = !!campaign?.id && open;
