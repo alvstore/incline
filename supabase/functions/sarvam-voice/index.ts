@@ -95,6 +95,146 @@ function publicConfig(cfg: SarvamConfig) {
   return rest;
 }
 
+export interface SarvamReadiness {
+  connected: boolean;
+  api_key_configured: boolean;
+  agent_configured: boolean;
+  agent_version: string | null;
+  agent_committed: boolean;
+  deployment_configured: boolean;
+  outbound_enabled: boolean;
+  phone_number_configured: boolean;
+  phone_number_active: boolean;
+  phone_number_assigned: boolean;
+  test_call_available: boolean;
+  successful_test_call: boolean;
+  integration_enabled: boolean;
+  production_ready: boolean;
+  probe_error: string | null;
+  deployment: Record<string, unknown> | null;
+  blockers: string[];
+}
+
+/** Single source of truth for "can we call". Never optimistic: every positive
+ *  flag is derived from a real Sarvam response or stored configuration. */
+async function computeReadiness(
+  sb: ReturnType<typeof admin>,
+  row: { id?: string; is_active?: boolean; api_key_last4?: string | null } | null,
+  cfg: SarvamConfig,
+  apiKey: string | null,
+  probe: boolean,
+): Promise<SarvamReadiness> {
+  const blockers: string[] = [];
+  const api_key_configured = !!row?.api_key_last4 && !!apiKey;
+  if (!api_key_configured) blockers.push("Sarvam API key is not stored.");
+
+  const agent_configured = !!cfg.org_id && !!cfg.workspace_id && !!cfg.app_id;
+  if (!cfg.org_id || !cfg.workspace_id) blockers.push("Organization ID / Workspace ID missing.");
+  if (!cfg.app_id) blockers.push("Sarvam Agent ID (app_id) is not configured.");
+
+  const agent_version = cfg.app_version ? String(cfg.app_version) : null;
+  if (!agent_version) blockers.push("Agent version is not set — Sarvam's outbound API requires a committed version.");
+
+  const phone_number_configured = !!cfg.agent_phone_number && !!cfg.connection_id;
+  if (!cfg.agent_phone_number) blockers.push("Agent phone number is not configured.");
+  if (!cfg.connection_id) blockers.push("Telephony connection ID is not configured.");
+
+  let connected = false;
+  let probe_error: string | null = null;
+  let deployment: Record<string, unknown> | null = null;
+  let deployment_configured = false;
+  let outbound_enabled = false;
+  let phone_number_active = false;
+  let phone_number_assigned = false;
+  let agent_committed = false;
+
+  if (api_key_configured && cfg.org_id && cfg.workspace_id && probe) {
+    try {
+      const res = await checkConnection(apiKey!, cfg);
+      connected = true;
+      deployment = (res.deployment as Record<string, unknown> | null) ?? null;
+      deployment_configured = !!deployment;
+      if (!deployment_configured) {
+        blockers.push("No Sarvam deployment matches this Agent ID — deploy/release the agent first.");
+      } else {
+        const status = String(deployment!.status ?? "").toLowerCase();
+        const direction = String(deployment!.channel_direction ?? "").toLowerCase();
+        const numbers = (Array.isArray(deployment!.phone_numbers) ? deployment!.phone_numbers : []).map((n) =>
+          normalizePhone(String(n))
+        );
+        agent_committed = deployment!.app_version !== null && deployment!.app_version !== undefined;
+        if (!agent_committed) blockers.push("Deployment reports no committed agent version.");
+        if (agent_version && String(deployment!.app_version) !== agent_version) {
+          blockers.push(
+            `Configured agent version (${agent_version}) does not match the deployed version (${deployment!.app_version}).`,
+          );
+        }
+        phone_number_active = status === "active";
+        if (!phone_number_active) blockers.push(`Deployment status is "${status || "unknown"}" — it must be active.`);
+        outbound_enabled = direction.includes("outbound") || direction === "bidirectional" || direction === "both";
+        if (!outbound_enabled) {
+          blockers.push(
+            `Deployment channel direction is "${direction || "unknown"}" — outbound calling is not enabled on it.`,
+          );
+        }
+        const wanted = normalizePhone(cfg.agent_phone_number ?? "");
+        phone_number_assigned = !!wanted && numbers.includes(wanted);
+        if (!phone_number_assigned) {
+          blockers.push("The configured agent phone number is not assigned to this deployment.");
+        }
+      }
+    } catch (e) {
+      const err = e instanceof SarvamError ? e : new SarvamError(redact((e as Error).message), "sarvam_unknown");
+      probe_error = `${err.code}: ${err.message}`;
+      blockers.push(`Sarvam check failed — ${err.message}`);
+    }
+  } else if (!probe) {
+    probe_error = "not_probed";
+  }
+
+  let successful_test_call = false;
+  {
+    const { count } = await sb
+      .from("voice_call_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("provider", PROVIDER)
+      .eq("source", "manual_test")
+      .in("status", ["connected", "answered", "completed"]);
+    successful_test_call = (count ?? 0) > 0;
+  }
+
+  const test_call_available = connected && agent_configured && !!agent_version && deployment_configured &&
+    outbound_enabled && phone_number_configured && phone_number_active && phone_number_assigned;
+
+  const integration_enabled = !!row?.is_active;
+  const production_ready = test_call_available && integration_enabled;
+  if (test_call_available && !integration_enabled) {
+    blockers.push("Sarvam Voice AI master switch is off.");
+  }
+  if (!successful_test_call) blockers.push("No successful test call has been completed yet.");
+
+  return {
+    connected,
+    api_key_configured,
+    agent_configured,
+    agent_version,
+    agent_committed,
+    deployment_configured,
+    outbound_enabled,
+    phone_number_configured,
+    phone_number_active,
+    phone_number_assigned,
+    test_call_available,
+    successful_test_call,
+    integration_enabled,
+    production_ready,
+    probe_error,
+    deployment,
+    blockers,
+  };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
