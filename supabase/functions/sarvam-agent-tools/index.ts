@@ -175,10 +175,12 @@ Deno.serve(async (req) => {
       }
     } else if (tool === "get_class_schedule") {
       const member = await resolveMember();
-      const target = (typeof args.branch_id === "string" ? args.branch_id : null) ?? member?.branch_id ?? null;
+      const target = (typeof args.branch_id === "string" ? args.branch_id : null) ??
+        member?.branch_id ?? (await resolveBranchByName());
       if (!target) {
         result = { classes: [], message: "No branch could be resolved for this caller." };
       } else {
+        branchId = target as string;
         const { data: classes } = await sb
           .from("classes")
           .select("name, class_type, scheduled_at, duration_minutes, venue")
@@ -193,15 +195,21 @@ Deno.serve(async (req) => {
       const member = await resolveMember();
       const when = typeof args.callback_datetime === "string" ? args.callback_datetime : null;
       const note = typeof args.note === "string" ? args.note.slice(0, 500) : "";
-      const target = member?.branch_id ?? null;
+      const target = member?.branch_id ?? (await resolveBranchByName());
       if (!target) {
         result = { booked: false, message: "No branch could be resolved, callback not booked." };
       } else {
+        branchId = target as string;
         const due = when ? new Date(when) : new Date();
+        const who = (member?.full_name as string | null) ??
+          (typeof args.member_name === "string" ? args.member_name : null);
+        const identity = [who, member?.member_code ?? (memberCode || null)].filter(Boolean).join(" · ");
         const { error } = await sb.from("tasks").insert({
           branch_id: target,
           title: "Voice AI: callback requested by member",
-          description: `Requested during a Sarvam Voice AI call. Phone ${phone}.${note ? ` Note: ${note}` : ""}`,
+          description: `Requested during a Sarvam Voice AI call.${identity ? ` Member: ${identity}.` : ""}${
+            phone ? ` Phone ${phone}.` : ""
+          }${note ? ` Note: ${note}` : ""}`,
           priority: "high",
           due_date: (Number.isNaN(due.getTime()) ? new Date() : due).toISOString().slice(0, 10),
           linked_entity_type: member ? "member" : null,
@@ -211,18 +219,29 @@ Deno.serve(async (req) => {
         result = { booked: true, message: "Callback noted for the team." };
       }
     } else if (tool === "mark_do_not_contact") {
-      if (!phone) {
-        result = { done: false, message: "No phone number supplied." };
+      const member = await resolveMember();
+      let target = phone;
+      if (!target && member?.user_id) {
+        const { data: profile } = await sb
+          .from("profiles")
+          .select("phone")
+          .eq("id", member.user_id as string)
+          .maybeSingle();
+        target = normalizePhone(String((profile as { phone?: string } | null)?.phone ?? ""));
+      }
+      if (!target) {
+        result = { done: false, message: "No phone number could be resolved for this member." };
       } else {
-        const member = await resolveMember();
+        phone = target;
         const { error } = await sb.rpc("mark_do_not_contact", {
-          p_phone: phone,
+          p_phone: target,
           p_branch_id: member?.branch_id ?? null,
           p_reason: typeof args.reason === "string" ? args.reason.slice(0, 200) : "voice_ai_opt_out",
           p_source: "sarvam_voice",
         });
         if (error) throw new Error(error.message);
         result = { done: true, message: "This number will not be contacted again." };
+
       }
     } else {
       return json({ ok: false, error: `Unknown tool: ${tool}` }, 400);
