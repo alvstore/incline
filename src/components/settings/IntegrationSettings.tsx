@@ -169,6 +169,7 @@ export function IntegrationSettings() {
   const activeInstagram = getIntegrationsByType('instagram').filter((i: any) => i.is_active).length;
   const activeMessenger = getIntegrationsByType('messenger').filter((i: any) => i.is_active).length;
   const activeRcs = getIntegrationsByType('rcs').filter((i: any) => i.is_active).length;
+  const activeGoogle = getIntegrationsByType('google_business').filter((i: any) => i.is_active).length;
 
   const openConfig = (type: IntegrationType, provider: string) => {
     const existing = integrations.find(
@@ -177,7 +178,6 @@ export function IntegrationSettings() {
     setConfigSheet({ open: true, type, provider, existing });
   };
 
-  return (
   const voiceSummary = useVoiceOpsSummary(null);
   const voiceActive = voiceSummary.data?.integration?.is_active ? 1 : 0;
 
