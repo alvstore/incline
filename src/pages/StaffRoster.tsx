@@ -1072,8 +1072,18 @@ function AttendanceMatrix({
                   </div>
                 </td>
                 {cells.map((c, i) => (
-                  <AttCell key={i} cell={c} day={i + 1} />
+                  <AttCell
+                    key={i}
+                    cell={c}
+                    day={i + 1}
+                    onOpen={() => setDetail({
+                      userId: s.user_id,
+                      name: s.full_name,
+                      date: `${ym}-${String(i + 1).padStart(2, '0')}`,
+                    })}
+                  />
                 ))}
+
                 <td className="text-center font-semibold text-success">{stats.present}</td>
                 <td className="text-center font-semibold text-warning">{stats.late}</td>
                 <td className="text-center font-semibold text-destructive">{stats.absent}</td>
