@@ -346,7 +346,35 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         item={previewItem}
       />
 
+      {/* Reopen Drawer */}
+      <Sheet open={reopenOpen} onOpenChange={setReopenOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Reopen payroll run</SheetTitle>
+            <SheetDescription>
+              The run returns to <strong>draft</strong> so attendance corrections can be recalculated.
+              Approvals are cleared and the change is recorded in the payroll audit trail.
+              Processed or paid runs can never be reopened.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-2 py-6">
+            <Label htmlFor="reopen-reason">Reason</Label>
+            <Input id="reopen-reason" value={reopenReason} onChange={(e) => setReopenReason(e.target.value)}
+              placeholder="e.g. night-shift attendance corrected after approval" />
+          </div>
+          <SheetFooter className="mt-auto pt-4 flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setReopenOpen(false)}>Cancel</Button>
+            <Button className="flex-1" disabled={!reopenReason.trim() || reopenMut.isPending}
+              onClick={() => reopenMut.mutate()}>
+              {reopenMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Reopen as draft
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
       {/* Pay Drawer */}
+
       <Sheet open={payOpen} onOpenChange={setPayOpen}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
