@@ -214,9 +214,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
 
   const filtered = useMemo(() => {
     return merged.filter((m) => {
-      if (filter === 'delivered' && !['delivered', 'read'].includes(m.final)) return false;
-      if (filter === 'failed' && m.final !== 'failed') return false;
-      if (filter === 'pending' && !['pending', 'sent'].includes(m.final)) return false;
+      if (!FILTER_MATCH[filter](m.final)) return false;
       if (search) {
         const q = search.toLowerCase();
         const hay = `${m.full_name || ''} ${m.phone || ''} ${m.email || ''}`.toLowerCase();
@@ -225,6 +223,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
       return true;
     });
   }, [merged, filter, search]);
+
 
   const retryMut = useMutation({
     mutationFn: () => retryFailedRecipients(campaign!.id),
