@@ -1169,12 +1169,13 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
             body: {
               branch_id: branchId, channel, recipient: target, category: 'marketing',
-              payload: { subject: campaign.subject || undefined, body: personalized, variables: perVars },
+              payload: { subject: personalizeSubject(campaign.subject, perVars), body: personalized, variables: perVars },
               template_id: templateId || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
               dedupe_key: `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:a${r.attempt || 1}`,
               force: true,
-              ...(attachment ? { attachment } : {}),
+              ...(attachmentForChannel(attachment, channel, personalized) ? { attachment: attachmentForChannel(attachment, channel, personalized) } : {}),
+
             },
           });
           // Phase 5: dispatcher status maps to a *lifecycle* state, never an
