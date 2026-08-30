@@ -307,6 +307,13 @@ export default function SarvamVoiceCard() {
                   {integration?.is_active
                     ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
                     : <Badge variant="secondary">Inactive</Badge>}
+                  {readinessQuery.isLoading
+                    ? <Badge variant="outline">Checking…</Badge>
+                    : readiness?.production_ready
+                      ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Ready</Badge>
+                      : readiness?.connected
+                        ? <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Action required</Badge>
+                        : <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Blocked</Badge>}
                 </CardTitle>
                 <CardDescription>
                   Outbound AI voice agent for member follow-ups. API key is stored server-side only.
@@ -415,7 +422,7 @@ export default function SarvamVoiceCard() {
               <Button
                 onClick={() => setConfirmOpen(true)}
                 disabled={
-                  !integration?.is_active || outboundUnsupported ||
+                  !canTestCall || outboundUnsupported ||
                   testPhone.trim().length < 10 || testCallMutation.isPending
                 }
                 className="gap-1.5 cursor-pointer"
@@ -442,10 +449,20 @@ export default function SarvamVoiceCard() {
                 </a>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Places one real outbound call through Sarvam's Instant Outbound API. Blocked outside the calling window,
-                for do-not-contact numbers, past the daily cap, or while another call is live.
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Places one real outbound call through Sarvam's Instant Outbound API. Blocked outside the calling
+                  window, for do-not-contact numbers, past the daily cap, or while another call is live.
+                </p>
+                {!canTestCall && !readinessQuery.isLoading && (
+                  <p className="text-xs text-amber-700">
+                    Test calls are locked until Sarvam reports a working outbound deployment.{' '}
+                    <button type="button" onClick={() => setBlockersOpen(true)} className="underline cursor-pointer">
+                      Why is this disabled?
+                    </button>
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
