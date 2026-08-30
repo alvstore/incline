@@ -1,4 +1,8 @@
-// dispatch-communication v1.37.0 — outbound provenance stamping.
+// dispatch-communication v1.38.0 — sanitize template params (no newlines/tabs/
+//          4+ spaces) before sending to Meta. Fixes 132018 on class-announcement
+//          sends where `class_details` was a multi-line value.
+// v1.37.0 — outbound provenance stamping.
+
 // v1.37.0: Accepts `campaign_id` / `source_type` and writes them (plus
 //          `communication_log_id`) onto every outbound whatsapp_messages row so
 //          inbound replies can be correlated back to what we sent.
