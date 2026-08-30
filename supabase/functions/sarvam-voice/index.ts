@@ -319,7 +319,7 @@ Deno.serve(async (req) => {
     if (action === "get_readiness" || action === "get_sarvam_voice_readiness") {
       const probe = body.probe !== false;
       const key = row?.id ? await loadKey() : null;
-      const readiness = await computeReadiness(row ?? null, cfg, key, probe, sb);
+      const readiness = await computeReadiness(sb, row ?? null, cfg, key, probe);
       if (row?.id && probe) {
         await sb.from("voice_provider_integrations").update({
           last_check_at: new Date().toISOString(),
