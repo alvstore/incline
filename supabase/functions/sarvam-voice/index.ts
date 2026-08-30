@@ -841,7 +841,10 @@ Deno.serve(async (req) => {
       const rNow = istMinutesNow();
       const rStart = hhmmToMinutes(String(a.window_start ?? "10:00"), 600);
       const rEnd = hhmmToMinutes(String(a.window_end ?? "19:00"), 1140);
-      if (rNow < rStart || rNow >= rEnd) {
+      // An operator may explicitly override the retention window for a
+      // supervised run; the wider integration calling window (dialGate) and
+      // every other safety check still apply.
+      if ((rNow < rStart || rNow >= rEnd) && body.override_window !== true) {
         return json({
           ok: false,
           error: `Outside the retention calling window (${a.window_start ?? "10:00"}–${a.window_end ?? "19:00"} IST).`,
