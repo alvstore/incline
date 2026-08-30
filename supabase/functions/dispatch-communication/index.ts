@@ -1,4 +1,8 @@
-// dispatch-communication v1.37.0 — outbound provenance stamping.
+// dispatch-communication v1.38.0 — sanitize template params (no newlines/tabs/
+//          4+ spaces) before sending to Meta. Fixes 132018 on class-announcement
+//          sends where `class_details` was a multi-line value.
+// v1.37.0 — outbound provenance stamping.
+
 // v1.37.0: Accepts `campaign_id` / `source_type` and writes them (plus
 //          `communication_log_id`) onto every outbound whatsapp_messages row so
 //          inbound replies can be correlated back to what we sent.
@@ -481,18 +485,32 @@ function safeFallbackForKey(key: string, index: number): string {
   return '—';
 }
 
+/** Meta rejects template parameter values that contain newlines, tabs or
+ *  4+ consecutive spaces (error 132018 / 132012). Class announcements build
+ *  multi-line "class_details" values, which is exactly this case — so every
+ *  parameter is flattened to a single line before it leaves this worker. */
+export function sanitizeParamText(input: string): string {
+  return String(input ?? '')
+    .replace(/\r\n|\r|\n/g, ' • ')
+    .replace(/\t/g, ' ')
+    .replace(/ {4,}/g, '   ')
+    .replace(/\s*•\s*/g, ' • ')
+    .trim();
+}
+
 function templateComponents(keys: string[], values: Record<string, unknown> | undefined): Array<Record<string, unknown>> | null | undefined {
   if (keys.length === 0) return undefined;
   const params = keys.map((key, index) => {
     const raw = resolveVarValue(key, values, index);
-    const trimmed = String(raw ?? '').trim();
+    const trimmed = sanitizeParamText(String(raw ?? ''));
     // Never send whitespace-only or empty text params — Meta returns 132018.
     // Substitute a safe visible fallback based on key semantics.
     const text = trimmed || safeFallbackForKey(key, index);
-    return { type: 'text', text: text || 'there' };
+    return { type: 'text', text: sanitizeParamText(text) || 'there' };
   });
   return [{ type: 'body', parameters: params }];
 }
+
 
 /** True when a template body variable is required (i.e. name-like) and the
  *  resolved value is empty — used to fail-closed on marketing sends before

@@ -947,7 +947,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         c.trainer_name ? `with ${c.trainer_name}` : '',
         c.duration_minutes ? `${c.duration_minutes} min` : '',
       ].filter(Boolean).join(' · '))
-      .join('\n');
+      // Single line: WhatsApp template parameters cannot contain newlines
+      // (Meta rejects them with error 132018).
+      .join(' • ');
+
 
     // Fill named class_* tokens and, for Meta positional templates, the
     // remaining non-auto slots in order (class name → when → details).
