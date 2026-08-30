@@ -350,9 +350,11 @@ export default function SarvamVoiceCard() {
             <div className="rounded-xl border p-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Calling window (IST)</p>
               <p className="text-sm font-medium mt-1">
-                {cfg.window_start || '10:00'}–{cfg.window_end || '19:00'} · cap {cfg.daily_call_cap ?? 50}/day
+                {automation.window_start || cfg.window_start || '10:00'}–{automation.window_end || cfg.window_end || '19:00'}
+                {' '}· cap {automation.max_calls_per_day ?? 25}/day
               </p>
             </div>
+
           </div>
 
           {/* Connection test */}
