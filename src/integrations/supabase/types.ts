@@ -16761,6 +16761,49 @@ export type Database = {
         Args: { _branch_id: string; _member_id: string }
         Returns: Json
       }
+      voice_call_detail: { Args: { p_call_id: string }; Returns: Json }
+      voice_calls_analytics: {
+        Args: { p_branch?: string; p_days?: number }
+        Returns: Json
+      }
+      voice_calls_feed: {
+        Args: {
+          p_branch?: string
+          p_disposition?: string
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+          p_to?: string
+        }
+        Returns: {
+          action_state: string
+          branch_id: string
+          branch_name: string
+          call_ended_at: string
+          call_started_at: string
+          call_summary: string
+          callback_datetime: string
+          created_at: string
+          days_absent_at_call: number
+          disposition: string
+          duration_seconds: number
+          id: string
+          interaction_id: string
+          last_visit: string
+          lead_id: string
+          masked_phone: string
+          member_code: string
+          member_id: string
+          member_name: string
+          next_step_agreed: string
+          provider_attempt_id: string
+          reason_for_absence: string
+          status: string
+          total_count: number
+        }[]
+      }
       voice_claim_call_slot: {
         Args: {
           _agent_id: string
@@ -16780,6 +16823,8 @@ export type Database = {
         }
         Returns: Json
       }
+      voice_mask_phone: { Args: { _phone: string }; Returns: string }
+      voice_ops_summary: { Args: { p_branch?: string }; Returns: Json }
       voice_retention_eligibility: {
         Args: {
           _branch_ids?: string[]
