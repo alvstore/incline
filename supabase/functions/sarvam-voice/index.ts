@@ -472,7 +472,6 @@ Deno.serve(async (req) => {
 
     if (action === "test_call") {
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
-      if (!row.is_active) return json({ ok: false, error: "Enable the Sarvam integration before placing calls." }, 400);
       if (body.confirmed !== true) {
         return json({ ok: false, error: "Confirmation is required before placing a test call." }, 400);
       }
@@ -481,7 +480,19 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX)." }, 400);
       }
 
-      // Calling window (Asia/Kolkata)
+      // 1. Provider readiness (live probe — never trust the browser).
+      const key = await loadKey();
+      const readiness = await computeReadiness(sb, row, cfg, key, true);
+      if (!readiness.test_call_available) {
+        return json({
+          ok: false,
+          error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calls.",
+          code: "not_ready",
+          readiness,
+        }, 400);
+      }
+
+      // 2. Calling window (Asia/Kolkata, server-side).
       const nowMin = istMinutesNow();
       const startMin = hhmmToMinutes(cfg.window_start, 600);
       const endMin = hhmmToMinutes(cfg.window_end, 1140);
@@ -489,90 +500,73 @@ Deno.serve(async (req) => {
         return json({
           ok: false,
           error: `Outside the configured calling window (${cfg.window_start}–${cfg.window_end} IST).`,
+          code: "outside_window",
         }, 400);
       }
 
-      // Do-not-contact
-      const [{ data: dncMember }, { data: dncLead }] = await Promise.all([
-        sb.from("members").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
+      // 3. Do-not-contact across members (via profile phone), leads and chat settings.
+      const [{ data: dncProfiles }, { data: dncLead }, { data: dncChat }] = await Promise.all([
+        sb.from("profiles").select("id").eq("phone", to).limit(5),
         sb.from("leads").select("id").eq("phone", to).eq("do_not_contact", true).limit(1),
+        sb.from("whatsapp_chat_settings").select("id").eq("phone_number", to).eq("do_not_contact", true).limit(1),
       ]);
-      if ((dncMember?.length ?? 0) > 0 || (dncLead?.length ?? 0) > 0) {
-        return json({ ok: false, error: "This number is marked do-not-contact." }, 400);
+      let memberBlocked = false;
+      const profileIds = (dncProfiles || []).map((p: { id: string }) => p.id);
+      if (profileIds.length) {
+        const { data: mem } = await sb
+          .from("members")
+          .select("id")
+          .in("user_id", profileIds)
+          .eq("do_not_contact", true)
+          .limit(1);
+        memberBlocked = (mem?.length ?? 0) > 0;
+      }
+      if (memberBlocked || (dncLead?.length ?? 0) > 0 || (dncChat?.length ?? 0) > 0) {
+        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" }, 400);
       }
 
-      // Daily cap (IST day)
-      const { count: todayCount } = await sb
-        .from("voice_call_attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("provider", PROVIDER)
-        .gte("started_at", istDayStartUtc());
-      if ((todayCount ?? 0) >= (cfg.daily_call_cap ?? 50)) {
-        return json({ ok: false, error: "Daily call cap reached." }, 400);
+      // 4. Atomic slot claim: daily cap + concurrency + duplicate live call.
+      //    Serialised in Postgres so concurrent workers cannot overshoot.
+      const { data: claim, error: claimErr } = await sb.rpc("voice_claim_call_slot", {
+        _provider: PROVIDER,
+        _branch_id: branchId,
+        _source: "manual_test",
+        _reason: "manual_test",
+        _phone: to,
+        _member_id: null,
+        _lead_id: null,
+        _agent_id: cfg.app_id ?? null,
+        _agent_version: cfg.app_version ?? null,
+        _daily_cap: cfg.daily_call_cap ?? 50,
+        _max_concurrent: cfg.max_concurrent_calls ?? 1,
+        _cooldown_days: 0,
+        _eligibility: {
+          checked: ["readiness", "window", "do_not_contact", "daily_cap", "concurrency", "duplicate"],
+          window: `${cfg.window_start}-${cfg.window_end} IST`,
+        },
+        _created_by: userId,
+      });
+      if (claimErr) return json({ ok: false, error: claimErr.message }, 500);
+      const claimed = claim as { ok: boolean; attempt_row_id?: string; error?: string; error_code?: string };
+      if (!claimed?.ok) {
+        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code }, 409);
       }
-
-      // Concurrency guard
-      const { count: liveCount } = await sb
-        .from("voice_call_attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("provider", PROVIDER)
-        .in("status", ["queued", "ringing"]);
-      if ((liveCount ?? 0) >= (cfg.max_concurrent_calls ?? 1)) {
-        return json({ ok: false, error: "Another voice call is already in progress. Wait for it to finish." }, 409);
-      }
-
-      // Claim the phone number — partial unique index rejects a duplicate live call.
-      const { data: attempt, error: claimErr } = await sb
-        .from("voice_call_attempts")
-        .insert({
-          branch_id: branchId,
-          provider: PROVIDER,
-          source: "manual_test",
-          phone: to,
-          agent_id: cfg.app_id ?? null,
-          agent_version: cfg.app_version ?? null,
-          status: "queued",
-          created_by: userId,
-          eligibility_snapshot: {
-            checked: ["window", "do_not_contact", "daily_cap", "concurrency"],
-            window: `${cfg.window_start}-${cfg.window_end} IST`,
-          },
-        })
-        .select("id")
-        .single();
-      if (claimErr) {
-        const dup = /duplicate key|unique/i.test(claimErr.message);
-        return json({
-          ok: false,
-          error: dup ? "A call to this number is already in progress." : claimErr.message,
-        }, dup ? 409 : 500);
-      }
-
-      const key = await loadKey();
-      if (!key) {
-        await sb.from("voice_call_attempts").update({
-          status: "failed",
-          error_code: "config_incomplete",
-          error_message: "No Sarvam API key stored.",
-          ended_at: new Date().toISOString(),
-        }).eq("id", attempt.id);
-        return json({ ok: false, error: "No Sarvam API key stored." }, 400);
-      }
+      const attemptRowId = claimed.attempt_row_id!;
 
       const webhookUrl =
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`;
       try {
-        const { attempt_id } = await createOutboundCall(key, cfg, {
+        const { attempt_id } = await createOutboundCall(key!, cfg, {
           to,
           agentVariables: { call_reason: "manual_test", source: "incline_crm" },
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
-          webhookMetadata: { attempt_ref: attempt.id, source: "manual_test" },
+          webhookMetadata: { attempt_ref: attemptRowId, source: "manual_test" },
         });
         await sb.from("voice_call_attempts").update({
           provider_call_id: attempt_id,
-          status: "ringing",
-        }).eq("id", attempt.id);
-        return json({ ok: true, attempt_id, call_record_id: attempt.id });
+          status: "initiated",
+        }).eq("id", attemptRowId);
+        return json({ ok: true, attempt_id, call_record_id: attemptRowId });
       } catch (e) {
         const err = e instanceof SarvamError ? e : new SarvamError(redact((e as Error).message), "sarvam_unknown");
         await sb.from("voice_call_attempts").update({
@@ -580,10 +574,11 @@ Deno.serve(async (req) => {
           error_code: err.code,
           error_message: err.message.slice(0, 500),
           ended_at: new Date().toISOString(),
-        }).eq("id", attempt.id);
+        }).eq("id", attemptRowId);
         return json({ ok: false, error: err.message, code: err.code }, 200);
       }
     }
+
 
     return json({ ok: false, error: `Unknown action: ${action}` }, 400);
   } catch (e) {
