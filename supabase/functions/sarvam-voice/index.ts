@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "save_automation") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const a = (body.retention_automation || {}) as Record<string, unknown>;
       const current = (row.retention_automation || {}) as Record<string, unknown>;
       // Turning retention calls ON is the single most dangerous switch here:
@@ -433,7 +433,7 @@ Deno.serve(async (req) => {
             ok: false,
             error: "Complete Voice AI setup before enabling retention calls.",
             readiness,
-          }, 400);
+          });
         }
       }
 
@@ -463,18 +463,19 @@ Deno.serve(async (req) => {
     }
 
     if (action === "set_active") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const enable = body.is_active === true;
       if (enable) {
         const key = await loadKey();
-        if (!key) return json({ ok: false, error: "Add the Sarvam API key before enabling." }, 400);
+        if (!key) return json({ ok: false, error: "Add the Sarvam API key before enabling.", code: "no_api_key" });
         const readiness = await computeReadiness(sb, row, cfg, key, true);
         if (!readiness.test_call_available) {
           return json({
             ok: false,
-            error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calling.",
+            error: setupBlocker(readiness) ?? "Sarvam is not ready for outbound calling.",
+            code: "not_ready",
             readiness,
-          }, 400);
+          });
         }
       }
       const { error } = await sb
@@ -486,9 +487,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "test_connection") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const key = await loadKey();
-      if (!key) return json({ ok: false, error: "No Sarvam API key stored." }, 400);
+      if (!key) return json({ ok: false, error: "No Sarvam API key stored.", code: "no_api_key" });
       try {
         const result = await checkConnection(key, cfg);
         await sb.from("voice_provider_integrations").update({
@@ -509,13 +510,13 @@ Deno.serve(async (req) => {
     }
 
     if (action === "test_call") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       if (body.confirmed !== true) {
-        return json({ ok: false, error: "Confirmation is required before placing a test call." }, 400);
+        return json({ ok: false, error: "Confirmation is required before placing a test call.", code: "not_confirmed" });
       }
       const to = normalizePhone(String(body.to || ""));
       if (!isValidIndianMobile(to)) {
-        return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX)." }, 400);
+        return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX).", code: "invalid_number" });
       }
 
       // 1. Provider readiness (live probe — never trust the browser).
@@ -524,10 +525,10 @@ Deno.serve(async (req) => {
       if (!readiness.test_call_available) {
         return json({
           ok: false,
-          error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calls.",
+          error: setupBlocker(readiness) ?? "Sarvam is not ready for outbound calls.",
           code: "not_ready",
           readiness,
-        }, 400);
+        });
       }
 
       // 2. Calling window (Asia/Kolkata, server-side).
@@ -539,7 +540,7 @@ Deno.serve(async (req) => {
           ok: false,
           error: `Outside the configured calling window (${cfg.window_start}–${cfg.window_end} IST).`,
           code: "outside_window",
-        }, 400);
+        });
       }
 
       // 3. Do-not-contact across members (via profile phone), leads and chat settings.
@@ -560,7 +561,7 @@ Deno.serve(async (req) => {
         memberBlocked = (mem?.length ?? 0) > 0;
       }
       if (memberBlocked || (dncLead?.length ?? 0) > 0 || (dncChat?.length ?? 0) > 0) {
-        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" }, 400);
+        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" });
       }
 
       // 4. Atomic slot claim: daily cap + concurrency + duplicate live call.
@@ -587,7 +588,7 @@ Deno.serve(async (req) => {
       if (claimErr) return json({ ok: false, error: claimErr.message }, 500);
       const claimed = claim as { ok: boolean; attempt_row_id?: string; error?: string; error_code?: string };
       if (!claimed?.ok) {
-        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code }, 409);
+        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code });
       }
       const attemptRowId = claimed.attempt_row_id!;
 
@@ -651,7 +652,7 @@ Deno.serve(async (req) => {
     }
 
 
-    return json({ ok: false, error: `Unknown action: ${action}` }, 400);
+    return json({ ok: false, error: `Unknown action: ${action}`, code: "unknown_action" });
   } catch (e) {
     console.error("sarvam-voice error:", redact((e as Error)?.message));
     return json({ ok: false, error: redact((e as Error)?.message || "Unexpected error") }, 500);
