@@ -263,13 +263,17 @@ export function CampaignsPanel() {
                 {(c.failure_count || 0) > 0 && (
                   <CampaignFailureBreakdown campaignId={c.id} active={inFlight} />
                 )}
-                <div className="grid grid-cols-4 gap-2 text-center pt-3 border-t">
+                <div className="grid grid-cols-5 gap-2 text-center pt-3 border-t">
                   <div>
                     <p className="text-lg font-bold text-foreground">{c.recipients_count}</p>
                     <p className="text-[10px] text-muted-foreground uppercase">Total</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-success">{c.delivered_count ?? c.success_count}</p>
+                    <p className="text-lg font-bold text-info">{c.success_count ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">Sent</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-success">{c.delivered_count ?? 0}</p>
                     <p className="text-[10px] text-muted-foreground uppercase">Delivered</p>
                   </div>
                   <div>
@@ -281,6 +285,7 @@ export function CampaignsPanel() {
                     <p className="text-[10px] text-muted-foreground uppercase">Failed</p>
                   </div>
                 </div>
+
                 <p className="text-[11px] text-muted-foreground text-center mt-3">
                   {c.sent_at
                     ? `Sent ${format(new Date(c.sent_at), 'dd MMM, HH:mm')}`
