@@ -193,14 +193,16 @@ Deno.serve(async (req) => {
       const useBranded = true;
 
 
+      let originDedupeKey: string | null = null;
       if (row.original_log_id) {
         const { data: log } = await supabase
           .from("communication_logs")
-          .select("category, delivery_metadata")
+          .select("category, delivery_metadata, dedupe_key")
           .eq("id", row.original_log_id)
           .maybeSingle();
         if (log) {
           category = (log as any).category ?? null;
+          originDedupeKey = (log as any).dedupe_key ?? null;
           const meta = ((log as any).delivery_metadata ?? {}) as Record<string, any>;
           if (meta.attachment) attachment = meta.attachment;
           if (meta.variables && typeof meta.variables === "object") {
@@ -211,6 +213,23 @@ Deno.serve(async (req) => {
           }
         }
       }
+
+      // v2.9.0: campaign replays must carry the campaign's fixed slot values
+      // ({{2}}, {{3}}, …). Logs written before those were forwarded only stored
+      // the name variables, so every retry died with `template_param_empty`.
+      const campaignMatch = String(originDedupeKey ?? "").match(/^campaign:([0-9a-f-]{36})/i);
+      if (campaignMatch) {
+        const { data: camp } = await supabase
+          .from("campaigns")
+          .select("template_variables")
+          .eq("id", campaignMatch[1])
+          .maybeSingle();
+        const cv = (camp as any)?.template_variables;
+        if (cv && typeof cv === "object") {
+          payloadVariables = { ...(cv as Record<string, unknown>), ...(payloadVariables ?? {}) };
+        }
+      }
+
       // Fallback to retry-queue.metadata copy of delivery_metadata
       const meta = (row.metadata ?? {}) as Record<string, any>;
       if (!category && meta.category) category = meta.category;

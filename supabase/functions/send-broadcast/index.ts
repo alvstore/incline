@@ -103,9 +103,24 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename, retry } = body;
+    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, attachment_url, attachment_kind, attachment_filename, retry } = body;
+    let variables = body.variables;
+    // v5.1.0: retries / re-runs invoked from the UI only pass campaign_id.
+    // Without the campaign's fixed slot values ({{2}}, {{3}}, …) the dispatcher
+    // pre-flight blocks the send with `template_param_empty` — hydrate them here.
+    if (campaign_id && (!variables || typeof variables !== 'object' || Object.keys(variables).length === 0)) {
+      const { data: campVars } = await adminClient
+        .from('campaigns')
+        .select('template_variables')
+        .eq('id', campaign_id)
+        .maybeSingle();
+      if (campVars?.template_variables && typeof campVars.template_variables === 'object') {
+        variables = campVars.template_variables;
+      }
+    }
     const rawMode: string | undefined = body.mode;
     const retrySuffix = retry ? `:retry:${Date.now()}` : '';
+
     // Recurring campaigns re-use the same campaign_id on every run. Without a
     // per-run key the dispatcher dedupe would swallow every send after the
     // first occurrence. Callers (run-campaign / process-scheduled-campaigns)
@@ -402,7 +417,7 @@ Deno.serve(async (req) => {
               channel,
               recipient: target,
               category: 'marketing',
-              payload: { subject: subject || undefined, body: personalized, variables: perVars },
+              payload: { subject: personalizeSubject(subject, perVars), body: personalized, variables: perVars },
               template_id: template_id || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
               // v3.x — provenance: lets inbound replies be correlated back to
@@ -411,7 +426,8 @@ Deno.serve(async (req) => {
               source_type: campaign_id ? 'campaign' : 'automation',
               dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}${runKey}${retrySuffix}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
               force: true,
-              ...(attachment ? { attachment } : {}),
+              ...(attachmentForChannel(attachment, channel, personalized) ? { attachment: attachmentForChannel(attachment, channel, personalized) } : {}),
+
             },
           });
           const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
@@ -695,12 +711,13 @@ Deno.serve(async (req) => {
             channel,
             recipient,
             category: 'marketing',
-            payload: { subject: subject || undefined, body: personalizedMsg, variables: perVars },
+            payload: { subject: personalizeSubject(subject, perVars), body: personalizedMsg, variables: perVars },
             template_id: template_id || null,
             member_id: member.id,
             dedupe_key: campaign_id ? `campaign:${campaign_id}:member:${member.id}${runKey}${retrySuffix}` : `broadcast:${Date.now()}:member:${member.id}`,
             force: true,
-            ...(attachment ? { attachment } : {}),
+            ...(attachmentForChannel(attachment, channel, personalizedMsg) ? { attachment: attachmentForChannel(attachment, channel, personalizedMsg) } : {}),
+
           },
         });
         const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
@@ -805,6 +822,38 @@ function finalizeFreeformBody(
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
+
+/** v5.1.0: email subjects carry the same `{{class_name}}` style placeholders as
+ *  the body. Without this the inbox literally shows the raw braces (and spam
+ *  filters penalise it). Unresolved keys collapse to an empty string. */
+function personalizeSubject(
+  subject: string | null | undefined,
+  vars: Record<string, string>,
+): string | undefined {
+  const raw = String(subject ?? '').trim();
+  if (!raw) return undefined;
+  return raw
+    .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k: string) => vars[k] ?? vars[String(k).toLowerCase()] ?? '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([—–-])\s*$/, '')
+    .trim() || undefined;
+}
+
+/** v5.1.0: HTML email bodies already embed the campaign poster via
+ *  `{{poster_url}}`. Passing the same file as an attachment renders the image
+ *  a second time — drop it for email when the body already references it. */
+function attachmentForChannel(
+  attachment: any,
+  channel: string,
+  body: string,
+): any {
+  if (!attachment) return undefined;
+  if (channel !== 'email') return attachment;
+  const url = String(attachment.url || '');
+  if (url && String(body || '').includes(url.split('?')[0])) return undefined;
+  return attachment;
+}
+
 
 // Detect Meta pacing / low-quality throttle codes in an error string.
 // 131049 = "not delivered to maintain healthy ecosystem engagement"
@@ -1120,12 +1169,13 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
             body: {
               branch_id: branchId, channel, recipient: target, category: 'marketing',
-              payload: { subject: campaign.subject || undefined, body: personalized, variables: perVars },
+              payload: { subject: personalizeSubject(campaign.subject, perVars), body: personalized, variables: perVars },
               template_id: templateId || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
               dedupe_key: `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:a${r.attempt || 1}`,
               force: true,
-              ...(attachment ? { attachment } : {}),
+              ...(attachmentForChannel(attachment, channel, personalized) ? { attachment: attachmentForChannel(attachment, channel, personalized) } : {}),
+
             },
           });
           // Phase 5: dispatcher status maps to a *lifecycle* state, never an
