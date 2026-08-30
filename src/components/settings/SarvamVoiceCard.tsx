@@ -429,9 +429,20 @@ export default function SarvamVoiceCard() {
             </div>
           )}
           {lastCheck?.ok && lastCheck.agent_found === false && (
-            <p className="flex items-center gap-1.5 text-sm text-amber-600">
-              <AlertTriangle className="h-4 w-4" /> Credentials are valid but no deployment matches this Agent ID.
+            <p className="text-sm text-muted-foreground">
+              No inbound deployment matches this Agent ID. That is only needed to answer inbound calls or run
+              campaigns — outbound test and retention calls do not require one.
             </p>
+          )}
+          {!!readiness?.warnings?.length && (
+            <ul className="space-y-1 text-sm text-amber-600">
+              {readiness.warnings.map((w) => (
+                <li key={w} className="flex items-start gap-1.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
           )}
 
           <Separator />
