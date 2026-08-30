@@ -1,4 +1,4 @@
-// v1.1.0 — Sarvam Voice AI control plane (owner/admin only).
+// v1.2.0 — Sarvam Voice AI control plane (owner/admin only).
 //
 // Actions: get_state | get_readiness | run_eligibility_check | save_config |
 //          save_automation | set_active | test_connection | test_call
@@ -12,6 +12,7 @@ import {
   checkConnection,
   corsHeaders,
   createOutboundCall,
+  isOutboundCapable,
   json,
   maskKey,
   redact,
@@ -19,6 +20,7 @@ import {
   type SarvamConfig,
 } from "../_shared/sarvam.ts";
 import { normalizePhone, isValidIndianMobile } from "../_shared/phone.ts";
+
 
 const PROVIDER = "sarvam";
 
