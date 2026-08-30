@@ -55,6 +55,42 @@ interface SarvamDeployment {
   phone_numbers?: string[];
 }
 
+interface SarvamReadiness {
+  connected: boolean;
+  api_key_configured: boolean;
+  agent_configured: boolean;
+  agent_version: string | null;
+  agent_committed: boolean;
+  deployment_configured: boolean;
+  outbound_enabled: boolean;
+  phone_number_configured: boolean;
+  phone_number_active: boolean;
+  phone_number_assigned: boolean;
+  test_call_available: boolean;
+  successful_test_call: boolean;
+  integration_enabled: boolean;
+  production_ready: boolean;
+  probe_error: string | null;
+  blockers: string[];
+}
+
+interface EligibilitySummary {
+  considered: number;
+  eligible: number;
+  missing_phone: number;
+  dnd: number;
+  paused_handoff: number;
+  not_absent_enough: number;
+  already_contacted_today: number;
+  cooldown: number;
+  in_calling_window: boolean;
+  calling_window: string;
+  daily_cap: number;
+  used_today: number;
+  remaining_today: number;
+  checked_at_ist: string;
+}
+
 interface SarvamState {
   ok: boolean;
   configured: boolean;
@@ -70,6 +106,7 @@ interface SarvamState {
     retention_automation: RetentionAutomation | null;
   } | null;
   config: SarvamConfig;
+  readiness?: SarvamReadiness;
   test?: { ok: boolean; error?: string; deployment?: SarvamDeployment | null; deployments?: SarvamDeployment[]; agent_found?: boolean | null };
   error?: string;
 }
@@ -93,10 +130,18 @@ export default function SarvamVoiceCard() {
   const [testPhone, setTestPhone] = useState('');
   const [outboundUnsupported, setOutboundUnsupported] = useState(false);
   const [lastCheck, setLastCheck] = useState<SarvamState['test'] | null>(null);
+  const [blockersOpen, setBlockersOpen] = useState(false);
+  const [eligibility, setEligibility] = useState<EligibilitySummary | null>(null);
 
   const stateQuery = useQuery({
     queryKey: ['sarvam-voice', 'state'],
     queryFn: () => invokeSarvam({ action: 'get_state' }),
+  });
+
+  const readinessQuery = useQuery({
+    queryKey: ['sarvam-voice', 'readiness'],
+    queryFn: () => invokeSarvam({ action: 'get_readiness' }),
+    staleTime: 60_000,
   });
 
   const attemptsQuery = useQuery({
@@ -117,6 +162,10 @@ export default function SarvamVoiceCard() {
   const cfg = state?.config ?? {};
   const integration = state?.integration ?? null;
   const automation = integration?.retention_automation ?? {};
+  const readiness = readinessQuery.data?.readiness ?? null;
+  const canTestCall = !!readiness?.test_call_available;
+  const canEnableRetention =
+    !!readiness?.production_ready && !!readiness?.test_call_available && !!readiness?.successful_test_call;
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['sarvam-voice'] });
@@ -187,6 +236,20 @@ export default function SarvamVoiceCard() {
       toast.success('Retention call settings saved');
       refresh();
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const eligibilityMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sarvam-voice', {
+        body: { action: 'run_eligibility_check' },
+      });
+      if (error) throw new Error(error.message);
+      const res = data as { ok: boolean; error?: string; eligibility?: EligibilitySummary };
+      if (!res.ok) throw new Error(res.error || 'Eligibility check failed');
+      return res.eligibility as EligibilitySummary;
+    },
+    onSuccess: (d) => setEligibility(d),
     onError: (e: Error) => toast.error(e.message),
   });
 
