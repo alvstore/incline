@@ -33,7 +33,7 @@ const DEFAULT_CONFIG: SarvamConfig = {
   window_start: "10:00",
   window_end: "19:00",
   max_concurrent_calls: 1,
-  daily_call_cap: 50,
+  daily_call_cap: 25,
   retry_enabled: false,
 };
 
@@ -566,7 +566,7 @@ Deno.serve(async (req) => {
         _lead_id: null,
         _agent_id: cfg.app_id ?? null,
         _agent_version: cfg.app_version ?? null,
-        _daily_cap: cfg.daily_call_cap ?? 50,
+        _daily_cap: cfg.daily_call_cap ?? 25,
         _max_concurrent: cfg.max_concurrent_calls ?? 1,
         _cooldown_days: 0,
         _eligibility: {

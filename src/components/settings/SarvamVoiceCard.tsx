@@ -703,7 +703,7 @@ export default function SarvamVoiceCard() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="sarvam-cap">Daily call cap</Label>
-                <Input id="sarvam-cap" type="number" min={1} value={form.daily_call_cap ?? 50}
+                <Input id="sarvam-cap" type="number" min={1} value={form.daily_call_cap ?? 25}
                   onChange={(e) => set('daily_call_cap', Number(e.target.value))} />
               </div>
               <div className="space-y-1.5">
@@ -716,6 +716,39 @@ export default function SarvamVoiceCard() {
                 <Input id="sarvam-testnum" value={form.test_phone ?? ''} placeholder="+91XXXXXXXXXX"
                   onChange={(e) => set('test_phone', e.target.value)} />
               </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">Sarvam dashboard endpoints</p>
+                  <p className="text-xs text-muted-foreground">
+                    Paste these into the agent's webhook and HTTPS tool configuration.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={() => endpointsQuery.refetch()}
+                  disabled={endpointsQuery.isFetching}
+                >
+                  {endpointsQuery.isFetching
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    : 'Reveal'}
+                </Button>
+              </div>
+              {endpoints && (
+                <div className="space-y-2 rounded-xl bg-muted/50 p-3 text-xs break-all">
+                  <p><span className="font-semibold">Webhook URL:</span> {endpoints.webhook_url}</p>
+                  <p><span className="font-semibold">Tools URL:</span> {endpoints.tools_url}</p>
+                  <p><span className="font-semibold">Tools header:</span> {endpoints.tools_header}: {endpoints.tools_token}</p>
+                  <p><span className="font-semibold">Input variables:</span> {(endpoints.agent_input_variables || []).join(', ')}</p>
+                  <p><span className="font-semibold">Output variables:</span> {(endpoints.agent_output_variables || []).join(', ')}</p>
+                </div>
+              )}
             </div>
           </div>
 
