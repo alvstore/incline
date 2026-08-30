@@ -1,7 +1,15 @@
-// v2.2.0 — Resumable, bounded reconciliation across members, employees and
-// trainers. Each run advances a rotating roster window and delegates the full
-// server + photo + per-device audited delivery to sync-to-mips. The rotating
-// window bounds runtime while eventually healing the complete branch roster.
+// v2.3.0 — Drift-driven, quiet-hours-aware reconciliation across members,
+// employees and trainers.
+//
+// v2.2.0 rotated blindly through the roster and re-pushed 3 people (person +
+// photo + syncPerson to every gate) every 15 minutes, 24x7, forever. That is
+// ~576 dispatches/day of pure no-op traffic and makes the terminals rebuild
+// face templates round the clock.
+//
+// v2.3.0 only dispatches a person when there is real DRIFT: no successful
+// `device_dispatch` recorded for every mapped device since that person last
+// changed. People already in sync are skipped for free, and during quiet hours
+// (23:00-06:00 IST) nothing speculative is pushed at all.
 //
 // Invoked by the automation-brain cron every ~15 min (rule
 // `mips_reconcile_devices`).
@@ -15,6 +23,25 @@ const corsHeaders = {
 
 const PER_RUN_CAP = 3;
 const INVOCATION_BUDGET_MS = 45_000;
+// Roster entries examined per run. Examining is a cheap local comparison; only
+// genuine drift is turned into a device dispatch.
+const SCAN_WINDOW = 60;
+// Safety net: even a perfectly in-sync person is re-proven this often.
+const MAX_SYNC_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** 23:00-06:00 IST — gym closed, no speculative device traffic. */
+function isQuietHourIST(now = new Date()): boolean {
+  const istHour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      hour12: false,
+    }).format(now),
+  );
+  return istHour >= 23 || istHour < 6;
+}
+
+const ts = (v: unknown): number => (v ? Date.parse(String(v)) : 0);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -24,7 +51,17 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const force = Boolean((body as any)?.force);
     const runStartedAt = Date.now();
+
+    if (isQuietHourIST() && !force) {
+      return new Response(
+        JSON.stringify({ success: true, skipped: "quiet_hours_ist", branches: [] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // 1. Load all MAPPED devices grouped by branch (include offline — MIPS
     //    server queues syncs for offline devices and delivers on reconnect).
     const { data: devices, error: devErr } = await supabase
@@ -45,40 +82,69 @@ Deno.serve(async (req) => {
     for (const [branchId, brDevices] of byBranch.entries()) {
       if (brDevices.length < 2) continue; // only multi-device branches
 
-
       const deviceIds = brDevices.map((d) => d.mipsId);
+      const localDeviceIds = brDevices.map((d) => d.localId);
 
       // 2. Build the complete branch roster, including trainers.
+      const cols = "id, mips_person_id";
       const [{ data: members }, { data: employees }, { data: trainers }] = await Promise.all([
-        supabase
-          .from("members")
-          .select("id, mips_person_id")
-          .eq("branch_id", branchId)
-          .not("mips_person_id", "is", null),
-        supabase
-          .from("employees")
-          .select("id, mips_person_id")
-          .eq("branch_id", branchId)
-          .not("mips_person_id", "is", null),
-        supabase
-          .from("trainers")
-          .select("id, mips_person_id")
-          .eq("branch_id", branchId)
-          .eq("is_active", true)
-          .not("mips_person_id", "is", null),
+        supabase.from("members").select(cols)
+          .eq("branch_id", branchId).not("mips_person_id", "is", null),
+        supabase.from("employees").select(cols)
+          .eq("branch_id", branchId).not("mips_person_id", "is", null),
+        supabase.from("trainers").select(cols)
+          .eq("branch_id", branchId).eq("is_active", true).not("mips_person_id", "is", null),
       ]);
 
       const roster = [
-        ...((members || []).map((m: any) => ({ type: "member", id: m.id }))),
-        ...((employees || []).map((e: any) => ({ type: "employee", id: e.id }))),
-        ...((trainers || []).map((t: any) => ({ type: "trainer", id: t.id }))),
-      ];
+        ...((members || []).map((m: any) => ({ type: "member", ...m }))),
+        ...((employees || []).map((e: any) => ({ type: "employee", ...e }))),
+        ...((trainers || []).map((t: any) => ({ type: "trainer", ...t }))),
+      ].map((p: any) => ({ type: p.type as string, id: p.id as string }));
+
+      // 3. Advance a rotating SCAN window (cheap: local comparison only).
       const windowNo = Math.floor(Date.now() / (15 * 60_000));
-      const start = roster.length > 0 ? (windowNo * PER_RUN_CAP) % roster.length : 0;
-      const persons = Array.from(
-        { length: Math.min(PER_RUN_CAP, roster.length) },
+      const start = roster.length > 0 ? (windowNo * SCAN_WINDOW) % roster.length : 0;
+      const scanned = Array.from(
+        { length: Math.min(SCAN_WINDOW, roster.length) },
         (_, index) => roster[(start + index) % roster.length],
       );
+
+      // 4. Last successful device_dispatch per (person, device).
+      const { data: attempts } = await supabase
+        .from("mips_sync_attempts")
+        .select("entity_id, device_id, created_at")
+        .eq("operation", "device_dispatch")
+        .eq("status", "success")
+        .in("device_id", localDeviceIds)
+        .in("entity_id", scanned.map((p) => p.id))
+        .order("created_at", { ascending: false })
+        .limit(5000);
+
+      const lastOk = new Map<string, number>(); // `${entity}|${device}` → epoch
+      for (const a of attempts || []) {
+        const key = `${(a as any).entity_id}|${(a as any).device_id}`;
+        const t = ts((a as any).created_at);
+        if (t > (lastOk.get(key) ?? 0)) lastOk.set(key, t);
+      }
+
+      // 5. Drift = a device that has NEVER received this person, or whose last
+      //    successful delivery is older than MAX_SYNC_AGE_MS.
+      //
+      //    Real changes (new photo, access revoked/restored, name edits) are
+      //    pushed immediately by the event-driven sync path, so reconciliation
+      //    is only a slow safety net. Deliberately NOT keyed off `updated_at`:
+      //    unrelated row updates fire constantly and would put every person
+      //    back into the queue, which is exactly the 24x7 churn we removed.
+      const now = Date.now();
+      const drifted = scanned.filter((p) =>
+        localDeviceIds.some((dev) => {
+          const seen = lastOk.get(`${p.id}|${dev}`) ?? 0;
+          return seen === 0 || now - seen > MAX_SYNC_AGE_MS;
+        })
+      );
+
+      const persons = drifted.slice(0, PER_RUN_CAP);
 
       let ok = 0, failed = 0;
       for (const p of persons) {
@@ -99,15 +165,26 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 3. Stamp last_reconcile_at on all branch devices.
+      // 6. Stamp last_reconcile_at on all branch devices.
       await supabase
         .from("access_devices")
         .update({ last_reconcile_at: new Date().toISOString() })
-        .in("id", brDevices.map((d) => d.localId));
+        .in("id", localDeviceIds);
 
-      summary.push({ branch_id: branchId, devices: deviceIds.length, roster: roster.length, offset: start, processed: ok + failed, ok, failed });
+      summary.push({
+        branch_id: branchId,
+        devices: deviceIds.length,
+        roster: roster.length,
+        offset: start,
+        scanned: scanned.length,
+        drifted: drifted.length,
+        processed: ok + failed,
+        ok,
+        failed,
+      });
     }
 
+    console.log(`[mips-reconcile-devices] ${JSON.stringify(summary)}`);
     return new Response(JSON.stringify({ success: true, branches: summary }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

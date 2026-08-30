@@ -1,4 +1,8 @@
-// mips-face-sweep v2.0.0
+// mips-face-sweep v2.1.0
+// v2.1.0: adds Tier-A verification (a real face recognition at a gate proves
+// that gate holds the template), keeps `unverified` rows retry-eligible on a
+// cooldown instead of freezing at counter parity, only degrades rows that were
+// actually pushed, and never escalates `unverified` to `rejected`.
 // Ledger-driven face enrolment worker.
 //
 // v1.x pushed a rotating batch of people every 5 minutes and hoped the gates'
@@ -48,6 +52,11 @@ const PER_TICK = 2;
 const MAX_PER_TICK = 6;
 const SETTLE_MS = 6_000;
 const INVOCATION_BUDGET_MS = 45_000;
+// How long an `unverified` row rests before we try to prove it again.
+const VERIFY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+// How far back a face recognition still counts as proof of a live template.
+const RECOGNITION_WINDOW_DAYS = 120;
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -99,6 +108,109 @@ async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceC
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Tier A verification — attribute face templates from real recognitions.
+ *
+ * The firmware never says WHO it holds, but every accepted face scan in
+ * `access_logs` names a person AND the gate serial that recognised them. A
+ * successful face scan is proof that this gate carries a usable template for
+ * that person, so the matching ledger rows can be marked `enrolled` without
+ * touching the MIPS server at all.
+ */
+async function verifyByRecognition(
+  supabase: any,
+  branchId: string,
+  devices: LedgerDevice[],
+  roster: LedgerPerson[],
+): Promise<number> {
+  if (!devices.length || !roster.length) return 0;
+
+  // serial → mips_device_id
+  const { data: deviceRows } = await supabase
+    .from("access_devices")
+    .select("serial_number, mips_device_id")
+    .eq("branch_id", branchId)
+    .not("mips_device_id", "is", null);
+  const snToMips = new Map<string, number>();
+  for (const d of deviceRows || []) {
+    if (d.serial_number) snToMips.set(String(d.serial_number).toUpperCase(), Number(d.mips_device_id));
+  }
+  if (!snToMips.size) return 0;
+
+  const since = new Date(Date.now() - RECOGNITION_WINDOW_DAYS * 86_400_000).toISOString();
+  // PostgREST caps a response at 1000 rows, so page explicitly.
+  const logs: Array<{ device_sn: string | null; member_id: string | null; profile_id: string | null }> = [];
+  const PAGE = 1000;
+  for (let from = 0; from < 40_000; from += PAGE) {
+    const { data: page } = await supabase
+      .from("access_logs")
+      .select("device_sn, member_id, profile_id")
+      .eq("branch_id", branchId)
+      .eq("event_type", "face_scan")
+      .gte("captured_at", since)
+      .range(from, from + PAGE - 1);
+    if (!page?.length) break;
+    logs.push(...(page as any));
+    if (page.length < PAGE) break;
+  }
+  if (!logs.length) return 0;
+
+  // person_id → person_sn (members are keyed by member id, staff by profile id)
+  const memberIds = roster.filter((p) => p.type === "member").map((p) => p.id);
+  const staff = roster.filter((p) => p.type !== "member");
+  const snByMemberId = new Map<string, string>();
+  for (const p of roster) if (p.type === "member") snByMemberId.set(p.id, p.sn);
+
+  const snByProfileId = new Map<string, string>();
+  if (staff.length) {
+    const [emp, trn] = await Promise.all([
+      supabase.from("employees").select("id, user_id").in("id", staff.filter((s) => s.type === "employee").map((s) => s.id)),
+      supabase.from("trainers").select("id, user_id").in("id", staff.filter((s) => s.type === "trainer").map((s) => s.id)),
+    ]);
+    for (const row of [...(emp.data || []), ...(trn.data || [])]) {
+      const person = staff.find((s) => s.id === row.id);
+      if (person && row.user_id) snByProfileId.set(row.user_id, person.sn);
+    }
+  }
+
+  // (mips_device_id, person_sn) pairs proven by a real recognition
+  const proven = new Map<number, Set<string>>();
+  for (const l of logs) {
+    const mipsId = snToMips.get(String(l.device_sn || "").toUpperCase());
+    if (!mipsId) continue;
+    const sn = (l.member_id && snByMemberId.get(l.member_id))
+      || (l.profile_id && snByProfileId.get(l.profile_id));
+    if (!sn) continue;
+    const set = proven.get(mipsId) || new Set<string>();
+    set.add(sn);
+    proven.set(mipsId, set);
+  }
+  if (!proven.size) return 0;
+
+  let marked = 0;
+  for (const [mipsId, sns] of proven.entries()) {
+    const list = [...sns];
+    for (let i = 0; i < list.length; i += 200) {
+      const { data } = await supabase
+        .from("mips_device_face_state")
+        .update({
+          state: "enrolled",
+          reason: "Verified by a successful face recognition at this gate",
+          enrolled_at: new Date().toISOString(),
+        })
+        .eq("branch_id", branchId)
+        .eq("mips_device_id", mipsId)
+        .in("person_sn", list.slice(i, i + 200))
+        .neq("state", "enrolled")
+        .select("id");
+      marked += (data || []).length;
+    }
+  }
+  if (marked) console.log(`[mips-face-sweep] recognition-verified ${marked} ledger rows (memberIds=${memberIds.length})`);
+  return marked;
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -170,14 +282,26 @@ Deno.serve(async (req) => {
 
       await seedLedger(supabase, branchId, branchDevices, roster);
       const pruned = await pruneLedger(supabase, branchId, branchDevices, roster);
+
+      // ---- Tier A proof: real face recognition at the gate ------------------
+      // If a person has actually been recognised BY FACE on a given gate, that
+      // gate demonstrably holds a usable template for them. This is stronger
+      // evidence than any counter delta and costs the MIPS server nothing.
+      const recognised = await verifyByRecognition(supabase, branchId, branchDevices, roster);
+
       const ledger = await readLedger(supabase, branchId);
 
       const outstanding = ledger.filter((r) => r.state === "pending" || r.state === "missing");
       const rejected = ledger.filter((r) => r.state === "rejected");
       const unverified = ledger.filter((r) => r.state === "unverified");
+      // `unverified` rows are retried on a slow cadence so the ledger keeps
+      // converting guesswork into proof even when every gate is at parity.
+      const verifyDue = unverified.filter(
+        (r) => !r.last_attempt_at || Date.now() - Date.parse(r.last_attempt_at) > VERIFY_COOLDOWN_MS,
+      );
 
       // Nothing queued → do not even touch the MIPS server.
-      if (outstanding.length === 0 && !force) {
+      if (outstanding.length === 0 && verifyDue.length === 0 && !force) {
         summary.push({
           branch_id: branchId,
           nothing_queued: true,
@@ -185,11 +309,13 @@ Deno.serve(async (req) => {
           verified: ledger.filter((r) => r.state === "enrolled").length,
           unverified: unverified.length,
           rejected: rejected.length,
+          recognised,
           pruned,
           processed: 0,
         });
         continue;
       }
+
 
       // ---- Credentials + breaker -------------------------------------------
       let serverUrl = Deno.env.get("MIPS_SERVER_URL") || "";
@@ -240,10 +366,10 @@ Deno.serve(async (req) => {
       }
 
       // A gate whose counter already covers the whole roster is *probably*
-      // carrying everyone — but the firmware never says WHO, so nothing is
-      // marked enrolled here. Untouched rows become `unverified`: counted by
-      // the gate, not attributed to a name. Only a single-person push that
-      // moves the counter ever writes `enrolled`.
+      // carrying everyone — but the firmware never says WHO. Only rows we have
+      // ACTUALLY pushed at least once degrade to `unverified` (counted, not
+      // attributed). Never-pushed rows stay `pending` so they still get a real
+      // single-person push instead of being written off by a bulk counter.
       for (const dev of branchDevices) {
         const live = counts.find((c) => c.id === dev.mips_device_id);
         if (live && roster.length > 0 && live.faces >= roster.length) {
@@ -255,30 +381,25 @@ Deno.serve(async (req) => {
             })
             .eq("branch_id", branchId)
             .eq("mips_device_id", dev.mips_device_id)
+            .gt("attempts", 0)
             .in("state", ["pending", "missing"]);
         }
       }
 
       // ---- Pick the next people, one push each -----------------------------
       const settled = await readLedger(supabase, branchId);
-      // Gates that are numerically behind still need real pushes; their
-      // `unverified` rows are fair game (lowest priority) so the ledger keeps
-      // converting guesswork into proof over time.
-      const behindDevices = new Set(
-        branchDevices
-          .filter((d) => {
-            const live = counts.find((c) => c.id === d.mips_device_id);
-            return !live || live.faces < roster.length;
-          })
-          .map((d) => d.mips_device_id),
-      );
+      // `unverified` rows are always retry-eligible once their cooldown has
+      // elapsed — parity is not proof, so the ledger must keep working towards
+      // a per-person answer instead of freezing forever.
       const stillOutstanding = settled.filter(
         (r) =>
           r.state === "pending" ||
           r.state === "missing" ||
-          (r.state === "unverified" && behindDevices.has(r.mips_device_id)),
+          (r.state === "unverified" &&
+            (!r.last_attempt_at || Date.now() - Date.parse(r.last_attempt_at) > VERIFY_COOLDOWN_MS)),
       );
       const perTick = pinned ?? PER_TICK;
+
       const bySn = new Map<string, typeof stillOutstanding>();
       for (const row of stillOutstanding) {
         const list = bySn.get(row.person_sn) || [];
@@ -349,6 +470,20 @@ Deno.serve(async (req) => {
           if (a > b) {
             enrolledNow++;
             await markEnrolled(supabase, branchId, r.mips_device_id, personSn);
+          } else if (r.state === "unverified") {
+            // A static counter for someone the gate ALREADY counts proves
+            // nothing bad — it usually means the template is present. Never
+            // escalate an unverified row to `rejected`; just rest it.
+            stalled++;
+            await supabase
+              .from("mips_device_face_state")
+              .update({
+                last_attempt_at: new Date().toISOString(),
+                reason: "Re-pushed; gate counter unchanged (already counted — awaiting a face scan to confirm)",
+              })
+              .eq("branch_id", branchId)
+              .eq("mips_device_id", r.mips_device_id)
+              .eq("person_sn", personSn);
           } else {
             stalled++;
             await markAttempt(
@@ -357,6 +492,7 @@ Deno.serve(async (req) => {
             );
           }
         }
+
         counts = after;
       }
 
@@ -364,6 +500,7 @@ Deno.serve(async (req) => {
       summary.push({
         branch_id: branchId,
         expected: roster.length,
+        recognised,
         processed: candidates.length,
         enrolled_now: enrolledNow,
         stalled,
