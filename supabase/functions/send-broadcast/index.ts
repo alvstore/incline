@@ -417,7 +417,7 @@ Deno.serve(async (req) => {
               channel,
               recipient: target,
               category: 'marketing',
-              payload: { subject: subject || undefined, body: personalized, variables: perVars },
+              payload: { subject: personalizeSubject(subject, perVars), body: personalized, variables: perVars },
               template_id: template_id || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
               // v3.x — provenance: lets inbound replies be correlated back to
@@ -426,7 +426,8 @@ Deno.serve(async (req) => {
               source_type: campaign_id ? 'campaign' : 'automation',
               dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}${runKey}${retrySuffix}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
               force: true,
-              ...(attachment ? { attachment } : {}),
+              ...(attachmentForChannel(attachment, channel, personalized) ? { attachment: attachmentForChannel(attachment, channel, personalized) } : {}),
+
             },
           });
           const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
