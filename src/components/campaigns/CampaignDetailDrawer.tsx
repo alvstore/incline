@@ -115,10 +115,24 @@ const recipientRank = (status: string | null | undefined) => {
   }
 };
 
+type FilterKey = 'all' | 'sent' | 'delivered' | 'read' | 'failed' | 'pending' | 'skipped';
+
+/** Each chip matches EXACTLY the same set of rows its KPI tile counts. */
+const FILTER_MATCH: Record<FilterKey, (f: MergedRecipient['final']) => boolean> = {
+  all: () => true,
+  sent: (f) => f === 'sent' || f === 'delivered' || f === 'read',
+  delivered: (f) => f === 'delivered' || f === 'read',
+  read: (f) => f === 'read',
+  failed: (f) => f === 'failed',
+  pending: (f) => f === 'pending',
+  skipped: (f) => f === 'skipped',
+};
+
 export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<'all' | 'delivered' | 'failed' | 'pending'>('all');
+  const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
+
   const [confirmRetrigger, setConfirmRetrigger] = useState(false);
 
   const enabled = !!campaign?.id && open;
@@ -214,9 +228,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
 
   const filtered = useMemo(() => {
     return merged.filter((m) => {
-      if (filter === 'delivered' && !['delivered', 'read'].includes(m.final)) return false;
-      if (filter === 'failed' && m.final !== 'failed') return false;
-      if (filter === 'pending' && !['pending', 'sent'].includes(m.final)) return false;
+      if (!FILTER_MATCH[filter](m.final)) return false;
       if (search) {
         const q = search.toLowerCase();
         const hay = `${m.full_name || ''} ${m.phone || ''} ${m.email || ''}`.toLowerCase();
@@ -225,6 +237,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
       return true;
     });
   }, [merged, filter, search]);
+
 
   const retryMut = useMutation({
     mutationFn: () => retryFailedRecipients(campaign!.id),
@@ -421,19 +434,29 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
 
           {/* Filter chips + search */}
           <div className="flex flex-wrap items-center gap-2">
-            {(['all', 'delivered', 'failed', 'pending'] as const).map((k) => (
+            {([
+              ['all', counts.total],
+              ['sent', counts.sent],
+              ['delivered', counts.delivered],
+              ['read', counts.read],
+              ['failed', counts.failed],
+              ['pending', counts.pending],
+              ...(counts.skipped > 0 ? [['skipped', counts.skipped] as const] : []),
+            ] as [FilterKey, number][]).map(([k, n]) => (
               <button
                 key={k}
                 onClick={() => setFilter(k)}
-                className={`text-xs rounded-full px-3 py-1 border transition-colors ${
+                aria-pressed={filter === k}
+                className={`text-xs rounded-full px-3 py-1 border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                   filter === k
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-card text-foreground border-border hover:bg-muted'
                 }`}
               >
-                {k.charAt(0).toUpperCase() + k.slice(1)}
+                {k.charAt(0).toUpperCase() + k.slice(1)} ({n})
               </button>
             ))}
+
             <div className="relative flex-1 min-w-[160px]">
               <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
               <Input
