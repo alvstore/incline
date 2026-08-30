@@ -487,7 +487,7 @@ async function processStatusUpdates(value: any, branchId: string | null) {
           newStatus === "failed"    ? "failed"    :
           newStatus === "sent"      ? "sent"      : null;
         if (mapped) {
-          await supabase.rpc("record_delivery_event", {
+          const { error: rdeErr } = await supabase.rpc("record_delivery_event", {
             p_log_id: log.id,
             p_new_status: mapped,
             p_provider: "meta_whatsapp",
@@ -495,6 +495,21 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             p_error: mapped === "failed" ? errMsg : null,
             p_metadata: { wa_status: newStatus, raw: status },
           });
+          // v7.2.0 — never swallow a delivery-receipt write failure: it silently
+          // froze every campaign at 0 delivered / 0 read.
+          if (rdeErr) {
+            console.error("[wa-status] record_delivery_event failed", log.id, mapped, rdeErr.message);
+            try {
+              await supabase.rpc("log_error_event", {
+                p_severity: "error",
+                p_source: "whatsapp-webhook",
+                p_message: `record_delivery_event failed: ${rdeErr.message}`,
+                p_function_name: "processStatusUpdates",
+                p_context: { log_id: log.id, mapped, wamid: status.id },
+              });
+            } catch { /* best effort */ }
+          }
+
 
 
           // v6.8.0: delivery outcome drives the retry queue and the pacing
