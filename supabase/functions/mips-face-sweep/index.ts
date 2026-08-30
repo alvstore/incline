@@ -458,6 +458,20 @@ Deno.serve(async (req) => {
           if (a > b) {
             enrolledNow++;
             await markEnrolled(supabase, branchId, r.mips_device_id, personSn);
+          } else if (r.state === "unverified") {
+            // A static counter for someone the gate ALREADY counts proves
+            // nothing bad — it usually means the template is present. Never
+            // escalate an unverified row to `rejected`; just rest it.
+            stalled++;
+            await supabase
+              .from("mips_device_face_state")
+              .update({
+                last_attempt_at: new Date().toISOString(),
+                reason: "Re-pushed; gate counter unchanged (already counted — awaiting a face scan to confirm)",
+              })
+              .eq("branch_id", branchId)
+              .eq("mips_device_id", r.mips_device_id)
+              .eq("person_sn", personSn);
           } else {
             stalled++;
             await markAttempt(
@@ -466,6 +480,7 @@ Deno.serve(async (req) => {
             );
           }
         }
+
         counts = after;
       }
 
