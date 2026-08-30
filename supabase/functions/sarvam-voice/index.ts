@@ -389,6 +389,21 @@ Deno.serve(async (req) => {
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
       const a = (body.retention_automation || {}) as Record<string, unknown>;
       const current = (row.retention_automation || {}) as Record<string, unknown>;
+      // Turning retention calls ON is the single most dangerous switch here:
+      // it may only flip once the provider itself reports a working outbound
+      // path AND a real test call has already succeeded.
+      if (a.enabled === true && !current.enabled) {
+        const key = await loadKey();
+        const readiness = await computeReadiness(sb, row, cfg, key, true);
+        if (!readiness.production_ready || !readiness.test_call_available || !readiness.successful_test_call) {
+          return json({
+            ok: false,
+            error: "Complete Voice AI setup before enabling retention calls.",
+            readiness,
+          }, 400);
+        }
+      }
+
       const next = {
         ...current,
         enabled: typeof a.enabled === "boolean" ? a.enabled : !!current.enabled,
