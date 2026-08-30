@@ -271,7 +271,7 @@ Deno.serve(async (req) => {
           last_check_status: "connected",
           last_check_error: null,
         }).eq("id", row.id);
-        return await stateResponse({ test: { ok: true, ...result } });
+        return await stateResponse({ test: { ...result, ok: true } });
       } catch (e) {
         const err = e instanceof SarvamError ? e : new SarvamError(redact((e as Error).message), "sarvam_unknown");
         await sb.from("voice_provider_integrations").update({
