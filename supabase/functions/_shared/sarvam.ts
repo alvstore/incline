@@ -56,6 +56,7 @@ export interface SarvamConfig {
   retry_enabled?: boolean;
   test_phone?: string;
   webhook_token?: string;
+  tool_token?: string;
 }
 
 /** Internal, provider-neutral error model. */
