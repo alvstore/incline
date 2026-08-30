@@ -159,8 +159,13 @@ export function StaffAttendanceBoard({
 
   async function confirmDelete() {
     if (!deleting) return;
+    const reason = deleteReason.trim();
+    if (!reason) {
+      toast.error('A reason is required to remove a punch');
+      return;
+    }
     try {
-      await staffAttendanceService.deletePunch(deleting.id);
+      await staffAttendanceService.deletePunch(deleting.id, reason);
       toast.success('Punch removed');
       queryClient.invalidateQueries({ queryKey: ['staff-attendance-board'] });
       queryClient.invalidateQueries({ queryKey: ['staff-attendance'] });
@@ -168,8 +173,10 @@ export function StaffAttendanceBoard({
       toast.error(e instanceof Error ? e.message : 'Could not remove punch');
     } finally {
       setDeleting(null);
+      setDeleteReason('');
     }
   }
+
 
   return (
     <div className="space-y-4">
