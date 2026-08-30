@@ -100,11 +100,11 @@ export interface SarvamReadiness {
   agent_configured: boolean;
   agent_version: string | null;
   agent_committed: boolean;
+  /** Deployments are an INBOUND/campaign concept — advisory only for outbound. */
   deployment_configured: boolean;
   deployment_active: boolean;
   outbound_enabled: boolean;
   phone_number_configured: boolean;
-  /** Alias of deployment_active — the number is live only if its deployment is. */
   phone_number_active: boolean;
   phone_number_assigned: boolean;
 
@@ -115,10 +115,18 @@ export interface SarvamReadiness {
   probe_error: string | null;
   deployment: Record<string, unknown> | null;
   blockers: string[];
+  /** Non-blocking advisories (deployment mismatches, inbound not configured). */
+  warnings: string[];
 }
 
 /** Single source of truth for "can we call". Never optimistic: every positive
- *  flag is derived from a real Sarvam response or stored configuration. */
+ *  flag is derived from a real Sarvam response or stored configuration.
+ *
+ *  Gate matches the documented Instant Outbound contract exactly
+ *  (docs.sarvam.ai/conversations/api/instant-outbound/create): app_id,
+ *  app_version, connection_id, agent_phone_number. A deployment record is NOT
+ *  part of that contract — it only binds an agent to a number for inbound
+ *  calls and campaigns, so it is reported as a warning, never a blocker. */
 async function computeReadiness(
   sb: ReturnType<typeof admin>,
   row: { id?: string; is_active?: boolean; api_key_last4?: string | null } | null,
@@ -127,6 +135,7 @@ async function computeReadiness(
   probe: boolean,
 ): Promise<SarvamReadiness> {
   const blockers: string[] = [];
+  const warnings: string[] = [];
   const api_key_configured = !!row?.api_key_last4 && !!apiKey;
   if (!api_key_configured) blockers.push("Sarvam API key is not stored.");
 
@@ -148,7 +157,7 @@ async function computeReadiness(
   let outbound_enabled = false;
   let deployment_active = false;
   let phone_number_assigned = false;
-  let agent_committed = false;
+  let agent_committed = !!agent_version;
 
   if (api_key_configured && cfg.org_id && cfg.workspace_id && probe) {
     try {
@@ -157,35 +166,33 @@ async function computeReadiness(
       deployment = (res.deployment as Record<string, unknown> | null) ?? null;
       deployment_configured = !!deployment;
       if (!deployment_configured) {
-        blockers.push("No Sarvam deployment matches this Agent ID — deploy/release the agent first.");
+        warnings.push(
+          "No inbound deployment matches this Agent ID. Not required for outbound calls — only for answering inbound calls or running campaigns.",
+        );
       } else {
         const status = String(deployment!.status ?? "").toLowerCase();
         const direction = String(deployment!.channel_direction ?? "").toLowerCase();
         const numbers = (Array.isArray(deployment!.phone_numbers) ? deployment!.phone_numbers : []).map((n) =>
           normalizePhone(String(n))
         );
-        agent_committed = deployment!.app_version !== null && deployment!.app_version !== undefined;
-        if (!agent_committed) blockers.push("Deployment reports no committed agent version.");
         if (agent_version && String(deployment!.app_version) !== agent_version) {
-          blockers.push(
-            `Configured agent version (${agent_version}) does not match the deployed version (${deployment!.app_version}).`,
+          warnings.push(
+            `Configured agent version (${agent_version}) differs from the deployed version (${deployment!.app_version}). Outbound calls use the configured version.`,
           );
         }
         deployment_active = status === "active";
         if (!deployment_active) {
-          blockers.push(`Deployment status is "${status || "unknown"}" — it must be active (not paused).`);
+          warnings.push(`Deployment status is "${status || "unknown"}" — inbound calls will not be answered.`);
         }
         outbound_enabled = isOutboundCapable(direction);
         if (!outbound_enabled) {
-          blockers.push(
-            `Deployment channel direction is "${direction || "unknown"}" — it must be "outbound" or "inbound_outbound".`,
-          );
+          warnings.push(`Deployment channel direction is "${direction || "unknown"}".`);
         }
 
         const wanted = normalizePhone(cfg.agent_phone_number ?? "");
         phone_number_assigned = !!wanted && numbers.includes(wanted);
         if (!phone_number_assigned) {
-          blockers.push("The configured agent phone number is not assigned to this deployment.");
+          warnings.push("The configured agent phone number is not attached to this deployment.");
         }
       }
     } catch (e) {
@@ -208,11 +215,11 @@ async function computeReadiness(
     successful_test_call = (count ?? 0) > 0;
   }
 
-  const test_call_available = connected && agent_configured && !!agent_version && deployment_configured &&
-    outbound_enabled && phone_number_configured && deployment_active && phone_number_assigned;
+  // Documented Instant Outbound requirements only.
+  const test_call_available = connected && agent_configured && !!agent_version && phone_number_configured;
 
   const integration_enabled = !!row?.is_active;
-  const production_ready = test_call_available && integration_enabled;
+  const production_ready = test_call_available && successful_test_call && integration_enabled;
   if (test_call_available && !integration_enabled) {
     blockers.push("Sarvam Voice AI master switch is off.");
   }
@@ -237,8 +244,10 @@ async function computeReadiness(
     probe_error,
     deployment,
     blockers,
+    warnings,
   };
 }
+
 
 
 
