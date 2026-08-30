@@ -126,14 +126,10 @@ Deno.serve(async (req) => {
           p_reason: "voice_ai_wrong_person",
           p_source: "sarvam_voice",
         });
-      } else if (disposition === "not_interested") {
-        await sb.rpc("mark_do_not_contact", {
-          p_phone: phone,
-          p_branch_id: branchId,
-          p_reason: "voice_ai_not_interested",
-          p_source: "sarvam_voice",
-        });
       }
+      // "not_interested" intentionally triggers no CRM action: the attempt row
+      // itself enforces the retention cooldown. Opting the member out of every
+      // channel is a decision only a human should make.
     } catch (followUpError) {
       console.error("sarvam-voice-webhook follow-up failed:", redact((followUpError as Error)?.message));
     }
