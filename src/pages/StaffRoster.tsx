@@ -1133,14 +1133,18 @@ function AttCell({ cell, day, onOpen }: { cell: ReturnType<typeof Object> & any;
 
   return (
     <td className="px-0.5 py-1 text-center">
-      <span
-        title={title}
-        className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold ${tone}`}
+      <button
+        type="button"
+        title={`${title} — click to review or correct`}
+        aria-label={`${title}. Open attendance details`}
+        onClick={onOpen}
+        className={`inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-[10px] font-semibold transition-colors duration-150 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary ${tone}`}
       >
         {symbol}
-      </span>
+      </button>
     </td>
   );
+
 }
 
 function KpiCard({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: 'indigo' | 'emerald' | 'amber' | 'red' }) {
