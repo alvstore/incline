@@ -1101,9 +1101,20 @@ function AttendanceMatrix({
 
       <p className="text-[11px] text-muted-foreground">
         Late = check-in after the roster shift start plus the branch grace period (set in Late policy). Absent = scheduled day with no check-in.
-
+        Click any cell to review the day and correct attendance.
       </p>
+
+      <AttendanceDetailDrawer
+        open={!!detail}
+        onOpenChange={(o) => !o && setDetail(null)}
+        userId={detail?.userId ?? null}
+        staffName={detail?.name ?? ''}
+        date={detail?.date ?? null}
+        branchId={branchId && branchId !== 'all' ? branchId : null}
+        canManage={canManage}
+      />
     </div>
+
   );
 }
 
