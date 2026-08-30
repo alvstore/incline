@@ -6,3 +6,4 @@
 - [Attendance correction & payroll override](mem://features/attendance-correction-payroll-override) — manual/correct/delete/mark RPCs, branch+self guards, attendance_changed_at flag, explicit recalculate, approved-run reopen
 
 - [PT commission GST-exclusive + installments](mem://features/pt-commission-gst-exclusive-installments) — pre-GST commission base, separate GST deduction, full-payment gating, monthly installments, duplicate protection
+- [MIPS device churn & face verification](mem://integrations/mips-device-churn-and-face-verification) — drift-only reconciliation, IST quiet hours, recognition-proof face ledger
