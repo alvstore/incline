@@ -73,6 +73,7 @@ interface SarvamReadiness {
   production_ready: boolean;
   probe_error: string | null;
   blockers: string[];
+  warnings?: string[];
 }
 
 interface EligibilitySummary {
