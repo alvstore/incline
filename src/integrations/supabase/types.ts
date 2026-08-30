@@ -15625,6 +15625,10 @@ export type Database = {
         Args: { p_item_ids: string[] }
         Returns: undefined
       }
+      payroll_recalculate_item: {
+        Args: { p_item_id: string; p_reason?: string }
+        Returns: undefined
+      }
       payroll_reopen_run: {
         Args: { p_reason: string; p_run_id: string }
         Returns: undefined
