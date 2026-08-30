@@ -111,6 +111,7 @@ export function IntegrationSettings() {
   const [diagnostics, setDiagnostics] = useState<{ ok: boolean; checks: any[] } | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
   const [googleDrawerOpen, setGoogleDrawerOpen] = useState(false);
+  const [tab, setTab] = useState('payment');
   const queryClient = useQueryClient();
 
   const runMetaDiagnostics = async () => {
