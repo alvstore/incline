@@ -367,9 +367,67 @@ export default function VoiceAIPage() {
                   <Kpi label="Used today" value={`${today.calls ?? 0} / ${cap}`} icon={PhoneCall} />
                   <Kpi label="Minimum absence" value={`${integration?.min_absent_days ?? 7} days`} sub={`Cooldown ${integration?.cooldown_days ?? 7} days`} icon={Clock} tone="slate" />
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+
+                {queueQ.isError ? (
+                  <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Could not load the queue. Refresh to try again.
+                  </div>
+                ) : queueQ.isLoading ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
+                  </div>
+                ) : (queueQ.data ?? []).length === 0 ? (
+                  <EmptyState
+                    title="No members due for a retention call"
+                    hint="Members appear here once the backend considers them eligible — absent long enough, contactable, and outside cooldown."
+                  />
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-background">
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Last visit</TableHead>
+                          <TableHead>Days absent</TableHead>
+                          <TableHead>Plan expiry</TableHead>
+                          <TableHead>Trainer</TableHead>
+                          <TableHead>Last outcome</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(queueQ.data ?? []).map((q) => {
+                          const disp = dispositionLook(q.last_disposition);
+                          const clickable = !!q.last_call_id;
+                          return (
+                            <TableRow
+                              key={q.member_id}
+                              className={clickable ? 'cursor-pointer transition-colors duration-150 hover:bg-muted/50' : ''}
+                              onClick={() => q.last_call_id && setOpenCallId(q.last_call_id)}
+                            >
+                              <TableCell>
+                                <div className="font-medium text-foreground">{q.member_name ?? 'Unknown'}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {q.member_code ?? '—'}
+                                  {q.masked_phone ? ` · ${q.masked_phone}` : ''}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{fmt(q.last_visit, 'dd MMM yyyy')}</TableCell>
+                              <TableCell className="text-sm">{q.days_absent ?? '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{fmt(q.plan_expiry, 'dd MMM yyyy')}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{q.trainer_name ?? '—'}</TableCell>
+                              <TableCell>
+                                {disp
+                                  ? <Badge className={`rounded-full ${disp.className}`}>{disp.label}</Badge>
+                                  : <span className="text-xs text-muted-foreground">Never called</span>}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
 
           <TabsContent value="callbacks">
             <CallsTable
