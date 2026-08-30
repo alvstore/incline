@@ -20,8 +20,9 @@ import {
   CreditCard, MessageSquare, Mail, Phone,
   Settings, CheckCircle, XCircle, Save, Globe, Webhook, Copy, ExternalLink,
   RefreshCw, ChevronDown, ChevronRight, Clock, PauseCircle, Send,
-  Instagram, Facebook, Search, Radio,
+  Instagram, Facebook, Search, Radio, PhoneCall,
 } from 'lucide-react';
+import SarvamVoiceCard from './SarvamVoiceCard';
 import GoogleBusinessDrawer from './GoogleBusinessDrawer';
 import GoogleListingCard from './GoogleListingCard';
 import { RcsHub } from './rcs/RcsHub';
@@ -232,7 +233,12 @@ export function IntegrationSettings() {
           <TabsTrigger value="meta" className="gap-1.5"><Facebook className="h-3.5 w-3.5" />Meta</TabsTrigger>
           <TabsTrigger value="leads" className="gap-1.5"><Send className="h-3.5 w-3.5" />Lead Capture</TabsTrigger>
           <TabsTrigger value="google" className="gap-1.5"><Globe className="h-3.5 w-3.5" />Google</TabsTrigger>
+          <TabsTrigger value="voice" className="gap-1.5"><PhoneCall className="h-3.5 w-3.5" />Voice AI</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="voice" className="space-y-4">
+          <SarvamVoiceCard />
+        </TabsContent>
 
         <TabsContent value="payment" className="space-y-4">
           <Card>
