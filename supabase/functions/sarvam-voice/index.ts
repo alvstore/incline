@@ -100,11 +100,11 @@ export interface SarvamReadiness {
   agent_configured: boolean;
   agent_version: string | null;
   agent_committed: boolean;
+  /** Deployments are an INBOUND/campaign concept — advisory only for outbound. */
   deployment_configured: boolean;
   deployment_active: boolean;
   outbound_enabled: boolean;
   phone_number_configured: boolean;
-  /** Alias of deployment_active — the number is live only if its deployment is. */
   phone_number_active: boolean;
   phone_number_assigned: boolean;
 
@@ -115,10 +115,24 @@ export interface SarvamReadiness {
   probe_error: string | null;
   deployment: Record<string, unknown> | null;
   blockers: string[];
+  /** Non-blocking advisories (deployment mismatches, inbound not configured). */
+  warnings: string[];
 }
 
 /** Single source of truth for "can we call". Never optimistic: every positive
- *  flag is derived from a real Sarvam response or stored configuration. */
+ *  flag is derived from a real Sarvam response or stored configuration.
+ *
+ *  Gate matches the documented Instant Outbound contract exactly
+ *  (docs.sarvam.ai/conversations/api/instant-outbound/create): app_id,
+ *  app_version, connection_id, agent_phone_number. A deployment record is NOT
+ *  part of that contract — it only binds an agent to a number for inbound
+ *  calls and campaigns, so it is reported as a warning, never a blocker. */
+/** First blocker that actually prevents dialling (ignores post-call gates). */
+function setupBlocker(r: { blockers: string[] }): string | null {
+  const ignore = ["No successful test call", "master switch is off"];
+  return r.blockers.find((b) => !ignore.some((i) => b.includes(i))) ?? null;
+}
+
 async function computeReadiness(
   sb: ReturnType<typeof admin>,
   row: { id?: string; is_active?: boolean; api_key_last4?: string | null } | null,
@@ -127,6 +141,7 @@ async function computeReadiness(
   probe: boolean,
 ): Promise<SarvamReadiness> {
   const blockers: string[] = [];
+  const warnings: string[] = [];
   const api_key_configured = !!row?.api_key_last4 && !!apiKey;
   if (!api_key_configured) blockers.push("Sarvam API key is not stored.");
 
@@ -148,7 +163,7 @@ async function computeReadiness(
   let outbound_enabled = false;
   let deployment_active = false;
   let phone_number_assigned = false;
-  let agent_committed = false;
+  let agent_committed = !!agent_version;
 
   if (api_key_configured && cfg.org_id && cfg.workspace_id && probe) {
     try {
@@ -157,35 +172,33 @@ async function computeReadiness(
       deployment = (res.deployment as Record<string, unknown> | null) ?? null;
       deployment_configured = !!deployment;
       if (!deployment_configured) {
-        blockers.push("No Sarvam deployment matches this Agent ID — deploy/release the agent first.");
+        warnings.push(
+          "No inbound deployment matches this Agent ID. Not required for outbound calls — only for answering inbound calls or running campaigns.",
+        );
       } else {
         const status = String(deployment!.status ?? "").toLowerCase();
         const direction = String(deployment!.channel_direction ?? "").toLowerCase();
         const numbers = (Array.isArray(deployment!.phone_numbers) ? deployment!.phone_numbers : []).map((n) =>
           normalizePhone(String(n))
         );
-        agent_committed = deployment!.app_version !== null && deployment!.app_version !== undefined;
-        if (!agent_committed) blockers.push("Deployment reports no committed agent version.");
         if (agent_version && String(deployment!.app_version) !== agent_version) {
-          blockers.push(
-            `Configured agent version (${agent_version}) does not match the deployed version (${deployment!.app_version}).`,
+          warnings.push(
+            `Configured agent version (${agent_version}) differs from the deployed version (${deployment!.app_version}). Outbound calls use the configured version.`,
           );
         }
         deployment_active = status === "active";
         if (!deployment_active) {
-          blockers.push(`Deployment status is "${status || "unknown"}" — it must be active (not paused).`);
+          warnings.push(`Deployment status is "${status || "unknown"}" — inbound calls will not be answered.`);
         }
         outbound_enabled = isOutboundCapable(direction);
         if (!outbound_enabled) {
-          blockers.push(
-            `Deployment channel direction is "${direction || "unknown"}" — it must be "outbound" or "inbound_outbound".`,
-          );
+          warnings.push(`Deployment channel direction is "${direction || "unknown"}".`);
         }
 
         const wanted = normalizePhone(cfg.agent_phone_number ?? "");
         phone_number_assigned = !!wanted && numbers.includes(wanted);
         if (!phone_number_assigned) {
-          blockers.push("The configured agent phone number is not assigned to this deployment.");
+          warnings.push("The configured agent phone number is not attached to this deployment.");
         }
       }
     } catch (e) {
@@ -208,11 +221,11 @@ async function computeReadiness(
     successful_test_call = (count ?? 0) > 0;
   }
 
-  const test_call_available = connected && agent_configured && !!agent_version && deployment_configured &&
-    outbound_enabled && phone_number_configured && deployment_active && phone_number_assigned;
+  // Documented Instant Outbound requirements only.
+  const test_call_available = connected && agent_configured && !!agent_version && phone_number_configured;
 
   const integration_enabled = !!row?.is_active;
-  const production_ready = test_call_available && integration_enabled;
+  const production_ready = test_call_available && successful_test_call && integration_enabled;
   if (test_call_available && !integration_enabled) {
     blockers.push("Sarvam Voice AI master switch is off.");
   }
@@ -237,8 +250,10 @@ async function computeReadiness(
     probe_error,
     deployment,
     blockers,
+    warnings,
   };
 }
+
 
 
 
@@ -410,7 +425,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "save_automation") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const a = (body.retention_automation || {}) as Record<string, unknown>;
       const current = (row.retention_automation || {}) as Record<string, unknown>;
       // Turning retention calls ON is the single most dangerous switch here:
@@ -424,7 +439,7 @@ Deno.serve(async (req) => {
             ok: false,
             error: "Complete Voice AI setup before enabling retention calls.",
             readiness,
-          }, 400);
+          });
         }
       }
 
@@ -454,18 +469,19 @@ Deno.serve(async (req) => {
     }
 
     if (action === "set_active") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const enable = body.is_active === true;
       if (enable) {
         const key = await loadKey();
-        if (!key) return json({ ok: false, error: "Add the Sarvam API key before enabling." }, 400);
+        if (!key) return json({ ok: false, error: "Add the Sarvam API key before enabling.", code: "no_api_key" });
         const readiness = await computeReadiness(sb, row, cfg, key, true);
         if (!readiness.test_call_available) {
           return json({
             ok: false,
-            error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calling.",
+            error: setupBlocker(readiness) ?? "Sarvam is not ready for outbound calling.",
+            code: "not_ready",
             readiness,
-          }, 400);
+          });
         }
       }
       const { error } = await sb
@@ -477,9 +493,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "test_connection") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const key = await loadKey();
-      if (!key) return json({ ok: false, error: "No Sarvam API key stored." }, 400);
+      if (!key) return json({ ok: false, error: "No Sarvam API key stored.", code: "no_api_key" });
       try {
         const result = await checkConnection(key, cfg);
         await sb.from("voice_provider_integrations").update({
@@ -500,13 +516,13 @@ Deno.serve(async (req) => {
     }
 
     if (action === "test_call") {
-      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first." }, 400);
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       if (body.confirmed !== true) {
-        return json({ ok: false, error: "Confirmation is required before placing a test call." }, 400);
+        return json({ ok: false, error: "Confirmation is required before placing a test call.", code: "not_confirmed" });
       }
       const to = normalizePhone(String(body.to || ""));
       if (!isValidIndianMobile(to)) {
-        return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX)." }, 400);
+        return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX).", code: "invalid_number" });
       }
 
       // 1. Provider readiness (live probe — never trust the browser).
@@ -515,10 +531,10 @@ Deno.serve(async (req) => {
       if (!readiness.test_call_available) {
         return json({
           ok: false,
-          error: readiness.blockers[0] ?? "Sarvam is not ready for outbound calls.",
+          error: setupBlocker(readiness) ?? "Sarvam is not ready for outbound calls.",
           code: "not_ready",
           readiness,
-        }, 400);
+        });
       }
 
       // 2. Calling window (Asia/Kolkata, server-side).
@@ -530,7 +546,7 @@ Deno.serve(async (req) => {
           ok: false,
           error: `Outside the configured calling window (${cfg.window_start}–${cfg.window_end} IST).`,
           code: "outside_window",
-        }, 400);
+        });
       }
 
       // 3. Do-not-contact across members (via profile phone), leads and chat settings.
@@ -551,7 +567,7 @@ Deno.serve(async (req) => {
         memberBlocked = (mem?.length ?? 0) > 0;
       }
       if (memberBlocked || (dncLead?.length ?? 0) > 0 || (dncChat?.length ?? 0) > 0) {
-        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" }, 400);
+        return json({ ok: false, error: "This number is marked do-not-contact.", code: "do_not_contact" });
       }
 
       // 4. Atomic slot claim: daily cap + concurrency + duplicate live call.
@@ -578,7 +594,7 @@ Deno.serve(async (req) => {
       if (claimErr) return json({ ok: false, error: claimErr.message }, 500);
       const claimed = claim as { ok: boolean; attempt_row_id?: string; error?: string; error_code?: string };
       if (!claimed?.ok) {
-        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code }, 409);
+        return json({ ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code });
       }
       const attemptRowId = claimed.attempt_row_id!;
 
@@ -642,7 +658,7 @@ Deno.serve(async (req) => {
     }
 
 
-    return json({ ok: false, error: `Unknown action: ${action}` }, 400);
+    return json({ ok: false, error: `Unknown action: ${action}`, code: "unknown_action" });
   } catch (e) {
     console.error("sarvam-voice error:", redact((e as Error)?.message));
     return json({ ok: false, error: redact((e as Error)?.message || "Unexpected error") }, 500);

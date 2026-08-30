@@ -73,6 +73,7 @@ interface SarvamReadiness {
   production_ready: boolean;
   probe_error: string | null;
   blockers: string[];
+  warnings?: string[];
 }
 
 interface EligibilitySummary {
@@ -123,9 +124,25 @@ interface SarvamState {
 
 const SARVAM_CONSOLE_URL = 'https://dashboard.sarvam.ai/';
 
+/** Edge errors carry the real reason in the response body — supabase-js only
+ *  surfaces "Edge Function returned a non-2xx status code" unless we read it. */
+async function readEdgeError(error: unknown, fallback: string): Promise<string> {
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.clone().json();
+      const msg = (body as { error?: string })?.error;
+      if (msg) return msg;
+    } catch {
+      /* body not JSON — fall through */
+    }
+  }
+  return (error as Error)?.message || fallback;
+}
+
 async function invokeSarvam(payload: Record<string, unknown>): Promise<SarvamState> {
   const { data, error } = await supabase.functions.invoke('sarvam-voice', { body: payload });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await readEdgeError(error, 'Sarvam request failed'));
   const res = data as SarvamState;
   if (!res?.ok && res?.error) throw new Error(res.error);
   return res;
@@ -233,7 +250,7 @@ export default function SarvamVoiceCard() {
       const { data, error } = await supabase.functions.invoke('sarvam-voice', {
         body: { action: 'test_call', to: testPhone, confirmed: true },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readEdgeError(error, 'Test call failed'));
       const res = data as { ok: boolean; error?: string; code?: string };
       if (!res.ok) {
         // Sarvam does not expose Instant Outbound for this workspace/agent —
@@ -270,7 +287,7 @@ export default function SarvamVoiceCard() {
       const { data, error } = await supabase.functions.invoke('sarvam-voice', {
         body: { action: 'run_eligibility_check' },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readEdgeError(error, 'Eligibility check failed'));
       const res = data as { ok: boolean; error?: string; eligibility?: EligibilitySummary };
       if (!res.ok) throw new Error(res.error || 'Eligibility check failed');
       return res.eligibility as EligibilitySummary;
@@ -429,9 +446,20 @@ export default function SarvamVoiceCard() {
             </div>
           )}
           {lastCheck?.ok && lastCheck.agent_found === false && (
-            <p className="flex items-center gap-1.5 text-sm text-amber-600">
-              <AlertTriangle className="h-4 w-4" /> Credentials are valid but no deployment matches this Agent ID.
+            <p className="text-sm text-muted-foreground">
+              No inbound deployment matches this Agent ID. That is only needed to answer inbound calls or run
+              campaigns — outbound test and retention calls do not require one.
             </p>
+          )}
+          {!!readiness?.warnings?.length && (
+            <ul className="space-y-1 text-sm text-amber-600">
+              {readiness.warnings.map((w) => (
+                <li key={w} className="flex items-start gap-1.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
           )}
 
           <Separator />
@@ -526,9 +554,8 @@ export default function SarvamVoiceCard() {
                 <ul className="space-y-1 text-xs">
                   {([
                     ['Sarvam connected', !!readiness?.connected],
-                    ['Agent configured', !!readiness?.agent_configured && !!readiness?.agent_version],
-                    ['Outbound deployment', !!readiness?.deployment_configured && !!readiness?.outbound_enabled],
-                    ['Deployment active & number assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
+                    ['Agent ID & version', !!readiness?.agent_configured && !!readiness?.agent_version],
+                    ['Telephony connection & agent number', !!readiness?.phone_number_configured],
                     ['Integration switched on', !!readiness?.integration_enabled],
                     ['Successful test call', !!readiness?.successful_test_call],
                   ] as Array<[string, boolean]>).map(([label, done]) => (
