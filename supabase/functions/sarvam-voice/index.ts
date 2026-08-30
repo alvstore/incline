@@ -140,7 +140,7 @@ async function computeReadiness(
   let deployment: Record<string, unknown> | null = null;
   let deployment_configured = false;
   let outbound_enabled = false;
-  let phone_number_active = false;
+  let deployment_active = false;
   let phone_number_assigned = false;
   let agent_committed = false;
 
