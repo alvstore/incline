@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import {
-  useVoiceOpsSummary, useVoiceCalls, useVoiceAnalytics, type VoiceCallRow,
+  useVoiceOpsSummary, useVoiceCalls, useVoiceAnalytics, useVoiceQueue, type VoiceCallRow,
 } from '@/hooks/useVoiceOps';
 import {
   dispositionLook, statusLook, actionStateLook, formatDuration,
