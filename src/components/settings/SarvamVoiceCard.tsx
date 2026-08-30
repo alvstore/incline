@@ -472,18 +472,99 @@ export default function SarvamVoiceCard() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="font-medium text-sm">Member Retention Calls — 7+ days absent</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-sm">Member Retention Calls — 7+ days absent</p>
+                  {automation.enabled
+                    ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
+                    : canEnableRetention
+                      ? <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Ready</Badge>
+                      : <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">Blocked</Badge>}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Foundation only. Nothing is dialled automatically while this is off.
                 </p>
               </div>
               <Switch
                 checked={!!automation.enabled}
-                disabled={!state?.configured || automationMutation.isPending}
+                disabled={(!automation.enabled && !canEnableRetention) || automationMutation.isPending}
                 onCheckedChange={(v) => automationMutation.mutate({ ...automation, enabled: v })}
                 aria-label="Enable retention calls"
               />
             </div>
+
+            {!canEnableRetention && (
+              <div className="rounded-xl bg-muted/50 p-3 space-y-2">
+                <p className="text-sm font-medium">Complete Voice AI setup before enabling retention calls.</p>
+                <ul className="space-y-1 text-xs">
+                  {([
+                    ['Sarvam connected', !!readiness?.connected],
+                    ['Agent configured', !!readiness?.agent_configured && !!readiness?.agent_version],
+                    ['Outbound deployment', !!readiness?.deployment_configured && !!readiness?.outbound_enabled],
+                    ['Phone number active & assigned', !!readiness?.phone_number_active && !!readiness?.phone_number_assigned],
+                    ['Integration switched on', !!readiness?.integration_enabled],
+                    ['Successful test call', !!readiness?.successful_test_call],
+                  ] as Array<[string, boolean]>).map(([label, done]) => (
+                    <li key={label} className="flex items-center gap-2">
+                      {done
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                        : <XCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
+                      <span className={done ? 'text-emerald-700' : 'text-muted-foreground'}>{label}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs cursor-pointer"
+                  onClick={() => setBlockersOpen(true)}
+                >
+                  Why is this disabled?
+                </Button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => eligibilityMutation.mutate()}
+                disabled={eligibilityMutation.isPending}
+                className="gap-1.5 cursor-pointer"
+              >
+                {eligibilityMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Clock className="h-3.5 w-3.5" />}
+                Run eligibility check
+              </Button>
+              <span className="text-xs text-muted-foreground">Read-only — places no calls.</span>
+            </div>
+
+            {eligibility && (
+              <div className="grid gap-2 sm:grid-cols-3 rounded-xl border p-3 text-sm">
+                {([
+                  ['Eligible today', eligibility.eligible],
+                  ['Already contacted today', eligibility.already_contacted_today],
+                  ['DND / opted out', eligibility.dnd],
+                  ['Cooldown', eligibility.cooldown],
+                  ['Missing phone', eligibility.missing_phone],
+                  ['Paused / handoff', eligibility.paused_handoff],
+                  ['Absent < minimum', eligibility.not_absent_enough],
+                  ['Remaining daily cap', eligibility.remaining_today],
+                ] as Array<[string, number]>).map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="font-semibold">{value}</p>
+                  </div>
+                ))}
+                <div className="sm:col-span-3 text-xs text-muted-foreground">
+                  {eligibility.in_calling_window
+                    ? `Inside the calling window (${eligibility.calling_window})`
+                    : `Outside the calling window (${eligibility.calling_window}) — nothing would be dialled now`}
+                  {` · checked ${eligibility.checked_at_ist} IST`}
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="sarvam-absent-days">Minimum days absent</Label>
