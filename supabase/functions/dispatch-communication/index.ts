@@ -907,24 +907,26 @@ Deno.serve(async (req) => {
       }
 
       if (input.channel === 'whatsapp') {
-        const digits = String(input.recipient ?? '').replace(/\D/g, '');
-        const last10 = digits.slice(-10);
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const pacedQuery = supabase
-          .from('communication_logs')
-          .select('id')
-          .eq('type', 'whatsapp')
-          .ilike('recipient', `%${last10}`)
-          .in('delivery_status', ['failed', 'bounced'])
-          .or('error_message.ilike.%131049%,error_message.ilike.%healthy ecosystem engagement%')
-          .gte('created_at', since)
-          .limit(1);
-        const { data: paced } = await pacedQuery;
-        if (paced && paced.length > 0) {
-          return await logSuppressed('pacing_cooldown_24h (Meta 131049 recently)', {
-            suppressed_by: 'pacing_cooldown',
-            meta_code: 131049,
-          });
+        // v1.39.0 — recipient-level marketing memory is the ONLY pacing gate.
+        // The former `error_message ilike '%131049%'` log scan is gone: pacing
+        // state now lives in `whatsapp_recipient_state` and is shared by the
+        // dispatcher, the broadcaster, the retry worker and the preflight.
+        const waCategory = resolveMessageCategory(input.category);
+        const paceCheck = await isMarketingBlocked(
+          supabase as unknown as { rpc: (fn: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+          String(input.recipient ?? ''),
+          waCategory,
+        );
+        if (paceCheck.blocked) {
+          return await logSuppressed(
+            `pace_cooldown (Meta marketing pacing; until ${paceCheck.until ?? 'further notice'})`,
+            {
+              suppressed_by: 'pace_cooldown',
+              pace_limited: true,
+              cooldown_until: paceCheck.until,
+              message_category: waCategory,
+            },
+          );
         }
 
         // Circuit breaker: when the sending number has taken 5+ pacing errors
