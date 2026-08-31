@@ -420,6 +420,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
               ['delivered', counts.delivered],
               ['read', counts.read],
               ['failed', counts.failed],
+              ...(counts.pace_limited > 0 ? [['pace_limited', counts.pace_limited] as const] : []),
               ['pending', counts.pending],
               ...(counts.skipped > 0 ? [['skipped', counts.skipped] as const] : []),
             ] as [CampaignDeliveryFilter, number][]).map(([k, n]) => (
@@ -427,15 +428,19 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
                 key={k}
                 onClick={() => setFilter(k)}
                 aria-pressed={filter === k}
+                title={k === 'pace_limited' ? 'Withheld by Meta marketing pacing — not a delivery failure and never auto-retried' : undefined}
                 className={`text-xs rounded-full px-3 py-1 border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                   filter === k
                     ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-card text-foreground border-border hover:bg-muted'
+                    : k === 'pace_limited'
+                      ? 'bg-warning/10 text-warning border-warning/30 hover:bg-warning/20'
+                      : 'bg-card text-foreground border-border hover:bg-muted'
                 }`}
               >
-                {k.charAt(0).toUpperCase() + k.slice(1)} ({n})
+                {campaignDeliveryFilterLabel(k)} ({n})
               </button>
             ))}
+
 
             <div className="relative flex-1 min-w-[160px]">
               <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
