@@ -38,6 +38,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
 import { phoneVariants } from "../_shared/phone.ts";
 import { mayAdvance } from "../_shared/deliveryState.ts";
+import { recordMarketingEvent, recordPaceEvent } from "../_shared/whatsappPolicy.ts";
 
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 import {
