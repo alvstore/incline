@@ -15566,6 +15566,7 @@ export type Database = {
       is_branch_member: { Args: { p_branch_id: string }; Returns: boolean }
       is_dr_readonly: { Args: never; Returns: boolean }
       is_in_quiet_hours: { Args: { p_member_id: string }; Returns: boolean }
+      is_pure_trainer: { Args: { _user_id: string }; Returns: boolean }
       issue_referral_reward: {
         Args: {
           p_actor_user_id?: string
