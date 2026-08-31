@@ -29,7 +29,7 @@ const channelMeta: Record<string, { icon: any; color: string; label: string }> =
 };
 
 const statusBadge = (s: string, errorMessage?: string | null) => {
-  if (/\b131049\b|healthy ecosystem engagement/i.test(errorMessage || '')) {
+  if (isPacingError(errorMessage)) {
     return (
       <Badge variant="outline" className="rounded-full gap-1 font-medium bg-warning/10 text-warning border-warning/30">
         <ShieldAlert className="h-3 w-3" />Paced / Suppressed
