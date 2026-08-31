@@ -66,12 +66,14 @@ Deno.serve(async (req) => {
     }
 
 
+    const dryRun = body?.dry_run === true;
+
     // Load failed recipients (recipient-side status OR joined provider DLR failure).
     const { data: recRows } = await admin
       .from('campaign_recipients')
-      .select('id, source_type, source_ref_id, full_name, phone, email, status, attempt')
+      .select('id, source_type, source_ref_id, full_name, phone, email, status, attempt, error, last_meta_error_code, marketing_blocked_until')
       .eq('campaign_id', campaign_id)
-      .in('status', ['failed']);
+      .in('status', ['failed', 'pace_limited']);
 
     // Merge provider DLR states. Base keys strip any :retry:<ts> suffix so all
     // attempts for the same recipient collapse to one current outcome.
