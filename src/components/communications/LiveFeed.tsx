@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { DeliveryTimeline } from './DeliveryTimeline';
 import { KpiStrip, type KpiCounts } from './KpiStrip';
 import { formatPhoneDisplay, phoneVariants } from '@/lib/contacts/phone';
-import { parseCommError } from '@/lib/comms/metaErrorLabels';
+import { parseCommError, isPacingError } from '@/lib/comms/metaErrorLabels';
 
 type ChannelKey = 'all' | 'whatsapp' | 'sms' | 'email' | 'in_app';
 
