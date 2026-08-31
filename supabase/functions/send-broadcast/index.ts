@@ -39,6 +39,7 @@ import {
   extractMetaCode,
   marketingBlockedUntil,
 } from "../_shared/metaErrorPolicy.ts";
+import { recordPaceEvent } from "../_shared/whatsappPolicy.ts";
 
 
 // deno-lint-ignore no-explicit-any
