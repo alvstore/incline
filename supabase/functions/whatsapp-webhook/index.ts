@@ -595,6 +595,10 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
   if (!inboundMsg?.content) return;
 
+  // A reply is the strongest engagement signal Meta rewards: it opens the
+  // customer-service window and clears any marketing pacing cooldown we hold.
+  await recordMarketingEvent(supabase as never, phoneNumber, "reply", branchId ?? null);
+
 
   // ── Do-Not-Contact opt-out gate ─────────────────────────────────────────────
   // If the inbound message asks us to stop messaging, mark the contact across
