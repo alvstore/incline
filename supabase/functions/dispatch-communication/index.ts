@@ -1949,6 +1949,23 @@ Deno.serve(async (req) => {
 
 
     const providerRoute = (metaErrorFields.provider_route as string | undefined) ?? null;
+
+    // ── recipient marketing memory (single write point for the dispatcher) ──
+    if (input.channel === 'whatsapp' && input.recipient) {
+      const db = supabase as unknown as { rpc: (fn: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> };
+      const waCategory = resolveMessageCategory(input.category);
+      const verdict = classifyOutcome({
+        ok: !sendError && !callbackAlreadyTerminal,
+        errorText: sendError ?? (callbackTerminalError ?? null),
+        code: (metaErrorFields.meta_code as string | undefined) ?? null,
+      });
+      if (verdict.outcome === 'pace_limited') {
+        await recordPaceEvent(db, input.recipient, verdict.meta_code ?? '131049', input.branch_id ?? null);
+      } else if (verdict.outcome === 'accepted' && waCategory === 'marketing') {
+        await recordMarketingEvent(db, input.recipient, 'attempt', input.branch_id ?? null);
+      }
+    }
+
     if (sendError || callbackAlreadyTerminal) {
       return ok({ status: 'failed', log_id: log!.id, reason: sendError, provider_route: providerRoute });
     }
