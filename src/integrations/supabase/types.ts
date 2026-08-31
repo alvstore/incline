@@ -14871,6 +14871,7 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_password_setup: { Args: never; Returns: boolean }
       compute_error_fingerprint: {
         Args: {
           p_function_name: string
