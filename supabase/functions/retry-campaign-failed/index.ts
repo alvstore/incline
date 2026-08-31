@@ -97,22 +97,21 @@ Deno.serve(async (req) => {
         .filter(Boolean) as string[],
     );
 
-    // Meta error codes that are permanent for this recipient — retrying only
-    // burns sending quality, so they stay failed.
-    const TERMINAL_CODES = ['131026', '130472', '131047', '132000'];
-    const terminalKeys = new Set(
-      (campaignLogs || [])
-        .filter((l: any) => TERMINAL_CODES.some((c) => String(l.error_message || '').includes(c)))
-        .map((l: any) => baseCampaignKey(l.dedupe_key))
-        .filter(Boolean) as string[],
-    );
+    // Latest provider error text per base recipient key (logs are newest-first).
+    const latestErrorByKey = new Map<string, string>();
+    for (const l of (campaignLogs || []) as any[]) {
+      const key = baseCampaignKey(l.dedupe_key);
+      if (key && !latestErrorByKey.has(key) && l.error_message) {
+        latestErrorByKey.set(key, String(l.error_message));
+      }
+    }
 
     // Pull sent-but-DLR-failed recipient rows to also retry.
     let dlrFailedRecipients: any[] = [];
     if (dlrFailedKeys.size > 0) {
       const { data: sentRows } = await admin
         .from('campaign_recipients')
-        .select('id, source_type, source_ref_id, full_name, phone, email, status, attempt')
+        .select('id, source_type, source_ref_id, full_name, phone, email, status, attempt, error, last_meta_error_code, marketing_blocked_until')
         .eq('campaign_id', campaign_id)
         .eq('status', 'sent');
       dlrFailedRecipients = (sentRows || []).filter((r: any) =>
@@ -123,24 +122,58 @@ Deno.serve(async (req) => {
     const merged = [...(recRows || []), ...dlrFailedRecipients]
       .filter((r: any) => {
         const key = `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}`;
-        return !successfulKeys.has(key) && !terminalKeys.has(key);
+        return !successfulKeys.has(key);
       });
     // Dedupe by (source_type, source_ref_id)
     const seen = new Set<string>();
-    const audience = merged.filter((r: any) => {
+    const candidates = merged.filter((r: any) => {
       const k = `${r.source_type}:${r.source_ref_id}`;
       if (seen.has(k)) return false;
       seen.add(k);
       return !!(r.phone || r.email);
     });
 
+    // ── Single policy decision per candidate ────────────────────────────────
+    const buckets: Record<'retryable' | 'pace_limited' | 'terminal', any[]> = {
+      retryable: [], pace_limited: [], terminal: [],
+    };
+    const reasonCounts: Record<string, number> = {};
+    for (const r of candidates) {
+      const key = `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}`;
+      const verdict = retryEligibility({
+        status: r.status,
+        error: r.error ?? latestErrorByKey.get(key) ?? null,
+        error_code: r.last_meta_error_code ?? null,
+        marketing_blocked_until: r.marketing_blocked_until ?? null,
+        attempt: r.attempt ?? 0,
+      });
+      buckets[verdict.bucket].push(r);
+      if (verdict.bucket !== 'retryable') {
+        reasonCounts[verdict.reason] = (reasonCounts[verdict.reason] || 0) + 1;
+      }
+    }
+
+    const audience = buckets.retryable;
+    const split = {
+      candidates: candidates.length,
+      retryable: buckets.retryable.length,
+      pace_limited: buckets.pace_limited.length,
+      terminal: buckets.terminal.length,
+      skipped_reasons: reasonCounts,
+    };
+
+    if (dryRun) {
+      return json(200, { dry_run: true, accepted: 0, split });
+    }
+
     if (audience.length === 0) {
       return json(200, {
         accepted: 0,
-        reason: 'no retryable failed recipients (terminal-error contacts skipped)',
-        terminal_skipped: terminalKeys.size,
+        reason: 'no retryable recipients — pace-limited and terminal contacts are never re-attempted',
+        split,
       });
     }
+
 
     // Bump attempt + last_retried_at on these recipient rows.
     const ids = audience.map((r: any) => r.id).filter(Boolean);
@@ -198,7 +231,7 @@ Deno.serve(async (req) => {
       return json(500, { error: invokeErr.message || 'send-broadcast invoke failed' });
     }
 
-    return json(202, { accepted: audience.length, retrying: true });
+    return json(202, { accepted: audience.length, retrying: true, split });
   } catch (e: any) {
     return json(500, { error: e?.message || String(e) });
   }

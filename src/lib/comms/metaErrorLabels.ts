@@ -91,14 +91,7 @@ const CODE_PATTERNS: RegExp[] = [
 export function parseCommError(raw: string | null | undefined): FriendlyCommError | null {
   if (!raw) return null;
   const text = String(raw);
-  let code: number | null = null;
-  for (const re of CODE_PATTERNS) {
-    const m = text.match(re);
-    if (m) {
-      code = Number(m[1]);
-      break;
-    }
-  }
+  const code = extractMetaErrorCode(text);
   if (code && META_ERROR_MAP[code]) {
     return { code, short: META_ERROR_MAP[code].short, hint: META_ERROR_MAP[code].hint, raw: text };
   }
@@ -109,3 +102,60 @@ export function parseCommError(raw: string | null | undefined): FriendlyCommErro
   const firstLine = text.split('\n')[0].slice(0, 180);
   return { code: null, short: firstLine, hint: '', raw: text };
 }
+
+/** Extracts a Meta error code from free-form provider error text. */
+export function extractMetaErrorCode(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const text = String(raw);
+  for (const re of CODE_PATTERNS) {
+    const m = text.match(re);
+    if (m) return Number(m[1]);
+  }
+  const loose = text.match(/\b(1[0-9]{5})\b/);
+  return loose ? Number(loose[1]) : null;
+}
+
+/** Meta codes that mean "withheld for ecosystem pacing", not "delivery failed". */
+export const PACING_CODES = [131049, 130472] as const;
+
+/** Single source of truth for "is this a Meta pacing outcome?" on the client. */
+export function isPacingError(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  const code = extractMetaErrorCode(raw);
+  if (code && (PACING_CODES as readonly number[]).includes(code)) return true;
+  return /healthy ecosystem engagement|per-user marketing/i.test(String(raw));
+}
+
+export interface OperatorExplanation {
+  title: string;
+  what: string;
+  action: string;
+  retryable: boolean;
+}
+
+/** Plain-language, operator-facing explanation of a delivery outcome. */
+export function explainCommError(raw: string | null | undefined): OperatorExplanation {
+  const code = extractMetaErrorCode(raw);
+  if (isPacingError(raw)) {
+    return {
+      title: `Pace limited${code ? ` (Meta ${code})` : ''}`,
+      what: 'Meta withheld this marketing message to protect recipient experience. It was never delivered and was not a technical failure.',
+      action: 'No action needed. Automatic retry is disabled; the recipient becomes eligible again after the cooldown.',
+      retryable: false,
+    };
+  }
+  const friendly = parseCommError(raw);
+  if (!friendly) {
+    return { title: 'Unknown outcome', what: 'No provider response was recorded.', action: 'Wait for reconciliation before resending.', retryable: false };
+  }
+  const terminal = code != null && [131026, 131047, 132000, 132001, 132012, 132015, 132016, 133010].includes(code);
+  return {
+    title: friendly.code ? `${friendly.short} (Meta ${friendly.code})` : friendly.short,
+    what: friendly.hint || 'Provider reported an error for this recipient.',
+    action: terminal
+      ? 'Permanent for this recipient or template — fix the template or contact details before sending again.'
+      : 'Transient — a retry is allowed.',
+    retryable: !terminal,
+  };
+}
+

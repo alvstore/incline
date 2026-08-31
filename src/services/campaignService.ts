@@ -418,19 +418,31 @@ export async function sendCampaignNow(
   return { accepted: true, total };
 }
 
+export interface RetrySplit {
+  candidates: number;
+  retryable: number;
+  pace_limited: number;
+  terminal: number;
+  skipped_reasons: Record<string, number>;
+}
+
 /**
- * Retry only the failed recipients from a previous send.
- * Delegates to edge fn `retry-campaign-failed`, which reads
- * `campaign_recipients` where status='failed', constructs a fresh
- * `recipients` array and invokes `send-broadcast` with retry=true.
+ * Retry only the genuinely retryable recipients from a previous send.
+ * Delegates to edge fn `retry-campaign-failed`, which classifies every failed
+ * recipient through the shared WhatsApp policy module and skips pace-limited
+ * (Meta 131049/130472) and terminal contacts.
  */
-export async function retryFailedRecipients(campaignId: string): Promise<{ accepted: number }> {
+export async function retryFailedRecipients(
+  campaignId: string,
+  opts?: { dryRun?: boolean },
+): Promise<{ accepted: number; split?: RetrySplit }> {
   const { data, error } = await supabase.functions.invoke('retry-campaign-failed', {
-    body: { campaign_id: campaignId },
+    body: { campaign_id: campaignId, dry_run: opts?.dryRun === true },
   });
   if (error) throw error;
-  return { accepted: (data as any)?.accepted ?? 0 };
+  return { accepted: (data as any)?.accepted ?? 0, split: (data as any)?.split };
 }
+
 
 /**
  * Resume a campaign whose chunk pipeline died mid-flight. Kicks a fresh

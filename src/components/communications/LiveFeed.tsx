@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { DeliveryTimeline } from './DeliveryTimeline';
 import { KpiStrip, type KpiCounts } from './KpiStrip';
 import { formatPhoneDisplay, phoneVariants } from '@/lib/contacts/phone';
-import { parseCommError } from '@/lib/comms/metaErrorLabels';
+import { parseCommError, isPacingError } from '@/lib/comms/metaErrorLabels';
 
 type ChannelKey = 'all' | 'whatsapp' | 'sms' | 'email' | 'in_app';
 
@@ -29,7 +29,7 @@ const channelMeta: Record<string, { icon: any; color: string; label: string }> =
 };
 
 const statusBadge = (s: string, errorMessage?: string | null) => {
-  if (/\b131049\b|healthy ecosystem engagement/i.test(errorMessage || '')) {
+  if (isPacingError(errorMessage)) {
     return (
       <Badge variant="outline" className="rounded-full gap-1 font-medium bg-warning/10 text-warning border-warning/30">
         <ShieldAlert className="h-3 w-3" />Paced / Suppressed
@@ -567,7 +567,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                         <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-auto">
                           {statusBadge(
                             rollup.primary,
-                            g.logs.find((entry: any) => /\b131049\b|healthy ecosystem engagement/i.test(entry.error_message || ''))?.error_message,
+                            g.logs.find((entry: any) => isPacingError(entry.error_message))?.error_message,
                           )}
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {rollup.failed > 0 && rollup.failed < rollup.total && (
