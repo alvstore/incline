@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
       return json(500, { error: invokeErr.message || 'send-broadcast invoke failed' });
     }
 
-    return json(202, { accepted: audience.length, retrying: true });
+    return json(202, { accepted: audience.length, retrying: true, split });
   } catch (e: any) {
     return json(500, { error: e?.message || String(e) });
   }
