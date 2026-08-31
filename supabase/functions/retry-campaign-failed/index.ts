@@ -1,15 +1,16 @@
+// v2.0.0 — Smart retry. Every candidate row is classified through the single
+// policy module (`_shared/whatsappPolicy.ts`): only `retryable` rows are sent
+// again. Pace-limited (Meta 131049/130472) and terminal recipients are never
+// re-attempted, and an unconfirmed outcome is never blind-resent.
+// Supports `dry_run: true` so the UI can show the Retryable / Pace limited /
+// Terminal split before the operator confirms.
 // v1.3.0 — Fold every dedupe-key variant (`:a1`, `:retry:<ts>`, `:fallback:<ts>`)
-// back to the base recipient key so DLR-failed rows are actually detected, and
-// skip Meta-terminal error codes (131026 undeliverable, 130472 experiment)
-// which can never succeed on retry.
+// back to the base recipient key so DLR-failed rows are actually detected.
 // v1.1.0 — Retry only currently failed recipients; do not retry contacts that
 // already have a successful send log for the same campaign/source key.
 // v1.0.0 — Retry only the failed recipients of a campaign.
-// Reads campaign_recipients where status='failed' (or merged log status is
-// failed/bounced), builds a fresh `recipients` array in the shape send-broadcast
-// expects, and invokes send-broadcast with { retry: true } so the new attempt
-// uses a distinct dedupe_key suffix.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { retryEligibility } from '../_shared/whatsappPolicy.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,12 +66,14 @@ Deno.serve(async (req) => {
     }
 
 
+    const dryRun = body?.dry_run === true;
+
     // Load failed recipients (recipient-side status OR joined provider DLR failure).
     const { data: recRows } = await admin
       .from('campaign_recipients')
-      .select('id, source_type, source_ref_id, full_name, phone, email, status, attempt')
+      .select('id, source_type, source_ref_id, full_name, phone, email, status, attempt, error, last_meta_error_code, marketing_blocked_until')
       .eq('campaign_id', campaign_id)
-      .in('status', ['failed']);
+      .in('status', ['failed', 'pace_limited']);
 
     // Merge provider DLR states. Base keys strip any :retry:<ts> suffix so all
     // attempts for the same recipient collapse to one current outcome.
