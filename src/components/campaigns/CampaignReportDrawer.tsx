@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Loader2, Download, AlertTriangle, CheckCircle2, Clock, MessageCircle,
-  Search, FileText,
+  Search, FileText, Gauge,
 } from 'lucide-react';
+import { explainCommError, isPacingError } from '@/lib/comms/metaErrorLabels';
 import { getCampaignReport, type Campaign, type CampaignRecipientRow } from '@/services/campaignService';
 
 interface Props {
