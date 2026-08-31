@@ -263,7 +263,7 @@ export default function WhatsAppChatPage() {
   // Multi-device agent presence (typing/viewing) for the open conversation
   const conversationKey = selectedContact ? normalizePhone(selectedContact.phone_number) : null;
   const { typingOthers, viewingOthers, setTyping, broadcastReplied, lastPeerReplyAt } =
-    useConversationPresence(conversationKey);
+    useConversationPresence(conversationKey, selectedBranch);
 
   // Clear chat confirmation
   const [clearChatConfirmOpen, setClearChatConfirmOpen] = useState(false);
