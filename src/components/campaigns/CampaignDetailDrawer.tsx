@@ -195,7 +195,9 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
           deliveryStatus: base.dlrStatus,
           deliveredAt: base.deliveredAt,
           readAt: base.readAt,
+          errorText: errRaw,
         }),
+
       };
     });
   }, [recipients, logs, campaign?.id]);
