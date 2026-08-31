@@ -208,15 +208,15 @@ Deno.test("28. marketing content on a UTILITY template is a mismatch", () => {
 
 Deno.test("29. marketing routes to MM API only when enabled; utility stays Cloud", () => {
   assertEquals(
-    resolveProviderRoute({ category: "marketing", isTemplate: true, mmApiEnabled: true }),
+    resolveProviderRoute({ category: "marketing", hasTemplate: true, mmApiEnabled: true }),
     "mm_api",
   );
   assertEquals(
-    resolveProviderRoute({ category: "marketing", isTemplate: true, mmApiEnabled: false }),
+    resolveProviderRoute({ category: "marketing", hasTemplate: true, mmApiEnabled: false }),
     "cloud_api",
   );
   assertEquals(
-    resolveProviderRoute({ category: "utility", isTemplate: true, mmApiEnabled: true }),
+    resolveProviderRoute({ category: "utility", hasTemplate: true, mmApiEnabled: true }),
     "cloud_api",
   );
 });
@@ -263,7 +263,7 @@ Deno.test("35. phone matching is last-10 normalised across formats", () => {
 Deno.test("36. conversation window opens for 24h from the last inbound", () => {
   const recent = new Date(Date.now() - 60_000).toISOString();
   const stale = new Date(Date.now() - 25 * 3600_000).toISOString();
-  assert(conversationWindow(recent).active);
-  assertFalse(conversationWindow(stale).active);
-  assertFalse(conversationWindow(null).active);
+  assert(conversationWindow(recent).conversation_window_active);
+  assertFalse(conversationWindow(stale).conversation_window_active);
+  assertFalse(conversationWindow(null).conversation_window_active);
 });
