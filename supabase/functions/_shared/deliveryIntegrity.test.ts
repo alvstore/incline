@@ -177,3 +177,93 @@ Deno.test("26. a non-retryable policy never schedules a retry (no duplicate work
   assertEquals(nextRetryAt(0, classifyMetaError({ code: "132001" })), null);
   assertEquals(nextRetryAt(1, classifyMetaError({ code: "131049" })), null);
 });
+
+// ── Phase 10: whatsappPolicy — category gate, routing, retry buckets ────────
+import {
+  categoryFromTemplate,
+  categoryMismatch,
+  classifyOutcome,
+  conversationWindow,
+  last10,
+  resolveMessageCategory,
+  resolveProviderRoute,
+  retryEligibility,
+} from "./whatsappPolicy.ts";
+
+Deno.test("27. category resolution never widens marketing into utility", () => {
+  assertEquals(resolveMessageCategory("promotion"), "marketing");
+  assertEquals(resolveMessageCategory("something_new"), "marketing");
+  assertEquals(resolveMessageCategory("invoice"), "utility");
+  assertEquals(resolveMessageCategory("otp"), "authentication");
+  assertEquals(resolveMessageCategory(null), "marketing");
+});
+
+Deno.test("28. marketing content on a UTILITY template is a mismatch", () => {
+  assertEquals(categoryFromTemplate("UTILITY"), "utility");
+  assert(categoryMismatch("marketing", "UTILITY"));
+  assertFalse(categoryMismatch("marketing", "MARKETING"));
+  assertFalse(categoryMismatch("service", "UTILITY"));
+  assertFalse(categoryMismatch("marketing", null));
+});
+
+Deno.test("29. marketing routes to MM API only when enabled; utility stays Cloud", () => {
+  assertEquals(
+    resolveProviderRoute({ category: "marketing", isTemplate: true, mmApiEnabled: true }),
+    "mm_api",
+  );
+  assertEquals(
+    resolveProviderRoute({ category: "marketing", isTemplate: true, mmApiEnabled: false }),
+    "cloud_api",
+  );
+  assertEquals(
+    resolveProviderRoute({ category: "utility", isTemplate: true, mmApiEnabled: true }),
+    "cloud_api",
+  );
+});
+
+Deno.test("30. retry buckets: pacing never retried", () => {
+  assertEquals(retryEligibility({ status: "pace_limited" }).bucket, "pace_limited");
+  assertEquals(
+    retryEligibility({ status: "failed", error_code: "131049" }).bucket,
+    "pace_limited",
+  );
+  const future = new Date(Date.now() + 3_600_000).toISOString();
+  assertEquals(
+    retryEligibility({ status: "failed", marketing_blocked_until: future }).bucket,
+    "pace_limited",
+  );
+});
+
+Deno.test("31. retry buckets: terminal codes never retried", () => {
+  for (const code of ["131026", "132000", "132001", "133010"]) {
+    assertEquals(retryEligibility({ status: "failed", error_code: code }).bucket, "terminal", code);
+  }
+});
+
+Deno.test("32. retry buckets: repairable + transport errors are retried", () => {
+  assertEquals(retryEligibility({ status: "failed", error_code: "132018" }).bucket, "retryable");
+});
+
+Deno.test("33. an unconfirmed outcome is never blind-resent", () => {
+  const v = retryEligibility({ status: "failed", error: "weird provider text" });
+  assertEquals(v.bucket, "terminal");
+  assertFalse(v.retryable);
+});
+
+Deno.test("34. classifyOutcome marks a pacing send as pace_limited, not failed", () => {
+  const v = classifyOutcome({ ok: false, code: "131049", errorText: null, attempt: 0 });
+  assertEquals(v.outcome, "pace_limited");
+});
+
+Deno.test("35. phone matching is last-10 normalised across formats", () => {
+  assertEquals(last10("+91 99287 97971"), last10("919928797971"));
+  assertEquals(last10("09928797971"), "9928797971");
+});
+
+Deno.test("36. conversation window opens for 24h from the last inbound", () => {
+  const recent = new Date(Date.now() - 60_000).toISOString();
+  const stale = new Date(Date.now() - 25 * 3600_000).toISOString();
+  assert(conversationWindow(recent).active);
+  assertFalse(conversationWindow(stale).active);
+  assertFalse(conversationWindow(null).active);
+});
