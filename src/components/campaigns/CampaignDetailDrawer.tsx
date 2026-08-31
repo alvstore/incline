@@ -222,12 +222,27 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
   const retryMut = useMutation({
     mutationFn: () => retryFailedRecipients(campaign!.id),
     onSuccess: (r) => {
-      toast.success(`Retrying ${r.accepted} failed recipient${r.accepted === 1 ? '' : 's'}`);
+      const s = r.split;
+      if (r.accepted === 0) {
+        toast.info(
+          s
+            ? `Nothing to retry — ${s.pace_limited} pace limited, ${s.terminal} terminal`
+            : 'No retryable recipients',
+        );
+      } else {
+        toast.success(
+          `Retrying ${r.accepted} recipient${r.accepted === 1 ? '' : 's'}` +
+            (s && (s.pace_limited || s.terminal)
+              ? ` · skipped ${s.pace_limited} pace limited, ${s.terminal} terminal`
+              : ''),
+        );
+      }
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       qc.invalidateQueries({ queryKey: ['campaign-recipients', campaign?.id] });
       qc.invalidateQueries({ queryKey: ['campaign-logs', campaign?.id] });
     },
     onError: (e: any) => toast.error(e?.message || 'Retry failed'),
+
   });
 
   const resumeMut = useMutation({
