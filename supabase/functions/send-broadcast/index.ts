@@ -1214,13 +1214,22 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
                   error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
                 }
               } else {
-                // Phase 9: 131049/130472 is a recipient-level marketing pacing
-                // outcome, not a transient error. Suppress this recipient for
-                // the policy cooldown; do NOT loop, do NOT fail the campaign.
+                // v6.2.0: 131049/130472 is recipient-level marketing pacing, not
+                // a delivery failure and not a transient error. The recipient
+                // becomes `pace_limited` (its own counter bucket), the cooldown
+                // is recorded in the shared recipient memory, and NOTHING is
+                // retried. Never rotate templates or hop providers to bypass it.
                 const pol = classifyMetaError({ code: String(pacingCode) });
-                status = 'suppressed';
+                status = 'pace_limited';
                 error = `paced_${pacingCode}: ${pol.description}`;
                 marketingBlocked = marketingBlockedUntil(pol);
+                const until = await recordPaceEvent(
+                  adminClient as any,
+                  String(r.phone),
+                  String(pacingCode),
+                  branchId ?? null,
+                );
+                if (until) marketingBlocked = until;
               }
 
             }
