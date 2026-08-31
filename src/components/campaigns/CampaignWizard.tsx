@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import DOMPurify from 'dompurify';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { supabase } from '@/integrations/supabase/client';
+import { campaignPurpose, categoryMismatch, templateStatusBlocked } from '@/lib/comms/messageCategory';
 import { AudienceBuilder } from './AudienceBuilder';
 import {
   type AudienceFilter,
@@ -1008,7 +1009,26 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   // scheduled / automated triggers, PENDING is allowed: the worker re-checks
   // template status at fire time (issue #2).
   const templateReadyForTrigger = templatePicked && (trigger !== 'send_now' || !selectedTemplatePending);
-  const blockedByTemplate = requiresTemplate && !templateReadyForTrigger;
+
+  // ── Purpose ↔ Meta category preflight gate ────────────────────────────────
+  // A promotional campaign may never ride a UTILITY template (and vice versa),
+  // and a rejected/paused/pending-deletion template can never be sent.
+  const declaredPurpose = campaignPurpose(campaignType);
+  const selectedTemplateCategory = selectedTemplateMeta?.category ?? null;
+  const purposeMismatch = channel === 'whatsapp' && templatePicked
+    && categoryMismatch(declaredPurpose, selectedTemplateCategory);
+  const templateUnusable = channel === 'whatsapp' && templatePicked
+    && templateStatusBlocked(selectedTemplateMeta?.meta_template_status ?? selectedTemplateMeta?.status);
+
+  const blockedByTemplate =
+    (requiresTemplate && !templateReadyForTrigger) || purposeMismatch || templateUnusable;
+  const templateBlockReason = purposeMismatch
+    ? `This is a ${declaredPurpose} campaign but the selected template is approved as ${String(selectedTemplateCategory).toUpperCase()}. Pick a ${declaredPurpose.toUpperCase()} template — relabelling is not allowed by Meta.`
+    : templateUnusable
+      ? 'Template needs synchronisation/review — Meta has it as rejected, paused or pending deletion.'
+      : requiresTemplate && !templateReadyForTrigger
+        ? 'Pick an approved Meta template — cold recipients require it'
+        : null;
 
   // ─── Per-channel drafts ────────────────────────────────────────────────────
   const captureDraft = (): ChannelDraft => ({
@@ -1611,7 +1631,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                         This Meta template has no local CRM row yet. Click <strong>Sync from Meta</strong> once to materialize it before sending.
                       </p>
                     )}
-                    {selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') && (
+                    {templateBlockReason && (purposeMismatch || templateUnusable) && (
+                      <p className="text-[11px] text-destructive bg-destructive/10 border border-destructive/25 rounded-lg p-2">
+                        {templateBlockReason}
+                      </p>
+                    )}
+                    {selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') && !purposeMismatch && !templateUnusable && (
                       <p className="text-[11px] text-success">
                         Body is locked to the approved template content. You can still personalize variables and attach the required header media below.
                       </p>
@@ -2147,7 +2172,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate || missingSlotTokens.length > 0} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : missingSlotTokens.length > 0 ? `Fill template slots ${missingSlotTokens.join(', ')} on the Message step` : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
+            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate || missingSlotTokens.length > 0} title={blockedByTemplate ? (templateBlockReason || 'Pick an approved Meta template — cold recipients require it') : missingSlotTokens.length > 0 ? `Fill template slots ${missingSlotTokens.join(', ')} on the Message step` : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> :
                 trigger === 'send_now' ? <><Send className="h-4 w-4" /> Send Campaign</> :
                 trigger === 'scheduled' ? <><Clock className="h-4 w-4" /> Schedule Campaign</> :

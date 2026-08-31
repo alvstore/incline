@@ -273,9 +273,8 @@ export function CampaignsPanel() {
                     </div>
                   );
                 })()}
-                {(c.failure_count || 0) > 0 && (
-                  <CampaignFailureBreakdown campaignId={c.id} active={inFlight} />
-                )}
+                <CampaignFailureBreakdown campaignId={c.id} active={inFlight} />
+
                 <div className="grid grid-cols-5 gap-2 text-center pt-3 border-t">
                   <div>
                     <p className="text-lg font-bold text-foreground">{c.recipients_count}</p>
