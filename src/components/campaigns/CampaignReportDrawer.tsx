@@ -28,6 +28,7 @@ function statusPill(status: string) {
     case 'read': return { c: 'bg-primary/15 text-primary', icon: MessageCircle, label: 'Read' };
     case 'submitted': return { c: 'bg-info/15 text-info', icon: CheckCircle2, label: 'Sent' };
     case 'failed': return { c: 'bg-destructive/15 text-destructive', icon: AlertTriangle, label: 'Failed' };
+    case 'pace_limited': return { c: 'bg-warning/15 text-warning', icon: Gauge, label: 'Pace limited' };
     case 'queued': return { c: 'bg-muted text-foreground', icon: Clock, label: 'Queued' };
     case 'skipped': return { c: 'bg-warning/15 text-warning', icon: AlertTriangle, label: 'Skipped' };
     case 'suppressed': return { c: 'bg-warning/15 text-warning', icon: AlertTriangle, label: 'Suppressed' };
@@ -74,7 +75,9 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
 
   const filtered = useMemo(() => {
     let out = rows;
-    if (filter !== 'all') out = out.filter((r) => r.status === filter);
+    if (filter === 'pace_limited') out = out.filter(isPaced);
+    else if (filter === 'failed') out = out.filter((r) => r.status === 'failed' && !isPaced(r));
+    else if (filter !== 'all') out = out.filter((r) => r.status === filter);
     if (search) {
       const q = search.toLowerCase();
       out = out.filter((r) =>
@@ -85,10 +88,15 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
     return out;
   }, [rows, filter, search]);
 
+  const isPaced = (r: CampaignRecipientRow) =>
+    r.status === 'pace_limited' ||
+    (r.status === 'failed' && isPacingError(`${r.error_code ?? ''} ${r.error_reason ?? ''}`));
+
   const totals = useMemo(() => {
-    const t = { total: rows.length, sent: 0, failed: 0, queued: 0, read: 0 };
+    const t = { total: rows.length, sent: 0, failed: 0, pace_limited: 0, queued: 0, read: 0 };
     for (const r of rows) {
       if (['sent', 'submitted', 'delivered', 'read'].includes(r.status)) t.sent++;
+      else if (isPaced(r)) t.pace_limited++;
       else if (r.status === 'failed') t.failed++;
       else if (r.status === 'queued') t.queued++;
       if (r.read_at || r.status === 'read') t.read++;
@@ -109,12 +117,28 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
 
       <div className="px-1 pb-2 space-y-4">
         {/* Totals */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className={`grid ${totals.pace_limited > 0 ? 'grid-cols-5' : 'grid-cols-4'} gap-2`}>
           <Stat label="Total" value={totals.total} color="text-foreground" />
           <Stat label="Delivered" value={totals.sent} color="text-success" />
           <Stat label="Failed" value={totals.failed} color="text-destructive" />
+          {totals.pace_limited > 0 && (
+            <Stat label="Pace limited" value={totals.pace_limited} color="text-warning" icon={Gauge} />
+          )}
           <Stat label="Read" value={totals.read} color="text-primary" icon={MessageCircle} />
         </div>
+
+        {totals.pace_limited > 0 && (
+          <div className="rounded-2xl border border-warning/30 bg-warning/10 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-warning flex items-center gap-1.5">
+              <Gauge className="h-3.5 w-3.5" /> {totals.pace_limited} pace limited
+            </p>
+            <p className="mt-1 text-[12px] leading-relaxed text-foreground/80">
+              Meta withheld these marketing messages to protect recipient experience (codes 131049 /
+              130472). They are not delivery failures, are never auto-retried, and become eligible
+              again once the per-recipient cooldown expires.
+            </p>
+          </div>
+        )}
 
         {/* Failure groups */}
         {groups.length > 0 && (
@@ -157,6 +181,7 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
             <option value="submitted">Sent</option>
             <option value="delivered">Delivered</option>
             <option value="failed">Failed</option>
+            {totals.pace_limited > 0 && <option value="pace_limited">Pace limited</option>}
             <option value="queued">Queued</option>
           </select>
           <Button
@@ -178,7 +203,7 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
         ) : (
           <div className="border rounded-2xl divide-y max-h-[55vh] overflow-y-auto">
             {filtered.map((r) => {
-              const sp = statusPill(r.status);
+              const sp = statusPill(isPaced(r) ? 'pace_limited' : r.status);
               const SIcon = sp.icon;
               return (
                 <div key={r.id} className="p-3 hover:bg-muted/40 text-sm">
@@ -197,12 +222,21 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
                       <SIcon className="h-3 w-3 mr-1" /> {sp.label}
                     </Badge>
                   </div>
-                  {r.status === 'failed' && (r.error_reason || r.error_code) && (
-                    <div className="mt-1.5 text-[11px] text-destructive bg-destructive/10 rounded-lg px-2 py-1">
-                      {r.error_code && <span className="font-mono mr-1.5">[{r.error_code}]</span>}
-                      {r.error_reason || 'Unknown error'}
-                    </div>
-                  )}
+                  {(r.status === 'failed' || r.status === 'pace_limited') && (r.error_reason || r.error_code) && (() => {
+                    const explained = explainCommError(`${r.error_code ?? ''} ${r.error_reason ?? ''}`);
+                    const paced = isPaced(r);
+                    return (
+                      <div className={`mt-1.5 text-[11px] rounded-lg px-2 py-1 ${paced ? 'text-warning bg-warning/10' : 'text-destructive bg-destructive/10'}`}>
+                        <p className="font-medium">
+                          {r.error_code && <span className="font-mono mr-1.5">[{r.error_code}]</span>}
+                          {explained.title}
+                        </p>
+                        <p className="text-[10px] leading-relaxed text-foreground/70 mt-0.5">
+                          {explained.what} {explained.action}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
