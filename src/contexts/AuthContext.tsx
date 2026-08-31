@@ -329,16 +329,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error: updateError } = await supabase.auth.updateUser({ password });
     if (updateError) return { error: updateError as Error };
 
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ must_set_password: false })
-      .eq('id', user?.id);
+    // A guard trigger reverts `must_set_password` on direct updates from
+    // non-admin users, so clearing the flag must go through this RPC.
+    const { error: rpcError } = await supabase.rpc('complete_password_setup');
+    if (rpcError) return { error: rpcError as Error };
 
-    if (profileError) return { error: profileError as Error };
-    
     await refreshProfile();
     return { error: null };
   };
+
 
   const resetPassword = async (email: string) => {
     const redirectTo = `${window.location.origin}/auth/reset-password`;
