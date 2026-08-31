@@ -152,6 +152,13 @@
 //   3. quiet hours (deferred to communication_retry_queue)
 //   4. provider routing (whatsapp / sms / email / in_app)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
+import {
+  classifyOutcome,
+  isMarketingBlocked,
+  recordMarketingEvent,
+  recordPaceEvent,
+  resolveMessageCategory,
+} from '../_shared/whatsappPolicy.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
