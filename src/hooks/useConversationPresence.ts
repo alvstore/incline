@@ -16,14 +16,14 @@ const THROTTLE_MS = 1000;
 /**
  * Multi-device agent presence for a single WhatsApp conversation.
  *
- * - Joins the realtime channel `whatsapp:conv:<conversationKey>` (we key on the
+ * - Joins the realtime channel `whatsapp:conv:<branchId>:<conversationKey>` (we key on the
  *   contact phone number to keep it stable across devices).
  * - Tracks `{ user_id, full_name, avatar_url, status: 'viewing'|'typing', ts }`.
  * - Returns the merged list of OTHER agents currently viewing/typing,
  *   plus a throttled `setTyping(true|false)` setter and a `broadcastReplied()`
  *   helper to notify other agents the conversation just got an outbound reply.
  */
-export function useConversationPresence(conversationKey: string | null) {
+export function useConversationPresence(conversationKey: string | null, branchId?: string | null) {
   const { user, profile } = useAuth();
   const [others, setOthers] = useState<ConversationPresence[]>([]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -57,7 +57,9 @@ export function useConversationPresence(conversationKey: string | null) {
       setOthers([]);
       return;
     }
-    const channelName = `whatsapp:conv:${conversationKey}`;
+    // Branch-scoped topic — realtime RLS validates the branch segment.
+    const branchSegment = branchId && branchId !== 'all' ? branchId : 'all';
+    const channelName = `whatsapp:conv:${branchSegment}:${conversationKey}`;
     const ch = supabase.channel(channelName, { config: { presence: { key: user.id } } });
     channelRef.current = ch;
 
@@ -95,7 +97,7 @@ export function useConversationPresence(conversationKey: string | null) {
       currentStatusRef.current = 'viewing';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationKey, user?.id]);
+  }, [conversationKey, branchId, user?.id]);
 
   const setTyping = useCallback(
     (typing: boolean) => {
