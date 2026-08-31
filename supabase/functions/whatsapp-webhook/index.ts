@@ -517,7 +517,15 @@ async function processStatusUpdates(value: any, branchId: string | null) {
           // circuit breaker. Parked (`awaiting_confirmation`) rows are closed
           // here so a paced message is never re-attempted by the worker.
           try {
-            const isPacing = /(^|\D)131049(\D|$)|healthy ecosystem engagement/i.test(errMsg ?? "");
+            // v7.3.0 — pacing is classified by the shared policy module and
+            // recorded against the recipient, not just the sending number.
+            const paceVerdict = classifyOutcome({
+              ok: false,
+              code: failureCode ?? null,
+              errorText: errMsg ?? null,
+            });
+            const isPacing = mapped === "failed" && paceVerdict.outcome === "pace_limited";
+            const recipientPhone = String(status.recipient_id ?? "");
             if (mapped === "failed") {
               await supabase
                 .from("communication_retry_queue")
@@ -529,6 +537,14 @@ async function processStatusUpdates(value: any, branchId: string | null) {
                   _phone_number_id: String(phoneNumberId ?? "default"),
                   _error_code: failureCode ?? "131049",
                 });
+                if (recipientPhone) {
+                  await recordPaceEvent(
+                    supabase as never,
+                    recipientPhone,
+                    String(paceVerdict.meta_code ?? failureCode ?? "131049"),
+                    branchId ?? null,
+                  );
+                }
               }
             } else if (mapped === "delivered" || mapped === "read") {
               await supabase
@@ -539,6 +555,14 @@ async function processStatusUpdates(value: any, branchId: string | null) {
               await supabase.rpc("whatsapp_breaker_close", {
                 _phone_number_id: String(phoneNumberId ?? "default"),
               });
+              if (recipientPhone) {
+                await recordMarketingEvent(
+                  supabase as never,
+                  recipientPhone,
+                  mapped === "read" ? "read" : "delivered",
+                  branchId ?? null,
+                );
+              }
             }
           } catch (e) {
             console.warn("[whatsapp-webhook] breaker/queue sync failed:", e);
