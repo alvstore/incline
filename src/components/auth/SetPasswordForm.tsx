@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Loader2, ShieldCheck, Eye, EyeOff, CheckCircle2, Circle } from 'lucide-react';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
+import { getHomePath } from '@/lib/roleRedirect';
 
 const passwordSchema = z
   .string()
@@ -22,7 +23,7 @@ export function SetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { setPassword: updatePassword, profile } = useAuth();
+  const { setPassword: updatePassword, profile, roles } = useAuth();
   const navigate = useNavigate();
 
   const passwordValidation = passwordSchema.safeParse(password);
@@ -54,7 +55,7 @@ export function SetPasswordForm() {
       return;
     }
     toast.success('Password set successfully!');
-    navigate('/dashboard');
+    navigate(getHomePath(roles), { replace: true });
   };
 
   return (
