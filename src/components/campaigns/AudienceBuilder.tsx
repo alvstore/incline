@@ -141,33 +141,72 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
     }
   };
 
+  const activeOpt = KIND_OPTIONS.find(o => o.id === kind);
+
+  const GROUPS: { title: string; hint: string; ids: AudienceKind[] }[] = [
+    { title: 'The club', hint: 'People who already train with you', ids: ['members', 'members_and_staff', 'staff'] },
+    { title: 'Pipeline', hint: 'Prospects from the CRM', ids: ['leads', 'lost_leads'] },
+    { title: 'Custom lists', hint: 'Contact book, saved segments, one-off uploads', ids: ['contacts', 'mixed', 'segment', 'csv_import'] },
+  ];
+
   return (
     <div className="space-y-5">
-      <div>
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Who should receive this?</Label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {KIND_OPTIONS.map(opt => {
-            const active = kind === opt.id;
-            const Icon = opt.icon;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setKind(opt.id)}
-                className={`text-left rounded-2xl p-3 border-2 transition-all ${
-                  active
-                    ? 'border-primary bg-primary/10 dark:bg-primary/10 shadow-sm'
-                    : 'border-border bg-card hover:border-muted-foreground/40'
-                }`}
-              >
-                <Icon className={`h-4 w-4 mb-1.5 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
-                <p className="text-sm font-semibold text-foreground leading-tight">{opt.label}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
-              </button>
-            );
-          })}
+      <div className="space-y-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground block">Who should receive this?</Label>
+            <p className="text-[11px] text-muted-foreground mt-1">Pick one audience source, then refine it below.</p>
+          </div>
+          {activeOpt && (
+            <Badge className="rounded-full bg-primary/15 text-primary hover:bg-primary/15 border-0 shrink-0">
+              {activeOpt.label}
+            </Badge>
+          )}
         </div>
+
+        {GROUPS.map(group => (
+          <div key={group.title} className="space-y-2">
+            <div className="flex items-baseline gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">{group.title}</p>
+              <span className="text-[11px] text-muted-foreground truncate">{group.hint}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {group.ids.map(id => {
+                const opt = KIND_OPTIONS.find(o => o.id === id)!;
+                const active = kind === opt.id;
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setKind(opt.id)}
+                    className={`group relative cursor-pointer text-left rounded-2xl p-3.5 pr-9 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+                      active
+                        ? 'bg-primary/10 ring-2 ring-primary shadow-lg shadow-primary/10'
+                        : 'bg-card ring-1 ring-border hover:ring-primary/40 hover:shadow-md hover:shadow-primary/5'
+                    }`}
+                  >
+                    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full mb-2 transition-colors ${
+                      active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:text-primary'
+                    }`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <p className="text-sm font-semibold text-foreground leading-tight">{opt.label}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
+                    {active && (
+                      <span className="absolute top-3 right-3 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
+
 
       {/* Kind-specific filters */}
       {kind === 'members' && (
