@@ -452,7 +452,9 @@ async function sendViaSMTP(
   config: Record<string, string>, credentials: Record<string, string>,
   attachments?: EmailAttachment[],
 ) {
+  const TIMED_OUT = Symbol("smtp_read_timeout");
   const startedAt = Date.now();
+
   const totalBudgetMs = 70_000;
   let activeConnection: Deno.Conn | Deno.TlsConn | null = null;
   const host = config.host;
@@ -473,30 +475,49 @@ async function sendViaSMTP(
   // Loops with per-read timeout to handle servers (e.g. Hostinger) that flush
   // the final 250 only after fully ingesting a multi-MB DATA payload.
   const makeIO = (conn: Deno.Conn | Deno.TlsConn) => {
+    // A single in-flight read is kept across timeout slices. Starting a second
+    // conn.read() while one is still pending makes Deno throw
+    // "TCP stream is currently in use" — never abandon a pending read.
+    let pending: { promise: Promise<number | null>; buf: Uint8Array } | null = null;
+
     const readResponse = async (overallTimeoutMs = 60_000): Promise<string> => {
       let acc = '';
       const deadline = Math.min(Date.now() + overallTimeoutMs, startedAt + totalBudgetMs);
       while (Date.now() < deadline) {
-        const buf = new Uint8Array(16384);
-        const readPromise = conn.read(buf);
-        const timeoutPromise = new Promise<null>((res) => setTimeout(() => res(null), 5000));
-        const n = await Promise.race([readPromise, timeoutPromise]);
-        if (n === null) {
-          // 5s of silence — only break if we already have a parsable reply
+        if (!pending) {
+          const buf = new Uint8Array(16384);
+          pending = { promise: conn.read(buf), buf };
+        }
+        const current = pending;
+        let timer: number | undefined;
+        const timeoutPromise = new Promise<symbol>((res) => {
+          timer = setTimeout(() => res(TIMED_OUT), 5000);
+        });
+        const outcome = await Promise.race([current.promise, timeoutPromise]);
+        if (timer !== undefined) clearTimeout(timer);
+        if (outcome === TIMED_OUT) {
+          // Read still in flight — keep it and retry the wait.
           if (/(^|\n)\d{3} [^\n]*\r?\n?$/.test(acc)) return acc;
           continue;
         }
-        if (!n) {
+        pending = null;
+        const n = outcome as number | null;
+        if (n === null || n === 0) {
           // EOF
           return acc;
         }
-        acc += decoder.decode(buf.subarray(0, n));
+        acc += decoder.decode(current.buf.subarray(0, n));
         // SMTP final line is "NNN <text>" (space, not dash). Multiline uses "NNN-".
         if (/(^|\n)\d{3} [^\n]*\r?\n?$/.test(acc)) return acc;
       }
       if (Date.now() >= startedAt + totalBudgetMs) throw new Error('SMTP total time budget exceeded');
+      // A read is still in flight; issuing the next command on this socket would
+      // trip "TCP stream is currently in use". Fail cleanly instead.
+      if (pending) throw new Error('SMTP read timed out waiting for server reply');
       return acc;
+
     };
+
     const read = () => readResponse(15_000);
     const write = async (cmd: string) => {
       await conn.write(encoder.encode(cmd + "\r\n"));
