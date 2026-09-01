@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
-  Loader2, Users, UserPlus, Briefcase, Contact2, Layers, Bookmark, Info,
+  Loader2, Users, UserPlus, Briefcase, Contact2, Layers, Bookmark, Info, Check, SlidersHorizontal,
   UserMinus, FileSpreadsheet, MessageCircle, Snowflake,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -130,46 +130,82 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
     }
   };
 
-  const sourceColor = (src: string) => {
-    switch (src) {
-      case 'member': return 'bg-primary/15 text-primary';
-      case 'lead': return 'bg-warning/15 text-warning';
-      case 'lost_lead': return 'bg-muted text-foreground';
-      case 'contact': return 'bg-success/15 text-success';
-      case 'csv': return 'bg-info/15 text-info';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
+
+
+
+  const activeOpt = KIND_OPTIONS.find(o => o.id === kind);
+
+  const GROUPS: { title: string; hint: string; ids: AudienceKind[] }[] = [
+    { title: 'The club', hint: 'People who already train with you', ids: ['members', 'members_and_staff', 'staff'] },
+    { title: 'Pipeline', hint: 'Prospects from the CRM', ids: ['leads', 'lost_leads'] },
+    { title: 'Custom lists', hint: 'Contact book, saved segments, one-off uploads', ids: ['contacts', 'mixed', 'segment', 'csv_import'] },
+  ];
 
   return (
     <div className="space-y-5">
-      <div>
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Who should receive this?</Label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {KIND_OPTIONS.map(opt => {
-            const active = kind === opt.id;
-            const Icon = opt.icon;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setKind(opt.id)}
-                className={`text-left rounded-2xl p-3 border-2 transition-all ${
-                  active
-                    ? 'border-primary bg-primary/10 dark:bg-primary/10 shadow-sm'
-                    : 'border-border bg-card hover:border-muted-foreground/40'
-                }`}
-              >
-                <Icon className={`h-4 w-4 mb-1.5 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
-                <p className="text-sm font-semibold text-foreground leading-tight">{opt.label}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
-              </button>
-            );
-          })}
+      <div className="space-y-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground block">Who should receive this?</Label>
+            <p className="text-[11px] text-muted-foreground mt-1">Pick one audience source, then refine it below.</p>
+          </div>
+          {activeOpt && (
+            <Badge className="rounded-full bg-primary/15 text-primary hover:bg-primary/15 border-0 shrink-0">
+              {activeOpt.label}
+            </Badge>
+          )}
         </div>
+
+        {GROUPS.map(group => (
+          <div key={group.title} className="space-y-2">
+            <div className="flex items-baseline gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">{group.title}</p>
+              <span className="text-[11px] text-muted-foreground truncate">{group.hint}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {group.ids.map(id => {
+                const opt = KIND_OPTIONS.find(o => o.id === id)!;
+                const active = kind === opt.id;
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setKind(opt.id)}
+                    className={`group relative cursor-pointer text-left rounded-2xl p-3.5 pr-9 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+                      active
+                        ? 'bg-primary/10 ring-2 ring-primary shadow-lg shadow-primary/10'
+                        : 'bg-card ring-1 ring-border hover:ring-primary/40 hover:shadow-md hover:shadow-primary/5'
+                    }`}
+                  >
+                    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full mb-2 transition-colors ${
+                      active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:text-primary'
+                    }`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <p className="text-sm font-semibold text-foreground leading-tight">{opt.label}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
+                    {active && (
+                      <span className="absolute top-3 right-3 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
+
       {/* Kind-specific filters */}
+      <div className="rounded-2xl bg-card ring-1 ring-border shadow-sm p-4 space-y-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-primary" /> Refine · {activeOpt?.label}
+        </p>
+
       {kind === 'members' && (
         <div className="space-y-4">
           <div>
@@ -357,30 +393,32 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
           </p>
         </div>
       )}
+      </div>
 
       {/* Live audience breakdown */}
-      <div className="rounded-2xl bg-gradient-to-br from-primary/10 to-primary/10 dark:from-primary/10 dark:to-primary/10 p-5 shadow-sm shadow-primary/20">
+      <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-5 shadow-lg shadow-primary/20 text-primary-foreground">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-            <Users className="h-5 w-5" />
+          <div className="h-11 w-11 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
+            <Users className="h-5 w-5 text-white" />
           </div>
+
           <div className="flex-1">
-            <p className="text-xs uppercase text-muted-foreground tracking-wider">Live audience size</p>
+            <p className="text-xs uppercase text-white/70 tracking-wider">Live audience size</p>
             {isLoading ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex items-center gap-2 text-white/80">
                 <Loader2 className="h-4 w-4 animate-spin" /> Counting…
               </div>
             ) : error ? (
-              <p className="text-sm font-semibold text-destructive">
+              <p className="text-sm font-semibold text-white bg-destructive/40 rounded-lg px-2 py-1 inline-block">
                 Audience query failed — {(error as Error).message}
               </p>
             ) : (
-              <p className="text-2xl font-bold text-foreground">
-                {breakdown?.total ?? 0} <span className="text-sm font-normal text-muted-foreground">recipients</span>
+              <p className="text-3xl font-bold text-white leading-tight">
+                {breakdown?.total ?? 0} <span className="text-sm font-normal text-white/75">recipients</span>
               </p>
             )}
             {channel && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-[11px] text-white/70 mt-0.5">
                 Recipients without a {channel === 'email' ? 'verified email' : 'phone number'} are skipped automatically.
               </p>
             )}
@@ -390,18 +428,22 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
         {!!breakdown && breakdown.total > 0 && (
           <>
             <div className="grid grid-cols-2 gap-2 mt-4">
-              <div className="rounded-xl bg-success/10 dark:bg-success/10 p-2.5 flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-success" />
-                <div>
-                  <p className="text-base font-bold text-success">{breakdown.in_window}</p>
-                  <p className="text-[10px] uppercase text-success/80">In 24h window · freeform OK</p>
+              <div className="rounded-xl bg-white/12 backdrop-blur p-3 flex items-center gap-2.5">
+                <span className="h-8 w-8 rounded-full bg-emerald-400/25 flex items-center justify-center shrink-0">
+                  <MessageCircle className="h-4 w-4 text-emerald-100" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold text-white leading-none">{breakdown.in_window}</p>
+                  <p className="text-[10px] uppercase text-white/70 mt-1 truncate">In 24h window · freeform OK</p>
                 </div>
               </div>
-              <div className={`rounded-xl p-2.5 flex items-center gap-2 ${breakdown.cold > 0 ? 'bg-warning/10 dark:bg-warning/10' : 'bg-muted/50'}`}>
-                <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-warning' : 'text-muted-foreground'}`} />
-                <div>
-                  <p className={`text-base font-bold ${breakdown.cold > 0 ? 'text-warning' : 'text-muted-foreground'}`}>{breakdown.cold}</p>
-                  <p className="text-[10px] uppercase text-warning/80">Cold · needs Meta template</p>
+              <div className="rounded-xl bg-white/12 backdrop-blur p-3 flex items-center gap-2.5">
+                <span className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${breakdown.cold > 0 ? 'bg-amber-400/30' : 'bg-white/15'}`}>
+                  <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-amber-100' : 'text-white/70'}`} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold text-white leading-none">{breakdown.cold}</p>
+                  <p className="text-[10px] uppercase text-white/70 mt-1 truncate">Cold · needs Meta template</p>
                 </div>
               </div>
             </div>
@@ -409,7 +451,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             {Object.keys(breakdown.by_source).length > 1 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {Object.entries(breakdown.by_source).map(([src, n]) => (
-                  <span key={src} className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sourceColor(src)}`}>
+                  <span key={src} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white">
                     {src.replace('_', ' ')} · {n}
                   </span>
                 ))}
@@ -419,15 +461,16 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             {!!breakdown.sample.length && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {breakdown.sample.map((s, i) => (
-                  <Badge key={i} variant="outline" className="text-[11px] rounded-full">{s.name}</Badge>
+                  <span key={i} className="px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white/90 ring-1 ring-white/20">{s.name}</span>
                 ))}
                 {(breakdown.total > breakdown.sample.length) && (
-                  <Badge variant="outline" className="text-[11px] rounded-full">+{breakdown.total - breakdown.sample.length} more</Badge>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white/90 ring-1 ring-white/20">+{breakdown.total - breakdown.sample.length} more</span>
                 )}
               </div>
             )}
           </>
         )}
+
       </div>
     </div>
   );
