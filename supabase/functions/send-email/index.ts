@@ -452,7 +452,9 @@ async function sendViaSMTP(
   config: Record<string, string>, credentials: Record<string, string>,
   attachments?: EmailAttachment[],
 ) {
+  const TIMED_OUT = Symbol("smtp_read_timeout");
   const startedAt = Date.now();
+
   const totalBudgetMs = 70_000;
   let activeConnection: Deno.Conn | Deno.TlsConn | null = null;
   const host = config.host;
