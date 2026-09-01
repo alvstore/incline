@@ -209,6 +209,11 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
 
 
       {/* Kind-specific filters */}
+      <div className="rounded-2xl bg-card ring-1 ring-border shadow-sm p-4 space-y-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-primary" /> Refine · {activeOpt?.label}
+        </p>
+
       {kind === 'members' && (
         <div className="space-y-4">
           <div>
