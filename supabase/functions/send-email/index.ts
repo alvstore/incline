@@ -511,7 +511,11 @@ async function sendViaSMTP(
         if (/(^|\n)\d{3} [^\n]*\r?\n?$/.test(acc)) return acc;
       }
       if (Date.now() >= startedAt + totalBudgetMs) throw new Error('SMTP total time budget exceeded');
+      // A read is still in flight; issuing the next command on this socket would
+      // trip "TCP stream is currently in use". Fail cleanly instead.
+      if (pending) throw new Error('SMTP read timed out waiting for server reply');
       return acc;
+
     };
 
     const read = () => readResponse(15_000);
