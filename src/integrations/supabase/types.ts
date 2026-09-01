@@ -15796,7 +15796,7 @@ export type Database = {
       notification_recipients: {
         Args: { p_branch_id: string; p_category?: string }
         Returns: {
-          u_id: string
+          user_id: string
         }[]
       }
       notify_member: {
