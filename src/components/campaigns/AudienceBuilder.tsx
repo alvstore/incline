@@ -411,22 +411,22 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
           </div>
 
           <div className="flex-1">
-            <p className="text-xs uppercase text-muted-foreground tracking-wider">Live audience size</p>
+            <p className="text-xs uppercase text-white/70 tracking-wider">Live audience size</p>
             {isLoading ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex items-center gap-2 text-white/80">
                 <Loader2 className="h-4 w-4 animate-spin" /> Counting…
               </div>
             ) : error ? (
-              <p className="text-sm font-semibold text-destructive">
+              <p className="text-sm font-semibold text-white bg-destructive/40 rounded-lg px-2 py-1 inline-block">
                 Audience query failed — {(error as Error).message}
               </p>
             ) : (
-              <p className="text-2xl font-bold text-foreground">
-                {breakdown?.total ?? 0} <span className="text-sm font-normal text-muted-foreground">recipients</span>
+              <p className="text-3xl font-bold text-white leading-tight">
+                {breakdown?.total ?? 0} <span className="text-sm font-normal text-white/75">recipients</span>
               </p>
             )}
             {channel && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-[11px] text-white/70 mt-0.5">
                 Recipients without a {channel === 'email' ? 'verified email' : 'phone number'} are skipped automatically.
               </p>
             )}
@@ -436,18 +436,22 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
         {!!breakdown && breakdown.total > 0 && (
           <>
             <div className="grid grid-cols-2 gap-2 mt-4">
-              <div className="rounded-xl bg-success/10 dark:bg-success/10 p-2.5 flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-success" />
-                <div>
-                  <p className="text-base font-bold text-success">{breakdown.in_window}</p>
-                  <p className="text-[10px] uppercase text-success/80">In 24h window · freeform OK</p>
+              <div className="rounded-xl bg-white/12 backdrop-blur p-3 flex items-center gap-2.5">
+                <span className="h-8 w-8 rounded-full bg-emerald-400/25 flex items-center justify-center shrink-0">
+                  <MessageCircle className="h-4 w-4 text-emerald-100" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold text-white leading-none">{breakdown.in_window}</p>
+                  <p className="text-[10px] uppercase text-white/70 mt-1 truncate">In 24h window · freeform OK</p>
                 </div>
               </div>
-              <div className={`rounded-xl p-2.5 flex items-center gap-2 ${breakdown.cold > 0 ? 'bg-warning/10 dark:bg-warning/10' : 'bg-muted/50'}`}>
-                <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-warning' : 'text-muted-foreground'}`} />
-                <div>
-                  <p className={`text-base font-bold ${breakdown.cold > 0 ? 'text-warning' : 'text-muted-foreground'}`}>{breakdown.cold}</p>
-                  <p className="text-[10px] uppercase text-warning/80">Cold · needs Meta template</p>
+              <div className="rounded-xl bg-white/12 backdrop-blur p-3 flex items-center gap-2.5">
+                <span className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${breakdown.cold > 0 ? 'bg-amber-400/30' : 'bg-white/15'}`}>
+                  <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-amber-100' : 'text-white/70'}`} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold text-white leading-none">{breakdown.cold}</p>
+                  <p className="text-[10px] uppercase text-white/70 mt-1 truncate">Cold · needs Meta template</p>
                 </div>
               </div>
             </div>
@@ -455,7 +459,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             {Object.keys(breakdown.by_source).length > 1 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {Object.entries(breakdown.by_source).map(([src, n]) => (
-                  <span key={src} className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sourceColor(src)}`}>
+                  <span key={src} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white">
                     {src.replace('_', ' ')} · {n}
                   </span>
                 ))}
@@ -465,15 +469,16 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             {!!breakdown.sample.length && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {breakdown.sample.map((s, i) => (
-                  <Badge key={i} variant="outline" className="text-[11px] rounded-full">{s.name}</Badge>
+                  <span key={i} className="px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white/90 ring-1 ring-white/20">{s.name}</span>
                 ))}
                 {(breakdown.total > breakdown.sample.length) && (
-                  <Badge variant="outline" className="text-[11px] rounded-full">+{breakdown.total - breakdown.sample.length} more</Badge>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white/90 ring-1 ring-white/20">+{breakdown.total - breakdown.sample.length} more</span>
                 )}
               </div>
             )}
           </>
         )}
+
       </div>
     </div>
   );
