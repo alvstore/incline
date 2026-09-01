@@ -401,13 +401,15 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
           </p>
         </div>
       )}
+      </div>
 
       {/* Live audience breakdown */}
-      <div className="rounded-2xl bg-gradient-to-br from-primary/10 to-primary/10 dark:from-primary/10 dark:to-primary/10 p-5 shadow-sm shadow-primary/20">
+      <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-5 shadow-lg shadow-primary/20 text-primary-foreground">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-            <Users className="h-5 w-5" />
+          <div className="h-11 w-11 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
+            <Users className="h-5 w-5 text-white" />
           </div>
+
           <div className="flex-1">
             <p className="text-xs uppercase text-muted-foreground tracking-wider">Live audience size</p>
             {isLoading ? (
