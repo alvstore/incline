@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
-  Loader2, Users, UserPlus, Briefcase, Contact2, Layers, Bookmark, Info,
+  Loader2, Users, UserPlus, Briefcase, Contact2, Layers, Bookmark, Info, Check, SlidersHorizontal,
   UserMinus, FileSpreadsheet, MessageCircle, Snowflake,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
