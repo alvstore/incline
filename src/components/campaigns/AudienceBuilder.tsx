@@ -130,16 +130,8 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
     }
   };
 
-  const sourceColor = (src: string) => {
-    switch (src) {
-      case 'member': return 'bg-primary/15 text-primary';
-      case 'lead': return 'bg-warning/15 text-warning';
-      case 'lost_lead': return 'bg-muted text-foreground';
-      case 'contact': return 'bg-success/15 text-success';
-      case 'csv': return 'bg-info/15 text-info';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
+
+
 
   const activeOpt = KIND_OPTIONS.find(o => o.id === kind);
 
