@@ -975,6 +975,64 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
     setVarOverrides(next);
   };
 
+  /** Values derivable from the current event/class + attachment context.
+   *  Recomputed on every change so a template picked *after* the class was
+   *  selected (or a poster uploaded later) still gets auto-filled. */
+  const autoFillValues = useMemo(() => {
+    const picked = (upcomingClasses as any[]).filter((c: any) => selectedClassIds.includes(c.id));
+    const names = Array.from(new Set(picked.map((c: any) => c.name).filter(Boolean)));
+    const when = picked.map((c: any) => formatClassWhen(c.scheduled_at)).filter(Boolean).join(' · ');
+    const trainers = Array.from(new Set(picked.map((c: any) => c.trainer_name).filter(Boolean)));
+    const detail = picked
+      .map((c: any) => [
+        c.name,
+        formatClassWhen(c.scheduled_at),
+        c.trainer_name ? `with ${c.trainer_name}` : '',
+        c.duration_minutes ? `${c.duration_minutes} min` : '',
+      ].filter(Boolean).join(' · '))
+      .join(' • ');
+
+    const eventWhen = eventDate ? `${eventDate}${eventTime ? ` at ${eventTime}` : ''}` : '';
+    const out: Record<string, string> = {
+      class_name: names.join(' + ') || eventName || '',
+      class_when: when || eventWhen,
+      class_trainer: trainers.join(', '),
+      class_venue: eventVenue || '',
+      class_details: detail || [eventName, eventWhen, eventVenue].filter(Boolean).join(' · '),
+      poster_url: attachment?.url || '',
+    };
+    Object.keys(out).forEach((k) => { if (!out[k]) delete out[k]; });
+    return out;
+  }, [upcomingClasses, selectedClassIds, eventName, eventDate, eventTime, eventVenue, attachment?.url]);
+
+  /** Fill any empty (never user-typed) slot from the derived context. */
+  useEffect(() => {
+    if (!message.trim()) return;
+    const vars = extractTemplateVars(message).filter((v) => !isAutoVar(v));
+    if (vars.length === 0) return;
+    setVarOverrides((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      // Named slots first.
+      vars.forEach((v) => {
+        if ((next[v.key] || '').trim()) return;
+        const val = autoFillValues[v.key.toLowerCase()];
+        if (val) { next[v.key] = val; changed = true; }
+      });
+      // Positional Meta slots ({{2}}, {{3}}, …) in order: name → when → details.
+      const queue = [autoFillValues.class_name, autoFillValues.class_when, autoFillValues.class_details].filter(Boolean);
+      let qi = 0;
+      vars.filter((v) => v.positional).forEach((v) => {
+        if ((next[v.key] || '').trim()) { qi += 1; return; }
+        const val = queue[qi];
+        if (val) { next[v.key] = val; changed = true; }
+        qi += 1;
+      });
+      return changed ? next : prev;
+    });
+  }, [message, autoFillValues]);
+
+
   // Deep-link: /campaigns?announce_class=<id> opens the wizard as an Event
   // campaign with that class already selected.
   useEffect(() => {
