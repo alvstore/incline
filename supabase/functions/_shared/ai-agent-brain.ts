@@ -1467,11 +1467,13 @@ ANSWER-FIRST RULE (highest priority in this block):
     leadCaptureEnabled: shouldCaptureLead,
   });
 
-  // 9c. FOUNDER'S PHASE plain-text sanitizer — final line of defense.
+  // 9c. COMMERCIAL POLICY sanitizer — final line of defense (pricing leak guard).
   replyText = sanitizeFoundersPhaseText({
     replyText,
     memory,
     leadCaptureEnabled: shouldCaptureLead,
+    history,
+    userMessage: ctx.messageContent,
   });
 
   // 9c.1 HALLUCINATED-ACTION GUARD (v4.8.0) — the LLM occasionally claims it
