@@ -411,10 +411,14 @@ export async function assignDevicePermission(
     const numId = typeof personMipsId === "string" ? parseInt(personMipsId, 10) : personMipsId;
     if (isNaN(numId)) return { success: false, message: "Invalid MIPS person ID" };
 
-    const result = await callMIPSProxy("/through/device/syncPerson", "POST", undefined, {
-      personId: numId,
+    const result = await callMIPSProxy("/personInfo/person/persionIssue", "PUT", undefined, {
+      personType: 1,
+      personIds: [numId],
       deviceIds,
-      deviceNumType: "4",
+      regionCodes: [],
+      numType: "2",
+      deviceType: "1",
+      authType: "1",
     });
     const isOk = result.success && (result.data?.code === 200 || result.data?.code === 0);
     return {
