@@ -494,7 +494,6 @@ Deno.serve(async (req) => {
       }
       counts = await readDeviceCounts(baseUrl, token).catch(() => counts);
 
-      }
 
       const finalLedger = await readLedger(supabase, branchId);
       summary.push({
