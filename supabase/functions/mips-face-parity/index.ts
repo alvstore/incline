@@ -1,4 +1,4 @@
-// mips-face-parity v1.2.0
+// mips-face-parity v2.0.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
 // Problem it solves: the MIPS server holds N persons with photos, but each
@@ -13,6 +13,13 @@
 //        → re-dispatch every person that HAS a photo to the given devices
 //          (defaults to all devices on the branch).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  claimDispatchSlot,
+  claimFullSyncSlot,
+  dispatchFullRoster,
+  dispatchPerson,
+  releaseDispatchSlot,
+} from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,7 +81,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { action = "report", branch_id, device_ids, person_type, person_id } = body as {
-      action?: "report" | "resync" | "diagnose" | "audit";
+      action?: "report" | "resync" | "diagnose" | "audit" | "full_sync";
       branch_id?: string;
       device_ids?: number[];
       person_type?: "member" | "employee" | "trainer";
@@ -114,6 +121,29 @@ Deno.serve(async (req) => {
       faces: Number(d.photoCount ?? d.faceCount ?? d.faceNum ?? 0),
       online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
     })).filter((d) => !isNaN(d.id));
+
+    // MANUAL ONLY — full roster download to a gate. This makes the terminal
+    // re-pull and rebuild every face template, so it is never scheduled and is
+    // rate-limited to once per gate per 24h unless a human forces it.
+    if (action === "full_sync") {
+      const targets = (device_ids && device_ids.length ? device_ids : devices.filter((d) => d.online).map((d) => d.id))
+        .map(Number)
+        .filter((n) => !isNaN(n));
+      if (!targets.length) return json({ error: "No online devices to full-sync" }, 400);
+
+      const results: Array<Record<string, unknown>> = [];
+      for (const t of targets) {
+        const claimed = await claimFullSyncSlot(supabase, t, { force: Boolean((body as any)?.force) });
+        if (!claimed) {
+          results.push({ device_id: t, skipped: true, reason: "Already full-synced in the last 24h" });
+          continue;
+        }
+        const outcome = await dispatchFullRoster(baseUrl, authHeaders(token), t);
+        results.push({ device_id: t, ok: outcome.ok, message: outcome.message });
+      }
+      return json({ success: true, action: "full_sync", results });
+    }
+
 
     // Named audit: who exactly is missing a face on each gate. Reads the
     // per-person ledger built by mips-face-sweep (single-person pushes with
@@ -275,27 +305,32 @@ Deno.serve(async (req) => {
     for (const p of withPhoto) {
       for (const t of targets) {
         let success = false;
-        for (let attempt = 0; attempt < 2 && !success; attempt++) {
-          try {
-            const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-              method: "POST",
+        let slotHeld = false;
+        try {
+          slotHeld = await claimDispatchSlot(supabase, t, null, { minGapSeconds: 1 });
+          if (!slotHeld) {
+            if (errors.length < 15) errors.push(`dev ${t} / ${p.personSn}: dispatch slot busy`);
+          } else {
+            const outcome = await dispatchPerson({
+              baseUrl,
               headers: authHeaders(token),
-              body: JSON.stringify({ personId: p.id, deviceIds: [t], deviceNumType: "4" }),
+              personId: p.id,
+              deviceIds: [t],
+              attempts: 2,
             });
-            const text = await res.text();
-            let j: any;
-            try { j = JSON.parse(text); } catch { j = { raw: text }; }
-            if (res.ok && (j.code === 200 || j.code === 0 || j.raw)) success = true;
-            else if (attempt === 1 && errors.length < 15) {
-              errors.push(`dev ${t} / ${p.personSn}: ${j.msg || text.slice(0, 100)}`);
-            }
-          } catch (e) {
-            if (attempt === 1 && errors.length < 15) {
-              errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+            success = outcome.ok;
+            if (!success && errors.length < 15) {
+              errors.push(`dev ${t} / ${p.personSn}: ${outcome.message ?? "unknown"}`);
             }
           }
-          if (!success) await new Promise((r) => setTimeout(r, 150));
+        } catch (e) {
+          if (errors.length < 15) {
+            errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        } finally {
+          if (slotHeld) await releaseDispatchSlot(supabase, t);
         }
+
         if (success) { ok++; perDevice[String(t)].ok++; }
         else { failed++; perDevice[String(t)].failed++; }
         // gentle pacing so the server queue does not drop dispatches

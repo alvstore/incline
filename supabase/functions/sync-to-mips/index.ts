@@ -31,6 +31,7 @@ import {
   recordSuccess,
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
+import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 
 
@@ -514,6 +515,10 @@ async function dispatchToDevices(
 
   // Dispatch separately so Gate 1 and Gate 2 have independent delivery truth.
   // A combined request can return 200 while silently failing one device.
+  //
+  // v2.8.0: targeted `persionIssue` only. The old `syncPerson` call dropped the
+  // personId server-side and triggered a FULL roster download per call — that is
+  // what kept the terminals rebuilding templates and restarting.
   const results: any[] = [];
   const deliveredDeviceIds: number[] = [];
   for (const mipsDeviceId of [...new Set(deviceIds)]) {
@@ -523,41 +528,31 @@ async function dispatchToDevices(
     let responseCode = 0;
     let status = "failed";
     let lastError: string | null = null;
+    let slotHeld = false;
     try {
-      // "请选择在线设备" ("please select an online device") is a transient
-      // window on the MIPS side, not a permanent failure — back off and retry
-      // instead of losing the dispatch.
-      const MAX_ATTEMPTS = 3;
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-          method: "POST",
-          headers: authHeaders(token),
-          body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "4" }),
-          signal: AbortSignal.timeout(8_000),
-        });
-        responseCode = res.status;
-        const text = await res.text();
-        try { result = JSON.parse(text); } catch { result = { raw: text }; }
-        const apiCode = Number(result?.code ?? result?.data?.code);
-        const accepted = res.ok && (apiCode === 0 || apiCode === 200);
-        status = accepted ? "success" : "failed";
-        lastError = accepted ? null : String(result?.msg || result?.message || `HTTP ${res.status}`);
-        if (accepted) {
-          deliveredDeviceIds.push(mipsDeviceId);
-          break;
-        }
-        const retryable = lastError.includes("请选择在线设备") || res.status >= 500;
-        if (attempt < MAX_ATTEMPTS && retryable) {
-          await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
-        } else {
-          break;
-        }
+      slotHeld = await claimDispatchSlot(supabase, mipsDeviceId, branchId ?? null);
+      if (!slotHeld) {
+        results.push({ mipsDeviceId, status: "throttled", responseCode: 0, lastError: "dispatch slot busy", response: null });
+        continue;
       }
-
+      const outcome = await dispatchPerson({
+        baseUrl,
+        headers: authHeaders(token),
+        personId,
+        deviceIds: [mipsDeviceId],
+      });
+      responseCode = outcome.httpStatus;
+      result = outcome.raw;
+      status = outcome.ok ? "success" : "failed";
+      lastError = outcome.ok ? null : outcome.message;
+      if (outcome.ok) deliveredDeviceIds.push(mipsDeviceId);
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       result = { error: lastError };
+    } finally {
+      if (slotHeld) await releaseDispatchSlot(supabase, mipsDeviceId);
     }
+
 
     if (local?.id && branchId) {
       const { error: auditError } = await supabase.from("mips_sync_attempts").insert({

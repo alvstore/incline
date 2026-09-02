@@ -39,6 +39,7 @@ import {
   readLedger,
   seedLedger,
 } from "../_shared/mipsFaceState.ts";
+import { fetchPushLedger, latestLedgerState } from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,6 +109,24 @@ async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceC
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Per-person / per-gate delivery truth from the MIPS push ledger.
+ * Keyed `personSn::mipsDeviceId`, newest row wins.
+ */
+async function readPushState(baseUrl: string, token: string) {
+  try {
+    const rows = await fetchPushLedger(baseUrl, {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "TENANT-ID": "1",
+    }, { pageSize: 500, pages: 3 });
+    return latestLedgerState(rows);
+  } catch (e) {
+    console.warn("[mips-face-sweep] push ledger unavailable:", e);
+    return new Map<string, never>() as ReturnType<typeof latestLedgerState>;
+  }
+}
 
 /**
  * Tier A verification — attribute face templates from real recognitions.
@@ -423,8 +442,6 @@ Deno.serve(async (req) => {
       for (const [personSn, rows] of candidates) {
         if (Date.now() - startedAt >= INVOCATION_BUDGET_MS) break;
         const row = rows[0];
-        const before = await readDeviceCounts(baseUrl, token).catch(() => counts);
-
         let pushError = "";
         try {
           const res = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
@@ -459,42 +476,43 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Give the terminals a moment to drain the download, then attribute the
-        // delta. Single-person pushes make this attribution exact.
+        // Delivery truth comes from the MIPS push ledger, never from a device
+        // photo counter. `/personInfo/authedLog/list` reports pushStatus per
+        // (person, gate): 0 queued, 1 pushing, 2 delivered — plus the exact
+        // failure message when a gate refuses the template.
         await sleep(SETTLE_MS);
-        const after = await readDeviceCounts(baseUrl, token).catch(() => before);
+        const state = await readPushState(baseUrl, token);
 
         for (const r of rows) {
-          const b = before.find((d) => d.id === r.mips_device_id)?.faces ?? 0;
-          const a = after.find((d) => d.id === r.mips_device_id)?.faces ?? b;
-          if (a > b) {
+          const entry = state.get(`${personSn}::${r.mips_device_id}`);
+          if (entry?.pushStatus === "delivered") {
             enrolledNow++;
             await markEnrolled(supabase, branchId, r.mips_device_id, personSn);
-          } else if (r.state === "unverified") {
-            // A static counter for someone the gate ALREADY counts proves
-            // nothing bad — it usually means the template is present. Never
-            // escalate an unverified row to `rejected`; just rest it.
+          } else if (entry?.failureMessage) {
+            stalled++;
+            await markAttempt(
+              supabase, branchId, r.mips_device_id, personSn, r.attempts,
+              `Gate rejected the template: ${entry.failureMessage}`,
+            );
+          } else {
+            // Queued or still pushing — normal, the gate drains asynchronously.
             stalled++;
             await supabase
               .from("mips_device_face_state")
               .update({
                 last_attempt_at: new Date().toISOString(),
-                reason: "Re-pushed; gate counter unchanged (already counted — awaiting a face scan to confirm)",
+                reason: entry
+                  ? `Accepted by MIPS, ${entry.pushStatus} to the gate — awaiting delivery`
+                  : "Accepted by MIPS, no ledger entry yet — awaiting delivery",
               })
               .eq("branch_id", branchId)
               .eq("mips_device_id", r.mips_device_id)
               .eq("person_sn", personSn);
-          } else {
-            stalled++;
-            await markAttempt(
-              supabase, branchId, r.mips_device_id, personSn, r.attempts,
-              "Server accepted the photo but the gate's face counter did not move",
-            );
           }
         }
-
-        counts = after;
       }
+      counts = await readDeviceCounts(baseUrl, token).catch(() => counts);
+
 
       const finalLedger = await readLedger(supabase, branchId);
       summary.push({

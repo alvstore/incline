@@ -280,7 +280,14 @@ export async function restartDevice(deviceId: number, branchId?: string): Promis
   }
 }
 
-// Dispatch a person to device
+/**
+ * Dispatch ONE person to ONE gate.
+ *
+ * Uses the targeted `persionIssue` API. The old `/through/device/syncPerson`
+ * call dropped the personId server-side and made the gate re-download the
+ * entire roster (which is what kept the terminals rebuilding templates and
+ * restarting) — never call it from here.
+ */
 export async function dispatchToDevice(
   personMipsId: string | number,
   targetDeviceId = 13
@@ -289,10 +296,14 @@ export async function dispatchToDevice(
     const numId = typeof personMipsId === "string" ? parseInt(personMipsId, 10) : personMipsId;
     if (isNaN(numId)) return { success: false, message: "Invalid MIPS person ID" };
 
-    const result = await callMIPSProxy("/through/device/syncPerson", "POST", undefined, {
-      personId: numId,
+    const result = await callMIPSProxy("/personInfo/person/persionIssue", "PUT", undefined, {
+      personType: 1,
+      personIds: [numId],
       deviceIds: [targetDeviceId],
-      deviceNumType: "4",
+      regionCodes: [],
+      numType: "2",
+      deviceType: "1",
+      authType: "1",
     });
     const isOk = result.success && (result.data?.code === 200 || result.data?.code === 0);
     return {
@@ -303,6 +314,7 @@ export async function dispatchToDevice(
     return { success: false, message: e instanceof Error ? e.message : String(e) };
   }
 }
+
 
 // Fetch online device IDs
 export async function fetchOnlineDeviceIds(): Promise<number[]> {
@@ -399,10 +411,14 @@ export async function assignDevicePermission(
     const numId = typeof personMipsId === "string" ? parseInt(personMipsId, 10) : personMipsId;
     if (isNaN(numId)) return { success: false, message: "Invalid MIPS person ID" };
 
-    const result = await callMIPSProxy("/through/device/syncPerson", "POST", undefined, {
-      personId: numId,
+    const result = await callMIPSProxy("/personInfo/person/persionIssue", "PUT", undefined, {
+      personType: 1,
+      personIds: [numId],
       deviceIds,
-      deviceNumType: "4",
+      regionCodes: [],
+      numType: "2",
+      deviceType: "1",
+      authType: "1",
     });
     const isOk = result.success && (result.data?.code === 200 || result.data?.code === 0);
     return {
