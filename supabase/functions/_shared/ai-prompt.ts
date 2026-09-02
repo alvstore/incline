@@ -20,6 +20,12 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPurpose, type Purpose } from "./ai-runtime.ts";
 import { loadDynamicMemory } from "./ai-dynamic-memory.ts";
+import {
+  COMMERCIAL_POLICY_BLOCK,
+  SALES_PSYCHOLOGY_BLOCK,
+  detectLeadStage,
+  stageGuidance,
+} from "./pricingPolicy.ts";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
