@@ -172,10 +172,14 @@ function pick(list: string[], seed: string, avoid?: string | null): string {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   let idx = h % list.length;
   if (avoid) {
-    const a = avoid.trim().toLowerCase();
+    // Compare on a normalised fingerprint: the bank entries still carry the
+    // {name} placeholder while `avoid` is already rendered copy.
+    const norm = (t: string) =>
+      t.replace(/\{name\}/g, "").replace(/,\s+/g, " ").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 48);
+    const a = norm(avoid);
     for (let n = 0; n < list.length; n++) {
       const cand = list[(idx + n) % list.length];
-      if (cand.trim().toLowerCase().slice(0, 60) !== a.slice(0, 60)) {
+      if (norm(cand) !== a) {
         idx = (idx + n) % list.length;
         break;
       }
