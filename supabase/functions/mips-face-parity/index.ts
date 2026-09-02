@@ -13,6 +13,7 @@
 //        → re-dispatch every person that HAS a photo to the given devices
 //          (defaults to all devices on the branch).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
