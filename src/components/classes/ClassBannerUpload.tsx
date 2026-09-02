@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ImagePlus, Loader2, Trash2, Sparkles } from 'lucide-react';
+import { useBranchContext } from '@/contexts/BranchContext';
+
 
 const BUCKET = 'template-media';
 const PREFIX = 'class-banners';
