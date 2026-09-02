@@ -1086,7 +1086,7 @@ export async function runUnifiedAgent(
   // 7. Hydrate deterministic gym facts (plans, facilities, timings).
   //    Persona, behavior rules, FAQs and offers all come from the SSOT brain
   //    (ai_purposes.system_prompt + ai_knowledge) via buildSystemPrompt().
-  const gymFacts = await hydrateGymFacts(supabase, ctx.branchId);
+  const gymFacts = await hydrateGymFacts(supabase, ctx.branchId, !memberCtx.isMember && !memberCtx.isStaff);
 
   // 8. Assemble system prompt via the single-source-of-truth helper.
   const gymName = orgConfig?.name || "Incline";
