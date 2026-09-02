@@ -158,6 +158,7 @@ import {
   visitPivotReply,
   visitCta,
   PRICING_LEAK_RE,
+  DEFENSIVE_PHRASE_RE,
   COMMERCIAL_POLICY_BLOCK,
 } from "./pricingPolicy.ts";
 
@@ -2071,10 +2072,11 @@ function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string 
 
 
 // Gym knowledge cache (refreshes every 5 min)
-let _gymFactsCache: string | null = null;
-let _gymFactsTs = 0;
-async function hydrateGymFacts(supabase: any, branchId: string): Promise<string> {
-  if (_gymFactsCache && Date.now() - _gymFactsTs < 300_000) return _gymFactsCache;
+const _gymFactsCache: Record<string, { text: string; ts: number }> = {};
+async function hydrateGymFacts(supabase: any, branchId: string, leadMode = false): Promise<string> {
+  const cacheKey = `${branchId}:${leadMode ? "lead" : "member"}`;
+  const cached = _gymFactsCache[cacheKey];
+  if (cached && Date.now() - cached.ts < 300_000) return cached.text;
   try {
     const [plansRes, facilitiesRes, branchRes] = await Promise.all([
       supabase.from("membership_plans").select("name, duration_days, price, discounted_price, admission_fee, description").eq("branch_id", branchId).eq("is_active", true).order("price"),
@@ -2089,7 +2091,10 @@ async function hydrateGymFacts(supabase: any, branchId: string): Promise<string>
       if (b.opening_time && b.closing_time) parts.push(`Timings: ${b.opening_time} – ${b.closing_time}`);
     }
 
-    if (plansRes.data?.length) {
+    if (leadMode) {
+      // COMMERCIAL BLACKOUT for prospects: no plan names, no durations, no fees.
+      parts.push(`\nMembership: never mention plan names, durations, session counts or fees. Membership options are explained in person at the club.`);
+    } else if (plansRes.data?.length) {
       // PRICING BLACKOUT: never inject plan prices into the model context.
       // Only surface plan names and durations so Ananya can acknowledge
       // interest and pivot to the VIP tour without ever quoting a fee.
@@ -2108,9 +2113,9 @@ async function hydrateGymFacts(supabase: any, branchId: string): Promise<string>
     parts.push(`\nEquipment: 50+ machines including Panatta (Italy), Real Leader (USA), Hammer Strength. Full free-weight area, functional training zone.`);
     parts.push(`USP: 3D body scanning (HOWBODY), ice bath, sauna therapy, biomechanical precision equipment.`);
 
-    _gymFactsCache = parts.join("\n");
-    _gymFactsTs = Date.now();
-    return _gymFactsCache;
+    const text = parts.join("\n");
+    _gymFactsCache[cacheKey] = { text, ts: Date.now() };
+    return text;
   } catch (e) {
     console.error("[AI] hydrateGymFacts failed:", e);
     return "";
