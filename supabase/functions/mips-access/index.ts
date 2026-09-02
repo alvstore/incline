@@ -123,11 +123,20 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
 
   if (deviceIds.length === 0) return;
 
-  await fetch(`${baseUrl}/through/device/syncPerson`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({ personId, deviceIds, deviceNumType: "4" }),
-  });
+  // Targeted per-gate push (v2.9.0). The old bulk `syncPerson` call discarded the
+  // personId server-side and made every gate re-download the whole roster.
+  for (const deviceId of [...new Set(deviceIds.map(Number))]) {
+    let slotHeld = false;
+    try {
+      slotHeld = await claimDispatchSlot(supabase, deviceId, branchId ?? null);
+      if (!slotHeld) continue;
+      await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId] });
+    } catch (e) {
+      console.warn(`[mips-access] dispatch to device ${deviceId} failed:`, e);
+    } finally {
+      if (slotHeld) await releaseDispatchSlot(supabase, deviceId);
+    }
+  }
 }
 
 function formatDate(dateStr: string | null, fallback: string): string {
