@@ -14,6 +14,7 @@
 // Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
 //         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
