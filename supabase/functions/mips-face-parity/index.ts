@@ -275,27 +275,32 @@ Deno.serve(async (req) => {
     for (const p of withPhoto) {
       for (const t of targets) {
         let success = false;
-        for (let attempt = 0; attempt < 2 && !success; attempt++) {
-          try {
-            const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-              method: "POST",
+        let slotHeld = false;
+        try {
+          slotHeld = await claimDispatchSlot(supabase, t, null, { minGapSeconds: 1 });
+          if (!slotHeld) {
+            if (errors.length < 15) errors.push(`dev ${t} / ${p.personSn}: dispatch slot busy`);
+          } else {
+            const outcome = await dispatchPerson({
+              baseUrl,
               headers: authHeaders(token),
-              body: JSON.stringify({ personId: p.id, deviceIds: [t], deviceNumType: "4" }),
+              personId: p.id,
+              deviceIds: [t],
+              attempts: 2,
             });
-            const text = await res.text();
-            let j: any;
-            try { j = JSON.parse(text); } catch { j = { raw: text }; }
-            if (res.ok && (j.code === 200 || j.code === 0 || j.raw)) success = true;
-            else if (attempt === 1 && errors.length < 15) {
-              errors.push(`dev ${t} / ${p.personSn}: ${j.msg || text.slice(0, 100)}`);
-            }
-          } catch (e) {
-            if (attempt === 1 && errors.length < 15) {
-              errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+            success = outcome.ok;
+            if (!success && errors.length < 15) {
+              errors.push(`dev ${t} / ${p.personSn}: ${outcome.message ?? "unknown"}`);
             }
           }
-          if (!success) await new Promise((r) => setTimeout(r, 150));
+        } catch (e) {
+          if (errors.length < 15) {
+            errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        } finally {
+          if (slotHeld) await releaseDispatchSlot(supabase, t);
         }
+
         if (success) { ok++; perDevice[String(t)].ok++; }
         else { failed++; perDevice[String(t)].failed++; }
         // gentle pacing so the server queue does not drop dispatches
