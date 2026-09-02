@@ -33,7 +33,7 @@ export const WHY_NO_PRICE_RE =
  * Deliberately broad: numbers-with-currency, plan names, durations, fees.
  */
 export const PRICING_LEAK_RE =
-  /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice[sd]?\b|\bpricing\b|\bfees?\b|\bcosts?\b|\bcharges?\b|\bMRP\b|\bGST\b|\bdiscount(?:ed)?\b|\bjoining\s+fee\b|\bregistration\s+fee\b|\badmission\s+fee\b|\bstarting\s+(?:from|at)\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|yearly)\s+(?:plan|membership|package)\b|\b\d{1,2}[,\s]?\d{3}\b|\b(?:1|3|6|12)\s*(?:month|months|mo|yr|year)s?\s+(?:plan|membership|package)\b|\b\d+\s+sessions?\b)/i;
+  /(₹\s*\d|\b(?:rs\.?|inr)\s*\d|\b\d[\d,]*\s*(?:\/-|rupees?|rs\b|inr\b)|\b(?:price|pricing|fees?|cost|costs|charges?|rates?|mrp|gst|amount)\b[^.\n]{0,24}?\b\d{2,}|\b\d{2,}\b[^.\n]{0,20}?\b(?:per\s+month|per\s+year|monthly|annually)\b|\bdiscount(?:ed)?\s+(?:price|rate|of)\b|\b(?:joining|registration|admission)\s+fee\s+(?:is|of|:)\b|\bstarting\s+(?:from|at)\s*(?:₹|rs\.?|inr)?\s*\d|\b(?:monthly|quarterly|half[- ]?yearly|annual|yearly)\s+(?:plan|membership|package)\b|\b(?:1|3|6|12)\s*(?:month|months|mo|yr|year)s?\s+(?:plan|membership|package)\b|\b\d+\s+sessions?\b)/i;
 
 /** Words that make us sound like a refusal machine — banned in outbound copy. */
 export const DEFENSIVE_PHRASE_RE =
