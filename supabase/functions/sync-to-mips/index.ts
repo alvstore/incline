@@ -31,6 +31,7 @@ import {
   recordSuccess,
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
+import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 
 
