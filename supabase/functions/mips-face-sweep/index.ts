@@ -110,6 +110,24 @@ async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceC
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Per-person / per-gate delivery truth from the MIPS push ledger.
+ * Keyed `personSn::mipsDeviceId`, newest row wins.
+ */
+async function readPushState(baseUrl: string, token: string) {
+  try {
+    const rows = await fetchPushLedger(baseUrl, {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "TENANT-ID": "1",
+    }, { pageSize: 500, pages: 3 });
+    return latestLedgerState(rows);
+  } catch (e) {
+    console.warn("[mips-face-sweep] push ledger unavailable:", e);
+    return new Map<string, never>() as ReturnType<typeof latestLedgerState>;
+  }
+}
+
+/**
  * Tier A verification — attribute face templates from real recognitions.
  *
  * The firmware never says WHO it holds, but every accepted face scan in
