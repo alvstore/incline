@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ImagePlus, Loader2, Trash2, Sparkles } from 'lucide-react';
+import { useBranchContext } from '@/contexts/BranchContext';
+
 
 const BUCKET = 'template-media';
 const PREFIX = 'class-banners';
@@ -37,6 +39,7 @@ interface Props {
 export function ClassBannerUpload({ value, onChange, label = 'Class banner' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const { effectiveBranchId } = useBranchContext();
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -47,10 +50,16 @@ export function ClassBannerUpload({ value, onChange, label = 'Class banner' }: P
       toast.error('Banner must be under 5 MB');
       return;
     }
+    if (!effectiveBranchId) {
+      toast.error('Select a branch before uploading a banner');
+      return;
+    }
     setUploading(true);
     try {
       const blob = await prepareBanner(file);
-      const path = `${PREFIX}/${crypto.randomUUID()}.jpg`;
+      // Branch-scoped folder so RLS can enforce cross-branch write isolation.
+      const path = `${PREFIX}/${effectiveBranchId}/${crypto.randomUUID()}.jpg`;
+
       const { error } = await supabase.storage
         .from(BUCKET)
         .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
