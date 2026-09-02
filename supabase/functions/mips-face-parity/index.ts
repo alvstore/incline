@@ -116,6 +116,29 @@ Deno.serve(async (req) => {
       online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
     })).filter((d) => !isNaN(d.id));
 
+    // MANUAL ONLY — full roster download to a gate. This makes the terminal
+    // re-pull and rebuild every face template, so it is never scheduled and is
+    // rate-limited to once per gate per 24h unless a human forces it.
+    if (action === "full_sync") {
+      const targets = (device_ids && device_ids.length ? device_ids : devices.filter((d) => d.online).map((d) => d.id))
+        .map(Number)
+        .filter((n) => !isNaN(n));
+      if (!targets.length) return json({ error: "No online devices to full-sync" }, 400);
+
+      const results: Array<Record<string, unknown>> = [];
+      for (const t of targets) {
+        const claimed = await claimFullSyncSlot(supabase, t, { force: Boolean((body as any)?.force) });
+        if (!claimed) {
+          results.push({ device_id: t, skipped: true, reason: "Already full-synced in the last 24h" });
+          continue;
+        }
+        const outcome = await dispatchFullRoster(baseUrl, authHeaders(token), t);
+        results.push({ device_id: t, ok: outcome.ok, message: outcome.message });
+      }
+      return json({ success: true, action: "full_sync", results });
+    }
+
+
     // Named audit: who exactly is missing a face on each gate. Reads the
     // per-person ledger built by mips-face-sweep (single-person pushes with
     // photoCount attribution) — this firmware exposes no per-device roster.
