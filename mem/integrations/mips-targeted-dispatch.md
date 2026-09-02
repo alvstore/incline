@@ -52,3 +52,11 @@ and produced bogus `rejected`/`unverified` verdicts (reset to `pending` in the f
   bearer token. Photos JPG ≤400 KB, upload + full-object person PUT.
 - Both gates: Gate 1 id 24 key `D1146D682A96B1C2`, Gate 2 id 25 key `F06D92740D0062CF`,
   versionCode 1.42.0.2, appVersion 3. Onsite APK version still unverified physically.
+
+## authedLog is a live QUEUE, not history
+Rows are removed once the gate finishes the push (`remark` shows
+`创建人员信息:授权成功; 下发人员照片:success`). An **absent** row therefore means
+"nothing pending" — never "never issued" and never "rejected". Only a row with
+`failureMessage` is a real failure. Verified Sep 2 2026: after issuing 5 missing
+people the queue drained within ~60s and gate `personCount` rose 136 → 144 (Gate 1)
+and 136 → 143 (Gate 2).
