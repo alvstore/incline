@@ -14775,6 +14775,10 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_write_class_banner: {
+        Args: { _object_name: string }
+        Returns: boolean
+      }
       can_write_member_avatar: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
@@ -14785,6 +14789,14 @@ export type Database = {
       }
       can_write_member_measurements: {
         Args: { _member_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_write_shared_attachment: {
+        Args: { _object_name: string }
+        Returns: boolean
+      }
+      can_write_template_media: {
+        Args: { _object_name: string }
         Returns: boolean
       }
       cancel_class_booking: {
@@ -16770,6 +16782,10 @@ export type Database = {
       start_membership_now: {
         Args: { p_membership_id: string; p_reason?: string }
         Returns: Json
+      }
+      storage_branch_segment_visible: {
+        Args: { _seg: string }
+        Returns: boolean
       }
       supersede_fitness_plans: {
         Args: { p_plan_ids: string[] }
