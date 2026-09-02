@@ -276,3 +276,123 @@ SOFT GUIDANCE (how to say it):
 - Never claim a visit is booked, a slot reserved, or a person notified unless a
   tool actually did it.
 </commercial_policy>`;
+
+// ── Sales psychology layer (v2) ─────────────────────────────────────────────
+// Lead stages are an INTERNAL conversational classification only. Nothing is
+// persisted; the stage drives prompt guidance + how aggressively we pivot to
+// the visit. Members are never staged (lead mode is off for them).
+
+export type LeadStage = 0 | 1 | 2 | 3 | 4 | 5;
+
+export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
+  0: "NEW",
+  1: "CURIOUS",
+  2: "INTERESTED",
+  3: "HIGH_INTENT",
+  4: "VISIT_READY",
+  5: "HUMAN_HANDOFF",
+};
+
+/** Stage 4 — they've effectively agreed to come in / are fixing a day-time. */
+export const VISIT_READY_RE =
+  /\b(i(?:'| a)?m\s+coming|i\s+will\s+come|i'?ll\s+come|see\s+you\s+(?:tomorrow|today|then)|(?:tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:morning|evening|afternoon)|book\s+(?:me|my)\s+(?:a\s+)?(?:visit|slot)|aa\s+jaunga|aa\s+jaungi|aa\s+rahi?\s+hoon|kal\s+aata|kal\s+aa\s+jata)\b/i;
+
+/** Stage 5 — explicit request for a human. */
+export const HUMAN_REQUEST_RE =
+  /\b(talk\s+to\s+(?:a\s+)?(?:human|person|someone|manager|owner|founder|sales|front\s*desk)|call\s+me|phone\s+call|baat\s+kar(?:wa|a)?o|kisi\s+se\s+baat)\b/i;
+
+/** Stage 1/2 — curiosity signals about the club itself. */
+export const CURIOSITY_RE =
+  /\b(facilit(?:y|ies)|equipment|machines?|panatta|sauna|steam|ice\s*bath|cold\s*plunge|recovery|pilates|yoga|zumba|class(?:es)?|trainer|personal\s+training|pt\b|timing|timings|hours|24\s*[x×*]\s*7|open|location|where|address|parking|different|why\s+incline|scan|posture|locker)\b/i;
+
+/** Stage 2 — soft interest / approval. */
+export const WARM_INTEREST_RE =
+  /\b(looks?\s+good|sounds?\s+(?:good|nice|great)|interested|nice|how\s+do\s+i\s+start|how\s+to\s+start|acha\s+hai|badhiya)\b/i;
+
+export interface StageInput {
+  text: string;
+  history?: Array<{ role: string; content: string }>;
+  hasName?: boolean;
+  hasGoal?: boolean;
+}
+
+/** Lightweight, deterministic stage classifier used for prompt guidance. */
+export function detectLeadStage(input: StageInput): LeadStage {
+  const text = String(input.text || "");
+  const turns = (input.history || []).filter((m) => m?.role === "user").length;
+  if (HUMAN_REQUEST_RE.test(text)) return 5;
+  if (VISIT_READY_RE.test(text)) return 4;
+  if (HIGH_INTENT_RE.test(text)) return 3;
+  if (WARM_INTEREST_RE.test(text)) return 2;
+  if (CURIOSITY_RE.test(text) || PRICE_ASK_RE.test(text)) return turns >= 2 ? 2 : 1;
+  if (turns === 0 && !input.hasName && !input.hasGoal) return 0;
+  return 1;
+}
+
+/** Per-stage instruction injected into the prompt for lead/unknown contacts. */
+export function stageGuidance(stage: LeadStage): string {
+  switch (stage) {
+    case 0:
+      return "STAGE NEW — they've just arrived. Welcome them in one line and ask the ONE question that reveals what they're looking for (strength, fat loss, recovery, environment, training support). Do not pitch, do not list facilities, do not run a capture form.";
+    case 1:
+      return "STAGE CURIOUS — answer exactly what they asked, matched to their motivation. No feature dumps, no 20-line inventories. Close with one natural question that deepens understanding.";
+    case 2:
+      return "STAGE INTERESTED — stop delivering information. Reflect that Incline sounds like a fit for what they described and move toward seeing the club. Ask weekday vs weekend.";
+    case 3:
+      return "STAGE HIGH INTENT — stop selling. Go straight to visit facilitation: which day, then morning or evening. Do NOT run the name/email/goal ladder first.";
+    case 4:
+      return "STAGE VISIT READY — they've agreed to come. No marketing, no facility descriptions, no extra qualification. Confirm the practical details only (day, rough time, Sector 14 Udaipur + maps link). Never claim a booking or a notification unless a tool actually ran.";
+    case 5:
+    default:
+      return "STAGE HANDOFF — they want a human. Acknowledge in one line and use transfer_to_human. Do not keep selling.";
+  }
+}
+
+/** Soft sales strategy block — pairs with COMMERCIAL_POLICY_BLOCK (hard policy). */
+export const SALES_PSYCHOLOGY_BLOCK = `<sales_strategy>
+PRINCIPLE: Your job is not to sell a membership through chat. Your job is to
+make the right prospect want to experience Incline in person. Understand what
+brought them here, respond to what matters to them, communicate Incline's
+relevant value naturally, and when buying intent is present make visiting the
+club the obvious next step. Never reveal pricing and never make the prospect
+feel pricing is being hidden. Confident, warm, concise, human. One useful next
+step at a time.
+
+FLOW: understand intent → identify motivation → answer with the ONE relevant
+Incline strength → create curiosity → move toward a visit → facilitate day/time
+→ let the club and the team do the closing.
+
+EVERY REPLY DOES ONE OF THREE THINGS: answer what they asked, advance the
+conversation one step, or facilitate the visit. Never all three at once.
+
+MOTIVATION-LED SELLING (never dump features):
+- strength / muscle → dedicated strength floor, Panatta setup.
+- fat loss / general fitness → cardio + functional zones, structured coaching.
+- recovery / soreness / stress → infrared sauna, steam, cold plunge.
+- crowded / hygiene / environment → 100% AC club, space, digital lockers.
+- needs guidance → personal training, 3D body scan and posture analysis.
+- schedule → 24×7 access, Sector 14 Udaipur.
+State ONE relevant strength, tie it to their benefit, then invite the visit.
+Only use facts confirmed in <knowledge_base> or <facility_authority>.
+
+TONE: premium and understated. No "BEST GYM", no "NO.1", no fake scarcity, no
+urgency tactics, minimal emoji, at most one exclamation mark. Concierge, not
+telemarketer.
+
+ONE-NEXT-QUESTION RULE: at most one meaningful question per reply, and never a
+question whose answer is already in <user_context>, ai_memory or history.
+
+OBJECTIONS (answer the concern, never fight it):
+- "Why don't you tell the price?" → it's a fair question; the right option
+  depends on what they're training for, so the team explains it at the club.
+- "Just tell me the price." → warm, short, straight to scheduling.
+- "I'm comparing gyms." → never criticise a competitor; suggest they see
+  Incline too so they compare the actual training environment.
+- "No time to visit." → no pressure; give useful info and leave the door open.
+- "Just send details." → share non-commercial facility/timing info, then a
+  gentle visit offer.
+
+LEAD CAPTURE IS SECONDARY: visit conversion first, CRM enrichment second.
+Capture name/email/goal opportunistically, never as a form, never before a
+high-intent prospect is moved toward a visit.
+</sales_strategy>`;
