@@ -8897,6 +8897,42 @@ export type Database = {
           },
         ]
       }
+      mips_dispatch_state: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          dispatch_count: number
+          dispatch_day: string | null
+          in_flight_until: string | null
+          last_dispatch_at: string | null
+          last_full_sync_at: string | null
+          mips_device_id: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          dispatch_count?: number
+          dispatch_day?: string | null
+          in_flight_until?: string | null
+          last_dispatch_at?: string | null
+          last_full_sync_at?: string | null
+          mips_device_id: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          dispatch_count?: number
+          dispatch_day?: string | null
+          in_flight_until?: string | null
+          last_dispatch_at?: string | null
+          last_full_sync_at?: string | null
+          mips_device_id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mips_person_aliases: {
         Row: {
           created_at: string
@@ -15782,6 +15818,28 @@ export type Database = {
       membership_end_date: {
         Args: { p_duration_days: number; p_start: string }
         Returns: string
+      }
+      mips_claim_dispatch_slot: {
+        Args: {
+          p_branch_id?: string
+          p_daily_cap?: number
+          p_in_flight_seconds?: number
+          p_min_gap_seconds?: number
+          p_mips_device_id: number
+        }
+        Returns: boolean
+      }
+      mips_claim_full_sync: {
+        Args: {
+          p_force?: boolean
+          p_min_hours?: number
+          p_mips_device_id: number
+        }
+        Returns: boolean
+      }
+      mips_release_dispatch_slot: {
+        Args: { p_mips_device_id: number }
+        Returns: undefined
       }
       move_to_dlq: {
         Args: {
