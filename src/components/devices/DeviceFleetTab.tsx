@@ -3,7 +3,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Monitor, RefreshCw, GitCompare, ShieldOff, UploadCloud } from "lucide-react";
+import { Monitor, RefreshCw, GitCompare, ShieldOff, UploadCloud, DatabaseBackup } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMipsFleet } from "./useMipsFleet";
@@ -17,8 +27,31 @@ interface DeviceFleetTabProps {
 const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTabProps) => {
   const qc = useQueryClient();
   const { devices, bySerial, isLoading, isConnected, connection, refetch } = useMipsFleet(branchId);
-  const [busy, setBusy] = useState<"sync" | "reconcile" | "revoke" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "reconcile" | "revoke" | "full" | null>(null);
+  const [confirmFull, setConfirmFull] = useState(false);
   const [registeringSN, setRegisteringSN] = useState<string | null>(null);
+
+  const handleFullRosterSync = async () => {
+    setConfirmFull(false);
+    setBusy("full");
+    try {
+      const { data, error } = await supabase.functions.invoke("mips-face-parity", {
+        body: { action: "full_sync", branch_id: branchId },
+      });
+      if (error) throw error;
+      const results = ((data as { results?: Array<{ claimed?: boolean }> })?.results) || [];
+      const pushed = results.filter((r) => r.claimed !== false).length;
+      const skipped = results.length - pushed;
+      toast.success(
+        `Full roster sync queued on ${pushed} gate(s)${skipped ? ` — ${skipped} skipped (already synced in the last 24h)` : ""}`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Full roster sync failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
 
   const handleFleetSync = async () => {
     setBusy("sync");
@@ -141,6 +174,17 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
               <ShieldOff className={`mr-1.5 h-3.5 w-3.5 ${busy === "revoke" ? "animate-pulse" : ""}`} />
               {busy === "revoke" ? "Sweeping…" : "Revoke expired"}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-[36px] rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50"
+              onClick={() => setConfirmFull(true)}
+              disabled={busy !== null}
+            >
+              <DatabaseBackup className={`mr-1.5 h-3.5 w-3.5 ${busy === "full" ? "animate-pulse" : ""}`} />
+              {busy === "full" ? "Queuing…" : "Full roster sync"}
+            </Button>
+
           </CardContent>
         </Card>
       )}
@@ -198,7 +242,26 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
           })}
         </div>
       )}
+
+      <AlertDialog open={confirmFull} onOpenChange={setConfirmFull}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run a full roster sync?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This makes every gate re-download the entire personnel list and rebuild its face
+              templates. It is heavy on the terminals and can interrupt entry for several minutes —
+              use it only for maintenance. Allowed once per gate per 24 hours. Everyday changes are
+              already pushed person-by-person automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleFullRosterSync}>Run full sync</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 };
 

@@ -1,0 +1,2 @@
+ALTER TABLE public.campaign_recipients DROP CONSTRAINT IF EXISTS campaign_recipients_status_check;
+ALTER TABLE public.campaign_recipients ADD CONSTRAINT campaign_recipients_status_check CHECK (status = ANY (ARRAY['pending'::text,'dispatching'::text,'queued'::text,'submitted'::text,'sent'::text,'delivered'::text,'read'::text,'failed'::text,'suppressed'::text,'skipped'::text,'cancelled'::text,'pace_limited'::text,'unknown'::text]));
