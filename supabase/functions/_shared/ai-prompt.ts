@@ -381,6 +381,19 @@ export async function buildSystemPrompt(
 - [INTENT OVERRIDE]: Before extracting name/email/phone, check if the user is asking a NEW question. If so, ANSWER it first using <knowledge_base>, THEN politely re-ask for the missing detail in the SAME message. Never save Hinglish questions, greetings, or single-word replies (hi/hello/no/ok/haan/nahi) as a person's name.
 </strict_rules>`);
 
+  // Commercial policy (HARD) + sales psychology (SOFT) — lead/unknown only.
+  // Members must never see the prospect visit funnel.
+  if (!identity || identity.role !== "member") {
+    sections.push(COMMERCIAL_POLICY_BLOCK);
+    sections.push(SALES_PSYCHOLOGY_BLOCK);
+    const stage = detectLeadStage({
+      text: userMessage ?? "",
+      hasName: !!(identity && "name" in identity && identity.name),
+    });
+    sections.push(`<conversation_stage>\n${stageGuidance(stage)}\n</conversation_stage>`);
+  }
+
+
   // Admin-trained rule overrides (UI-managed via Settings → AI Agent → Training).
   // Sits between <strict_rules> and <knowledge_base> so it overrides general
   // strict-rule wording but is anchored by retrieved knowledge.
