@@ -152,42 +152,36 @@ import {
   type ResolvedWhatsAppContext,
 } from "./whatsapp-context.ts";
 
+import {
+  detectPriceContext,
+  detectPolicyLang,
+  visitPivotReply,
+  visitCta,
+  PRICING_LEAK_RE,
+  COMMERCIAL_POLICY_BLOCK,
+} from "./pricingPolicy.ts";
 
-// ─── PRICING BLACKOUT & VIP TOUR PROTOCOL — SINGLE SOURCE OF TRUTH ─────────
-// v8.0.0 (blackout): Ananya is strictly forbidden from quoting any prices,
-// fees, GST %, MRP, plan names, plan durations, session counts, or discounts.
-// Every pricing/plan/fee/cost/membership intent must pivot to a warm welcome
-// and a VIP tour or front-desk-call offer. Kept exported constants intact for
-// backward compatibility with downstream callers; all bodies now return the
-// canonical pivot copy.
+// ─── COMMERCIAL POLICY (no pricing over chat → convert to a visit) ─────────
+// v9.0.0: all copy + detection now lives in ./pricingPolicy.ts (single source
+// of truth, unit-tested). The exports below are thin adapters kept so existing
+// call sites keep compiling.
 export const PRICING_MATRIX = {} as const;
 
-/** Mandatory VIP tour / front-desk pivot line. */
+/** Soft, varied visit invitation. No longer hard-codes "VIP tour". */
 export function tourCtaLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
-  return fn
-    ? `I'd love to schedule a VIP gym tour for you with our front desk, ${fn}, or you can call our front desk directly for a detailed walkthrough. Which day works best for your visit? ✨`
-    : `I'd love to schedule a VIP gym tour for you with our front desk, or you can call our front desk directly for a detailed walkthrough. Which day works best for your visit? ✨`;
+  const cta = visitCta({ lang: "en", seed: fn || "cta" });
+  return fn ? `${cta.replace(/^Would you/, `${fn}, would you`)}` : cta;
 }
 
-/** Canonical English "Welcome & Pivot" reply. No prices, no plan names. */
+/** Canonical English graceful pivot. No prices, no plan names, no refusal tone. */
 export function pricingReplyEN(firstName?: string | null): string {
-  const fn = (firstName || "").trim();
-  const hi = fn ? `Welcome to Incline, ${fn}! ✨ ` : "Welcome to Incline! ✨ ";
-  return (
-    `${hi}Our memberships are tailored to your specific fitness goals and we discuss all options in person so we can match the right plan to you. ` +
-    tourCtaLine(firstName)
-  );
+  return visitPivotReply({ firstName, lang: "en", askCount: 1, seed: firstName || "en" });
 }
 
-/** Canonical Hinglish "Welcome & Pivot" reply. No prices, no plan names. */
+/** Canonical Hinglish graceful pivot. */
 export function pricingReplyHI(firstName?: string | null): string {
-  const fn = (firstName || "").trim();
-  const hi = fn ? `Welcome to Incline, ${fn}! ✨ ` : "Welcome to Incline! ✨ ";
-  return (
-    `${hi}Humari memberships aapke fitness goals ke hisaab se tailored hoti hain — best pricing aur options hum in-person discuss karte hain. ` +
-    `Aap ek VIP tour book kar lein ya front desk ko call karein. Kis din aana prefer karenge? ✨`
-  );
+  return visitPivotReply({ firstName, lang: "hi", askCount: 1, seed: firstName || "hi" });
 }
 
 /** Deprecated alias — kept for backward compatibility with old call sites. */
@@ -198,6 +192,7 @@ export const EMBARGO_PIVOT_LINE_EN = pricingReplyEN();
 export const EMBARGO_PIVOT_LINE_HI = pricingReplyHI();
 export const LAUNCH_DATE_LABEL = "now open";
 export const LAUNCH_DATE_INTERNAL = "2026-07-26";
+
 
 
 
