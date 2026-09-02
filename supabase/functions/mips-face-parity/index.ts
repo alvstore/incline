@@ -1,4 +1,4 @@
-// mips-face-parity v1.2.0
+// mips-face-parity v2.0.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
 // Problem it solves: the MIPS server holds N persons with photos, but each
@@ -13,7 +13,13 @@
 //        → re-dispatch every person that HAS a photo to the given devices
 //          (defaults to all devices on the branch).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import {
+  claimDispatchSlot,
+  claimFullSyncSlot,
+  dispatchFullRoster,
+  dispatchPerson,
+  releaseDispatchSlot,
+} from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,7 +81,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { action = "report", branch_id, device_ids, person_type, person_id } = body as {
-      action?: "report" | "resync" | "diagnose" | "audit";
+      action?: "report" | "resync" | "diagnose" | "audit" | "full_sync";
       branch_id?: string;
       device_ids?: number[];
       person_type?: "member" | "employee" | "trainer";
