@@ -33,7 +33,7 @@ export const WHY_NO_PRICE_RE =
  * Deliberately broad: numbers-with-currency, plan names, durations, fees.
  */
 export const PRICING_LEAK_RE =
-  /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice[sd]?\b|\bpricing\b|\bfees?\b|\bcosts?\b|\bcharges?\b|\bMRP\b|\bGST\b|\bdiscount(?:ed)?\b|\bjoining\s+fee\b|\bregistration\s+fee\b|\badmission\s+fee\b|\bstarting\s+(?:from|at)\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|yearly)\s+(?:plan|membership|package)\b|\b\d{1,2}[,\s]?\d{3}\b|\b(?:1|3|6|12)\s*(?:month|months|mo|yr|year)s?\s+(?:plan|membership|package)\b|\b\d+\s+sessions?\b)/i;
+  /(₹\s*\d|\b(?:rs\.?|inr)\s*\d|\b\d[\d,]*\s*(?:\/-|rupees?|rs\b|inr\b)|\b(?:price|pricing|fees?|cost|costs|charges?|rates?|mrp|gst|amount)\b[^.\n]{0,24}?\b\d{2,}|\b\d{2,}\b[^.\n]{0,20}?\b(?:per\s+month|per\s+year|monthly|annually)\b|\bgst\b|\bdiscount(?:ed)?\s+(?:price|rate|of)\b|\b(?:joining|registration|admission)\s+fee\b|\bstart(?:s|ing)\s+(?:from|at)\s*(?:₹|rs\.?|inr)?\s*[\d,]|\b(?:monthly|quarterly|half[- ]?yearly|annual|yearly)\s+(?:plan|membership|package)\b|\b(?:1|3|6|12)\s*(?:month|months|mo|yr|year)s?\s+(?:plan|membership|package)\b|\b\d+\s+sessions?\b)/i;
 
 /** Words that make us sound like a refusal machine — banned in outbound copy. */
 export const DEFENSIVE_PHRASE_RE =
@@ -172,10 +172,14 @@ function pick(list: string[], seed: string, avoid?: string | null): string {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   let idx = h % list.length;
   if (avoid) {
-    const a = avoid.trim().toLowerCase();
+    // Compare on a normalised fingerprint: the bank entries still carry the
+    // {name} placeholder while `avoid` is already rendered copy.
+    const norm = (t: string) =>
+      t.replace(/\{name\}/g, "").replace(/,\s+/g, " ").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 48);
+    const a = norm(avoid);
     for (let n = 0; n < list.length; n++) {
       const cand = list[(idx + n) % list.length];
-      if (cand.trim().toLowerCase().slice(0, 60) !== a.slice(0, 60)) {
+      if (norm(cand) !== a) {
         idx = (idx + n) % list.length;
         break;
       }
