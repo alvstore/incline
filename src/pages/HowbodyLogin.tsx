@@ -14,6 +14,7 @@ import { getHowbodyDeviceLabel } from "@/services/howbodyDeviceService";
 import { Loader2, ScanLine, CheckCircle2, AlertTriangle, Search, ShieldCheck } from "lucide-react";
 
 type Status = "idle" | "binding" | "bound" | "error";
+type ScanKind = "body" | "posture";
 
 interface MemberHit {
   id: string;
