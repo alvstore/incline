@@ -271,9 +271,10 @@ export function HowbodySettings() {
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-success/10 p-2 text-success"><ScanLine className="h-5 w-5" /></div>
             <div>
-              <h2 className="text-lg font-bold">Body Scanner Webhooks</h2>
+              <h2 className="text-lg font-bold">HOWBODY Integration URLs</h2>
               <p className="text-sm text-muted-foreground">
-                Provide these URLs to the HOWBODY device vendor. Each maps to a section of the API doc.
+                Provide these URLs to the HOWBODY device vendor. <strong>Member URLs</strong> open a page on the
+                member's phone; only the <strong>Inbound Webhooks</strong> receive data from the scanner.
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-// v1.1.0 — Auto-deliver body/posture scan reports (templates-driven, logged to communication_logs)
+// v1.2.0 — Auto-deliver body/posture scan reports (templates-driven, logged to communication_logs)
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -43,7 +43,8 @@ async function buildPdf(opts: {
   rows: Array<[string, string]>;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595.28, 841.89]); // A4
+  const PAGE: [number, number] = [595.28, 841.89]; // A4
+  let page = pdf.addPage(PAGE);
   const { width } = page.getSize();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -62,32 +63,37 @@ async function buildPdf(opts: {
   const slate = rgb(0.39, 0.45, 0.55);
   const dark = rgb(0.06, 0.09, 0.16);
 
-  // Header
+  const drawFooter = (p: typeof page) => {
+    p.drawText(
+      "Generated from your body scan. Wellness reference only - not medical advice.",
+      { x: 40, y: 40, size: 9, font, color: slate },
+    );
+  };
+
+  // Header (first page only)
   page.drawText("The Incline Life by Incline", { x: 40, y: 800, size: 14, font: bold, color: teal });
   page.drawText(win(opts.title), { x: 40, y: 778, size: 18, font: bold, color: dark });
   page.drawText(win(`${opts.memberName} · ${opts.branchName}`), { x: 40, y: 758, size: 11, font, color: slate });
   page.drawText(win(`Scan: ${opts.scanDateLabel}`), { x: 40, y: 744, size: 10, font, color: slate });
   page.drawLine({ start: { x: 40, y: 730 }, end: { x: width - 40, y: 730 }, thickness: 1.5, color: teal });
 
-  // Rows
+  // Rows — paginate onto fresh pages instead of clipping.
   let y = 700;
   const lh = 22;
   for (const [label, value] of opts.rows) {
     if (y < 80) {
-      const p = pdf.addPage([595.28, 841.89]);
-      y = 800;
-      void p;
+      drawFooter(page);
+      page = pdf.addPage(PAGE);
+      page.drawText(win(`${opts.title} (continued)`), { x: 40, y: 800, size: 12, font: bold, color: teal });
+      page.drawLine({ start: { x: 40, y: 788 }, end: { x: width - 40, y: 788 }, thickness: 1, color: teal });
+      y = 760;
     }
     page.drawText(win(label), { x: 50, y, size: 11, font, color: slate });
     page.drawText(win(value ?? "-"), { x: 280, y, size: 11, font: bold, color: dark });
     y -= lh;
   }
 
-  // Footer
-  page.drawText(
-    "Generated from your body scan. Wellness reference only - not medical advice.",
-    { x: 40, y: 40, size: 9, font, color: slate },
-  );
+  drawFooter(page);
 
   return await pdf.save();
 }

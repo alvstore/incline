@@ -79,17 +79,8 @@ export async function getHowbodyCreds(): Promise<HowbodyCreds> {
   return value;
 }
 
-/** Back-compat sync wrapper (deprecated). Prefer getHowbodyCreds(). */
-export function howbodyCreds() {
-  // Synchronous callers can no longer access DB; this only returns env if available.
-  const baseUrl = (Deno.env.get("HOWBODY_BASE_URL") || "").replace(/\/+$/, "");
-  const userName = Deno.env.get("HOWBODY_USERNAME") || "";
-  const appKey = Deno.env.get("HOWBODY_APPKEY") || "";
-  if (!baseUrl || !userName || !appKey) {
-    throw new Error("HOWBODY credentials missing — set via Settings UI or HOWBODY_* env vars");
-  }
-  return { baseUrl, userName, appKey };
-}
+
+
 
 export async function getCachedToken(): Promise<{ token: string; expires_at: string }> {
   const sb = admin();
