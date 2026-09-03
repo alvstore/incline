@@ -241,6 +241,30 @@ export default function HowbodyLogin() {
           </Badge>
         </div>
 
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scan type</p>
+          <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Scan type">
+            {(["body", "posture"] as ScanKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={kind === k}
+                onClick={() => setKind(k)}
+                disabled={status === "binding"}
+                className={`cursor-pointer rounded-xl border p-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
+                  kind === k
+                    ? "border-success/40 bg-success/10 text-success"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {k === "body" ? "Body composition" : "Posture"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+
+
         {!isStaff && memberId && (
           <div className="mt-6 space-y-4">
             <div className="rounded-xl bg-muted p-4">
