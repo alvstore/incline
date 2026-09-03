@@ -1,15 +1,31 @@
-// v1.2.0 — HOWBODY body composition push receiver (auto-registers devices in inventory)
+// v2.0.0 — HOWBODY body composition push receiver
+// Hardening: device allowlist, scanId ↔ member correlation, atomic idempotent entitlement
+// consumption on the confirmed report (plan allowance first, then add-on credit).
 import { corsHeaders, json, admin, logWebhook, getExpectedWebhookAppKey } from "../_shared/howbody.ts";
 
 const ENVELOPE_OK = { code: 200, message: "Push successful", data: null };
 const ENVELOPE_FAIL = { code: 500, message: "Push failed", data: null };
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function readAppKey(req: Request): string | null {
+  for (const [k, v] of req.headers.entries()) {
+    if (k.toLowerCase() === "appkey") return v;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const expectedKey = await getExpectedWebhookAppKey();
-    const sentKey = req.headers.get("appkey") || req.headers.get("Appkey") || req.headers.get("APPKEY");
-    if (!expectedKey || sentKey !== expectedKey) {
+    const sentKey = readAppKey(req);
+    if (!expectedKey || !sentKey || !timingSafeEqual(sentKey, expectedKey)) {
       await logWebhook("body", null, null, 401, "appkey mismatch", null);
       return json({ code: 401, message: "Unauthorized", data: null }, 401);
     }
@@ -27,6 +43,18 @@ Deno.serve(async (req) => {
     }
 
     const sb = admin();
+
+    // Device allowlist — reject pushes from devices disabled in inventory.
+    if (payload.equipmentNo) {
+      const { data: deviceOk } = await sb.rpc("howbody_device_authorized", {
+        _equipment_no: payload.equipmentNo,
+      });
+      if (deviceOk === false) {
+        await logWebhook("body", thirdUid, dataKey, 403, `unauthorized device ${payload.equipmentNo}`, payload);
+        return json({ code: 403, message: "Device not authorized", data: null }, 403);
+      }
+    }
+
     const { data: member } = await sb
       .from("members")
       .select("id")
@@ -35,6 +63,19 @@ Deno.serve(async (req) => {
     if (!member) {
       await logWebhook("body", thirdUid, dataKey, 404, "member not found", payload);
       return json(ENVELOPE_FAIL, 404);
+    }
+
+    // scanId ↔ member correlation — a report may not be attributed across sessions.
+    if (payload.scanId) {
+      const { data: session } = await sb
+        .from("howbody_scan_sessions")
+        .select("member_id")
+        .eq("scan_id", payload.scanId)
+        .maybeSingle();
+      if (session && session.member_id && session.member_id !== member.id) {
+        await logWebhook("body", thirdUid, dataKey, 409, "scanId/member mismatch", payload);
+        return json({ code: 409, message: "Session mismatch", data: null }, 409);
+      }
     }
 
     const testTime = payload.testTime ? new Date(Number(payload.testTime) * 1000).toISOString() : null;
@@ -67,6 +108,15 @@ Deno.serve(async (req) => {
       full_payload: payload,
     }, { onConflict: "data_key" }).select("id").maybeSingle();
 
+    // Atomic, idempotent entitlement consumption keyed on dataKey.
+    const { data: consumption, error: consumeErr } = await sb.rpc("howbody_consume_scan", {
+      _member_id: member.id,
+      _kind: "body",
+      _data_key: dataKey,
+    });
+    if (consumeErr) console.error("howbody_consume_scan (body) failed:", consumeErr.message);
+    const isDuplicate = (consumption as Record<string, unknown> | null)?.duplicate === true;
+
     // Touch device inventory (auto-registers unknown devices, bumps counters)
     if (payload.equipmentNo) {
       await sb.rpc("howbody_touch_device", { _equipment_no: payload.equipmentNo }).catch(() => {});
@@ -78,14 +128,15 @@ Deno.serve(async (req) => {
         .eq("scan_id", payload.scanId);
     }
 
-    // Fire-and-forget: deliver report to member (Email + WhatsApp + in-app)
-    if (upserted?.id) {
+    // Fire-and-forget: deliver report to member (Email + WhatsApp + in-app).
+    // Skipped on duplicate pushes so a redelivered dataKey never re-sends.
+    if (upserted?.id && !isDuplicate) {
       sb.functions.invoke("deliver-scan-report", {
         body: { report_id: upserted.id, kind: "body" },
       }).catch((err) => console.error("deliver-scan-report (body) invoke failed:", err));
     }
 
-    await logWebhook("body", thirdUid, dataKey, 200, "ok", null);
+    await logWebhook("body", thirdUid, dataKey, 200, isDuplicate ? "ok (duplicate)" : "ok", null);
     return json(ENVELOPE_OK, 200);
   } catch (e) {
     console.error("howbody-body-webhook error:", e);
