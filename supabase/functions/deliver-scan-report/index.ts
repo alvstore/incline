@@ -1,4 +1,4 @@
-// v1.1.0 — Auto-deliver body/posture scan reports (templates-driven, logged to communication_logs)
+// v1.2.0 — Auto-deliver body/posture scan reports (templates-driven, logged to communication_logs)
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
