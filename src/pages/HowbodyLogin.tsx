@@ -31,11 +31,14 @@ export default function HowbodyLogin() {
 
   const equipmentNo = params.get("equipmentNo") || "";
   const scanId = params.get("scanId") || "";
+  const kindParam = (params.get("kind") || params.get("scanType") || "").toLowerCase();
 
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  const [kind, setKind] = useState<ScanKind>(kindParam === "posture" ? "posture" : "body");
+
 
   // Resolve friendly device label from inventory (falls back to raw equipmentNo)
   useEffect(() => {
