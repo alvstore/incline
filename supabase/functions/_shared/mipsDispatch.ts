@@ -290,6 +290,34 @@ export async function claimDispatchSlot(
   }
 }
 
+/**
+ * Same throttle, but WAITS for the gate instead of dropping the push.
+ * A dropped door-access change means an expired member still walks in, or a
+ * member who just paid stays locked out — so callers must never silently skip.
+ * Returns false only after the whole budget is exhausted.
+ */
+export async function waitForDispatchSlot(
+  supabase: SupabaseLike,
+  mipsDeviceId: number,
+  branchId?: string | null,
+  opts: {
+    minGapSeconds?: number;
+    dailyCap?: number;
+    inFlightSeconds?: number;
+    attempts?: number;
+    waitMs?: number;
+  } = {},
+): Promise<boolean> {
+  const attempts = opts.attempts ?? 8;
+  const waitMs = opts.waitMs ?? 1500;
+  for (let i = 0; i < attempts; i++) {
+    const got = await claimDispatchSlot(supabase, mipsDeviceId, branchId, opts);
+    if (got) return true;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, waitMs));
+  }
+  return false;
+}
+
 export async function releaseDispatchSlot(supabase: SupabaseLike, mipsDeviceId: number): Promise<void> {
   try {
     await supabase.rpc("mips_release_dispatch_slot", { p_mips_device_id: mipsDeviceId });
