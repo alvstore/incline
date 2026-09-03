@@ -14,7 +14,7 @@
 // Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
 //         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,7 +100,7 @@ async function fetchPersonDetail(baseUrl: string, token: string, personId: numbe
 }
 
 
-async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string) {
+async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string): Promise<{ undelivered: number[] }> {
   let deviceIds: number[] = [];
   try {
     let query = supabase.from("access_devices").select("mips_device_id").eq("is_online", true);
@@ -122,15 +122,23 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
     } catch {}
   }
 
-  if (deviceIds.length === 0) return;
+  if (deviceIds.length === 0) return { undelivered: [] as number[] };
+
+  const undelivered: number[] = [];
 
   // Targeted per-gate push (v2.9.0). The old bulk `syncPerson` call discarded the
   // personId server-side and made every gate re-download the whole roster.
   for (const deviceId of [...new Set(deviceIds.map(Number))]) {
     let slotHeld = false;
     try {
-      slotHeld = await claimDispatchSlot(supabase, deviceId, branchId ?? null);
-      if (!slotHeld) continue;
+      // Wait for the gate's throttle window instead of dropping the change:
+      // a skipped revoke/restore silently diverges the hardware from the CRM.
+      slotHeld = await waitForDispatchSlot(supabase, deviceId, branchId ?? null);
+      if (!slotHeld) {
+        console.warn(`[mips-access] gate ${deviceId} stayed busy — dispatch not delivered`);
+        undelivered.push(deviceId);
+        continue;
+      }
       await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId] });
     } catch (e) {
       console.warn(`[mips-access] dispatch to device ${deviceId} failed:`, e);
@@ -138,6 +146,8 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
       if (slotHeld) await releaseDispatchSlot(supabase, deviceId);
     }
   }
+
+  return { undelivered };
 }
 
 function formatDate(dateStr: string | null, fallback: string): string {

@@ -31,7 +31,7 @@ import {
   recordSuccess,
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
-import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 
 
@@ -530,11 +530,14 @@ async function dispatchToDevices(
     let lastError: string | null = null;
     let slotHeld = false;
     try {
-      slotHeld = await claimDispatchSlot(supabase, mipsDeviceId, branchId ?? null);
+      // Wait out the per-gate throttle rather than dropping the push.
+      slotHeld = await waitForDispatchSlot(supabase, mipsDeviceId, branchId ?? null);
       if (!slotHeld) {
-        results.push({ mipsDeviceId, status: "throttled", responseCode: 0, lastError: "dispatch slot busy", response: null });
-        continue;
+        status = "failed";
+        lastError = "dispatch slot busy after retries";
+        result = { error: lastError };
       }
+      if (slotHeld) {
       const outcome = await dispatchPerson({
         baseUrl,
         headers: authHeaders(token),
@@ -546,6 +549,7 @@ async function dispatchToDevices(
       status = outcome.ok ? "success" : "failed";
       lastError = outcome.ok ? null : outcome.message;
       if (outcome.ok) deliveredDeviceIds.push(mipsDeviceId);
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       result = { error: lastError };

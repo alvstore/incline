@@ -14,7 +14,7 @@
 //          (defaults to all devices on the branch).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  claimDispatchSlot,
+  waitForDispatchSlot,
   claimFullSyncSlot,
   dispatchFullRoster,
   dispatchPerson,
@@ -307,9 +307,9 @@ Deno.serve(async (req) => {
         let success = false;
         let slotHeld = false;
         try {
-          slotHeld = await claimDispatchSlot(supabase, t, null, { minGapSeconds: 1 });
+          slotHeld = await waitForDispatchSlot(supabase, t, null, { minGapSeconds: 1, attempts: 6, waitMs: 1000 });
           if (!slotHeld) {
-            if (errors.length < 15) errors.push(`dev ${t} / ${p.personSn}: dispatch slot busy`);
+            if (errors.length < 15) errors.push(`dev ${t} / ${p.personSn}: dispatch slot busy after retries`);
           } else {
             const outcome = await dispatchPerson({
               baseUrl,
