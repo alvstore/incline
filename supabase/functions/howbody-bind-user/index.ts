@@ -90,20 +90,14 @@ Deno.serve(async (req) => {
 
     // Ownership check: a member may only bind themselves. Staff may bind anyone.
     if (member.user_id !== callerId) {
-      const { data: isStaff } = await sb.rpc("has_capability", {
-        _user_id: callerId,
-        _capability: "members.manage",
-      }).catch(() => ({ data: null }));
-      if (isStaff !== true) {
-        const { data: roleRows } = await sb
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", callerId);
-        const roles = (roleRows || []).map((r: { role: string }) => r.role);
-        const staffRoles = ["owner", "admin", "manager", "staff", "trainer"];
-        if (!roles.some((r) => staffRoles.includes(r))) {
-          return json({ ok: false, error: "You can only link your own account to the scanner." }, 403);
-        }
+      const { data: roleRows } = await sb
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", callerId);
+      const roles = (roleRows || []).map((r: { role: string }) => r.role);
+      const staffRoles = ["owner", "admin", "manager", "staff", "trainer"];
+      if (!roles.some((r) => staffRoles.includes(r))) {
+        return json({ ok: false, error: "You can only link your own account to the scanner." }, 403);
       }
     }
 
