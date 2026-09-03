@@ -135,7 +135,7 @@ export default function HowbodyLogin() {
     setStatus("binding");
     setErrorMsg(null);
     const { data, error } = await supabase.functions.invoke("howbody-bind-user", {
-      body: { equipmentNo, scanId, memberId: targetMemberId },
+      body: { equipmentNo, scanId, memberId: targetMemberId, kind },
     });
     if (error || !data?.ok) {
       setErrorMsg(data?.error || error?.message || "Could not bind to scanner.");
