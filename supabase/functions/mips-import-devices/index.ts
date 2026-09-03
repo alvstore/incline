@@ -68,7 +68,12 @@ Deno.serve(async (req) => {
     // fleet self-heals — and we report which gates still refuse to keep them,
     // because on firmware 1.42.x these fields are owned by the terminal's own
     // settings screen and the server-side PUT is silently ignored.
-    const callbackBase = `${SUPA_URL}/functions/v1/mips-webhook-receiver`;
+    // The receiver requires the shared secret, so the URL we push MUST carry
+    // `?token=` — without it every forwarded scan is rejected with 401.
+    const webhookSecret = Deno.env.get("MIPS_WEBHOOK_SECRET") || "";
+    const callbackBase = `${SUPA_URL}/functions/v1/mips-webhook-receiver${
+      webhookSecret ? `?token=${encodeURIComponent(webhookSecret)}&` : "?"
+    }`;
     const callbacks: Array<Record<string, unknown>> = [];
 
     let imported = 0, updated = 0, skipped = 0;
@@ -123,9 +128,9 @@ Deno.serve(async (req) => {
           const dev = detail?.data;
           if (dev) {
             delete dev.deviceRegion;
-            dev.sevUploadRecRecordUrl = `${callbackBase}?event=record`;
-            dev.sevUploadDevHeartbeatUrl = `${callbackBase}?event=heartbeat`;
-            dev.sevUploadRegPersonUrl = `${callbackBase}?event=regPerson`;
+            dev.sevUploadRecRecordUrl = `${callbackBase}event=record`;
+            dev.sevUploadDevHeartbeatUrl = `${callbackBase}event=heartbeat`;
+            dev.sevUploadRegPersonUrl = `${callbackBase}event=regPerson`;
             await fetch(`${baseUrl}/through/device`, {
               method: "PUT",
               headers: { "Authorization": `Bearer ${token}`, "TENANT-ID": "1", "Content-Type": "application/json" },

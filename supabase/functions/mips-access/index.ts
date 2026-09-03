@@ -413,15 +413,32 @@ async function applyMemberAction(
 
 
 
-  await supabase.from("access_logs").insert({
-    device_sn: "CRM-SYSTEM",
-    event_type: `hardware_${action}`,
-    result: action === "revoke" ? "member_denied" : "member",
-    message: `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}` +
-      (verified ? " (verified)" : ` (UNVERIFIED — server reports ${observedValidTimeEnd ?? "unknown"})`),
-    member_id: member_id,
-    branch_id: effectiveBranchId,
-  });
+  // v2.11.0 — the sweep re-asserts the same revocation every 30 min. Logging it
+  // each time floods the Live Access Feed and buries real face scans, so only
+  // log a CRM-SYSTEM state change (nothing identical in the last 12 hours).
+  const crmMessage = `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}` +
+    (verified ? " (verified)" : ` (UNVERIFIED — server reports ${observedValidTimeEnd ?? "unknown"})`);
+  const { data: dupLog } = await supabase
+    .from("access_logs")
+    .select("id")
+    .eq("member_id", member_id)
+    .eq("device_sn", "CRM-SYSTEM")
+    .eq("event_type", `hardware_${action}`)
+    .eq("message", crmMessage)
+    .gte("created_at", new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
+    .limit(1)
+    .maybeSingle();
+
+  if (!dupLog) {
+    await supabase.from("access_logs").insert({
+      device_sn: "CRM-SYSTEM",
+      event_type: `hardware_${action}`,
+      result: action === "revoke" ? "member_denied" : "member",
+      message: crmMessage,
+      member_id: member_id,
+      branch_id: effectiveBranchId,
+    });
+  }
 
   const gatesMissed = undeliveredGates.length > 0;
 
