@@ -5531,6 +5531,51 @@ export type Database = {
         }
         Relationships: []
       }
+      howbody_scan_consumptions: {
+        Row: {
+          created_at: string
+          credit_id: string | null
+          data_key: string
+          id: string
+          kind: string
+          member_id: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          credit_id?: string | null
+          data_key: string
+          id?: string
+          kind: string
+          member_id: string
+          source: string
+        }
+        Update: {
+          created_at?: string
+          credit_id?: string | null
+          data_key?: string
+          id?: string
+          kind?: string
+          member_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "howbody_scan_consumptions_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "member_benefit_credits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "howbody_scan_consumptions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       howbody_scan_sessions: {
         Row: {
           bound_at: string | null
@@ -5538,6 +5583,7 @@ export type Database = {
           created_at: string
           equipment_no: string
           id: string
+          kind: string
           member_id: string | null
           scan_id: string
           status: string
@@ -5548,6 +5594,7 @@ export type Database = {
           created_at?: string
           equipment_no: string
           id?: string
+          kind?: string
           member_id?: string | null
           scan_id: string
           status?: string
@@ -5558,6 +5605,7 @@ export type Database = {
           created_at?: string
           equipment_no?: string
           id?: string
+          kind?: string
           member_id?: string | null
           scan_id?: string
           status?: string
@@ -15593,6 +15641,14 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      howbody_consume_scan: {
+        Args: { _data_key: string; _kind: string; _member_id: string }
+        Returns: Json
+      }
+      howbody_device_authorized: {
+        Args: { _equipment_no: string }
         Returns: boolean
       }
       howbody_scan_quota: {
