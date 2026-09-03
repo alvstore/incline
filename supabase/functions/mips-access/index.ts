@@ -306,8 +306,9 @@ async function applyMemberAction(
     return { success: false, action, error: putJson.msg || "MIPS update failed" };
   }
 
+  let undeliveredGates: number[] = [];
   try {
-    await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId);
+    undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId)).undelivered;
     console.log(`Dispatched ${action} to devices for personId=${existing.personId}`);
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
@@ -422,18 +423,24 @@ async function applyMemberAction(
     branch_id: effectiveBranchId,
   });
 
+  const gatesMissed = undeliveredGates.length > 0;
+
   return {
-    success: verified,
+    success: verified && !gatesMissed,
     action,
     verified,
     observed_valid_time_end: observedValidTimeEnd,
     new_valid_time_end: newValidTimeEnd,
     mips_person_id: existing.personId,
-    error: verified
-      ? undefined
-      : `MIPS did not apply validTimeEnd (pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"})`,
-    message: verified
+    error: !verified
+      ? `MIPS did not apply validTimeEnd (pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"})`
+      : gatesMissed
+      ? `Gate(s) ${undeliveredGates.join(", ")} stayed busy — the change was not delivered to them`
+      : undefined,
+    message: verified && !gatesMissed
       ? `Hardware access ${action}d successfully`
+      : verified
+      ? `Hardware access ${action}d on the server but ${undeliveredGates.length} gate(s) did not receive it`
       : `Hardware access ${action} pushed but NOT confirmed by MIPS`,
   };
 
