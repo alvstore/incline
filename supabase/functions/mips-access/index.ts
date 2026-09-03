@@ -14,7 +14,7 @@
 // Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
 //         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { claimDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -100,7 +100,7 @@ async function fetchPersonDetail(baseUrl: string, token: string, personId: numbe
 }
 
 
-async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string) {
+async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string): Promise<{ undelivered: number[] }> {
   let deviceIds: number[] = [];
   try {
     let query = supabase.from("access_devices").select("mips_device_id").eq("is_online", true);
@@ -122,15 +122,23 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
     } catch {}
   }
 
-  if (deviceIds.length === 0) return;
+  if (deviceIds.length === 0) return { undelivered: [] as number[] };
+
+  const undelivered: number[] = [];
 
   // Targeted per-gate push (v2.9.0). The old bulk `syncPerson` call discarded the
   // personId server-side and made every gate re-download the whole roster.
   for (const deviceId of [...new Set(deviceIds.map(Number))]) {
     let slotHeld = false;
     try {
-      slotHeld = await claimDispatchSlot(supabase, deviceId, branchId ?? null);
-      if (!slotHeld) continue;
+      // Wait for the gate's throttle window instead of dropping the change:
+      // a skipped revoke/restore silently diverges the hardware from the CRM.
+      slotHeld = await waitForDispatchSlot(supabase, deviceId, branchId ?? null);
+      if (!slotHeld) {
+        console.warn(`[mips-access] gate ${deviceId} stayed busy — dispatch not delivered`);
+        undelivered.push(deviceId);
+        continue;
+      }
       await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId] });
     } catch (e) {
       console.warn(`[mips-access] dispatch to device ${deviceId} failed:`, e);
@@ -138,6 +146,8 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
       if (slotHeld) await releaseDispatchSlot(supabase, deviceId);
     }
   }
+
+  return { undelivered };
 }
 
 function formatDate(dateStr: string | null, fallback: string): string {
@@ -296,8 +306,9 @@ async function applyMemberAction(
     return { success: false, action, error: putJson.msg || "MIPS update failed" };
   }
 
+  let undeliveredGates: number[] = [];
   try {
-    await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId);
+    undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId)).undelivered;
     console.log(`Dispatched ${action} to devices for personId=${existing.personId}`);
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
@@ -412,18 +423,24 @@ async function applyMemberAction(
     branch_id: effectiveBranchId,
   });
 
+  const gatesMissed = undeliveredGates.length > 0;
+
   return {
-    success: verified,
+    success: verified && !gatesMissed,
     action,
     verified,
     observed_valid_time_end: observedValidTimeEnd,
     new_valid_time_end: newValidTimeEnd,
     mips_person_id: existing.personId,
-    error: verified
-      ? undefined
-      : `MIPS did not apply validTimeEnd (pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"})`,
-    message: verified
+    error: !verified
+      ? `MIPS did not apply validTimeEnd (pushed ${newValidTimeEnd}, server reports ${observedValidTimeEnd ?? "unknown"})`
+      : gatesMissed
+      ? `Gate(s) ${undeliveredGates.join(", ")} stayed busy — the change was not delivered to them`
+      : undefined,
+    message: verified && !gatesMissed
       ? `Hardware access ${action}d successfully`
+      : verified
+      ? `Hardware access ${action}d on the server but ${undeliveredGates.length} gate(s) did not receive it`
       : `Hardware access ${action} pushed but NOT confirmed by MIPS`,
   };
 

@@ -39,12 +39,21 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
         body: { action: "full_sync", branch_id: branchId },
       });
       if (error) throw error;
-      const results = ((data as { results?: Array<{ claimed?: boolean }> })?.results) || [];
-      const pushed = results.filter((r) => r.claimed !== false).length;
+      // The function reports skipped gates as `{ skipped: true, reason }` —
+      // anything without that flag was actually queued.
+      const results = ((data as { results?: Array<{ skipped?: boolean }> })?.results) || [];
+      const pushed = results.filter((r) => r.skipped !== true).length;
       const skipped = results.length - pushed;
-      toast.success(
-        `Full roster sync queued on ${pushed} gate(s)${skipped ? ` — ${skipped} skipped (already synced in the last 24h)` : ""}`
-      );
+      const skipNote = skipped ? ` — ${skipped} skipped (already full-synced in the last 24h)` : "";
+      if (pushed === 0) {
+        toast.info(
+          results.length
+            ? `No gate was refreshed${skipNote}`
+            : "No gates were targeted for a full roster sync"
+        );
+      } else {
+        toast.success(`Full roster sync queued on ${pushed} gate(s)${skipNote}`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Full roster sync failed");
     } finally {
