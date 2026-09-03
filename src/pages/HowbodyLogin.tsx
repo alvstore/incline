@@ -14,6 +14,7 @@ import { getHowbodyDeviceLabel } from "@/services/howbodyDeviceService";
 import { Loader2, ScanLine, CheckCircle2, AlertTriangle, Search, ShieldCheck } from "lucide-react";
 
 type Status = "idle" | "binding" | "bound" | "error";
+type ScanKind = "body" | "posture";
 
 interface MemberHit {
   id: string;
@@ -30,11 +31,14 @@ export default function HowbodyLogin() {
 
   const equipmentNo = params.get("equipmentNo") || "";
   const scanId = params.get("scanId") || "";
+  const kindParam = (params.get("kind") || params.get("scanType") || "").toLowerCase();
 
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  const [kind, setKind] = useState<ScanKind>(kindParam === "posture" ? "posture" : "body");
+
 
   // Resolve friendly device label from inventory (falls back to raw equipmentNo)
   useEffect(() => {
@@ -131,7 +135,7 @@ export default function HowbodyLogin() {
     setStatus("binding");
     setErrorMsg(null);
     const { data, error } = await supabase.functions.invoke("howbody-bind-user", {
-      body: { equipmentNo, scanId, memberId: targetMemberId },
+      body: { equipmentNo, scanId, memberId: targetMemberId, kind },
     });
     if (error || !data?.ok) {
       setErrorMsg(data?.error || error?.message || "Could not bind to scanner.");
@@ -236,6 +240,30 @@ export default function HowbodyLogin() {
             <ShieldCheck className="mr-1 h-3 w-3" /> Secure
           </Badge>
         </div>
+
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scan type</p>
+          <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Scan type">
+            {(["body", "posture"] as ScanKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={kind === k}
+                onClick={() => setKind(k)}
+                disabled={status === "binding"}
+                className={`cursor-pointer rounded-xl border p-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
+                  kind === k
+                    ? "border-success/40 bg-success/10 text-success"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {k === "body" ? "Body composition" : "Posture"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+
 
         {!isStaff && memberId && (
           <div className="mt-6 space-y-4">

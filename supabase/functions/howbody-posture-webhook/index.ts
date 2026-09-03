@@ -26,7 +26,12 @@ Deno.serve(async (req) => {
     const expectedKey = await getExpectedWebhookAppKey();
     const sentKey = readAppKey(req);
     if (!expectedKey || !sentKey || !timingSafeEqual(sentKey, expectedKey)) {
-      await logWebhook("posture", null, null, 401, "appkey mismatch", null);
+      // Diagnostic: header names only (never values) to identify vendor key placement.
+      await logWebhook("posture", null, null, 401, "appkey mismatch", {
+        header_names: [...req.headers.keys()],
+        appkey_header_present: sentKey !== null,
+        expected_key_configured: Boolean(expectedKey),
+      });
       return json({ code: 401, message: "Unauthorized", data: null }, 401);
     }
 
