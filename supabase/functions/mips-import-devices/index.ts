@@ -128,9 +128,9 @@ Deno.serve(async (req) => {
           const dev = detail?.data;
           if (dev) {
             delete dev.deviceRegion;
-            dev.sevUploadRecRecordUrl = `${callbackBase}?event=record`;
-            dev.sevUploadDevHeartbeatUrl = `${callbackBase}?event=heartbeat`;
-            dev.sevUploadRegPersonUrl = `${callbackBase}?event=regPerson`;
+            dev.sevUploadRecRecordUrl = `${callbackBase}event=record`;
+            dev.sevUploadDevHeartbeatUrl = `${callbackBase}event=heartbeat`;
+            dev.sevUploadRegPersonUrl = `${callbackBase}event=regPerson`;
             await fetch(`${baseUrl}/through/device`, {
               method: "PUT",
               headers: { "Authorization": `Bearer ${token}`, "TENANT-ID": "1", "Content-Type": "application/json" },
