@@ -1,3 +1,6 @@
+// v2.5.0 - Two-way sync: recognition records are mirrored back to the MIPS server
+//           (scheme-less server URLs normalized, native form-encoded body, fallback
+//           /tdx-admin path, failures reported via log_error_event).
 // v2.4.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block).
 //           Staff punches now carry the REAL hardware scan time (was webhook arrival
 //           time, so a delayed delivery invented lateness), parsed by the shared
@@ -704,11 +707,13 @@ Deno.serve(async (req) => {
         const relayed = await relayToMips(relayUrl, payload, eventType_raw);
         if (!relayed) {
           await supabase.rpc("log_error_event", {
-            _source: "mips-webhook-receiver",
-            _severity: "warning",
-            _message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
-            _context: { personNo, deviceKey, relayUrl, scanTime },
-          }).catch?.(() => {});
+            p_severity: "warning",
+            p_source: "mips-webhook-receiver",
+            p_message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
+            p_function_name: "relayToMips",
+            p_branch_id: branchId,
+            p_context: { personNo, deviceKey, relayUrl, scanTime },
+          });
         }
       } else {
         console.log("No MIPS relay URL configured — skipping relay");
