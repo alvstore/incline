@@ -26,6 +26,18 @@ Deno.serve(async (req) => {
     out.getToken_code = parsed?.code ?? null;
     out.getToken_msg = parsed?.msg ?? parsed?.message ?? text.slice(0, 200);
     out.token_received = Boolean(parsed?.data?.token);
+
+    // Loopback webhook auth probe: correct appkey must pass the 401 gate.
+    const hookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/howbody-body-webhook`;
+    const hookRes = await fetch(hookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", appkey: appKey },
+      body: JSON.stringify({ thirdUid: "selftest-unknown-uid", dataKey: `selftest-${Date.now()}` }),
+    });
+    out.webhook_status_with_valid_appkey = hookRes.status;
+    out.webhook_auth_passed = hookRes.status !== 401;
+    out.webhook_body = (await hookRes.text()).slice(0, 200);
+
   } catch (e) {
     out.error = e instanceof Error ? e.message : String(e);
   }
