@@ -696,11 +696,20 @@ Deno.serve(async (req) => {
 
     console.log(`Processed: result=${result}, person=${personNo}, device=${deviceKey}, message=${message}`);
 
-    // Relay to MIPS internal callback (fire-and-forget)
+    // Relay to the MIPS server so its own pass records mirror ours (two-way sync).
+    // A failure here means MIPS silently misses the scan, so it is reported.
     try {
       const relayUrl = await getRelayUrl(supabase, branchId);
       if (relayUrl) {
-        relayToMips(relayUrl, payload, eventType_raw);
+        const relayed = await relayToMips(relayUrl, payload, eventType_raw);
+        if (!relayed) {
+          await supabase.rpc("log_error_event", {
+            _source: "mips-webhook-receiver",
+            _severity: "warning",
+            _message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
+            _context: { personNo, deviceKey, relayUrl, scanTime },
+          }).catch?.(() => {});
+        }
       } else {
         console.log("No MIPS relay URL configured — skipping relay");
       }
