@@ -379,6 +379,25 @@ async function handleImgRegCallback(supabase: any, payload: Record<string, unkno
   }
 }
 
+/**
+ * Normalize a stored MIPS server URL into an absolute origin.
+ * Rows created from the device UI often store `212.38.94.228:9000` with no
+ * scheme — `new URL()` (used by fetch) then throws "Invalid URL", which is why
+ * every recognition record failed to reach the MIPS server.
+ */
+function normalizeMipsBase(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 async function getRelayUrl(supabase: any, branchId: string | null): Promise<string | null> {
   if (branchId) {
     const { data: conn } = await supabase
@@ -387,27 +406,53 @@ async function getRelayUrl(supabase: any, branchId: string | null): Promise<stri
       .eq("branch_id", branchId)
       .eq("is_active", true)
       .maybeSingle();
-    if (conn?.server_url) return conn.server_url.replace(/\/+$/, "");
+    const fromConn = normalizeMipsBase(conn?.server_url);
+    if (fromConn) return fromConn;
   }
-  const envUrl = Deno.env.get("MIPS_SERVER_URL");
-  return envUrl ? envUrl.replace(/\/+$/, "") : null;
+  return normalizeMipsBase(Deno.env.get("MIPS_SERVER_URL"));
 }
 
-function relayToMips(mipsServerUrl: string, payload: Record<string, unknown>, eventType: string) {
-  const callbackPaths: string[] = [];
-  if (eventType === "ImgReg" || eventType === "img_reg" || eventType === "register") {
-    callbackPaths.push("/api/callback/imgReg", "/tdx-admin/api/callback/imgReg");
-  } else {
-    callbackPaths.push("/api/callback/identify", "/tdx-admin/api/callback/identity");
+/**
+ * Forward the raw recognition payload back to the MIPS server so its own pass
+ * records stay in sync with ours (the gate can only push to ONE URL, and that
+ * URL is now us). Sends the vendor's native form-encoded body, retries the
+ * alternate `/tdx-admin` path, and returns whether MIPS accepted it.
+ */
+async function relayToMips(
+  mipsServerUrl: string,
+  payload: Record<string, unknown>,
+  eventType: string,
+): Promise<boolean> {
+  const callbackPaths: string[] =
+    eventType === "ImgReg" || eventType === "img_reg" || eventType === "register"
+      ? ["/api/callback/imgReg", "/tdx-admin/api/callback/imgReg"]
+      : ["/api/callback/identify", "/tdx-admin/api/callback/identity"];
+
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(payload)) {
+    if (v === null || v === undefined) continue;
+    form.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
   }
 
-  const primaryUrl = `${mipsServerUrl}${callbackPaths[0]}`;
-  console.log(`Relay forwarding to: ${primaryUrl}`);
-  fetch(primaryUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch((e) => console.warn("Relay forward failed:", e));
+  for (const path of callbackPaths) {
+    const url = `${mipsServerUrl}${path}`;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (res.ok) {
+        console.log(`Relay OK → ${url} (${res.status})`);
+        return true;
+      }
+      console.warn(`Relay rejected by ${url}: HTTP ${res.status}`);
+    } catch (e) {
+      console.warn(`Relay forward failed → ${url}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  return false;
 }
 
 Deno.serve(async (req) => {
