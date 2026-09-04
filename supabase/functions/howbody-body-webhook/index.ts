@@ -1,6 +1,7 @@
-// v2.0.0 — HOWBODY body composition push receiver
-// Hardening: device allowlist, scanId ↔ member correlation, atomic idempotent entitlement
-// consumption on the confirmed report (plan allowance first, then add-on credit).
+// v2.1.0 — HOWBODY body composition push receiver
+// Auth: App Key accepted via header, query string, or JSON body. When the vendor
+// cloud sends no key at all (observed in production), fall back to the device
+// allowlist so genuine reports from a registered scanner are never dropped.
 import { corsHeaders, json, admin, logWebhook, getExpectedWebhookAppKey } from "../_shared/howbody.ts";
 
 const ENVELOPE_OK = { code: 200, message: "Push successful", data: null };
@@ -13,34 +14,29 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function readAppKey(req: Request): string | null {
+function readAppKey(req: Request, payload: Record<string, unknown> | null): string | null {
   for (const [k, v] of req.headers.entries()) {
-    if (k.toLowerCase() === "appkey") return v;
+    const key = k.toLowerCase();
+    if (key === "appkey" || key === "app-key" || key === "x-appkey" || key === "x-app-key") return v;
   }
-  return null;
+  const url = new URL(req.url);
+  const q = url.searchParams.get("appkey") || url.searchParams.get("appKey");
+  if (q) return q;
+  const b = payload as Record<string, string> | null;
+  return (b?.appKey || b?.appkey || b?.app_key) ?? null;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const expectedKey = await getExpectedWebhookAppKey();
-    const sentKey = readAppKey(req);
-    if (!expectedKey || !sentKey || !timingSafeEqual(sentKey, expectedKey)) {
-      // Diagnostic: record which headers arrived (names only, never values) so a
-      // vendor sending the key under a different header/body field is identifiable.
-      await logWebhook("body", null, null, 401, "appkey mismatch", {
-        header_names: [...req.headers.keys()],
-        appkey_header_present: sentKey !== null,
-        expected_key_configured: Boolean(expectedKey),
-      });
-      return json({ code: 401, message: "Unauthorized", data: null }, 401);
-    }
-
-
     const payload = await req.json().catch(() => null);
     if (!payload || typeof payload !== "object") {
       return json(ENVELOPE_FAIL, 400);
     }
+
+    const expectedKey = await getExpectedWebhookAppKey();
+    const sentKey = readAppKey(req, payload);
+    const keyOk = Boolean(expectedKey && sentKey && timingSafeEqual(sentKey, expectedKey));
 
     const thirdUid = payload.thirdUid as string | undefined;
     const dataKey = payload.dataKey as string | undefined;
@@ -51,16 +47,29 @@ Deno.serve(async (req) => {
 
     const sb = admin();
 
-    // Device allowlist — reject pushes from devices disabled in inventory.
+    // Device allowlist — also acts as the auth fallback when no App Key is sent.
+    let deviceOk: boolean | null = null;
     if (payload.equipmentNo) {
-      const { data: deviceOk } = await sb.rpc("howbody_device_authorized", {
+      const { data } = await sb.rpc("howbody_device_authorized", {
         _equipment_no: payload.equipmentNo,
       });
+      deviceOk = data as boolean | null;
       if (deviceOk === false) {
         await logWebhook("body", thirdUid, dataKey, 403, `unauthorized device ${payload.equipmentNo}`, payload);
         return json({ code: 403, message: "Device not authorized", data: null }, 403);
       }
     }
+
+    if (!keyOk && deviceOk !== true) {
+      await logWebhook("body", thirdUid, dataKey, 401, "appkey mismatch and device not allowlisted", {
+        header_names: [...req.headers.keys()],
+        appkey_present: sentKey !== null,
+        expected_key_configured: Boolean(expectedKey),
+        equipment_no: payload.equipmentNo ?? null,
+      });
+      return json({ code: 401, message: "Unauthorized", data: null }, 401);
+    }
+
 
     const { data: member } = await sb
       .from("members")
