@@ -327,16 +327,18 @@ Deno.serve(async (req) => {
 
       // Never mail a half-written reminder ("₹" with no number, no date).
       if (!amountPlain || Number(pendingAmt) <= 0 || !dueDateStr) {
-        await adminClient
+        const { error: skipErr2 } = await adminClient
           .from("payment_reminders")
           .update({
             status: "skipped",
             skipped_reason: !dueDateStr ? "missing_due_date" : "missing_amount",
           })
           .eq("id", reminder.id);
+        if (skipErr2) console.error("[send-reminders] failed to mark reminder skipped", reminder.id, skipErr2.message);
         results.payment_reminders_skipped = (results.payment_reminders_skipped || 0) + 1;
         continue;
       }
+
 
 
       notifications.push({
