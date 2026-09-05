@@ -9489,6 +9489,7 @@ export type Database = {
           sent_at: string | null
           skipped_reason: string | null
           status: string | null
+          updated_at: string
         }
         Insert: {
           attempt_count?: number
@@ -9506,6 +9507,7 @@ export type Database = {
           sent_at?: string | null
           skipped_reason?: string | null
           status?: string | null
+          updated_at?: string
         }
         Update: {
           attempt_count?: number
@@ -9523,6 +9525,7 @@ export type Database = {
           sent_at?: string | null
           skipped_reason?: string | null
           status?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
