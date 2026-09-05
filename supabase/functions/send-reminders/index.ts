@@ -248,17 +248,18 @@ Deno.serve(async (req) => {
       const terminalStatuses = ["paid", "voided", "cancelled", "refunded"];
       const isTerminal = invoice?.status && terminalStatuses.includes(invoice.status);
       if (!invoice || isTerminal || pendingAmt < 1) {
-        await adminClient
+        const { error: skipErr } = await adminClient
           .from("payment_reminders")
           .update({
             status: "skipped",
             skipped_reason: isTerminal ? `invoice_${invoice?.status}` : "no_balance",
-            updated_at: new Date().toISOString(),
           })
           .eq("id", reminder.id);
+        if (skipErr) console.error("[send-reminders] failed to mark reminder skipped", reminder.id, skipErr.message);
         results.payment_reminders_skipped = (results.payment_reminders_skipped || 0) + 1;
         continue;
       }
+
 
       const name = member.profiles?.full_name || "Member";
       const isOverdue = !["due_soon", "before_due", "on_due"].includes(reminder.reminder_type);
