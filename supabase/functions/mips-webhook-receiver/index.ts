@@ -700,27 +700,34 @@ Deno.serve(async (req) => {
     console.log(`Processed: result=${result}, person=${personNo}, device=${deviceKey}, message=${message}`);
 
     // Relay to the MIPS server so its own pass records mirror ours (two-way sync).
-    // A failure here means MIPS silently misses the scan, so it is reported.
-    try {
-      const relayUrl = await getRelayUrl(supabase, branchId);
-      if (relayUrl) {
-        const relayed = await relayToMips(relayUrl, payload, eventType_raw);
-        if (!relayed) {
-          await supabase.rpc("log_error_event", {
-            p_severity: "warning",
-            p_source: "mips-webhook-receiver",
-            p_message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
-            p_function_name: "relayToMips",
-            p_branch_id: branchId,
-            p_context: { personNo, deviceKey, relayUrl, scanTime },
-          });
+    // Runs in the background: the gate must never wait on MIPS latency.
+    const relayTask = (async () => {
+      try {
+        const relayUrl = await getRelayUrl(supabase, branchId);
+        if (relayUrl) {
+          const relayed = await relayToMips(relayUrl, payload, eventType_raw);
+          if (!relayed) {
+            await supabase.rpc("log_error_event", {
+              p_severity: "warning",
+              p_source: "mips-webhook-receiver",
+              p_message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
+              p_function_name: "relayToMips",
+              p_branch_id: branchId,
+              p_context: { personNo, deviceKey, relayUrl, scanTime },
+            });
+          }
+        } else {
+          console.log("No MIPS relay URL configured — skipping relay");
         }
-      } else {
-        console.log("No MIPS relay URL configured — skipping relay");
+      } catch (relayErr) {
+        console.warn("Relay lookup failed:", relayErr);
       }
-    } catch (relayErr) {
-      console.warn("Relay lookup failed:", relayErr);
-    }
+    })();
+    // deno-lint-ignore no-explicit-any
+    const rt = (globalThis as any).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(relayTask);
+    else relayTask.catch(() => {});
+
 
     // *** CRITICAL HARDENING: Real-time Block Signal ***
     // If the check-in was denied (dues overdue, blacklisted, etc.), and we have a relay URL,
