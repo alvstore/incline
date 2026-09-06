@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw } from 'lucide-react';
+import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
+import { exportToCSV } from '@/lib/csvExport';
+
 import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
 import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
 import { useAuth } from '@/contexts/AuthContext';
@@ -201,6 +203,48 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
 
   const activeRun = runs.find((r: any) => r.id === activeRunId);
 
+  const att = (it: any) => (it?.calc_attendance || {}) as Record<string, number>;
+  const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+
+  const totals = items.reduce(
+    (acc: any, it: any) => {
+      acc.base += Number(it.final_base || 0);
+      acc.pt += Number(it.final_pt_commission || 0);
+      acc.bonus += Number(it.final_bonus || 0);
+      acc.advance += Number(it.final_advance || 0);
+      acc.deductions += Number(it.final_deductions || 0) + Number(it.final_penalty || 0);
+      acc.net += Number(it.final_net || 0);
+      return acc;
+    },
+    { base: 0, pt: 0, bonus: 0, advance: 0, deductions: 0, net: 0 },
+  );
+
+  const exportCsv = () => {
+    const rows = items.map((it: any) => {
+      const a = att(it);
+      return {
+        Employee: it.profile?.full_name || it.user_id,
+        Kind: it.staff_kind,
+        'Month Days': a.total_days ?? '',
+        'Total Shifts': a.shifts_rostered ?? '',
+        'Missed Shifts': a.shifts_missed ?? '',
+        'Attended Shifts': a.shifts_attended ?? '',
+        'Payable Days': a.payable_days ?? '',
+        'Per Shift Rate': a.per_shift_rate ?? '',
+        'Base Salary': a.monthly_salary ?? '',
+        'Salary Earned': Number(it.final_base || 0),
+        'PT Commission': Number(it.final_pt_commission || 0),
+        Bonus: Number(it.final_bonus || 0),
+        Deductions: Number(it.final_deductions || 0) + Number(it.final_penalty || 0),
+        Advance: Number(it.final_advance || 0),
+        'Net Payout': Number(it.final_net || 0),
+        Status: it.status,
+      };
+    });
+    exportToCSV(rows, `payroll-${periodStart}-to-${periodEnd}`);
+  };
+
+
   return (
     <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -254,6 +298,9 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                 onClick={() => setPayOpen(true)}>
                 <Banknote className="h-4 w-4 mr-1" /> Mark Paid
               </Button>
+              <Button size="sm" variant="outline" onClick={exportCsv} aria-label="Export payroll sheet">
+                <Download className="h-4 w-4 mr-1" /> Export
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <Table>
@@ -262,17 +309,21 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                     <TableHead className="w-8"></TableHead>
                     <TableHead>Staff</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Base</TableHead>
+                    <TableHead className="text-right">Shifts</TableHead>
+                    <TableHead className="text-right">Payable days</TableHead>
+                    <TableHead className="text-right">Salary earned</TableHead>
                     <TableHead className="text-right">PT</TableHead>
                     <TableHead className="text-right">Bonus</TableHead>
                     <TableHead className="text-right">Deductions</TableHead>
-                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead className="text-right">Advance</TableHead>
+                    <TableHead className="text-right">Net payout</TableHead>
                     <TableHead className="text-right">Adj.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((it: any) => {
                     const adjusted = Number(it.final_net) !== Number(it.calc_net);
+                    const a = att(it);
                     return (
                       <TableRow key={it.id}>
                         <TableCell>
@@ -280,7 +331,10 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
-                          <div className="text-xs text-muted-foreground">{it.staff_kind}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {it.staff_kind}
+                            {a.monthly_salary ? ` · ${inr(Number(a.monthly_salary))}/mo` : ''}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge className={STATUS_BADGE[(it.status as Status) || 'draft']}>{it.status}</Badge>
@@ -289,14 +343,31 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             <Badge className="ml-1 bg-warning/15 text-warning text-[10px]">attendance changed</Badge>
                           )}
                         </TableCell>
-
-                        <TableCell className="text-right font-mono text-sm">₹{Number(it.final_base).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">₹{Number(it.final_pt_commission).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">₹{Number(it.final_bonus).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-sm text-destructive">
-                          -₹{(Number(it.final_deductions) + Number(it.final_advance) + Number(it.final_penalty)).toLocaleString()}
+                        <TableCell className="text-right text-sm">
+                          <span className="font-mono">{a.shifts_attended ?? 0}/{a.shifts_rostered ?? 0}</span>
+                          {Number(a.shifts_missed || 0) > 0 && (
+                            <div className="text-[11px] text-destructive">{a.shifts_missed} missed</div>
+                          )}
+                          {Number(a.per_shift_rate || 0) > 0 && (
+                            <div className="text-[11px] text-muted-foreground">{inr(Number(a.per_shift_rate))}/shift</div>
+                          )}
                         </TableCell>
-                        <TableCell className="text-right font-bold">₹{Number(it.final_net).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {a.payable_days ?? 0}<span className="text-muted-foreground">/{a.total_days ?? 0}</span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_base))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_pt_commission))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_bonus))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm text-destructive">
+                          {Number(it.final_deductions) + Number(it.final_penalty) > 0
+                            ? `-${inr(Number(it.final_deductions) + Number(it.final_penalty))}`
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-destructive">
+                          {Number(it.final_advance) > 0 ? `-${inr(Number(it.final_advance))}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">{inr(Number(it.final_net))}</TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1 justify-end">
                             {it.attendance_changed_at && (
@@ -327,8 +398,23 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                       </TableRow>
                     );
                   })}
+                  <TableRow className="bg-slate-50 font-semibold">
+                    <TableCell colSpan={5} className="text-right text-xs uppercase tracking-wider text-slate-500">Total</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.base)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.pt)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.bonus)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm text-destructive">
+                      {totals.deductions > 0 ? `-${inr(totals.deductions)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm text-destructive">
+                      {totals.advance > 0 ? `-${inr(totals.advance)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">{inr(totals.net)}</TableCell>
+                    <TableCell />
+                  </TableRow>
                 </TableBody>
               </Table>
+
             </div>
           </>
         )}
