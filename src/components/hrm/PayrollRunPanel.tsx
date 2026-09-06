@@ -398,8 +398,23 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                       </TableRow>
                     );
                   })}
+                  <TableRow className="bg-slate-50 font-semibold">
+                    <TableCell colSpan={5} className="text-right text-xs uppercase tracking-wider text-slate-500">Total</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.base)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.pt)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.bonus)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm text-destructive">
+                      {totals.deductions > 0 ? `-${inr(totals.deductions)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm text-destructive">
+                      {totals.advance > 0 ? `-${inr(totals.advance)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">{inr(totals.net)}</TableCell>
+                    <TableCell />
+                  </TableRow>
                 </TableBody>
               </Table>
+
             </div>
           </>
         )}
