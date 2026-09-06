@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getISTToday } from '@/lib/utils/datetime';
-import { AlertTriangle, History, Layers, ChevronRight } from 'lucide-react';
+import { AlertTriangle, History, Layers, ChevronRight, PencilLine } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AttendanceDetailDrawer } from '@/components/attendance/AttendanceDetailDrawer';
 import type { Database } from '@/integrations/supabase/types';
 
 type MonthRow = Database['public']['Functions']['staff_month_summary']['Returns'][number];
@@ -37,11 +38,14 @@ const STATUS_BADGE: Record<string, string> = {
   weekly_off: 'bg-slate-100 text-slate-600',
   holiday: 'bg-violet-100 text-violet-700',
   scheduled: 'bg-slate-100 text-slate-600',
+  unrostered: 'bg-orange-100 text-orange-700',
 };
 
 export function StaffMonthHistory({ branchId }: { branchId: string | undefined }) {
   const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [detail, setDetail] = useState<MonthRow | null>(null);
+  const [editDate, setEditDate] = useState<string | null>(null);
+  const [pickDate, setPickDate] = useState('');
 
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ['staff-month-summary', branchId, month],

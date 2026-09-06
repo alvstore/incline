@@ -41,6 +41,9 @@ type HrSettings = {
   esi_employee_pct: number;
   pt_enabled: boolean;
   pt_amount: number | null;
+  tds_enabled: boolean;
+  tds_pct: number;
+  advance_recovery_max_per_month: number | null;
 };
 
 const blank = (branch_id: string | null): HrSettings => ({
@@ -67,6 +70,9 @@ const blank = (branch_id: string | null): HrSettings => ({
   esi_employee_pct: 0.75,
   pt_enabled: false,
   pt_amount: 200,
+  tds_enabled: false,
+  tds_pct: 10,
+  advance_recovery_max_per_month: null,
 });
 
 export default function HrSettingsTab() {
