@@ -30,7 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
 import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
 import { Dumbbell } from 'lucide-react';
-import { StaffAttendanceBoard } from '@/components/attendance/StaffAttendanceBoard';
+
 import { StaffRosterBoard } from '@/components/attendance/StaffRosterBoard';
 import { StaffMonthHistory } from '@/components/attendance/StaffMonthHistory';
 import { MemberAttendanceHistory } from '@/components/attendance/MemberAttendanceHistory';
@@ -128,7 +128,7 @@ export default function AttendanceDashboard() {
       }
     }
 
-    if (tabParam && ['members','staff-record','staff-log','pt','history'].includes(tabParam)) {
+    if (tabParam && ['members','staff-record','pt','history'].includes(tabParam)) {
       setActiveTab(tabParam);
       url.searchParams.delete('tab');
       window.history.replaceState({}, '', url.toString());
@@ -879,12 +879,7 @@ export default function AttendanceDashboard() {
               <CardTitle>Attendance Management</CardTitle>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
-                  const exportData = activeTab === 'staff-log' ? filteredStaffAttendance.map((a: any) => ({
-                    Name: a.profiles?.full_name || 'Unknown',
-                    'Check In': format(new Date(a.check_in), 'yyyy-MM-dd HH:mm'),
-                    'Check Out': a.check_out ? format(new Date(a.check_out), 'yyyy-MM-dd HH:mm') : '',
-                    Duration: formatDuration(a.check_in, a.check_out),
-                  })) : filteredMemberAttendance.map((a: any) => ({
+                  const exportData = filteredMemberAttendance.map((a: any) => ({
                     Name: a.members?.profiles?.full_name || 'Unknown',
                     Code: a.members?.member_code || '',
                     'Check In': format(new Date(a.check_in), 'yyyy-MM-dd HH:mm'),
@@ -921,9 +916,6 @@ export default function AttendanceDashboard() {
                 )}
                 {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
                   <>
-                    <TabsTrigger value="staff-log" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
-                      <Clock className="h-3.5 w-3.5" />Staff Log
-                    </TabsTrigger>
                     <TabsTrigger value="history" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
                       <History className="h-3.5 w-3.5" />History
                     </TabsTrigger>
@@ -1033,10 +1025,6 @@ export default function AttendanceDashboard() {
               </TabsContent>
 
 
-              {/* Staff Log Tab — shift-aware board */}
-              <TabsContent value="staff-log">
-                <StaffAttendanceBoard branchId={effectiveBranchId} canManage={canRecordStaff} />
-              </TabsContent>
 
 
               {/* History Tab — staff (block accurate) + members */}

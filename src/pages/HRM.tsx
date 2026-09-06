@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1311,6 +1312,25 @@ export default function HRMPage() {
 
           {/* Payroll Tab */}
           <TabsContent value="payroll" className="mt-4 space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Payroll — {getPayrollMonthLabel(payrollMonth)}</h3>
+                <p className="text-sm text-muted-foreground">
+                  Choose a month, calculate the run, review each line, then approve, process and mark paid.
+                  Attendance, PT commission, statutory deductions and advance recovery are all calculated on the server.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="payroll-month" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payroll month</Label>
+                <Input
+                  id="payroll-month"
+                  type="month"
+                  value={payrollMonth}
+                  onChange={(e) => setPayrollMonth(e.target.value)}
+                  className="w-[180px] cursor-pointer"
+                />
+              </div>
+            </div>
             <PayrollRunPanel
               periodStart={`${payrollMonth}-01`}
               periodEnd={(() => {
@@ -1318,275 +1338,8 @@ export default function HRMPage() {
                 return new Date(y, m, 0).toISOString().split('T')[0];
               })()}
             />
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <CardTitle>Payroll Processing</CardTitle>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="month"
-                      value={payrollMonth}
-                      onChange={(e) => setPayrollMonth(e.target.value)}
-                      className="w-[180px]"
-                    />
-                    {(() => {
-                      const anyBlocked = payrollStaff.some((s: PayrollStaffItem) => {
-                        const r = (payrollData as Record<string, any>)[s.id];
-                        return r && r.attendanceRecorded === false && !r.manualOverride;
-                      });
-                      const disabled = processAllPayroll.isPending || isLoadingPayroll || anyBlocked;
-                      return (
-                        <Button
-                          onClick={() => processAllPayroll.mutate()}
-                          disabled={disabled}
-                          className="bg-accent hover:bg-accent/90"
-                          title={anyBlocked ? 'Some staff have no attendance recorded. Sync MIPS or mark them present before processing.' : undefined}
-                        >
-                          <DollarSign className="mr-2 h-4 w-4" />
-                          Process All
-                        </Button>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff Member</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Days</TableHead>
-                      <TableHead>Base Salary</TableHead>
-                      <TableHead>Pro-rated</TableHead>
-                      <TableHead>PT Commission</TableHead>
-                      <TableHead>Gross</TableHead>
-                      <TableHead>Deductions</TableHead>
-                      <TableHead>Net Pay</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payrollStaff.map((staff: PayrollStaffItem) => {
-                      const p = (payrollData as Record<string, any>)[staff.id] || {};
-                      const rowLoading = isLoadingPayroll || (isFetchingPayroll && !(payrollData as Record<string, any>)[staff.id]);
-                      const blockProcess = p.attendanceRecorded === false && !p.manualOverride;
-
-                      return (
-                        <TableRow key={staff.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback className="bg-accent/10 text-accent text-xs">
-                                  {getInitials(staff.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{staff.name}</p>
-                                <p className="text-xs text-muted-foreground">{staff.code}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{getStaffTypeBadge(staff)}</TableCell>
-                          <TableCell>
-                            {rowLoading ? (
-                              <div className="flex flex-col gap-1.5">
-                                <Skeleton className="h-4 w-10" />
-                                <Skeleton className="h-4 w-24 rounded-full" />
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-start gap-1.5">
-                                <span className="font-mono text-sm">
-                                  {(p.payableDays ?? p.daysPresent ?? 0)}/{p.workingDays || getDaysInMonth(payrollMonth)}
-                                </span>
-                                <AttendanceStateBadge
-                                  attendanceRecorded={p.attendanceRecorded !== false}
-                                  manualOverride={!!p.manualOverride}
-                                />
-                                <div className="flex flex-wrap gap-1">
-                                  {(p.halfDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-warning/10 text-warning border-warning/30">
-                                      {p.halfDays} half
-                                    </Badge>
-                                  )}
-                                  {(p.lateDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-warning/10 text-warning border-warning/30">
-                                      {p.lateDays} late
-                                    </Badge>
-                                  )}
-                                  {(p.missingCheckoutDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-destructive/10 text-destructive border-destructive/30">
-                                      {p.missingCheckoutDays} no-out
-                                    </Badge>
-                                  )}
-                                  {(p.otHours || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-info/10 text-info border-info/30">
-                                      +{Math.round(p.otHours)}h OT
-                                    </Badge>
-                                  )}
-                                  {(p.leaveDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-primary/10 text-primary border-primary/30">
-                                      {p.leaveDays} leave
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">₹{(staff.salary || 0).toLocaleString()}</TableCell>
-                          <TableCell>{rowLoading ? <Skeleton className="h-4 w-16" /> : <>₹{(p.proRatedPay || 0).toLocaleString()}</>}</TableCell>
-                          <TableCell>
-                            {rowLoading ? <Skeleton className="h-4 w-10" /> : (p.ptCommission || 0) > 0
-                              ? <span className="text-success font-medium">+₹{p.ptCommission.toLocaleString()}</span>
-                              : <span className="text-muted-foreground">-</span>}
-                          </TableCell>
-                          <TableCell className="font-semibold">{rowLoading ? <Skeleton className="h-4 w-16" /> : <>₹{(p.grossPay || 0).toLocaleString()}</>}</TableCell>
-                          <TableCell className="text-destructive">
-                            {rowLoading ? <Skeleton className="h-4 w-16" /> : (() => {
-                              const ded = p.totalDeductions ?? (p.pfDeduction || 0);
-                              if (!ded) return <span className="text-muted-foreground">-</span>;
-                              const parts: string[] = [];
-                              if (p.pfDeduction) parts.push(`PF ₹${Math.round(p.pfDeduction).toLocaleString()}`);
-                              if (p.esiDeduction) parts.push(`ESI ₹${Math.round(p.esiDeduction).toLocaleString()}`);
-                              if (p.ptDeduction) parts.push(`PT ₹${Math.round(p.ptDeduction).toLocaleString()}`);
-                              return (
-                                <div title={parts.join(' · ')}>
-                                  -₹{Math.round(ded).toLocaleString()}
-                                  {parts.length > 0 && <div className="text-[10px] text-muted-foreground">{parts.join(' · ')}</div>}
-                                </div>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell className="font-semibold text-success">{rowLoading ? <Skeleton className="h-4 w-16" /> : <>₹{(p.netPay || 0).toLocaleString()}</>}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={rowLoading || blockProcess}
-                                title={blockProcess ? 'Attendance not recorded — sync MIPS or mark full month present first.' : undefined}
-                                onClick={() => {
-                                  toast.success(`Payroll processed for ${staff.name}`);
-                                }}
-                              >
-                                <CheckCircle className="mr-1 h-3 w-3" />
-                                Process
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  const blob = buildPayslipPdf({
-                                    employee_name: staff.name,
-                                    employee_code: staff.code,
-                                    designation: staff.position,
-                                    period_label: getPayrollMonthLabel(payrollMonth),
-                                    period_start: `${payrollMonth}-01`,
-                                    period_end: `${payrollMonth}-${String(p.workingDays || 28).padStart(2,'0')}`,
-                                    attendance: {
-                                      present: p.daysPresent ?? 0,
-                                      half_day: p.halfDays ?? 0,
-                                      late: p.lateDays ?? 0,
-                                      missing_checkout: p.missingCheckoutDays ?? 0,
-                                      leave: p.leaveDays ?? 0,
-                                      holiday: p.holidayDays ?? 0,
-                                      weekly_off: p.weeklyOffDays ?? 0,
-                                      absent: 0,
-                                      payable_days: p.payableDays ?? 0,
-                                      total_days: p.workingDays ?? 0,
-                                      monthly_salary: staff.salary || 0,
-                                    },
-                                    earnings: { base: p.proRatedPay || 0, pt_commission: p.ptCommission || 0, ot: 0, bonus: 0 },
-                                    deductions: { deductions: p.pfDeduction || 0, advance: 0, penalty: 0 },
-                                    gross: p.grossPay || 0,
-                                    net: p.netPay || 0,
-                                  }, brand);
-                                  downloadBlob(blob, `Payslip_${staff.code}_${payrollMonth}.pdf`);
-                                  toast.success('Payslip downloaded');
-                                }}
-                                title="Download Payslip"
-                              >
-                                <Download className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => toast.info('Email payslip feature coming soon')}
-                                title="Send Payslip via Email"
-                              >
-                                <Mail className="h-3 w-3" />
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="ghost" title="More">
-                                    <MoreHorizontal className="h-3 w-3" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                  <DropdownMenuItem
-                                    onClick={() => setMarkPresentTarget({ id: staff.id, name: staff.name, userId: staff.user_id || null })}
-                                    disabled={p.attendanceRecorded !== false}
-                                  >
-                                    <UserCheck className="mr-2 h-3.5 w-3.5" /> Mark full month present
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => setAdjustTarget({ id: staff.id, name: staff.name, userId: staff.user_id || null, currentNet: p.netPay || 0 })}
-                                  >
-                                    <Edit className="mr-2 h-3.5 w-3.5" /> Manual adjust…
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {payrollStaff.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
-                          <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>No active staff for payroll</p>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-
-                {/* Payroll Summary */}
-                <div className="mt-6 p-4 rounded-lg bg-muted/50">
-                  <h4 className="font-semibold mb-3">Payroll Summary - {getPayrollMonthLabel(payrollMonth)}</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Pro-rated Base</p>
-                      <p className="text-lg font-bold">₹{Math.round(totalPayrollSummary.totalBase).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">PT Commission</p>
-                      <p className="text-lg font-bold text-success">
-                        +₹{Math.round(totalPayrollSummary.totalCommission).toLocaleString()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Gross Pay</p>
-                      <p className="text-lg font-bold">₹{Math.round(totalPayrollSummary.totalGross).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Deductions</p>
-                      <p className="text-lg font-bold text-destructive">
-                        -₹{Math.round(totalPayrollSummary.totalDeductions).toLocaleString()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Net Payable</p>
-                      <p className="text-lg font-bold text-success">
-                        ₹{Math.round(totalPayrollSummary.totalNet).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
+
 
           {/* Policies Tab */}
           <TabsContent value="policies" className="mt-4">

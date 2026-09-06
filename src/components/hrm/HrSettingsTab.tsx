@@ -41,6 +41,9 @@ type HrSettings = {
   esi_employee_pct: number;
   pt_enabled: boolean;
   pt_amount: number | null;
+  tds_enabled: boolean;
+  tds_pct: number;
+  advance_recovery_max_per_month: number | null;
 };
 
 const blank = (branch_id: string | null): HrSettings => ({
@@ -67,6 +70,9 @@ const blank = (branch_id: string | null): HrSettings => ({
   esi_employee_pct: 0.75,
   pt_enabled: false,
   pt_amount: 200,
+  tds_enabled: false,
+  tds_pct: 10,
+  advance_recovery_max_per_month: null,
 });
 
 export default function HrSettingsTab() {
@@ -218,7 +224,45 @@ export default function HrSettingsTab() {
               </div>
             )}
           </div>
+
+          {/* TDS */}
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-foreground">TDS (income tax at source)</div>
+                <div className="text-xs text-muted-foreground">
+                  Off by default — while this is off, <strong>no TDS is deducted</strong> from any salary and contracts will not mention it.
+                </div>
+              </div>
+              <Switch checked={form.tds_enabled} onCheckedChange={(v) => patch('tds_enabled', v)} aria-label="Enable TDS deduction" />
+            </div>
+            {form.tds_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Rate % of gross"><Input type="number" step={0.1} value={form.tds_pct} onChange={(e) => patch('tds_pct', Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
+
+          {/* Advance recovery */}
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <div>
+              <div className="font-semibold text-foreground">Salary advance recovery</div>
+              <div className="text-xs text-muted-foreground">
+                Outstanding advances are automatically recovered in the payroll run, never more than the net pay. Set a monthly cap to spread a large advance over several months.
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Max recovery per month (₹, blank = no cap)">
+                <Input
+                  type="number"
+                  value={form.advance_recovery_max_per_month ?? ''}
+                  onChange={(e) => patch('advance_recovery_max_per_month', e.target.value === '' ? null : Number(e.target.value))}
+                />
+              </Field>
+            </div>
+          </div>
         </CardContent>
+
       </Card>
 
       <Card className="rounded-2xl shadow-lg shadow/50">
