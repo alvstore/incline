@@ -5676,6 +5676,7 @@ export type Database = {
       }
       hr_settings: {
         Row: {
+          advance_recovery_max_per_month: number | null
           arbitration_seat: string
           basic_pct_of_ctc: number
           branch_id: string | null
@@ -5707,11 +5708,13 @@ export type Database = {
           pt_commission_clawback_on_refund: boolean
           pt_enabled: boolean
           tds_enabled: boolean
+          tds_pct: number
           unscheduled_punch_policy: string
           updated_at: string
           weekly_hour_cap: number
         }
         Insert: {
+          advance_recovery_max_per_month?: number | null
           arbitration_seat?: string
           basic_pct_of_ctc?: number
           branch_id?: string | null
@@ -5743,11 +5746,13 @@ export type Database = {
           pt_commission_clawback_on_refund?: boolean
           pt_enabled?: boolean
           tds_enabled?: boolean
+          tds_pct?: number
           unscheduled_punch_policy?: string
           updated_at?: string
           weekly_hour_cap?: number
         }
         Update: {
+          advance_recovery_max_per_month?: number | null
           arbitration_seat?: string
           basic_pct_of_ctc?: number
           branch_id?: string | null
@@ -5779,6 +5784,7 @@ export type Database = {
           pt_commission_clawback_on_refund?: boolean
           pt_enabled?: boolean
           tds_enabled?: boolean
+          tds_pct?: number
           unscheduled_punch_policy?: string
           updated_at?: string
           weekly_hour_cap?: number
@@ -9838,6 +9844,7 @@ export type Database = {
           attendance_changed_at: string | null
           calc_attendance: Json
           calc_base: number
+          calc_deduction_breakdown: Json
           calc_deductions: number
           calc_gross: number
           calc_net: number
@@ -9868,6 +9875,7 @@ export type Database = {
           attendance_changed_at?: string | null
           calc_attendance?: Json
           calc_base?: number
+          calc_deduction_breakdown?: Json
           calc_deductions?: number
           calc_gross?: number
           calc_net?: number
@@ -9898,6 +9906,7 @@ export type Database = {
           attendance_changed_at?: string | null
           calc_attendance?: Json
           calc_base?: number
+          calc_deduction_breakdown?: Json
           calc_deductions?: number
           calc_gross?: number
           calc_net?: number
@@ -15415,6 +15424,7 @@ export type Database = {
       get_hr_settings_admin: {
         Args: { _branch_id: string }
         Returns: {
+          advance_recovery_max_per_month: number | null
           arbitration_seat: string
           basic_pct_of_ctc: number
           branch_id: string | null
@@ -15446,6 +15456,7 @@ export type Database = {
           pt_commission_clawback_on_refund: boolean
           pt_enabled: boolean
           tds_enabled: boolean
+          tds_pct: number
           unscheduled_punch_policy: string
           updated_at: string
           weekly_hour_cap: number
@@ -15970,6 +15981,10 @@ export type Database = {
         Args: { p_item_id: string; p_patch: Json; p_reason: string }
         Returns: undefined
       }
+      payroll_advance_due: {
+        Args: { p_branch_id: string; p_payable: number; p_user_id: string }
+        Returns: number
+      }
       payroll_approve_run: { Args: { p_run_id: string }; Returns: undefined }
       payroll_create_run: {
         Args: {
@@ -16009,6 +16024,10 @@ export type Database = {
       payroll_review_items: {
         Args: { p_item_ids: string[] }
         Returns: undefined
+      }
+      payroll_statutory_deductions: {
+        Args: { p_branch_id: string; p_gross: number }
+        Returns: Json
       }
       payroll_summarize: {
         Args: {
