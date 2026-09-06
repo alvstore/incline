@@ -152,15 +152,24 @@ export function CommissionLedger({ branchId }: Props) {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(
+    let list = rows;
+    if (month) {
+      list = list.filter(
+        (r) =>
+          (r.sale_date || '').slice(0, 7) === month ||
+          r.installments.some((i) => (i.month || '').slice(0, 7) === month),
+      );
+    }
+    if (!term) return list;
+    return list.filter(
       (r) =>
         r.member_name.toLowerCase().includes(term) ||
         (r.member_code || '').toLowerCase().includes(term) ||
         r.trainer_name.toLowerCase().includes(term) ||
         r.package_name.toLowerCase().includes(term),
     );
-  }, [rows, search]);
+  }, [rows, search, month]);
+
 
   const totals = useMemo(
     () =>
