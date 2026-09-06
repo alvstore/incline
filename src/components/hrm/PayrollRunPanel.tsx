@@ -201,6 +201,48 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
 
   const activeRun = runs.find((r: any) => r.id === activeRunId);
 
+  const att = (it: any) => (it?.calc_attendance || {}) as Record<string, number>;
+  const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+
+  const totals = items.reduce(
+    (acc: any, it: any) => {
+      acc.base += Number(it.final_base || 0);
+      acc.pt += Number(it.final_pt_commission || 0);
+      acc.bonus += Number(it.final_bonus || 0);
+      acc.advance += Number(it.final_advance || 0);
+      acc.deductions += Number(it.final_deductions || 0) + Number(it.final_penalty || 0);
+      acc.net += Number(it.final_net || 0);
+      return acc;
+    },
+    { base: 0, pt: 0, bonus: 0, advance: 0, deductions: 0, net: 0 },
+  );
+
+  const exportCsv = () => {
+    const rows = items.map((it: any) => {
+      const a = att(it);
+      return {
+        Employee: it.profile?.full_name || it.user_id,
+        Kind: it.staff_kind,
+        'Month Days': a.total_days ?? '',
+        'Total Shifts': a.shifts_rostered ?? '',
+        'Missed Shifts': a.shifts_missed ?? '',
+        'Attended Shifts': a.shifts_attended ?? '',
+        'Payable Days': a.payable_days ?? '',
+        'Per Shift Rate': a.per_shift_rate ?? '',
+        'Base Salary': a.monthly_salary ?? '',
+        'Salary Earned': Number(it.final_base || 0),
+        'PT Commission': Number(it.final_pt_commission || 0),
+        Bonus: Number(it.final_bonus || 0),
+        Deductions: Number(it.final_deductions || 0) + Number(it.final_penalty || 0),
+        Advance: Number(it.final_advance || 0),
+        'Net Payout': Number(it.final_net || 0),
+        Status: it.status,
+      };
+    });
+    exportToCSV(rows, `payroll-${periodStart}-to-${periodEnd}`);
+  };
+
+
   return (
     <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader className="flex flex-row items-center justify-between gap-3">
