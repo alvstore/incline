@@ -46,6 +46,7 @@ const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 export function CommissionLedger({ branchId }: Props) {
   const [search, setSearch] = useState('');
+  const [month, setMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
 
   const { data: rows = [], isLoading, isError } = useQuery<LedgerRow[]>({
     queryKey: ['pt-commission-ledger', branchId],
@@ -199,11 +200,32 @@ export function CommissionLedger({ branchId }: Props) {
             Trainer Commission Ledger
           </CardTitle>
           <CardDescription>
-            Commission is locked on the full package value at sale. Non-cash sales carry a 5% deduction, and the net is paid
-            out in equal monthly instalments through payroll.
+            Commission is locked on the GST-exclusive package value at sale. Non-cash sales carry a 5% payout deduction (not
+            GST), and the net is released in equal monthly instalments through payroll.
           </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="commission-month" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Month
+            </label>
+            <Input
+              id="commission-month"
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="w-[9.5rem] rounded-xl"
+            />
+            <Button
+              type="button"
+              variant={month ? 'outline' : 'secondary'}
+              size="sm"
+              className="rounded-xl"
+              onClick={() => setMonth('')}
+            >
+              All time
+            </Button>
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
             <Input
@@ -234,10 +256,10 @@ export function CommissionLedger({ branchId }: Props) {
                   'Comm %': r.percent,
                   Mode: r.mode,
                   'Base Commission': r.base_commission,
-                  GST: r.gst_deduction,
+                  'Payout Deduction': r.gst_deduction,
                   'Net Commission': r.net_commission,
                 })),
-                'pt_commission_ledger',
+                `pt_commission_ledger${month ? `_${month}` : ''}`,
               )
             }
           >
@@ -257,7 +279,9 @@ export function CommissionLedger({ branchId }: Props) {
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center">
             <Wallet className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
-            <p className="mt-3 text-sm font-medium text-slate-900">No PT commissions yet</p>
+            <p className="mt-3 text-sm font-medium text-slate-900">
+              {month ? 'No PT commissions in this month' : 'No PT commissions yet'}
+            </p>
             <p className="text-sm text-slate-500">Sell a personal training package and the commission will appear here.</p>
           </div>
         ) : (
@@ -291,7 +315,7 @@ export function CommissionLedger({ branchId }: Props) {
                     <TableHead className="text-right">Comm %</TableHead>
                     <TableHead>Mode</TableHead>
                     <TableHead className="text-right">Base</TableHead>
-                    <TableHead className="text-right">GST</TableHead>
+                    <TableHead className="text-right">Deduction</TableHead>
                     <TableHead className="text-right">Net</TableHead>
                     <TableHead>Instalments</TableHead>
                   </TableRow>
