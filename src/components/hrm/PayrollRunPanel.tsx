@@ -298,6 +298,9 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                 onClick={() => setPayOpen(true)}>
                 <Banknote className="h-4 w-4 mr-1" /> Mark Paid
               </Button>
+              <Button size="sm" variant="outline" onClick={exportCsv} aria-label="Export payroll sheet">
+                <Download className="h-4 w-4 mr-1" /> Export
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <Table>
@@ -306,17 +309,21 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                     <TableHead className="w-8"></TableHead>
                     <TableHead>Staff</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Base</TableHead>
+                    <TableHead className="text-right">Shifts</TableHead>
+                    <TableHead className="text-right">Payable days</TableHead>
+                    <TableHead className="text-right">Salary earned</TableHead>
                     <TableHead className="text-right">PT</TableHead>
                     <TableHead className="text-right">Bonus</TableHead>
                     <TableHead className="text-right">Deductions</TableHead>
-                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead className="text-right">Advance</TableHead>
+                    <TableHead className="text-right">Net payout</TableHead>
                     <TableHead className="text-right">Adj.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((it: any) => {
                     const adjusted = Number(it.final_net) !== Number(it.calc_net);
+                    const a = att(it);
                     return (
                       <TableRow key={it.id}>
                         <TableCell>
@@ -324,7 +331,10 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
-                          <div className="text-xs text-muted-foreground">{it.staff_kind}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {it.staff_kind}
+                            {a.monthly_salary ? ` · ${inr(Number(a.monthly_salary))}/mo` : ''}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge className={STATUS_BADGE[(it.status as Status) || 'draft']}>{it.status}</Badge>
@@ -333,14 +343,31 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             <Badge className="ml-1 bg-warning/15 text-warning text-[10px]">attendance changed</Badge>
                           )}
                         </TableCell>
-
-                        <TableCell className="text-right font-mono text-sm">₹{Number(it.final_base).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">₹{Number(it.final_pt_commission).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">₹{Number(it.final_bonus).toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-sm text-destructive">
-                          -₹{(Number(it.final_deductions) + Number(it.final_advance) + Number(it.final_penalty)).toLocaleString()}
+                        <TableCell className="text-right text-sm">
+                          <span className="font-mono">{a.shifts_attended ?? 0}/{a.shifts_rostered ?? 0}</span>
+                          {Number(a.shifts_missed || 0) > 0 && (
+                            <div className="text-[11px] text-destructive">{a.shifts_missed} missed</div>
+                          )}
+                          {Number(a.per_shift_rate || 0) > 0 && (
+                            <div className="text-[11px] text-muted-foreground">{inr(Number(a.per_shift_rate))}/shift</div>
+                          )}
                         </TableCell>
-                        <TableCell className="text-right font-bold">₹{Number(it.final_net).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {a.payable_days ?? 0}<span className="text-muted-foreground">/{a.total_days ?? 0}</span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_base))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_pt_commission))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_bonus))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm text-destructive">
+                          {Number(it.final_deductions) + Number(it.final_penalty) > 0
+                            ? `-${inr(Number(it.final_deductions) + Number(it.final_penalty))}`
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-destructive">
+                          {Number(it.final_advance) > 0 ? `-${inr(Number(it.final_advance))}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">{inr(Number(it.final_net))}</TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1 justify-end">
                             {it.attendance_changed_at && (
