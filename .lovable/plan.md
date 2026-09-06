@@ -35,6 +35,12 @@
 - The denominator for pro-rating is stated on screen (calendar days in month) so the number can be checked by hand.
 - August will be re-verified line by line for the affected staff after the fix; existing draft runs can be recalculated, processed/paid runs are left untouched.
 
+### E. Trainer Commission Ledger (PT)
+- The ledger currently loads **every PT package ever sold** with no period control. It gets a month selector (and a custom range) matching the payroll month, so August shows only August sales, with the summary tiles recalculated for that month.
+- The "GST" column is actually the flat 5% cut applied to non-cash sales — that deduction is switched off by default and only applies if the matching statutory switch is enabled in HR Settings; the column is renamed to what it really is, and shows "—" when nothing is deducted.
+- Each row keeps its instalment strip, with the instalment falling in the selected month highlighted so the payroll figure is traceable.
+
+
 ## Technical notes
 - Database: rewrite `payroll_summarize` (use `payable_fraction`, correct weekly-off detection), extend `payroll_create_run` / `payroll_recalculate_item` to fill `calc_deductions` (PF/ESI/PT/TDS from `hr_settings`) and `final_advance` from `salary_advances.outstanding`, and grant execute on `staff_day_blocks` where needed for the summary path.
 - Frontend: delete the `staff-log` tab and `StaffAttendanceBoard` usage in `AttendanceDashboard.tsx`; extend `StaffMonthHistory.tsx` day drawer to reuse `AttendanceDetailDrawer.tsx`; remove the legacy payroll table and `calculatePayrollForStaff` from `HRM.tsx` / `hrmService.ts`; rebuild `PayrollRunPanel.tsx` as the single console; add the statutory section to `HrSettingsTab.tsx`; make `contractTemplateV2.ts` deduction wording conditional.
