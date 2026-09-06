@@ -161,8 +161,29 @@ export function StaffMonthHistory({ branchId }: { branchId: string | undefined }
             <SheetTitle>{detail?.full_name} — {format(new Date(`${month}-01`), 'MMMM yyyy')}</SheetTitle>
             <SheetDescription>
               Day-by-day attendance with the shift blocks rostered and attended, and the payable fraction used by payroll.
+              Select a day to correct a punch, mark a shift absent or on leave, or add a punch the gate missed.
             </SheetDescription>
           </SheetHeader>
+
+          <div className="mt-4 flex items-end gap-2 rounded-xl bg-muted/40 p-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="fix-day" className="text-xs text-muted-foreground">Fix a specific day</Label>
+              <Input
+                id="fix-day" type="date" value={pickDate} max={getISTToday()}
+                min={`${month}-01`}
+                onChange={(e) => setPickDate(e.target.value)}
+                className="h-9 w-[170px] cursor-pointer"
+              />
+            </div>
+            <Button
+              size="sm" className="cursor-pointer gap-1.5"
+              disabled={!pickDate}
+              onClick={() => setEditDate(pickDate)}
+            >
+              <PencilLine className="h-3.5 w-3.5" /> Open day
+            </Button>
+          </div>
+
           <div className="py-4">
             {daysLoading ? (
               <div className="space-y-2">
@@ -177,11 +198,16 @@ export function StaffMonthHistory({ branchId }: { branchId: string | undefined }
                     <TableHead>Blocks</TableHead>
                     <TableHead>Hours</TableHead>
                     <TableHead>Pay</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {days.map((d) => (
-                    <TableRow key={String(d.work_date)}>
+                    <TableRow
+                      key={String(d.work_date)}
+                      className="cursor-pointer transition-colors duration-150 hover:bg-muted/50"
+                      onClick={() => setEditDate(String(d.work_date))}
+                    >
                       <TableCell className="text-sm">{format(new Date(String(d.work_date)), 'd MMM (EEE)')}</TableCell>
                       <TableCell>
                         <Badge className={`rounded-full border-0 text-[11px] capitalize ${STATUS_BADGE[String(d.status)] || 'bg-slate-100 text-slate-600'}`}>
@@ -194,10 +220,13 @@ export function StaffMonthHistory({ branchId }: { branchId: string | undefined }
                         {d.hours_source === 'rostered' && <span className="ml-1 text-[10px] text-muted-foreground">(roster)</span>}
                       </TableCell>
                       <TableCell className="text-sm">{Number(d.payable_fraction ?? 0).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <PencilLine className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                      </TableCell>
                     </TableRow>
                   ))}
                   {days.length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No days to show</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No days to show</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -205,6 +234,16 @@ export function StaffMonthHistory({ branchId }: { branchId: string | undefined }
           </div>
         </SheetContent>
       </Sheet>
+
+      <AttendanceDetailDrawer
+        open={!!editDate}
+        onOpenChange={(o) => !o && setEditDate(null)}
+        userId={detail?.user_id ?? null}
+        staffName={detail?.full_name ?? null}
+        date={editDate}
+        branchId={branchId ?? null}
+        canManage
+      />
     </div>
   );
 }
