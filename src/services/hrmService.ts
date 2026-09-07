@@ -264,12 +264,21 @@ export async function fetchAllPayrollStaff(branchId?: string): Promise<PayrollSt
   // Fetch employees
   let empQuery = supabase.from('employees').select('*').eq('is_active', true);
   if (branchId) empQuery = empQuery.eq('branch_id', branchId);
-  const { data: emps } = await empQuery;
+  const { data: allEmps } = await empQuery;
 
   // Fetch trainers
   let trainerQuery = supabase.from('trainers').select('*').eq('is_active', true);
   if (branchId) trainerQuery = trainerQuery.eq('branch_id', branchId);
-  const { data: trainers } = await trainerQuery;
+  const { data: allTrainers } = await trainerQuery;
+
+  // Owners/admins are never payroll staff (mirrored in payroll_create_run).
+  const privileged = await fetchPrivilegedUserIds([
+    ...(allEmps || []).map((e: any) => e.user_id),
+    ...(allTrainers || []).map((t: any) => t.user_id),
+  ]);
+  const emps = (allEmps || []).filter((e: any) => !e.user_id || !privileged.has(e.user_id));
+  const trainers = (allTrainers || []).filter((t: any) => !t.user_id || !privileged.has(t.user_id));
+
 
   // Collect all user_ids for profile lookup
   const allUserIds = [
