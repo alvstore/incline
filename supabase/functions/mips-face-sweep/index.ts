@@ -273,29 +273,34 @@ Deno.serve(async (req) => {
       const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
       const [members, employees, trainers] = await Promise.all([
         supabase.from("members")
-          .select("id, mips_person_sn, full_name:member_code")
+          .select("id, mips_person_sn, member_code, profiles:user_id(full_name), leads:lead_id(full_name)")
           .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
         supabase.from("employees")
-          .select("id, mips_person_sn, full_name:employee_code")
+          .select("id, mips_person_sn, employee_code, profiles:user_id(full_name)")
           .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
         supabase.from("trainers")
-          .select("id, mips_person_sn, full_name:trainer_code")
+          .select("id, mips_person_sn, trainer_code, profiles:user_id(full_name)")
           .eq("branch_id", branchId).eq("is_active", true)
           .not("mips_person_id", "is", null).or(photoFilter).limit(1000),
       ]);
 
+      // The ledger stores the human name (falling back to the code) so every
+      // gate screen can say WHO is waiting, not just which code.
       const roster: LedgerPerson[] = [
         ...(members.data || []).map((m: any) => ({
           table: "members" as const, type: "member" as const,
-          id: m.id, sn: m.mips_person_sn || "", name: m.full_name ?? null,
+          id: m.id, sn: m.mips_person_sn || "",
+          name: m.profiles?.full_name || m.leads?.full_name || m.member_code || null,
         })),
         ...(employees.data || []).map((e: any) => ({
           table: "employees" as const, type: "employee" as const,
-          id: e.id, sn: e.mips_person_sn || "", name: e.full_name ?? null,
+          id: e.id, sn: e.mips_person_sn || "",
+          name: e.profiles?.full_name || e.employee_code || null,
         })),
         ...(trainers.data || []).map((t: any) => ({
           table: "trainers" as const, type: "trainer" as const,
-          id: t.id, sn: t.mips_person_sn || "", name: t.full_name ?? null,
+          id: t.id, sn: t.mips_person_sn || "",
+          name: t.profiles?.full_name || t.trainer_code || null,
         })),
       ].filter((p) => !!p.sn);
 

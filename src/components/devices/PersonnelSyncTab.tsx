@@ -469,6 +469,12 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             <span>{person.code}</span>
             <span className="text-primary">→ {strippedCode}</span>
             {person.mipsPersonId && <span className="text-primary/60">MIPS#{person.mipsPersonId}</span>}
+            {person.alsoKnownAs && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-sans text-[10px] font-medium text-slate-600">
+                also on file as {person.alsoKnownAs}
+              </span>
+            )}
+
           </div>
         </div>
 
