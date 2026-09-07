@@ -197,6 +197,13 @@ const FaceEnrolmentPanel = ({ branchId, serverWithFace }: Props) => {
               const behind = faces !== null && shouldCarry > 0 ? Math.max(shouldCarry - faces, 0) : null;
               const name = live?.deviceName || forDevice[0]?.device_name || `Device ${deviceId}`;
 
+              const pct = shouldCarry > 0 && faces !== null
+                ? Math.min(Math.round((faces / shouldCarry) * 100), 100)
+                : null;
+              const waiting = [...rejected, ...awaiting].sort((a, b) =>
+                (a.person_name || a.person_sn).localeCompare(b.person_name || b.person_sn),
+              );
+
               return (
                 <div key={deviceId} className="rounded-xl bg-muted/30 p-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -204,17 +211,17 @@ const FaceEnrolmentPanel = ({ branchId, serverWithFace }: Props) => {
                     {live ? (
                       behind === null ? (
                         <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                          Server total unknown
+                          Can't compare yet
                         </Badge>
                       ) : behind === 0 ? (
                         <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
                           <CheckCircle2 className="mr-1 h-3 w-3" />
-                          Counts match
+                          Fully up to date
                         </Badge>
                       ) : (
                         <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
                           <AlertTriangle className="mr-1 h-3 w-3" />
-                          {behind} behind
+                          Missing {behind} photo{behind === 1 ? "" : "s"}
                         </Badge>
                       )
                     ) : (
@@ -225,6 +232,38 @@ const FaceEnrolmentPanel = ({ branchId, serverWithFace }: Props) => {
                     )}
                   </div>
 
+                  {/* Plain-language headline: what the numbers actually mean. */}
+                  <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+                    {live === undefined
+                      ? "This gate is not reporting right now, so we can't tell how many face photos it holds."
+                      : behind === null
+                        ? `This gate holds ${faces ?? "—"} face photos. We don't have the office total to compare against yet.`
+                        : behind === 0
+                          ? `This gate holds all ${shouldCarry} face photos the office has on file — nobody is missing.`
+                          : `This gate holds ${faces} of the ${shouldCarry} face photos the office has on file, so ${behind} ${behind === 1 ? "person's photo has" : "people's photos have"} not reached it yet.`}
+                  </p>
+
+                  {pct !== null && (
+                    <div className="mb-2">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-background">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            behind === 0 ? "bg-emerald-500" : "bg-amber-500"
+                          }`}
+                          style={{ width: `${pct}%` }}
+                          role="progressbar"
+                          aria-valuenow={pct}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${name} face photo sync progress`}
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {pct}% of the office's face photos are on this gate
+                      </p>
+                    </div>
+                  )}
+
                   {live && !online && (
                     <p className="mb-2 rounded-lg bg-amber-50 p-2 text-[10px] leading-relaxed text-amber-700">
                       Gate is offline — the counters below are its last reported values.
@@ -232,12 +271,12 @@ const FaceEnrolmentPanel = ({ branchId, serverWithFace }: Props) => {
                   )}
 
                   <div className="mb-2 grid grid-cols-3 gap-1.5">
-                    <Metric label="Faces on gate" value={faces ?? "—"} hint="live counter" />
-                    <Metric label="People on gate" value={persons ?? "—"} hint="live counter" />
+                    <Metric label="Photos on this gate" value={faces ?? "—"} hint="reported by the gate" />
+                    <Metric label="People on this gate" value={persons ?? "—"} hint="reported by the gate" />
                     <Metric
-                      label="Should carry"
+                      label="Photos in the office"
                       value={shouldCarry || "—"}
-                      hint="MIPS server photos"
+                      hint="the target every gate should reach"
                       tone="muted"
                     />
                   </div>
@@ -245,35 +284,36 @@ const FaceEnrolmentPanel = ({ branchId, serverWithFace }: Props) => {
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
                       <CheckCircle2 className="mr-1 h-3 w-3" />
-                      {verified.length} verified by name
+                      {verified.length} confirmed by name
                     </Badge>
                     <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
                       <HelpCircle className="mr-1 h-3 w-3" />
-                      {unverified.length} unverified
+                      {unverified.length} counted but not named
                     </Badge>
                     {awaiting.length > 0 && (
                       <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
                         <Clock className="mr-1 h-3 w-3" />
-                        {awaiting.length} awaiting push
+                        {awaiting.length} still to send
                       </Badge>
                     )}
                     {rejected.length > 0 && (
                       <Badge className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100">
                         <AlertTriangle className="mr-1 h-3 w-3" />
-                        {rejected.length} retake
+                        {rejected.length} need a new photo
                       </Badge>
                     )}
                   </div>
 
                   <p className="mb-2 text-[10px] leading-relaxed text-muted-foreground">
-                    The turnstile reports a face count, never a name list. Only a single-person push that moves
-                    that count proves an individual — everyone else stays “unverified”.
+                    The gate only reports how many photos it holds, never a list of names. We can name a person
+                    here once their photo was sent on its own and the gate's count moved — everyone else is
+                    counted but not named.
                   </p>
 
-                  {awaiting.length + rejected.length > 0 && (
+                  {waiting.length > 0 && (
                     <ScrollArea className="h-40 rounded-lg">
                       <div className="space-y-1.5 pr-2">
-                        {[...rejected, ...awaiting].map((r) => (
+                        {waiting.map((r) => (
                           <div key={`${r.mips_device_id}-${r.person_sn}`} className="rounded-lg bg-background p-2">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
@@ -295,6 +335,7 @@ const FaceEnrolmentPanel = ({ branchId, serverWithFace }: Props) => {
                   )}
                 </div>
               );
+
             })}
           </div>
         )}
