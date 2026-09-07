@@ -39,6 +39,9 @@ interface SyncPerson {
   mipsPersonSn: string | null;
   verifiedOnDevice?: boolean | null;
   branchId?: string;
+  userId?: string | null;
+  /** Second staff record the same human holds (e.g. staff + trainer). */
+  alsoKnownAs?: string | null;
 }
 
 const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => {
@@ -117,7 +120,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let empQuery = supabase
         .from("employees")
-        .select("id, employee_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .select("id, user_id, employee_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
         .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
@@ -138,13 +141,14 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             mipsPersonId: (e as any).mips_person_id || null,
             mipsPersonSn: (e as any).mips_person_sn || null,
             branchId: e.branch_id,
+            userId: (e as any).user_id || null,
           });
         }
       }
 
       let trainerQuery = supabase
         .from("trainers")
-        .select("id, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .select("id, user_id, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
         .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
@@ -165,11 +169,31 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             mipsPersonId: t.mips_person_id || null,
             mipsPersonSn: (t as any).mips_person_sn || null,
             branchId: t.branch_id,
+            userId: (t as any).user_id || null,
           });
         }
       }
 
-      return people;
+      // One row per human. A person who is both staff and trainer previously
+      // appeared twice with two roles; keep the record the gates already know
+      // (trainer wins on a tie) and note the other code on the same row.
+      const byUser = new Map<string, SyncPerson>();
+      const merged: SyncPerson[] = [];
+      for (const p of people) {
+        if (p.type === "member" || !p.userId) { merged.push(p); continue; }
+        const seen = byUser.get(p.userId);
+        if (!seen) { byUser.set(p.userId, p); merged.push(p); continue; }
+        const preferNew =
+          (!!p.mipsPersonId && !seen.mipsPersonId) ||
+          (!!p.mipsPersonId === !!seen.mipsPersonId && p.type === "trainer");
+        const keep = preferNew ? p : seen;
+        const drop = preferNew ? seen : p;
+        keep.alsoKnownAs = drop.code || null;
+        byUser.set(p.userId, keep);
+        merged[merged.indexOf(seen)] = keep;
+      }
+
+      return merged;
     },
   });
 
