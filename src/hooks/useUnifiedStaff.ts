@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchPrivilegedUserIds } from '@/lib/hrm/excludeAdmins';
+
 
 export type StaffRole = 'manager' | 'trainer' | 'staff';
 
@@ -40,17 +42,26 @@ export function useUnifiedStaff() {
   return useQuery<UnifiedStaffPerson[]>({
     queryKey: UNIFIED_STAFF_KEY,
     queryFn: async () => {
-      const [{ data: employees, error: empError }, { data: trainers, error: trainerError }] = await Promise.all([
+      const [{ data: allEmployees, error: empError }, { data: allTrainers, error: trainerError }] = await Promise.all([
         supabase.from('employees').select(`*, branches:branch_id(name)`).order('created_at', { ascending: false }),
         supabase.from('trainers').select(`*, branches:branch_id(name)`).order('created_at', { ascending: false }),
       ]);
       if (empError) throw empError;
       if (trainerError) throw trainerError;
 
+      // Owners/admins are not staff for HR purposes — drop them everywhere.
+      const privileged = await fetchPrivilegedUserIds([
+        ...(allEmployees || []).map((e: any) => e.user_id),
+        ...(allTrainers || []).map((t: any) => t.user_id),
+      ]);
+      const employees = (allEmployees || []).filter((e: any) => !e.user_id || !privileged.has(e.user_id));
+      const trainers = (allTrainers || []).filter((t: any) => !t.user_id || !privileged.has(t.user_id));
+
       const allUserIds = [
         ...(employees || []).map((e: any) => e.user_id),
         ...(trainers || []).map((t: any) => t.user_id),
       ].filter(Boolean) as string[];
+
 
       let profileMap = new Map<string, any>();
       if (allUserIds.length > 0) {
