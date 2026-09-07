@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { fetchPrivilegedUserIds } from '@/lib/hrm/excludeAdmins';
+
 
 export type StaffRoleLabel = 'Trainer' | 'Manager' | 'Front Desk' | 'Cleaning' | 'Staff';
 
@@ -64,8 +66,13 @@ export function useStaffSchedules(branchId: string | undefined) {
         if (t.user_id) roleMap.set(t.user_id, { role: 'Trainer', position: 'Trainer', department: 'Training' });
       });
 
+      // Owners/admins are excluded from the roster even if they hold a staff record.
+      const privileged = await fetchPrivilegedUserIds(Array.from(roleMap.keys()));
+      privileged.forEach((uid) => roleMap.delete(uid));
+
       const userIds = Array.from(roleMap.keys());
       if (userIds.length === 0) return [];
+
 
       const [{ data: profiles, error: pErr }, { data: shifts, error: sErr }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, avatar_url').in('id', userIds),
