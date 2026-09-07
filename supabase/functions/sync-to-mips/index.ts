@@ -41,8 +41,13 @@ const corsHeaders = {
 };
 
 const PERMANENT_END = "2099-12-31 23:59:59";
-// The MIPS server only has departments 100 (Incline) and 103 (Visitors).
-const STAFF_DEPT_ID = 100;
+// MIPS departments (verified on the server): 100 Incline (parent),
+// 101 Staff, 103 Members. Every employee/trainer/owner/manager goes to
+// Staff; every member goes to Members. Never derive these from CRM fields.
+const STAFF_DEPT_ID = 101;
+const STAFF_DEPT_NAME = "Staff";
+const MEMBER_DEPT_ID = 103;
+const MEMBER_DEPT_NAME = "Members";
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 // Photos are never decoded in this worker (see fetchDeviceReadyBytes).
@@ -779,8 +784,8 @@ Deno.serve(async (req) => {
 
     let gender: "M" | "F" | "U" = "U";
     let birthday: string | null = null;                     // YYYY-MM-DD
-    let deptId = 100;
-    let deptName = "Members";
+    let deptId = MEMBER_DEPT_ID;
+    let deptName = MEMBER_DEPT_NAME;
     let remarkExtra = "";
     let validTimeBegin = formatDate(new Date().toISOString(), "2024-01-01 00:00:00");
     let validTimeEnd = PERMANENT_END;
@@ -807,8 +812,8 @@ Deno.serve(async (req) => {
 
     if (person_type === "member") {
       tableName = "members";
-      deptId = 100;
-      deptName = "Members";
+      deptId = MEMBER_DEPT_ID;
+      deptName = MEMBER_DEPT_NAME;
       const { data: member, error } = await supabase
         .from("members")
         .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth), leads:lead_id(full_name, phone, email, gender, date_of_birth, avatar_url)")
@@ -913,7 +918,7 @@ Deno.serve(async (req) => {
       gender = normGender((emp as any).gender ?? profile?.gender);
       birthday = fmtDob((emp as any).date_of_birth ?? profile?.date_of_birth);
 
-      deptName = (emp as any).department || "Staff";
+      deptName = STAFF_DEPT_NAME;
       remarkExtra = [ (emp as any).department, (emp as any).position ].filter(Boolean).join(" · ");
       effectiveBranchId = effectiveBranchId || emp.branch_id;
       shouldRevokeInstead = emp.is_active === false || !!emp.exit_date;
@@ -955,7 +960,7 @@ Deno.serve(async (req) => {
       gender = normGender(profile?.gender);
       birthday = fmtDob(profile?.date_of_birth);
       const specs = Array.isArray((trainer as any).specializations) ? (trainer as any).specializations : [];
-      deptName = specs.length > 0 ? `Trainer · ${specs[0]}` : "Trainer";
+      deptName = STAFF_DEPT_NAME;
       remarkExtra = specs.join(", ");
 
       effectiveBranchId = effectiveBranchId || trainer.branch_id;

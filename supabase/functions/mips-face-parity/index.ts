@@ -288,66 +288,76 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3. Re-dispatch every photo-bearing person to the target devices
+    // 3. Re-dispatch every photo-bearing person to the target devices.
+    // This can be 150 people x 2 gates with pacing — far longer than the 150s
+    // client idle timeout — so it runs as a background task and the caller
+    // gets an immediate acknowledgement instead of a 504.
     const targets = (device_ids && device_ids.length ? device_ids : devices.map((d) => d.id))
       .map(Number)
       .filter((n) => !isNaN(n));
     if (targets.length === 0) return json({ error: "No target devices" }, 400);
 
-    // Dispatch per device (not one bulk deviceIds array): a single bad device id
-    // makes the whole bulk call fail, which is exactly how Gate 2 fell behind.
-    let ok = 0;
-    let failed = 0;
-    const errors: string[] = [];
-    const perDevice: Record<string, { ok: number; failed: number }> = {};
-    for (const t of targets) perDevice[String(t)] = { ok: 0, failed: 0 };
+    const runResync = async () => {
+      let ok = 0;
+      let failed = 0;
+      const errors: string[] = [];
+      const perDevice: Record<string, { ok: number; failed: number }> = {};
+      for (const t of targets) perDevice[String(t)] = { ok: 0, failed: 0 };
 
-    for (const p of withPhoto) {
-      for (const t of targets) {
-        let success = false;
-        let slotHeld = false;
-        try {
-          slotHeld = await waitForDispatchSlot(supabase, t, null, { minGapSeconds: 1, attempts: 6, waitMs: 1000 });
-          if (!slotHeld) {
-            if (errors.length < 15) errors.push(`dev ${t} / ${p.personSn}: dispatch slot busy after retries`);
-          } else {
-            const outcome = await dispatchPerson({
-              baseUrl,
-              headers: authHeaders(token),
-              personId: p.id,
-              deviceIds: [t],
-              attempts: 2,
-            });
-            success = outcome.ok;
-            if (!success && errors.length < 15) {
-              errors.push(`dev ${t} / ${p.personSn}: ${outcome.message ?? "unknown"}`);
+      // Dispatch per device (not one bulk deviceIds array): a single bad device
+      // id makes the whole bulk call fail, which is how Gate 2 fell behind.
+      for (const p of withPhoto) {
+        for (const t of targets) {
+          let success = false;
+          let slotHeld = false;
+          try {
+            slotHeld = await waitForDispatchSlot(supabase, t, null, { minGapSeconds: 1, attempts: 6, waitMs: 1000 });
+            if (!slotHeld) {
+              if (errors.length < 15) errors.push(`dev ${t} / ${p.personSn}: dispatch slot busy after retries`);
+            } else {
+              const outcome = await dispatchPerson({
+                baseUrl,
+                headers: authHeaders(token),
+                personId: p.id,
+                deviceIds: [t],
+                attempts: 2,
+              });
+              success = outcome.ok;
+              if (!success && errors.length < 15) {
+                errors.push(`dev ${t} / ${p.personSn}: ${outcome.message ?? "unknown"}`);
+              }
             }
+          } catch (e) {
+            if (errors.length < 15) {
+              errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          } finally {
+            if (slotHeld) await releaseDispatchSlot(supabase, t);
           }
-        } catch (e) {
-          if (errors.length < 15) {
-            errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
-          }
-        } finally {
-          if (slotHeld) await releaseDispatchSlot(supabase, t);
+
+          if (success) { ok++; perDevice[String(t)].ok++; }
+          else { failed++; perDevice[String(t)].failed++; }
+          // gentle pacing so the server queue does not drop dispatches
+          await new Promise((r) => setTimeout(r, 40));
         }
-
-        if (success) { ok++; perDevice[String(t)].ok++; }
-        else { failed++; perDevice[String(t)].failed++; }
-        // gentle pacing so the server queue does not drop dispatches
-        await new Promise((r) => setTimeout(r, 40));
       }
-    }
+      console.log(`[mips-face-parity] resync done: ok=${ok} failed=${failed} errors=${errors.slice(0, 5).join(" | ")}`);
+    };
 
+    // deno-lint-ignore no-explicit-any
+    const waitUntil = (globalThis as any).EdgeRuntime?.waitUntil;
+    if (typeof waitUntil === "function") waitUntil(runResync());
+    else runResync();
 
     return json({
       success: true,
-      dispatched: ok,
-      failed,
-      per_device: perDevice,
-      total_with_photo: withPhoto.length,
+      started: true,
+      queued_people: withPhoto.length,
+      queued_dispatches: withPhoto.length * targets.length,
       target_device_ids: targets,
-      errors,
-    });
+      note: "Re-sync is running in the background — gate face counts update as it progresses.",
+    }, 202);
+
 
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
