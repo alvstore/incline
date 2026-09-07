@@ -1,4 +1,4 @@
-// v2.3.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
+// v2.4.0 — Reconcile recent MIPS pass records; MIPS-side outages report as skipped, not 500.
 // v2.3 fixes: staff attendance now goes through the canonical `staff_record_punch`
 // RPC (same path as the live webhook), so roster-block resolution, grace and
 // per-block idempotency are identical no matter which path imports the scan.
@@ -562,6 +562,22 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[reconcile-mips-pass-records] fatal:", message);
+    // A MIPS-side outage (unreachable server, booting Tomcat, login/token
+    // rejection) is not a failure of this job — the cron would otherwise log a
+    // 500 every 5 minutes and drown real bugs. Report it as a skipped run.
+    const mipsSide =
+      error instanceof MipsTransportError ||
+      /MIPS login|MIPS records failed|non-JSON|unreachable|timed out|timeout/i.test(message);
+    if (mipsSide) {
+      return jsonResponse({
+        success: false,
+        skipped_reason: "mips_unavailable",
+        error: message,
+        imported: 0,
+        skipped: 0,
+      });
+    }
     return jsonResponse({ success: false, error: message, imported: 0, skipped: 0 }, 500);
   }
+
 });
