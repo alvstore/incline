@@ -1,4 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
+import { fetchPrivilegedUserIds } from '@/lib/hrm/excludeAdmins';
+
 
 export interface Employee {
   id: string;
