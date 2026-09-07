@@ -227,14 +227,8 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const truthFor = (person: SyncPerson) =>
     serverTruth?.map[normalizeMIPSPersonSn(person.mipsPersonSn || person.code)];
 
-  // ---- Gate truth: faces actually enrolled on each turnstile ---------------
-  const { data: gateTruth } = useQuery({
-    queryKey: ["mips-gate-truth", branchId || "all"],
-    queryFn: () => fetchMIPSDevices(branchId),
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    retry: 1,
-  });
+  // Gate-level face truth is rendered by FaceEnrolmentPanel (single source).
+
 
   // ---- Enrollment sweep status: when the self-healing worker last ran ------
   const { data: sweepStatus } = useQuery({
