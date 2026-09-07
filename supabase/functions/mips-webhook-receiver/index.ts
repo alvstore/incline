@@ -1,4 +1,4 @@
-// v2.5.0 - Two-way sync: recognition records are mirrored back to the MIPS server
+// v2.6.0 - Gate ACK is never blocked by MIPS: relay + deny command run in the background with hard timeouts.
 //           (scheme-less server URLs normalized, native form-encoded body, fallback
 //           /tdx-admin path, failures reported via log_error_event).
 // v2.4.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block).
@@ -574,13 +574,19 @@ Deno.serve(async (req) => {
     const eventType_raw = String(payload.eventType || payload.event_type || payload.type || "");
     if (eventType_raw === "ImgReg" || eventType_raw === "img_reg" || eventType_raw === "register") {
       await handleImgRegCallback(supabase, payload);
-      const relayUrl = await getRelayUrl(supabase, null);
-      if (relayUrl) relayToMips(relayUrl, payload, eventType_raw);
+      const imgRegRelay = (async () => {
+        const relayUrl = await getRelayUrl(supabase, null);
+        if (relayUrl) await relayToMips(relayUrl, payload, eventType_raw);
+      })().catch(() => {});
+      // deno-lint-ignore no-explicit-any
+      const rtImg = (globalThis as any).EdgeRuntime;
+      if (rtImg?.waitUntil) rtImg.waitUntil(imgRegRelay);
       return new Response(DEVICE_ACK, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     // Extract fields — device may send personId (which is actually personSn)
     const personNo = String(payload.personNo || payload.personSn || payload.personId || payload.person_no || "");
@@ -699,25 +705,50 @@ Deno.serve(async (req) => {
 
     console.log(`Processed: result=${result}, person=${personNo}, device=${deviceKey}, message=${message}`);
 
-    // Relay to the MIPS server so its own pass records mirror ours (two-way sync).
-    // Runs in the background: the gate must never wait on MIPS latency.
+    // Relay to the MIPS server so its own pass records mirror ours (two-way sync)
+    // AND, when access is denied, push the real-time block command.
+    // Both run in the background: the gate must never wait on MIPS latency.
     const relayTask = (async () => {
       try {
         const relayUrl = await getRelayUrl(supabase, branchId);
-        if (relayUrl) {
-          const relayed = await relayToMips(relayUrl, payload, eventType_raw);
-          if (!relayed) {
-            await supabase.rpc("log_error_event", {
-              p_severity: "warning",
-              p_source: "mips-webhook-receiver",
-              p_message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
-              p_function_name: "relayToMips",
-              p_branch_id: branchId,
-              p_context: { personNo, deviceKey, relayUrl, scanTime },
-            });
-          }
-        } else {
+        if (!relayUrl) {
           console.log("No MIPS relay URL configured — skipping relay");
+          return;
+        }
+        const relayed = await relayToMips(relayUrl, payload, eventType_raw);
+        if (!relayed) {
+          await supabase.rpc("log_error_event", {
+            p_severity: "warning",
+            p_source: "mips-webhook-receiver",
+            p_message: `MIPS relay failed for ${personNo} @ ${deviceKey} — pass record not mirrored to MIPS`,
+            p_function_name: "relayToMips",
+            p_branch_id: branchId,
+            p_context: { personNo, deviceKey, relayUrl, scanTime },
+          });
+        }
+
+        // *** Real-time Block Signal ***
+        // Denied/unknown people get an explicit gate-shut command, in case the
+        // device's local validTimeEnd has not synced yet. Hard timeout so a
+        // hanging MIPS server can never keep this invocation alive.
+        if (result === "member_denied" || result === "staff_denied" || result === "not_found" || result === "stranger") {
+          const denyUrl = `${relayUrl}/api/command/deny`;
+          console.log(`[REAL-TIME BLOCK] Sending deny command to relay for ${personNo}: ${denyUrl}`);
+          try {
+            await fetch(denyUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                personSn: personNo,
+                reason: message,
+                timestamp: scanTime,
+                deviceKey: deviceKey,
+              }),
+              signal: AbortSignal.timeout(5000),
+            });
+          } catch (e) {
+            console.warn("[REAL-TIME BLOCK] Command failed:", e instanceof Error ? e.message : String(e));
+          }
         }
       } catch (relayErr) {
         console.warn("Relay lookup failed:", relayErr);
@@ -728,32 +759,6 @@ Deno.serve(async (req) => {
     if (rt?.waitUntil) rt.waitUntil(relayTask);
     else relayTask.catch(() => {});
 
-
-    // *** CRITICAL HARDENING: Real-time Block Signal ***
-    // If the check-in was denied (dues overdue, blacklisted, etc.), and we have a relay URL,
-    // we send an immediate "deny/block" command back to the relay to force the gate shut.
-    // This handles cases where the local device validTimeEnd hasn't synced yet.
-    if (result === "member_denied" || result === "staff_denied" || result === "not_found" || result === "stranger") {
-      try {
-        const relayUrl = await getRelayUrl(supabase, branchId);
-        if (relayUrl) {
-          const denyUrl = `${relayUrl}/api/command/deny`;
-          console.log(`[REAL-TIME BLOCK] Sending deny command to relay for ${personNo}: ${denyUrl}`);
-          fetch(denyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personSn: personNo,
-              reason: message,
-              timestamp: scanTime,
-              deviceKey: deviceKey,
-            }),
-          }).catch((e) => console.warn("[REAL-TIME BLOCK] Command failed:", e));
-        }
-      } catch (blockErr) {
-        console.warn("[REAL-TIME BLOCK] Failed to send deny signal:", blockErr);
-      }
-    }
 
     return new Response(DEVICE_ACK, {
       status: 200,
