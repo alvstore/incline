@@ -357,18 +357,28 @@ Deno.serve(async (req) => {
       "run_eligibility_check",
       "place_call",
       "run_batch",
+      "auto_tick",
       "metrics",
     ]);
     const systemKey = req.headers.get("x-incline-tool-key") ?? "";
-    const isSystem = !!cfg.tool_token && systemKey.length === cfg.tool_token.length &&
+    const isToolKey = !!cfg.tool_token && systemKey.length === cfg.tool_token.length &&
       systemKey === cfg.tool_token;
+    // The scheduler (automation-brain) calls with the service-role key plus a
+    // marker header. It is a server-side identity; it may only tick the worker.
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
+    const isBrain = req.headers.get("x-system-call") === "automation-brain" &&
+      !!serviceKey && bearer === serviceKey;
+    const isSystem = isToolKey || isBrain;
 
     let userId: string | null = null;
     if (isSystem) {
-      if (!SYSTEM_ACTIONS.has(action)) {
+      const allowed = isBrain ? new Set(["auto_tick"]) : SYSTEM_ACTIONS;
+      if (!allowed.has(action)) {
         return json({ ok: false, error: "Forbidden — system key cannot perform this action" }, 403);
       }
     } else {
+
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Unauthorized" }, 401);
       const sbAuth = createClient(
@@ -899,6 +909,144 @@ Deno.serve(async (req) => {
         results,
       });
     }
+
+    // ---- autonomous retention worker ---------------------------------------
+    // Invoked ONLY by the scheduler (automation-brain, every 10 min). It never
+    // dials directly: it reuses placeOne, the atomic slot claim, and the stored
+    // retention configuration. Every run is written to voice_automation_runs.
+    if (action === "auto_tick") {
+      const finish = async (
+        runId: string | null,
+        patch: Record<string, unknown>,
+      ) => {
+        if (runId) {
+          await sb.from("voice_automation_runs")
+            .update({ finished_at: new Date().toISOString(), ...patch })
+            .eq("id", runId);
+        }
+        return json({ ok: true, run_id: runId, ...patch });
+      };
+
+      const a = ((row?.retention_automation || {}) as Record<string, unknown>) ?? {};
+      // Pre-flight checks that need no lease.
+      if (!row?.id) return json({ ok: true, skipped: true, skip_reason: "not_configured" });
+      if (a.enabled !== true) return json({ ok: true, skipped: true, skip_reason: "automation_disabled" });
+
+      const rNow = istMinutesNow();
+      const rStart = hhmmToMinutes(String(a.window_start ?? "10:00"), 600);
+      const rEnd = hhmmToMinutes(String(a.window_end ?? "19:00"), 1140);
+      if (rNow < rStart || rNow >= rEnd) {
+        return json({ ok: true, skipped: true, skip_reason: "outside_window" });
+      }
+
+      // Single-flight: one worker run at a time, stale leases reclaimed.
+      const { data: claimedRun, error: leaseErr } = await sb.rpc("voice_automation_claim_run", {
+        _lease_minutes: 15,
+      });
+      if (leaseErr) return json({ ok: false, error: leaseErr.message, code: "lease_failed" }, 500);
+      const runId = (claimedRun as string | null) ?? null;
+      if (!runId) return json({ ok: true, skipped: true, skip_reason: "already_running" });
+
+      try {
+        const gate = await dialGate();
+        if (gate.blocked) {
+          return await finish(runId, { status: "skipped", skip_reason: "provider_not_ready" });
+        }
+
+        const minAbsent = Number(a.min_absent_days ?? 10);
+        const cooldown = Number(a.cooldown_days ?? 7);
+        const dailyCap = Number(a.max_calls_per_day ?? cfg.daily_call_cap ?? 25);
+        const recentContactDays = Number(a.exclude_recent_human_contact_days ?? 0);
+        const branchIds = Array.isArray(a.branch_ids) && a.branch_ids.length
+          ? (a.branch_ids as string[])
+          : null;
+
+        // Remaining daily capacity, measured off the ledger in IST.
+        const istToday = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+        const { count: usedToday } = await sb
+          .from("voice_call_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("provider", PROVIDER)
+          .eq("source", "member_retention")
+          .gte("created_at", `${istToday}T00:00:00+05:30`);
+        const remaining = Math.max(0, dailyCap - (usedToday ?? 0));
+        if (remaining === 0) {
+          return await finish(runId, { status: "skipped", skip_reason: "daily_cap_reached" });
+        }
+
+        const { data: candidates, error: candErr } = await sb.rpc("voice_retention_candidates", {
+          _min_absent_days: minAbsent,
+          _cooldown_days: cooldown,
+          _branch_ids: branchIds,
+          _recent_contact_days: recentContactDays,
+        });
+        if (candErr) {
+          return await finish(runId, {
+            status: "failed",
+            error_count: 1,
+            last_error: candErr.message.slice(0, 500),
+          });
+        }
+
+        const eligible = ((candidates || []) as Array<Record<string, unknown>>).filter((c) =>
+          !c.missing_phone && !c.dnd && !c.paused && !c.too_recent && !c.in_cooldown &&
+          !c.contacted_today && !c.no_visit_data && !c.recent_human_contact
+        );
+        // A worker run with zero candidates is healthy, not an error.
+        const batch = eligible.slice(0, Math.min(remaining, 10));
+
+        let placed = 0;
+        let errors = 0;
+        let lastError: string | null = null;
+        for (const c of batch) {
+          const memberId = String(c.member_id);
+          const ctx = await memberCallContext(sb, memberId);
+          const res = await placeOne({
+            to: String(ctx?.phone || c.phone || ""),
+            source: "member_retention",
+            reason: "member_retention",
+            memberId,
+            branchIdForCall: (c.branch_id as string) ?? null,
+            cooldownDays: cooldown,
+            vars: ctx?.vars ?? {},
+            apiKey: gate.key!,
+          });
+          if (res.ok) placed++;
+          else {
+            errors++;
+            lastError = `${res.code ?? "error"}: ${res.error ?? ""}`.slice(0, 500);
+          }
+          await new Promise((r) => setTimeout(r, 1200));
+        }
+
+        console.log(JSON.stringify({
+          worker: "voice_retention_worker",
+          run_id: runId,
+          eligible_count: eligible.length,
+          attempted_count: batch.length,
+          placed_count: placed,
+          skipped_count: batch.length - placed,
+          error_count: errors,
+        }));
+
+        return await finish(runId, {
+          status: "completed",
+          candidates_found: eligible.length,
+          calls_attempted: batch.length,
+          calls_placed: placed,
+          calls_skipped: batch.length - placed,
+          error_count: errors,
+          last_error: lastError,
+        });
+      } catch (e) {
+        return await finish(runId, {
+          status: "failed",
+          error_count: 1,
+          last_error: redact((e as Error)?.message ?? "worker error").slice(0, 500),
+        });
+      }
+    }
+
 
     // Live success-ratio metrics straight off the ledger.
     if (action === "metrics") {
