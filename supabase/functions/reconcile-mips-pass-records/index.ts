@@ -1,4 +1,4 @@
-// v2.4.0 — Reconcile recent MIPS pass records; MIPS-side outages report as skipped, not 500.
+// v2.5.0 — Paginated MIPS pass-record backfill (body.pages) + outage-safe skips.
 // v2.3 fixes: staff attendance now goes through the canonical `staff_record_punch`
 // RPC (same path as the live webhook), so roster-block resolution, grace and
 // per-block idempotency are identical no matter which path imports the scan.
@@ -69,6 +69,7 @@ type RequestBody = {
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+const MAX_PAGES = 40;
 const ALLOWED_ROLES = new Set<Role>(["owner", "admin", "manager", "staff"]);
 
 let cachedToken: string | null = null;
@@ -449,6 +450,7 @@ Deno.serve(async (req) => {
     const rawBody = await req.json().catch(() => ({})) as RequestBody;
     const branchId = typeof rawBody.branch_id === "string" && rawBody.branch_id.trim() ? rawBody.branch_id.trim() : undefined;
     const limit = Math.min(Math.max(Number(rawBody.limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+    const pages = Math.min(Math.max(Number(rawBody.pages) || 1, 1), MAX_PAGES);
     const dryRun = rawBody.dry_run === true;
 
     let connectionQuery = supabase
@@ -489,7 +491,7 @@ Deno.serve(async (req) => {
 
     let records: MipsPassRecord[];
     try {
-      records = await fetchPassRecords(resolvedConnection, limit);
+      records = await fetchPassRecords(resolvedConnection, limit, pages);
       await recordSuccess(supabase, breakerBranch);
     } catch (e) {
       if (e instanceof MipsTransportError) {
