@@ -1,3 +1,5 @@
+// v2.7.0 - Entry/exit aware attendance: the scanning gate's door_role decides whether a
+//           scan opens (entry) or closes (exit) the visit/shift, using the hardware scan time.
 // v2.6.0 - Gate ACK is never blocked by MIPS: relay + deny command run in the background with hard timeouts.
 //           (scheme-less server URLs normalized, native form-encoded body, fallback
 //           /tdx-admin path, failures reported via log_error_event).
