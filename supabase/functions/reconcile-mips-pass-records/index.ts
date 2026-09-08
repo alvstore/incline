@@ -198,64 +198,117 @@ function extractRows(json: Record<string, unknown>): MipsPassRecord[] {
   return (rows ?? []).filter((row): row is MipsPassRecord => typeof row === "object" && row !== null);
 }
 
-async function fetchPassRecords(connection: MipsConnection, limit: number): Promise<MipsPassRecord[]> {
+type PassEndpoint = { path: string; pageParam: "pageNum" | "pageNo" };
+
+const PASS_ENDPOINTS: PassEndpoint[] = [
+  { path: "/through/record/list", pageParam: "pageNum" },
+  { path: "/interface/exterior/getCheckRecordList", pageParam: "pageNum" },
+  { path: "/interface/exterior/getCheckRecordList", pageParam: "pageNo" },
+];
+
+async function fetchPassPage(
+  baseUrl: string,
+  token: string,
+  endpoint: PassEndpoint,
+  page: number,
+  pageSize: number,
+): Promise<{ rows: MipsPassRecord[]; ok: boolean; error?: string; transport?: boolean }> {
+  const searchParams = new URLSearchParams({ [endpoint.pageParam]: String(page), pageSize: String(pageSize) });
+  const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
+  console.log(`[reconcile-mips-pass-records] GET ${url}`);
+
+  let res: Response;
+  let text: string;
+  try {
+    ({ res, text } = await mipsFetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "TENANT-ID": "1",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    }, 20_000));
+  } catch (e) {
+    if (e instanceof MipsTransportError) return { rows: [], ok: false, error: `${endpoint.path}: ${e.message}`, transport: true };
+    throw e;
+  }
+
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    // a booting Tomcat serves an HTML error page
+    return { rows: [], ok: false, error: `${endpoint.path}: non-JSON ${text.slice(0, 160)}`, transport: true };
+  }
+
+  const rows = extractRows(json);
+  const code = Number(json.code);
+  if (res.ok && (code === 200 || code === 0 || rows.length > 0)) return { rows, ok: true };
+  return { rows: [], ok: false, error: `${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}` };
+}
+
+/**
+ * Walks the MIPS pass-record list. `pages` > 1 lets a backfill reach far past
+ * the newest page — the server keeps hundreds of historical scans that a
+ * single-page pull can never recover.
+ */
+async function fetchPassRecords(connection: MipsConnection, limit: number, pages = 1): Promise<MipsPassRecord[]> {
   const baseUrl = getBaseUrl(connection.server_url);
   const token = await getRuoYiToken(baseUrl, connection.username, connection.password);
-  const endpoints = [
-    { path: "/through/record/list", params: { pageNum: "1", pageSize: String(limit) } },
-    { path: "/interface/exterior/getCheckRecordList", params: { pageNum: "1", pageSize: String(limit) } },
-    { path: "/interface/exterior/getCheckRecordList", params: { pageNo: "1", pageSize: String(limit) } },
-  ];
 
   const errors: string[] = [];
   let transportFailures = 0;
-  for (const endpoint of endpoints) {
-    const searchParams = new URLSearchParams(endpoint.params);
-    const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
-    console.log(`[reconcile-mips-pass-records] GET ${url}`);
+  let working: PassEndpoint | null = null;
+  let firstPage: MipsPassRecord[] = [];
 
-    let res: Response;
-    let text: string;
-    try {
-      ({ res, text } = await mipsFetch(url, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "TENANT-ID": "1",
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-      }, 20_000));
-    } catch (e) {
-      // One endpoint being unreachable can still mean another answers, so keep
-      // going; only a clean sweep of transport failures is a real outage.
-      if (e instanceof MipsTransportError) {
-        transportFailures++;
-        errors.push(`${endpoint.path}: ${e.message}`);
-        continue;
-      }
-      throw e;
+  for (const endpoint of PASS_ENDPOINTS) {
+    const result = await fetchPassPage(baseUrl, token, endpoint, 1, limit);
+    if (result.ok) {
+      working = endpoint;
+      firstPage = result.rows;
+      break;
     }
-
-    let json: Record<string, unknown>;
-    try {
-      json = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      transportFailures++; // a booting Tomcat serves an HTML error page
-      errors.push(`${endpoint.path}: non-JSON ${text.slice(0, 160)}`);
-      continue;
-    }
-
-    const rows = extractRows(json);
-    const code = Number(json.code);
-    if (res.ok && (code === 200 || code === 0 || rows.length > 0)) return rows;
-    errors.push(`${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}`);
+    if (result.error) errors.push(result.error);
+    if (result.transport) transportFailures++;
   }
 
-  const summary = `MIPS records failed: ${errors.join(" | ")}`.slice(0, 500);
-  if (transportFailures === endpoints.length) throw new MipsTransportError(summary);
-  throw new Error(summary);
+  if (!working) {
+    const summary = `MIPS records failed: ${errors.join(" | ")}`.slice(0, 500);
+    if (transportFailures === PASS_ENDPOINTS.length) throw new MipsTransportError(summary);
+    throw new Error(summary);
+  }
+
+  const seen = new Set<string>();
+  const all: MipsPassRecord[] = [];
+  const addRows = (rows: MipsPassRecord[]) => {
+    let added = 0;
+    for (const row of rows) {
+      const key = String(row.id ?? row.recordId ?? `${row.personSn ?? row.personNo ?? ""}|${row.createTime ?? row.time ?? row.timestamp ?? ""}`);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push(row);
+      added++;
+    }
+    return added;
+  };
+
+  addRows(firstPage);
+  let lastCount = firstPage.length;
+
+  for (let page = 2; page <= pages && lastCount >= limit; page++) {
+    const result = await fetchPassPage(baseUrl, token, working, page, limit);
+    if (!result.ok) {
+      console.warn(`[reconcile-mips-pass-records] page ${page} stopped: ${result.error}`);
+      break;
+    }
+    lastCount = result.rows.length;
+    if (addRows(result.rows) === 0) break; // server ignored paging — stop looping
+  }
+
+  return all;
 }
+
 
 async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string, personName?: string): Promise<PersonMatch | null> {
   const candidates = normalizePersonCodeCandidates(personCode);
