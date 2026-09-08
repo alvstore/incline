@@ -734,15 +734,25 @@ Deno.serve(async (req) => {
         branchId = person.branch_id;
         profileId = person.user_id;
 
+        const doorRole = await resolveDoorRole(supabase, deviceKey, deviceName);
+        console.log(`Door role for ${deviceKey || deviceName}: ${doorRole}`);
+
         if (person.type === "member") {
           memberId = person.id;
-          const checkin = await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType);
-          result = checkin.result;
-          message = checkin.message;
+          const outcome =
+            doorRole === "exit"
+              ? await handleMemberCheckout(supabase, person.id, person.branch_id, personName, scanTime)
+              : await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType);
+          result = outcome.result;
+          message = outcome.message;
         } else {
-          // Employee or trainer → staff attendance toggle
+          // Employee or trainer → staff attendance
           result = person.type === "trainer" ? "trainer" : "staff";
-          message = await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type, scanTime);
+          message =
+            doorRole === "exit"
+              ? await handleStaffCheckout(supabase, person.user_id, person.branch_id, personName, person.type, scanTime)
+              : await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type, scanTime);
+
         }
       } else {
         // *** CRITICAL FIX: Override result to not_found instead of keeping face_type default ***
