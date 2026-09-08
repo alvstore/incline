@@ -617,7 +617,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
 
 
-      <FaceEnrolmentPanel branchId={branchId} serverWithFace={stats.serverWithFace} />
+      <FaceEnrolmentPanel branchId={branchId} />
 
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
