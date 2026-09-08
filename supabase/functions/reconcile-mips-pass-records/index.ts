@@ -62,6 +62,8 @@ type PersonMatch = {
 type RequestBody = {
   branch_id?: string;
   limit?: number;
+  pages?: number;
+
   dry_run?: boolean;
 };
 
