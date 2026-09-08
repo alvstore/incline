@@ -28,23 +28,16 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, style, ...props }, ref) => (
+>(({ className, ...props }, ref) => (
   <AlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
       ref={ref}
-      // Optical centering: on desktop the visible content area sits to the
-      // right of the app sidebar. Offset the modal by half the sidebar width
-      // so it sits over the table the user is looking at, not the chrome.
-      style={{
-        ...style,
-        // Falls back to 0 when the var isn't defined (auth pages, etc.).
-        ['--alert-dialog-offset' as any]:
-          'calc(var(--sidebar-width, 0px) / 2)',
-      }}
       className={cn(
-        "fixed top-[50%] left-[50%] z-50 grid w-[calc(100%-2rem)] max-w-md translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl border-0 bg-background p-6 shadow-2xl shadow/15 duration-200",
-        "md:left-[calc(50%+var(--alert-dialog-offset))] md:w-full",
+        // True viewport centering on every screen size — no sidebar offset,
+        // which pushed the modal off-centre on wide layouts.
+        "fixed top-[50%] left-[50%] z-50 grid w-[calc(100%-2rem)] max-w-md translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl border-0 bg-background p-6 shadow-2xl duration-200",
+        "sm:w-full",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className,
       )}
@@ -52,6 +45,7 @@ const AlertDialogContent = React.forwardRef<
     />
   </AlertDialogPortal>
 ));
+
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
