@@ -37,7 +37,7 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
   const qc = useQueryClient();
   const [resyncing, setResyncing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const { devices, offline, unmapped, laggingDevices, maxFaces } = useMipsFleet(branchId);
+  const { devices, offline, unmapped, laggingDevices, laggingGates, target } = useMipsFleet(branchId);
 
   const handleResync = async () => {
     setResyncing(true);
@@ -104,8 +104,11 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
           icon={<AlertTriangle className="h-4 w-4" />}
           message={
             <>
-              Face parity gap:{" "}
-              {laggingDevices.map((d) => `${d.name || d.deviceKey} is ${maxFaces - (d.faceCount || 0)} behind`).join(" · ")}.
+              Missing face photos:{" "}
+              {laggingGates
+                .map((g) => `${g.name} is missing ${g.behind ?? 0} of ${target} photo(s)`)
+                .join(" · ")}
+              .
             </>
           }
           action={

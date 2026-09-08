@@ -57,7 +57,7 @@ const Tile = ({ icon, label, value, hint, tone = "default", toneClass }: TilePro
 );
 
 const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
-  const { connection, isConnected, devices, online, maxFaces, maxPersons, faceGap, lastEvent, isLoading } =
+  const { connection, isConnected, devices, online, maxFaces, target, faceGap, lastEvent, isLoading } =
     useMipsFleet(branchId);
 
   if (isLoading) {
@@ -101,14 +101,17 @@ const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
       />
       <Tile
         icon={<ScanFace className="h-5 w-5" />}
-        label="Faces On Device"
-        value={maxFaces}
+        label="Face Photos On Gates"
+        value={
+          <>
+            {maxFaces}
+            <span className="text-sm font-normal text-muted-foreground">/{target}</span>
+          </>
+        }
         hint={
-          total > 1
-            ? faceGap > 0
-              ? `${faceGap} behind on slowest gate`
-              : "All gates in parity"
-            : `${maxPersons} persons enrolled`
+          faceGap > 0
+            ? `Slowest gate is missing ${faceGap} photo(s)`
+            : "Every gate matches the office list"
         }
         toneClass={faceGap > 0 ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"}
       />
