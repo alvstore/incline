@@ -428,6 +428,19 @@ async function markAttendance(
 
   const label = person.type === "trainer" ? "Trainer" : "Staff";
 
+  if (doorRole === "exit") {
+    const { data, error } = await supabase.rpc("staff_gate_check_out", {
+      p_user_id: person.user_id,
+      p_branch_id: person.branch_id,
+      p_at: scanTime,
+    });
+    if (error) return `Staff attendance error: ${error.message}`;
+    const out = data as { success?: boolean; message?: string } | null;
+    return out?.success ? `${label} ${personName} checked out` : (out?.message ?? "No open shift to close");
+  }
+
+
+
   // Single source of truth: the same RPC the live webhook uses. It resolves the
   // roster block for the punch time (morning / evening / night / full_day),
   // applies the roster grace, and records at most one row per block per day —
