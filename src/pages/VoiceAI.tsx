@@ -28,6 +28,8 @@ import {
   DISPOSITION_OPTIONS, STATUS_OPTIONS, isLiveStatus,
 } from '@/lib/voice/voiceOutcomes';
 import { VoiceCallDetailSheet } from '@/components/voice/VoiceCallDetailSheet';
+import { AutomationHealthCard } from '@/components/voice/AutomationHealthCard';
+
 import { can } from '@/lib/auth/permissions';
 import { format } from 'date-fns';
 
@@ -248,7 +250,10 @@ export default function VoiceAIPage() {
           </CardContent>
         </Card>
 
+        <AutomationHealthCard />
+
         {/* KPIs */}
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <Kpi label="Today's calls" value={`${today.calls ?? 0} / ${cap}`} sub="Calls used vs daily cap" icon={PhoneCall} />
           <Kpi label="Connected" value={today.connected ?? 0} icon={PhoneIncoming} tone="emerald" />
