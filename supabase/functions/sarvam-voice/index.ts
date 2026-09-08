@@ -357,18 +357,28 @@ Deno.serve(async (req) => {
       "run_eligibility_check",
       "place_call",
       "run_batch",
+      "auto_tick",
       "metrics",
     ]);
     const systemKey = req.headers.get("x-incline-tool-key") ?? "";
-    const isSystem = !!cfg.tool_token && systemKey.length === cfg.tool_token.length &&
+    const isToolKey = !!cfg.tool_token && systemKey.length === cfg.tool_token.length &&
       systemKey === cfg.tool_token;
+    // The scheduler (automation-brain) calls with the service-role key plus a
+    // marker header. It is a server-side identity; it may only tick the worker.
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
+    const isBrain = req.headers.get("x-system-call") === "automation-brain" &&
+      !!serviceKey && bearer === serviceKey;
+    const isSystem = isToolKey || isBrain;
 
     let userId: string | null = null;
     if (isSystem) {
-      if (!SYSTEM_ACTIONS.has(action)) {
+      const allowed = isBrain ? new Set(["auto_tick"]) : SYSTEM_ACTIONS;
+      if (!allowed.has(action)) {
         return json({ ok: false, error: "Forbidden — system key cannot perform this action" }, 403);
       }
     } else {
+
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Unauthorized" }, 401);
       const sbAuth = createClient(

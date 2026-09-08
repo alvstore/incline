@@ -13106,6 +13106,57 @@ export type Database = {
           },
         ]
       }
+      voice_automation_runs: {
+        Row: {
+          branch_id: string | null
+          calls_attempted: number
+          calls_placed: number
+          calls_skipped: number
+          candidates_found: number
+          created_at: string
+          error_count: number
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          meta: Json
+          skip_reason: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          branch_id?: string | null
+          calls_attempted?: number
+          calls_placed?: number
+          calls_skipped?: number
+          candidates_found?: number
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          meta?: Json
+          skip_reason?: string | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          branch_id?: string | null
+          calls_attempted?: number
+          calls_placed?: number
+          calls_skipped?: number
+          candidates_found?: number
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          meta?: Json
+          skip_reason?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       voice_call_attempts: {
         Row: {
           agent_id: string | null
@@ -16982,6 +17033,11 @@ export type Database = {
         Args: { _branch_id: string; _member_id: string }
         Returns: Json
       }
+      voice_automation_claim_run: {
+        Args: { _lease_minutes?: number }
+        Returns: string
+      }
+      voice_automation_health: { Args: never; Returns: Json }
       voice_call_detail: { Args: { p_call_id: string }; Returns: Json }
       voice_calls_analytics: {
         Args: { p_branch?: string; p_days?: number }
@@ -17051,6 +17107,7 @@ export type Database = {
           _branch_ids?: string[]
           _cooldown_days?: number
           _min_absent_days?: number
+          _recent_contact_days?: number
         }
         Returns: {
           branch_id: string
@@ -17061,8 +17118,10 @@ export type Database = {
           last_seen: string
           member_id: string
           missing_phone: boolean
+          no_visit_data: boolean
           paused: boolean
           phone: string
+          recent_human_contact: boolean
           too_recent: boolean
         }[]
       }
