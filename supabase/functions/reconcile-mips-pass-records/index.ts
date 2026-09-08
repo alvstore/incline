@@ -374,13 +374,46 @@ async function resolveAlias(
 
 
 
+/** Cache of device serial/name → door role, so a batch hits the table once per gate. */
+const doorRoleCache = new Map<string, "entry" | "exit" | "both">();
+
+async function getDoorRole(
+  supabase: ReturnType<typeof createClient>,
+  deviceKey: string,
+): Promise<"entry" | "exit" | "both"> {
+  if (!deviceKey) return "both";
+  const cached = doorRoleCache.get(deviceKey);
+  if (cached) return cached;
+  const { data } = await supabase
+    .from("access_devices")
+    .select("door_role")
+    .or(`serial_number.eq.${deviceKey},device_name.eq.${deviceKey}`)
+    .limit(1)
+    .maybeSingle();
+  const role = ((data as { door_role?: string } | null)?.door_role ?? "both") as "entry" | "exit" | "both";
+  doorRoleCache.set(deviceKey, role);
+  return role;
+}
+
 async function markAttendance(
   supabase: ReturnType<typeof createClient>,
   person: PersonMatch,
   personName: string,
   scanTime: string,
+  deviceKey = "",
 ): Promise<string | null> {
+  const doorRole = await getDoorRole(supabase, deviceKey);
+
   if (person.type === "member") {
+    if (doorRole === "exit") {
+      const { data } = await supabase.rpc("member_gate_check_out", {
+        _member_id: person.id,
+        _branch_id: person.branch_id,
+        _at: scanTime,
+      });
+      const out = data as { success?: boolean; message?: string } | null;
+      return out?.success ? `${personName} checked out` : (out?.message ?? "No open visit to close");
+    }
     const { data } = await supabase.rpc("member_check_in", {
       _member_id: person.id,
       _branch_id: person.branch_id,
@@ -390,9 +423,23 @@ async function markAttendance(
     return result?.message ?? null;
   }
 
+
   if (!person.user_id) return "Staff profile missing login id; access logged only";
 
   const label = person.type === "trainer" ? "Trainer" : "Staff";
+
+  if (doorRole === "exit") {
+    const { data, error } = await supabase.rpc("staff_gate_check_out", {
+      p_user_id: person.user_id,
+      p_branch_id: person.branch_id,
+      p_at: scanTime,
+    });
+    if (error) return `Staff attendance error: ${error.message}`;
+    const out = data as { success?: boolean; message?: string } | null;
+    return out?.success ? `${label} ${personName} checked out` : (out?.message ?? "No open shift to close");
+  }
+
+
 
   // Single source of truth: the same RPC the live webhook uses. It resolves the
   // roster block for the punch time (morning / evening / night / full_day),
@@ -555,7 +602,13 @@ Deno.serve(async (req) => {
       const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
 
       const attendanceMessage = !dryRun && matchedPerson
-        ? await markAttendance(supabase, matchedPerson, personName, scanTime).catch((error: Error) => `Attendance error: ${error.message}`)
+        ? await markAttendance(
+            supabase,
+            matchedPerson,
+            personName,
+            scanTime,
+            getString(record.deviceKey ?? record.deviceSn ?? record.deviceName),
+          ).catch((error: Error) => `Attendance error: ${error.message}`)
         : null;
       if (
         attendanceMessage &&

@@ -1,3 +1,5 @@
+// v2.7.0 - Entry/exit aware attendance: the scanning gate's door_role decides whether a
+//           scan opens (entry) or closes (exit) the visit/shift, using the hardware scan time.
 // v2.6.0 - Gate ACK is never blocked by MIPS: relay + deny command run in the background with hard timeouts.
 //           (scheme-less server URLs normalized, native form-encoded body, fallback
 //           /tdx-admin path, failures reported via log_error_event).
@@ -332,6 +334,81 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
   return message;
 }
 
+/**
+ * Which door is this? The club now runs a dedicated entry gate and a dedicated
+ * exit gate, so the scan direction comes from the device row (`door_role`).
+ * Unknown / 'both' devices keep the old check-in-only behaviour.
+ */
+async function resolveDoorRole(
+  supabase: any,
+  deviceKey: string,
+  deviceName: string,
+): Promise<"entry" | "exit" | "both"> {
+  const keys = [deviceKey, deviceName].filter((k) => k && k !== "unknown");
+  for (const key of keys) {
+    const { data } = await supabase
+      .from("access_devices")
+      .select("door_role")
+      .or(`serial_number.eq.${key},device_name.eq.${key}`)
+      .limit(1)
+      .maybeSingle();
+    const role = data?.door_role;
+    if (role === "entry" || role === "exit" || role === "both") return role;
+  }
+  return "both";
+}
+
+async function handleMemberCheckout(
+  supabase: any,
+  memberId: string,
+  branchId: string,
+  personName: string,
+  scanTime: string,
+) {
+  try {
+    const { data, error } = await supabase.rpc("member_gate_check_out", {
+      _member_id: memberId,
+      _branch_id: branchId,
+      _at: scanTime,
+    });
+    if (error) throw error;
+    const mins = Math.round(Number((data as any)?.duration_minutes ?? 0));
+    return (data as any)?.success
+      ? { result: "member_exit", message: `${personName} checked out (${mins} min visit)` }
+      : { result: "member_exit", message: `${personName} exit scan: ${(data as any)?.message ?? "no open visit"}` };
+  } catch (e) {
+    console.warn("Member gate check-out failed:", e);
+    return { result: "member_exit", message: `${personName} exit scan error: ${e}` };
+  }
+}
+
+async function handleStaffCheckout(
+  supabase: any,
+  userId: string,
+  branchId: string,
+  personName: string,
+  personType: string,
+  scanTime: string,
+) {
+  const label = personType === "trainer" ? "Trainer" : "Staff";
+  try {
+    const { data, error } = await supabase.rpc("staff_gate_check_out", {
+      p_user_id: userId,
+      p_branch_id: branchId,
+      p_at: scanTime,
+    });
+    if (error) throw error;
+    const mins = Math.round(Number((data as any)?.duration_minutes ?? 0));
+    return (data as any)?.success
+      ? `${label} ${personName} checked out (${mins} min)`
+      : `${label} ${personName} exit scan: ${(data as any)?.message ?? "no open shift"}`;
+  } catch (e) {
+    console.warn("Staff gate check-out failed:", e);
+    return `${label} ${personName} exit scan error: ${e}`;
+  }
+}
+
+
 
 
 async function handleImgRegCallback(supabase: any, payload: Record<string, unknown>) {
@@ -657,15 +734,25 @@ Deno.serve(async (req) => {
         branchId = person.branch_id;
         profileId = person.user_id;
 
+        const doorRole = await resolveDoorRole(supabase, deviceKey, deviceName);
+        console.log(`Door role for ${deviceKey || deviceName}: ${doorRole}`);
+
         if (person.type === "member") {
           memberId = person.id;
-          const checkin = await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType);
-          result = checkin.result;
-          message = checkin.message;
+          const outcome =
+            doorRole === "exit"
+              ? await handleMemberCheckout(supabase, person.id, person.branch_id, personName, scanTime)
+              : await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType);
+          result = outcome.result;
+          message = outcome.message;
         } else {
-          // Employee or trainer → staff attendance toggle
+          // Employee or trainer → staff attendance
           result = person.type === "trainer" ? "trainer" : "staff";
-          message = await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type, scanTime);
+          message =
+            doorRole === "exit"
+              ? await handleStaffCheckout(supabase, person.user_id, person.branch_id, personName, person.type, scanTime)
+              : await handleStaffCheckin(supabase, person.user_id, person.branch_id, personName, person.type, scanTime);
+
         }
       } else {
         // *** CRITICAL FIX: Override result to not_found instead of keeping face_type default ***

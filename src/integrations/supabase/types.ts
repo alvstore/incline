@@ -15927,6 +15927,10 @@ export type Database = {
         }
         Returns: Json
       }
+      member_gate_check_out: {
+        Args: { _at: string; _branch_id: string; _member_id: string }
+        Returns: Json
+      }
       members_blocked_for_dues: {
         Args: never
         Returns: {
@@ -16829,6 +16833,10 @@ export type Database = {
       staff_delete_attendance: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
+      }
+      staff_gate_check_out: {
+        Args: { p_at: string; p_branch_id: string; p_user_id: string }
+        Returns: Json
       }
       staff_mark_block: {
         Args: {

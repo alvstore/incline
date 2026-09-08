@@ -257,3 +257,50 @@ export function useVoiceAnalytics(branchId: string | null | undefined, days: num
     staleTime: 60_000,
   });
 }
+
+export interface VoiceAutomationHealth {
+  last_run?: {
+    id: string;
+    status: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+    candidates_found: number | null;
+    calls_attempted: number | null;
+    calls_placed: number | null;
+    calls_skipped: number | null;
+    error_count: number | null;
+    last_error: string | null;
+    skip_reason: string | null;
+  } | null;
+  last_success?: {
+    id: string;
+    started_at: string | null;
+    finished_at: string | null;
+    calls_placed: number | null;
+    candidates_found: number | null;
+  } | null;
+  scheduler?: {
+    key: string;
+    is_active: boolean | null;
+    cron_expression: string | null;
+    last_run_at: string | null;
+    next_run_at: string | null;
+    last_status: string | null;
+    last_error: string | null;
+  } | null;
+  now_ist?: string;
+}
+
+/** Health of the server-side retention worker (runs every 10 minutes). */
+export function useVoiceAutomationHealth() {
+  return useQuery({
+    queryKey: ['voice-automation-health'],
+    queryFn: async (): Promise<VoiceAutomationHealth> => {
+      const { data, error } = await rpc('voice_automation_health', {});
+      if (error) throw error;
+      return (data ?? {}) as VoiceAutomationHealth;
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
