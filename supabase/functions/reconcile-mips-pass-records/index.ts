@@ -602,7 +602,13 @@ Deno.serve(async (req) => {
       const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
 
       const attendanceMessage = !dryRun && matchedPerson
-        ? await markAttendance(supabase, matchedPerson, personName, scanTime).catch((error: Error) => `Attendance error: ${error.message}`)
+        ? await markAttendance(
+            supabase,
+            matchedPerson,
+            personName,
+            scanTime,
+            getString(record.deviceKey ?? record.deviceSn ?? record.deviceName),
+          ).catch((error: Error) => `Attendance error: ${error.message}`)
         : null;
       if (
         attendanceMessage &&
