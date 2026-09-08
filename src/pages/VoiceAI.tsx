@@ -28,6 +28,8 @@ import {
   DISPOSITION_OPTIONS, STATUS_OPTIONS, isLiveStatus,
 } from '@/lib/voice/voiceOutcomes';
 import { VoiceCallDetailSheet } from '@/components/voice/VoiceCallDetailSheet';
+import { AutomationHealthCard } from '@/components/voice/AutomationHealthCard';
+
 import { can } from '@/lib/auth/permissions';
 import { format } from 'date-fns';
 
