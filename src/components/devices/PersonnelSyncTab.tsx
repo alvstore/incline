@@ -21,6 +21,8 @@ import {
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
 import FaceEnrolmentPanel from "./FaceEnrolmentPanel";
+import { useMipsFleet } from "./useMipsFleet";
+
 
 interface PersonnelSyncTabProps {
   branchId?: string;
@@ -198,31 +200,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   });
 
   // ---- Server truth: what the MIPS server actually holds -------------------
-  // The local `mips_sync_status` column only records what *we* attempted.
-  // The only reliable count is the person list on the MIPS server itself, and
-  // whether each person actually carries a face image (photoUri / havePhoto).
-  const { data: serverTruth, isFetching: truthLoading, isError: truthError, error: truthErrorDetail, refetch: refetchTruth } = useQuery({
-    queryKey: ["mips-server-truth", branchId || "all"],
-    queryFn: async () => {
-      const rows = await fetchAllMIPSPersons(200, branchId);
-      const map: Record<string, { exists: boolean; hasFace: boolean }> = {};
-      for (const r of rows) {
-        if (!r?.personSn) continue;
-        map[normalizeMIPSPersonSn(r.personSn)] = {
-          exists: true,
-          hasFace: mipsPersonHasPhoto(r as MIPSPerson & Record<string, unknown>),
-        };
-      }
-      return {
-        map,
-        total: rows.length,
-        withFace: rows.filter((r) => mipsPersonHasPhoto(r as MIPSPerson & Record<string, unknown>)).length,
-      };
-    },
-    staleTime: 60_000,
-    refetchInterval: 120_000,
-    retry: 1,
-  });
+  // Sourced from the shared fleet hook so every Device Command Center surface
+  // renders exactly the same person/photo totals.
+  const fleet = useMipsFleet(branchId);
+  const serverTruth = fleet.serverTruth;
+  const truthLoading = fleet.serverTruthLoading;
+  const truthError = Boolean(fleet.serverTruthError);
+  const truthErrorDetail = fleet.serverTruthError;
+  const refetchTruth = fleet.refetchServerTruth;
+
 
   const truthFor = (person: SyncPerson) =>
     serverTruth?.map[normalizeMIPSPersonSn(person.mipsPersonSn || person.code)];
@@ -631,7 +617,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
 
 
-      <FaceEnrolmentPanel branchId={branchId} serverWithFace={stats.serverWithFace} />
+      <FaceEnrolmentPanel branchId={branchId} />
 
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
