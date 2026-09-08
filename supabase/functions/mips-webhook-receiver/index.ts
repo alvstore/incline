@@ -334,6 +334,81 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
   return message;
 }
 
+/**
+ * Which door is this? The club now runs a dedicated entry gate and a dedicated
+ * exit gate, so the scan direction comes from the device row (`door_role`).
+ * Unknown / 'both' devices keep the old check-in-only behaviour.
+ */
+async function resolveDoorRole(
+  supabase: any,
+  deviceKey: string,
+  deviceName: string,
+): Promise<"entry" | "exit" | "both"> {
+  const keys = [deviceKey, deviceName].filter((k) => k && k !== "unknown");
+  for (const key of keys) {
+    const { data } = await supabase
+      .from("access_devices")
+      .select("door_role")
+      .or(`serial_number.eq.${key},device_name.eq.${key}`)
+      .limit(1)
+      .maybeSingle();
+    const role = data?.door_role;
+    if (role === "entry" || role === "exit" || role === "both") return role;
+  }
+  return "both";
+}
+
+async function handleMemberCheckout(
+  supabase: any,
+  memberId: string,
+  branchId: string,
+  personName: string,
+  scanTime: string,
+) {
+  try {
+    const { data, error } = await supabase.rpc("member_gate_check_out", {
+      _member_id: memberId,
+      _branch_id: branchId,
+      _at: scanTime,
+    });
+    if (error) throw error;
+    const mins = Math.round(Number((data as any)?.duration_minutes ?? 0));
+    return (data as any)?.success
+      ? { result: "member_exit", message: `${personName} checked out (${mins} min visit)` }
+      : { result: "member_exit", message: `${personName} exit scan: ${(data as any)?.message ?? "no open visit"}` };
+  } catch (e) {
+    console.warn("Member gate check-out failed:", e);
+    return { result: "member_exit", message: `${personName} exit scan error: ${e}` };
+  }
+}
+
+async function handleStaffCheckout(
+  supabase: any,
+  userId: string,
+  branchId: string,
+  personName: string,
+  personType: string,
+  scanTime: string,
+) {
+  const label = personType === "trainer" ? "Trainer" : "Staff";
+  try {
+    const { data, error } = await supabase.rpc("staff_gate_check_out", {
+      p_user_id: userId,
+      p_branch_id: branchId,
+      p_at: scanTime,
+    });
+    if (error) throw error;
+    const mins = Math.round(Number((data as any)?.duration_minutes ?? 0));
+    return (data as any)?.success
+      ? `${label} ${personName} checked out (${mins} min)`
+      : `${label} ${personName} exit scan: ${(data as any)?.message ?? "no open shift"}`;
+  } catch (e) {
+    console.warn("Staff gate check-out failed:", e);
+    return `${label} ${personName} exit scan error: ${e}`;
+  }
+}
+
+
 
 
 async function handleImgRegCallback(supabase: any, payload: Record<string, unknown>) {
