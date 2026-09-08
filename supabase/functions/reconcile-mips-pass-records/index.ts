@@ -374,13 +374,46 @@ async function resolveAlias(
 
 
 
+/** Cache of device serial/name → door role, so a batch hits the table once per gate. */
+const doorRoleCache = new Map<string, "entry" | "exit" | "both">();
+
+async function getDoorRole(
+  supabase: ReturnType<typeof createClient>,
+  deviceKey: string,
+): Promise<"entry" | "exit" | "both"> {
+  if (!deviceKey) return "both";
+  const cached = doorRoleCache.get(deviceKey);
+  if (cached) return cached;
+  const { data } = await supabase
+    .from("access_devices")
+    .select("door_role")
+    .or(`serial_number.eq.${deviceKey},device_name.eq.${deviceKey}`)
+    .limit(1)
+    .maybeSingle();
+  const role = ((data as { door_role?: string } | null)?.door_role ?? "both") as "entry" | "exit" | "both";
+  doorRoleCache.set(deviceKey, role);
+  return role;
+}
+
 async function markAttendance(
   supabase: ReturnType<typeof createClient>,
   person: PersonMatch,
   personName: string,
   scanTime: string,
+  deviceKey = "",
 ): Promise<string | null> {
+  const doorRole = await getDoorRole(supabase, deviceKey);
+
   if (person.type === "member") {
+    if (doorRole === "exit") {
+      const { data } = await supabase.rpc("member_gate_check_out", {
+        _member_id: person.id,
+        _branch_id: person.branch_id,
+        _at: scanTime,
+      });
+      const out = data as { success?: boolean; message?: string } | null;
+      return out?.success ? `${personName} checked out` : (out?.message ?? "No open visit to close");
+    }
     const { data } = await supabase.rpc("member_check_in", {
       _member_id: person.id,
       _branch_id: person.branch_id,
@@ -389,6 +422,7 @@ async function markAttendance(
     const result = data as { valid?: boolean; message?: string } | null;
     return result?.message ?? null;
   }
+
 
   if (!person.user_id) return "Staff profile missing login id; access logged only";
 
