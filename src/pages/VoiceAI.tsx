@@ -248,7 +248,10 @@ export default function VoiceAIPage() {
           </CardContent>
         </Card>
 
+        <AutomationHealthCard />
+
         {/* KPIs */}
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <Kpi label="Today's calls" value={`${today.calls ?? 0} / ${cap}`} sub="Calls used vs daily cap" icon={PhoneCall} />
           <Kpi label="Connected" value={today.connected ?? 0} icon={PhoneIncoming} tone="emerald" />
