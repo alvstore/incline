@@ -40,6 +40,25 @@ import { format } from 'date-fns';
 const PAGE_SIZE = 25;
 const ALL = '__all__';
 
+const SKIP_REASON_LOOK: Record<string, { label: string; className: string }> = {
+  no_phone: { label: 'No phone number', className: 'bg-slate-100 text-slate-600' },
+  do_not_contact: { label: 'Do not contact', className: 'bg-red-100 text-red-700' },
+  member_paused: { label: 'Member paused', className: 'bg-blue-100 text-blue-700' },
+  no_visit_history: { label: 'Never visited', className: 'bg-slate-100 text-slate-600' },
+  recently_contacted: { label: 'Recently contacted', className: 'bg-amber-100 text-amber-700' },
+  cooldown: { label: 'In cooldown', className: 'bg-amber-100 text-amber-700' },
+  recent_visit: { label: 'Visited recently', className: 'bg-emerald-100 text-emerald-700' },
+};
+
+function skipLook(reason?: string | null) {
+  if (!reason) return { label: '—', className: 'bg-slate-100 text-slate-600' };
+  return SKIP_REASON_LOOK[reason] ?? {
+    label: reason.replace(/_/g, ' '),
+    className: 'bg-slate-100 text-slate-600',
+  };
+}
+
+
 function fmt(value?: string | null, pattern = 'dd MMM, HH:mm') {
   if (!value) return '—';
   const d = new Date(value);
