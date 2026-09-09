@@ -15,13 +15,15 @@ import {
 } from '@/components/ui/table';
 import {
   PhoneCall, PhoneIncoming, AlertTriangle, ShieldOff, Activity,
-  Search, RefreshCw, Info, CheckCircle2, Clock,
+  Search, RefreshCw, Info, CheckCircle2, Clock, Pause, Play, RotateCcw, PhoneOutgoing,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import {
-  useVoiceOpsSummary, useVoiceCalls, useVoiceAnalytics, useVoiceQueue, type VoiceCallRow,
+  useVoiceOpsSummary, useVoiceCalls, useVoiceAnalytics, useVoiceQueue,
+  useVoiceBlocked, useVoiceAutomationState, useVoicePauseAutomation,
+  useVoiceCallMemberNow, useVoiceRetryFailedToday, type VoiceCallRow,
 } from '@/hooks/useVoiceOps';
 import {
   dispositionLook, statusLook, actionStateLook, formatDuration,
@@ -29,12 +31,33 @@ import {
 } from '@/lib/voice/voiceOutcomes';
 import { VoiceCallDetailSheet } from '@/components/voice/VoiceCallDetailSheet';
 import { AutomationHealthCard } from '@/components/voice/AutomationHealthCard';
+import { toast } from 'sonner';
+
 
 import { can } from '@/lib/auth/permissions';
 import { format } from 'date-fns';
 
 const PAGE_SIZE = 25;
 const ALL = '__all__';
+
+const SKIP_REASON_LOOK: Record<string, { label: string; className: string }> = {
+  no_phone: { label: 'No phone number', className: 'bg-slate-100 text-slate-600' },
+  do_not_contact: { label: 'Do not contact', className: 'bg-red-100 text-red-700' },
+  member_paused: { label: 'Member paused', className: 'bg-blue-100 text-blue-700' },
+  no_visit_history: { label: 'Never visited', className: 'bg-slate-100 text-slate-600' },
+  recently_contacted: { label: 'Recently contacted', className: 'bg-amber-100 text-amber-700' },
+  cooldown: { label: 'In cooldown', className: 'bg-amber-100 text-amber-700' },
+  recent_visit: { label: 'Visited recently', className: 'bg-emerald-100 text-emerald-700' },
+};
+
+function skipLook(reason?: string | null) {
+  if (!reason) return { label: '—', className: 'bg-slate-100 text-slate-600' };
+  return SKIP_REASON_LOOK[reason] ?? {
+    label: reason.replace(/_/g, ' '),
+    className: 'bg-slate-100 text-slate-600',
+  };
+}
+
 
 function fmt(value?: string | null, pattern = 'dd MMM, HH:mm') {
   if (!value) return '—';
@@ -170,6 +193,7 @@ export default function VoiceAIPage() {
   const [openCallId, setOpenCallId] = useState<string | null>(null);
 
   const canSeeAnalytics = can.viewFinancials(roles) || can.crossBranchView(roles);
+  const canControl = can.manageAutomations(roles) || can.manageSettings(roles);
 
   const summaryQ = useVoiceOpsSummary(branchId);
   const integration = summaryQ.data?.integration;
@@ -195,6 +219,38 @@ export default function VoiceAIPage() {
   const dndQ = useVoiceCalls({ ...baseFilters, offset: 0, disposition: 'wrong_person' });
   const analyticsQ = useVoiceAnalytics(branchId, analyticsDays);
   const queueQ = useVoiceQueue(branchId);
+  const blockedQ = useVoiceBlocked(branchId);
+  const automationQ = useVoiceAutomationState();
+  const pauseM = useVoicePauseAutomation();
+  const callNowM = useVoiceCallMemberNow();
+  const retryM = useVoiceRetryFailedToday(branchId);
+
+  const paused = automationQ.data?.paused === true;
+  const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
+
+  const togglePause = () => {
+    pauseM.mutate(!paused, {
+      onSuccess: () => toast.success(paused ? 'Retention calling resumed' : 'Retention calling paused'),
+      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Could not change the automation'),
+    });
+  };
+
+  const callNow = (memberId: string, name?: string | null) => {
+    setPendingMemberId(memberId);
+    callNowM.mutate(memberId, {
+      onSuccess: () => toast.success(`Calling ${name ?? 'member'} now`),
+      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Could not place the call'),
+      onSettled: () => setPendingMemberId(null),
+    });
+  };
+
+  const retryUnreached = () => {
+    retryM.mutate(undefined, {
+      onSuccess: (r) => toast.success(`Retried ${r.attempted} member(s) · ${r.placed} placed, ${r.failed} failed`),
+      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Retry failed'),
+    });
+  };
+
 
   useRealtimeInvalidate({
     channel: 'voice-ops',
@@ -222,8 +278,32 @@ export default function VoiceAIPage() {
             <h1 className="text-2xl font-bold text-foreground">Voice AI</h1>
             <p className="text-sm text-muted-foreground">Incline Member Care · retention calling operations</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge className={`rounded-full ${readiness.className}`}>{readiness.label}</Badge>
+            {paused && <Badge className="rounded-full bg-amber-100 text-amber-700">PAUSED</Badge>}
+            {canControl && (
+              <>
+                <Button
+                  variant={paused ? 'default' : 'outline'} size="sm" className="cursor-pointer"
+                  disabled={pauseM.isPending || automationQ.isLoading}
+                  onClick={togglePause}
+                  aria-label={paused ? 'Resume retention calling' : 'Pause retention calling'}
+                >
+                  {paused
+                    ? <><Play className="mr-2 h-4 w-4" /> Resume calling</>
+                    : <><Pause className="mr-2 h-4 w-4" /> Pause calling</>}
+                </Button>
+                <Button
+                  variant="outline" size="sm" className="cursor-pointer"
+                  disabled={retryM.isPending}
+                  onClick={retryUnreached}
+                  aria-label="Retry members not reached today"
+                >
+                  <RotateCcw className={`mr-2 h-4 w-4 ${retryM.isPending ? 'animate-spin' : ''}`} />
+                  {retryM.isPending ? 'Retrying…' : 'Retry unreached'}
+                </Button>
+              </>
+            )}
             <Button
               variant="outline" size="sm" className="cursor-pointer"
               onClick={() => { summaryQ.refetch(); historyQ.refetch(); }}
@@ -232,6 +312,7 @@ export default function VoiceAIPage() {
               <RefreshCw className="mr-2 h-4 w-4" /> Refresh
             </Button>
           </div>
+
         </div>
 
         <Card className="rounded-2xl shadow-sm">
@@ -267,7 +348,9 @@ export default function VoiceAIPage() {
           <TabsList>
             <TabsTrigger value="history" className="cursor-pointer">Call history</TabsTrigger>
             <TabsTrigger value="queue" className="cursor-pointer">Today's queue</TabsTrigger>
+            <TabsTrigger value="skipped" className="cursor-pointer">Skipped</TabsTrigger>
             <TabsTrigger value="callbacks" className="cursor-pointer">Callbacks</TabsTrigger>
+
             <TabsTrigger value="complaints" className="cursor-pointer">Complaints</TabsTrigger>
             <TabsTrigger value="dnd" className="cursor-pointer">DND</TabsTrigger>
             {canSeeAnalytics && <TabsTrigger value="analytics" className="cursor-pointer">Analytics</TabsTrigger>}
@@ -362,11 +445,12 @@ export default function VoiceAIPage() {
                 <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
                   <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <p>
-                    Eligibility, DND, cooldown, calling window, daily cap and concurrency are decided by the
-                    Voice AI backend — this screen never computes or overrides them, and there is no manual
-                    dial action. Run the eligibility check from Settings → Integrations → Voice AI to see
-                    today's breakdown; live calls appear in Call history the moment they start.
+                    Eligibility, DND, calling window, daily cap and concurrency are decided by the
+                    Voice AI backend — this screen never computes them. Managers can dial a listed
+                    member immediately with Call now; do-not-contact is still enforced server-side.
+                    Live calls appear in Call history the moment they start.
                   </p>
+
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Kpi label="Calls in progress" value={today.in_progress ?? 0} icon={Activity} tone="indigo" />
@@ -398,6 +482,7 @@ export default function VoiceAIPage() {
                           <TableHead>Plan expiry</TableHead>
                           <TableHead>Trainer</TableHead>
                           <TableHead>Last outcome</TableHead>
+                          {canControl && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -426,6 +511,19 @@ export default function VoiceAIPage() {
                                   ? <Badge className={`rounded-full ${disp.className}`}>{disp.label}</Badge>
                                   : <span className="text-xs text-muted-foreground">Never called</span>}
                               </TableCell>
+                              {canControl && (
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm" variant="outline" className="cursor-pointer"
+                                    disabled={callNowM.isPending && pendingMemberId === q.member_id}
+                                    aria-label={`Call ${q.member_name ?? 'member'} now`}
+                                    onClick={(e) => { e.stopPropagation(); callNow(q.member_id, q.member_name); }}
+                                  >
+                                    <PhoneOutgoing className="mr-2 h-4 w-4" />
+                                    {callNowM.isPending && pendingMemberId === q.member_id ? 'Calling…' : 'Call now'}
+                                  </Button>
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -436,6 +534,94 @@ export default function VoiceAIPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Skipped */}
+          <TabsContent value="skipped" className="space-y-4">
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Members the agent passed over</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <p>
+                    Each row shows exactly why the member was not called. Do-not-contact is never
+                    overridable; cooldown and recent-contact skips can be overridden with Call now.
+                  </p>
+                </div>
+                {blockedQ.isError ? (
+                  <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Could not load skipped members. Refresh to try again.
+                  </div>
+                ) : blockedQ.isLoading ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
+                  </div>
+                ) : (blockedQ.data ?? []).length === 0 ? (
+                  <EmptyState
+                    title="Nobody was skipped"
+                    hint="When the agent passes over a member — no phone, do-not-contact, cooldown or a recent visit — they show up here with the reason."
+                  />
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-background">
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Last visit</TableHead>
+                          <TableHead>Days absent</TableHead>
+                          <TableHead>Last call</TableHead>
+                          <TableHead>Why skipped</TableHead>
+                          {canControl && <TableHead className="text-right">Action</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(blockedQ.data ?? []).map((b) => {
+                          const look = skipLook(b.skip_reason);
+                          const overridable = !['do_not_contact', 'no_phone'].includes(b.skip_reason);
+                          return (
+                            <TableRow key={`${b.member_id}-${b.skip_reason}`} className="transition-colors duration-150 hover:bg-muted/50">
+                              <TableCell>
+                                <div className="font-medium text-foreground">{b.member_name ?? 'Unknown'}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {b.member_code ?? '—'}
+                                  {b.masked_phone ? ` · ${b.masked_phone}` : ''}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{fmt(b.last_visit, 'dd MMM yyyy')}</TableCell>
+                              <TableCell className="text-sm">{b.days_absent ?? '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{fmt(b.last_call_at)}</TableCell>
+                              <TableCell>
+                                <Badge className={`rounded-full ${look.className}`}>{look.label}</Badge>
+                              </TableCell>
+                              {canControl && (
+                                <TableCell className="text-right">
+                                  {overridable ? (
+                                    <Button
+                                      size="sm" variant="outline" className="cursor-pointer"
+                                      disabled={callNowM.isPending && pendingMemberId === b.member_id}
+                                      aria-label={`Call ${b.member_name ?? 'member'} now`}
+                                      onClick={() => callNow(b.member_id, b.member_name)}
+                                    >
+                                      <PhoneOutgoing className="mr-2 h-4 w-4" />
+                                      {callNowM.isPending && pendingMemberId === b.member_id ? 'Calling…' : 'Call now'}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">Not allowed</span>
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
 
 
           <TabsContent value="callbacks">
