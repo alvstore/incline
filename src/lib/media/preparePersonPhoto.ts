@@ -16,6 +16,16 @@ const HARD_MIN_EDGE = 240;    // below this nothing can be recovered
 const MAX_SIZE_BYTES = 350 * 1024;
 const MIN_QUALITY = 0.6;
 
+export interface PhotoQuality {
+  /** True when the photo is good enough to enrol as a gate face. */
+  ok: boolean;
+  /** Plain-language reasons a photo is not gate-quality. */
+  reasons: string[];
+  brightness: number;
+  sharpness: number;
+  faces: number | null;
+}
+
 export interface PreparedPhoto {
   file: File;
   width: number;
@@ -23,7 +33,25 @@ export interface PreparedPhoto {
   sizeKB: number;
   /** Human-readable list of the fixes applied, for UI feedback. */
   notes: string[];
+  /** Gate-enrolment verdict — advisory for display pictures, required for faces. */
+  quality: PhotoQuality;
 }
+
+/** Minimum square edge we accept as a gate-quality face. */
+const GATE_MIN_EDGE = 400;
+
+async function detectFaces(canvas: HTMLCanvasElement): Promise<number | null> {
+  const Ctor = (window as unknown as { FaceDetector?: new (o?: unknown) => { detect: (s: unknown) => Promise<unknown[]> } }).FaceDetector;
+  if (!Ctor) return null;
+  try {
+    const detector = new Ctor({ fastMode: true, maxDetectedFaces: 5 });
+    const faces = await detector.detect(canvas);
+    return Array.isArray(faces) ? faces.length : null;
+  } catch {
+    return null;
+  }
+}
+
 
 async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
   if (typeof createImageBitmap === 'function') {
