@@ -348,7 +348,9 @@ export default function VoiceAIPage() {
           <TabsList>
             <TabsTrigger value="history" className="cursor-pointer">Call history</TabsTrigger>
             <TabsTrigger value="queue" className="cursor-pointer">Today's queue</TabsTrigger>
+            <TabsTrigger value="skipped" className="cursor-pointer">Skipped</TabsTrigger>
             <TabsTrigger value="callbacks" className="cursor-pointer">Callbacks</TabsTrigger>
+
             <TabsTrigger value="complaints" className="cursor-pointer">Complaints</TabsTrigger>
             <TabsTrigger value="dnd" className="cursor-pointer">DND</TabsTrigger>
             {canSeeAnalytics && <TabsTrigger value="analytics" className="cursor-pointer">Analytics</TabsTrigger>}
