@@ -124,6 +124,8 @@ export async function uploadAndSyncPersonPhoto({
 
   const ref = person ?? (await resolvePersonEntity(userId));
   if (!ref) return { avatarUrl, person: null, queued: false };
+  // Display picture only — the gate face template is untouched.
+  if (!enrollFace) return { avatarUrl, person: ref, queued: false };
 
   let queued = false;
   let queueError: string | undefined;
