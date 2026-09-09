@@ -122,6 +122,7 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
         userId: member.user_id,
         personName: formData.full_name || profile?.full_name || 'Member',
         person: { entityType: 'members', entityId: member.id },
+        enrollFace: true,
       });
       setAvatarUrl(res.avatarUrl);
       if (res.queued) {

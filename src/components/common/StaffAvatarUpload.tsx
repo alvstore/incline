@@ -78,6 +78,7 @@ export function StaffAvatarUpload({
           userId,
           personName: name,
           person: staffId ? { entityType, entityId: staffId } : null,
+          enrollFace: true,
         });
         onAvatarChange(res.avatarUrl);
         toast.success(res.queued ? 'Photo uploaded — queued for device sync' : 'Photo uploaded successfully');

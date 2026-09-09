@@ -849,7 +849,7 @@ export default function PublicRegistration() {
                           person: { entityType: "members", entityId: newMember.memberId },
                         });
                         setPhotoState("done");
-                        toast.success("Photo saved — gate access is being set up");
+                        toast.success("Photo saved — our team will confirm it at reception for gate access");
                       } catch (err) {
                         setPhotoState("idle");
                         toast.error(err instanceof Error ? err.message : "Could not upload photo");
