@@ -4023,6 +4023,7 @@ export type Database = {
           exit_reason: string | null
           exit_type: string | null
           exited_by: string | null
+          face_photo_source: string | null
           father_or_spouse_name: string | null
           gender: string | null
           hire_date: string
@@ -4030,9 +4031,12 @@ export type Database = {
           is_active: boolean | null
           marital_status: string | null
           medical_fitness_declared_at: string | null
+          mips_dispatch_status: string | null
           mips_face_verified_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
+          mips_photo_hash: string | null
+          mips_photo_synced_at: string | null
           mips_sync_status: string | null
           nationality: string | null
           nominee: Json | null
@@ -4073,6 +4077,7 @@ export type Database = {
           exit_reason?: string | null
           exit_type?: string | null
           exited_by?: string | null
+          face_photo_source?: string | null
           father_or_spouse_name?: string | null
           gender?: string | null
           hire_date: string
@@ -4080,9 +4085,12 @@ export type Database = {
           is_active?: boolean | null
           marital_status?: string | null
           medical_fitness_declared_at?: string | null
+          mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
+          mips_photo_hash?: string | null
+          mips_photo_synced_at?: string | null
           mips_sync_status?: string | null
           nationality?: string | null
           nominee?: Json | null
@@ -4123,6 +4131,7 @@ export type Database = {
           exit_reason?: string | null
           exit_type?: string | null
           exited_by?: string | null
+          face_photo_source?: string | null
           father_or_spouse_name?: string | null
           gender?: string | null
           hire_date?: string
@@ -4130,9 +4139,12 @@ export type Database = {
           is_active?: boolean | null
           marital_status?: string | null
           medical_fitness_declared_at?: string | null
+          mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
+          mips_photo_hash?: string | null
+          mips_photo_synced_at?: string | null
           mips_sync_status?: string | null
           nationality?: string | null
           nominee?: Json | null
@@ -8294,6 +8306,7 @@ export type Database = {
           do_not_contact_set_by: string | null
           do_not_contact_until: string | null
           equipment_availability: string[]
+          face_photo_source: string | null
           fitness_goals: string | null
           fitness_level: string | null
           gstin: string | null
@@ -8308,9 +8321,12 @@ export type Database = {
           lead_id: string | null
           lifecycle_state: string
           member_code: string | null
+          mips_dispatch_status: string | null
           mips_face_verified_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
+          mips_photo_hash: string | null
+          mips_photo_synced_at: string | null
           mips_sync_status: string | null
           notes: string | null
           referred_by: string | null
@@ -8344,6 +8360,7 @@ export type Database = {
           do_not_contact_set_by?: string | null
           do_not_contact_until?: string | null
           equipment_availability?: string[]
+          face_photo_source?: string | null
           fitness_goals?: string | null
           fitness_level?: string | null
           gstin?: string | null
@@ -8358,9 +8375,12 @@ export type Database = {
           lead_id?: string | null
           lifecycle_state?: string
           member_code?: string | null
+          mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
+          mips_photo_hash?: string | null
+          mips_photo_synced_at?: string | null
           mips_sync_status?: string | null
           notes?: string | null
           referred_by?: string | null
@@ -8394,6 +8414,7 @@ export type Database = {
           do_not_contact_set_by?: string | null
           do_not_contact_until?: string | null
           equipment_availability?: string[]
+          face_photo_source?: string | null
           fitness_goals?: string | null
           fitness_level?: string | null
           gstin?: string | null
@@ -8408,9 +8429,12 @@ export type Database = {
           lead_id?: string | null
           lifecycle_state?: string
           member_code?: string | null
+          mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
+          mips_photo_hash?: string | null
+          mips_photo_synced_at?: string | null
           mips_sync_status?: string | null
           notes?: string | null
           referred_by?: string | null
@@ -12933,6 +12957,7 @@ export type Database = {
           exit_reason: string | null
           exit_type: string | null
           exited_by: string | null
+          face_photo_source: string | null
           fixed_salary: number | null
           government_id_number: string | null
           government_id_type: string | null
@@ -12940,9 +12965,12 @@ export type Database = {
           id: string
           is_active: boolean | null
           max_clients: number | null
+          mips_dispatch_status: string | null
           mips_face_verified_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
+          mips_photo_hash: string | null
+          mips_photo_synced_at: string | null
           mips_sync_status: string | null
           pt_share_percentage: number | null
           salary_type: string | null
@@ -12967,6 +12995,7 @@ export type Database = {
           exit_reason?: string | null
           exit_type?: string | null
           exited_by?: string | null
+          face_photo_source?: string | null
           fixed_salary?: number | null
           government_id_number?: string | null
           government_id_type?: string | null
@@ -12974,9 +13003,12 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_clients?: number | null
+          mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
+          mips_photo_hash?: string | null
+          mips_photo_synced_at?: string | null
           mips_sync_status?: string | null
           pt_share_percentage?: number | null
           salary_type?: string | null
@@ -13001,6 +13033,7 @@ export type Database = {
           exit_reason?: string | null
           exit_type?: string | null
           exited_by?: string | null
+          face_photo_source?: string | null
           fixed_salary?: number | null
           government_id_number?: string | null
           government_id_type?: string | null
@@ -13008,9 +13041,12 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_clients?: number | null
+          mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
+          mips_photo_hash?: string | null
+          mips_photo_synced_at?: string | null
           mips_sync_status?: string | null
           pt_share_percentage?: number | null
           salary_type?: string | null

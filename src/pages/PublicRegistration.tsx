@@ -822,14 +822,22 @@ export default function PublicRegistration() {
                 <div className="rounded-2xl bg-primary-foreground/10 p-4 text-left">
                   <p className="text-sm font-semibold">Add your photo for gate entry</p>
                   <p className="mt-1 text-xs text-primary-foreground/70">
-                    A clear, front-facing photo lets the entry gates recognise you. You can also do this later from your profile.
+                    Look straight at the camera in good light, with only your face in frame. This is the
+                    photo the entry gates will use, so we check it before saving.
                   </p>
                   <Label
                     htmlFor="register-photo"
                     className="mt-3 inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl"
                   >
-                    {photoState === "uploading" ? "Uploading…" : "Take / upload photo"}
+                    {photoState === "uploading" ? "Checking photo…" : photoIssues.length ? "Retake photo" : "Take / upload photo"}
                   </Label>
+                  {photoIssues.length > 0 && (
+                    <ul className="mt-3 space-y-1 rounded-xl bg-destructive/15 p-3 text-xs text-primary-foreground">
+                      {photoIssues.map((r) => (
+                        <li key={r}>• {r}</li>
+                      ))}
+                    </ul>
+                  )}
                   <input
                     id="register-photo"
                     type="file"
@@ -842,17 +850,24 @@ export default function PublicRegistration() {
                       if (!file || !newMember) return;
                       setPhotoState("uploading");
                       try {
+                        setPhotoIssues([]);
                         await uploadAndSyncPersonPhoto({
                           file,
                           userId: newMember.userId,
                           personName: details?.full_name || "Member",
                           person: { entityType: "members", entityId: newMember.memberId },
+                          // First-time capture at registration IS the gate face.
+                          enrollFace: true,
                         });
                         setPhotoState("done");
-                        toast.success("Photo saved — our team will confirm it at reception for gate access");
+                        toast.success("Photo accepted — the entry gates will recognise you");
                       } catch (err) {
                         setPhotoState("idle");
-                        toast.error(err instanceof Error ? err.message : "Could not upload photo");
+                        const msg = err instanceof Error ? err.message : "Could not upload photo";
+                        setPhotoIssues(msg.split(" · "));
+                        toast.error("Please retake your photo");
+                      } finally {
+                        e.target.value = "";
                       }
                     }}
                   />

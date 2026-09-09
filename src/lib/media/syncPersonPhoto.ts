@@ -105,7 +105,16 @@ export async function uploadAndSyncPersonPhoto({
   const prepared = await preparePersonPhoto(file);
   if (prepared.notes.length) console.info('[photo] auto-fixed:', prepared.notes.join(', '));
 
+  // A gate face template is only as good as the capture. Anything that would
+  // fail at the door is refused here, with the exact reason for the retake.
+  if (enrollFace && !prepared.quality.ok) {
+    const err = new Error(prepared.quality.reasons.join(' · '));
+    (err as Error & { photoQuality?: unknown }).photoQuality = prepared.quality;
+    throw err;
+  }
+
   const compressed = await compressImageFile(prepared.file);
+
 
 
   const filePath = `${userId}/avatar-${Date.now()}.jpg`;

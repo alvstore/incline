@@ -51,11 +51,20 @@ export function SetPasswordForm() {
     const { error } = await updatePassword(password);
     setIsLoading(false);
     if (error) {
-      toast.error(error.message);
+      const raw = error.message || '';
+      if (/different from the old password/i.test(raw)) {
+        toast.error('Please choose a password different from the one we sent you.');
+        setPassword('');
+        setConfirmPassword('');
+        document.getElementById('password')?.focus();
+        return;
+      }
+      toast.error(raw || 'Could not set your password. Please try again.');
       return;
     }
     toast.success('Password set successfully!');
     navigate(getHomePath(roles), { replace: true });
+
   };
 
   return (

@@ -331,12 +331,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // A guard trigger reverts `must_set_password` on direct updates from
     // non-admin users, so clearing the flag must go through this RPC.
-    const { error: rpcError } = await supabase.rpc('complete_password_setup');
+    const { data: cleared, error: rpcError } = await supabase.rpc('complete_password_setup');
     if (rpcError) return { error: rpcError as Error };
+    if (cleared === false) {
+      return { error: new Error('We could not finish setting up your account. Please contact reception.') };
+    }
 
     await refreshProfile();
     return { error: null };
   };
+
 
 
   const resetPassword = async (email: string) => {
