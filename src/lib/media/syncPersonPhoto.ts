@@ -68,6 +68,14 @@ export interface UploadPersonPhotoArgs {
   personName: string;
   /** Skip the lookup when the caller already knows the entity. */
   person?: PersonRef | null;
+  /**
+   * Whether this upload should also become the face used at the gates.
+   * Default `false` — a person changing their own display picture must never
+   * silently replace their gate face template (that allowed one person to put
+   * someone else's face on the door). Only staff-operated capture screens
+   * pass `true`; the database additionally rejects non-staff writes.
+   */
+  enrollFace?: boolean;
 }
 
 export interface UploadPersonPhotoResult {
