@@ -308,12 +308,17 @@ export async function waitForDispatchSlot(
     waitMs?: number;
   } = {},
 ): Promise<boolean> {
-  const attempts = opts.attempts ?? 8;
+  const attempts = opts.attempts ?? 12;
   const waitMs = opts.waitMs ?? 1500;
   for (let i = 0; i < attempts; i++) {
     const got = await claimDispatchSlot(supabase, mipsDeviceId, branchId, opts);
     if (got) return true;
-    if (i < attempts - 1) await new Promise((r) => setTimeout(r, waitMs));
+    if (i < attempts - 1) {
+      // Back off with jitter so parallel workers queue behind each other
+      // instead of colliding on the same gate every 1.5s and giving up.
+      const backoff = Math.min(waitMs * Math.pow(1.4, i), 8000);
+      await new Promise((r) => setTimeout(r, backoff + Math.random() * 400));
+    }
   }
   return false;
 }

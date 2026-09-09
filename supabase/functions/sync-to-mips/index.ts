@@ -596,9 +596,11 @@ async function dispatchToDevices(
       // Wait out the per-gate throttle rather than dropping the push.
       slotHeld = await waitForDispatchSlot(supabase, mipsDeviceId, branchId ?? null);
       if (!slotHeld) {
-        status = "failed";
-        lastError = "dispatch slot busy after retries";
-        result = { error: lastError };
+        // Not a failure of the person or the photo — the gate is simply busy.
+        // Recorded as deferred so nothing re-drives a full person sync for it.
+        status = "deferred";
+        lastError = "gate busy — hand-off deferred to the next tick";
+        result = { deferred: true, reason: lastError };
       }
       if (slotHeld) {
       const outcome = await dispatchPerson({
