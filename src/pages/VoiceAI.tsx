@@ -15,13 +15,15 @@ import {
 } from '@/components/ui/table';
 import {
   PhoneCall, PhoneIncoming, AlertTriangle, ShieldOff, Activity,
-  Search, RefreshCw, Info, CheckCircle2, Clock,
+  Search, RefreshCw, Info, CheckCircle2, Clock, Pause, Play, RotateCcw, PhoneOutgoing,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import {
-  useVoiceOpsSummary, useVoiceCalls, useVoiceAnalytics, useVoiceQueue, type VoiceCallRow,
+  useVoiceOpsSummary, useVoiceCalls, useVoiceAnalytics, useVoiceQueue,
+  useVoiceBlocked, useVoiceAutomationState, useVoicePauseAutomation,
+  useVoiceCallMemberNow, useVoiceRetryFailedToday, type VoiceCallRow,
 } from '@/hooks/useVoiceOps';
 import {
   dispositionLook, statusLook, actionStateLook, formatDuration,
@@ -29,6 +31,8 @@ import {
 } from '@/lib/voice/voiceOutcomes';
 import { VoiceCallDetailSheet } from '@/components/voice/VoiceCallDetailSheet';
 import { AutomationHealthCard } from '@/components/voice/AutomationHealthCard';
+import { toast } from 'sonner';
+
 
 import { can } from '@/lib/auth/permissions';
 import { format } from 'date-fns';
