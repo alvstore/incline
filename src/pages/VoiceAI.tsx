@@ -193,6 +193,7 @@ export default function VoiceAIPage() {
   const [openCallId, setOpenCallId] = useState<string | null>(null);
 
   const canSeeAnalytics = can.viewFinancials(roles) || can.crossBranchView(roles);
+  const canControl = can.manageAutomations(roles) || can.manageSettings(roles);
 
   const summaryQ = useVoiceOpsSummary(branchId);
   const integration = summaryQ.data?.integration;
@@ -218,6 +219,38 @@ export default function VoiceAIPage() {
   const dndQ = useVoiceCalls({ ...baseFilters, offset: 0, disposition: 'wrong_person' });
   const analyticsQ = useVoiceAnalytics(branchId, analyticsDays);
   const queueQ = useVoiceQueue(branchId);
+  const blockedQ = useVoiceBlocked(branchId);
+  const automationQ = useVoiceAutomationState();
+  const pauseM = useVoicePauseAutomation();
+  const callNowM = useVoiceCallMemberNow();
+  const retryM = useVoiceRetryFailedToday(branchId);
+
+  const paused = automationQ.data?.paused === true;
+  const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
+
+  const togglePause = () => {
+    pauseM.mutate(!paused, {
+      onSuccess: () => toast.success(paused ? 'Retention calling resumed' : 'Retention calling paused'),
+      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Could not change the automation'),
+    });
+  };
+
+  const callNow = (memberId: string, name?: string | null) => {
+    setPendingMemberId(memberId);
+    callNowM.mutate(memberId, {
+      onSuccess: () => toast.success(`Calling ${name ?? 'member'} now`),
+      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Could not place the call'),
+      onSettled: () => setPendingMemberId(null),
+    });
+  };
+
+  const retryUnreached = () => {
+    retryM.mutate(undefined, {
+      onSuccess: (r) => toast.success(`Retried ${r.attempted} member(s) · ${r.placed} placed, ${r.failed} failed`),
+      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Retry failed'),
+    });
+  };
+
 
   useRealtimeInvalidate({
     channel: 'voice-ops',
