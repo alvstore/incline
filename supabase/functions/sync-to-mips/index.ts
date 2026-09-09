@@ -1164,6 +1164,15 @@ Deno.serve(async (req) => {
     // IS audited — an unaudited photo stage is why the queue read 100% success
     // while 16 faces were missing from the gates.
     let photoResult = { success: false, message: "No photo available" } as any;
+    let knownPhotoHash: string | null = null;
+    if (photoUrl && force !== true) {
+      const { data: hashRow } = await supabase
+        .from(tableName)
+        .select("mips_photo_hash")
+        .eq("id", person_id)
+        .maybeSingle();
+      knownPhotoHash = (hashRow as any)?.mips_photo_hash ?? null;
+    }
     if (photoUrl) {
       const photoStarted = Date.now();
       try {
@@ -1173,7 +1182,7 @@ Deno.serve(async (req) => {
           mipsPersonSn,
           photoUrl,
           supabase,
-          force === true ? null : (personRow as any)?.mips_photo_hash ?? null,
+          knownPhotoHash,
         );
         console.log(`Photo upload: ${photoResult.success ? "✓" : "✗"} ${photoResult.message}`);
       } catch (photoErr) {
