@@ -481,6 +481,7 @@ export default function VoiceAIPage() {
                           <TableHead>Plan expiry</TableHead>
                           <TableHead>Trainer</TableHead>
                           <TableHead>Last outcome</TableHead>
+                          {canControl && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -509,6 +510,19 @@ export default function VoiceAIPage() {
                                   ? <Badge className={`rounded-full ${disp.className}`}>{disp.label}</Badge>
                                   : <span className="text-xs text-muted-foreground">Never called</span>}
                               </TableCell>
+                              {canControl && (
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm" variant="outline" className="cursor-pointer"
+                                    disabled={callNowM.isPending && pendingMemberId === q.member_id}
+                                    aria-label={`Call ${q.member_name ?? 'member'} now`}
+                                    onClick={(e) => { e.stopPropagation(); callNow(q.member_id, q.member_name); }}
+                                  >
+                                    <PhoneOutgoing className="mr-2 h-4 w-4" />
+                                    {callNowM.isPending && pendingMemberId === q.member_id ? 'Calling…' : 'Call now'}
+                                  </Button>
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -519,6 +533,94 @@ export default function VoiceAIPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Skipped */}
+          <TabsContent value="skipped" className="space-y-4">
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base">Members the agent passed over</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <p>
+                    Each row shows exactly why the member was not called. Do-not-contact is never
+                    overridable; cooldown and recent-contact skips can be overridden with Call now.
+                  </p>
+                </div>
+                {blockedQ.isError ? (
+                  <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Could not load skipped members. Refresh to try again.
+                  </div>
+                ) : blockedQ.isLoading ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
+                  </div>
+                ) : (blockedQ.data ?? []).length === 0 ? (
+                  <EmptyState
+                    title="Nobody was skipped"
+                    hint="When the agent passes over a member — no phone, do-not-contact, cooldown or a recent visit — they show up here with the reason."
+                  />
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-background">
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Last visit</TableHead>
+                          <TableHead>Days absent</TableHead>
+                          <TableHead>Last call</TableHead>
+                          <TableHead>Why skipped</TableHead>
+                          {canControl && <TableHead className="text-right">Action</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(blockedQ.data ?? []).map((b) => {
+                          const look = skipLook(b.skip_reason);
+                          const overridable = !['do_not_contact', 'no_phone'].includes(b.skip_reason);
+                          return (
+                            <TableRow key={`${b.member_id}-${b.skip_reason}`} className="transition-colors duration-150 hover:bg-muted/50">
+                              <TableCell>
+                                <div className="font-medium text-foreground">{b.member_name ?? 'Unknown'}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {b.member_code ?? '—'}
+                                  {b.masked_phone ? ` · ${b.masked_phone}` : ''}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{fmt(b.last_visit, 'dd MMM yyyy')}</TableCell>
+                              <TableCell className="text-sm">{b.days_absent ?? '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{fmt(b.last_call_at)}</TableCell>
+                              <TableCell>
+                                <Badge className={`rounded-full ${look.className}`}>{look.label}</Badge>
+                              </TableCell>
+                              {canControl && (
+                                <TableCell className="text-right">
+                                  {overridable ? (
+                                    <Button
+                                      size="sm" variant="outline" className="cursor-pointer"
+                                      disabled={callNowM.isPending && pendingMemberId === b.member_id}
+                                      aria-label={`Call ${b.member_name ?? 'member'} now`}
+                                      onClick={() => callNow(b.member_id, b.member_name)}
+                                    >
+                                      <PhoneOutgoing className="mr-2 h-4 w-4" />
+                                      {callNowM.isPending && pendingMemberId === b.member_id ? 'Calling…' : 'Call now'}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">Not allowed</span>
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
 
 
           <TabsContent value="callbacks">
