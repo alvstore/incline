@@ -98,6 +98,7 @@ export async function uploadAndSyncPersonPhoto({
   userId,
   personName,
   person,
+  enrollFace = false,
 }: UploadPersonPhotoArgs): Promise<UploadPersonPhotoResult> {
   // Auto-remediate instead of rejecting: EXIF orient → centre square crop →
   // brightness lift → device-safe 720px JPEG. Only truly unusable files throw.
