@@ -445,11 +445,12 @@ export default function VoiceAIPage() {
                 <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
                   <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <p>
-                    Eligibility, DND, cooldown, calling window, daily cap and concurrency are decided by the
-                    Voice AI backend — this screen never computes or overrides them, and there is no manual
-                    dial action. Run the eligibility check from Settings → Integrations → Voice AI to see
-                    today's breakdown; live calls appear in Call history the moment they start.
+                    Eligibility, DND, calling window, daily cap and concurrency are decided by the
+                    Voice AI backend — this screen never computes them. Managers can dial a listed
+                    member immediately with Call now; do-not-contact is still enforced server-side.
+                    Live calls appear in Call history the moment they start.
                   </p>
+
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Kpi label="Calls in progress" value={today.in_progress ?? 0} icon={Activity} tone="indigo" />
