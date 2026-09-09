@@ -527,8 +527,37 @@ async function dispatchToDevices(
   // what kept the terminals rebuilding templates and restarting.
   const results: any[] = [];
   const deliveredDeviceIds: number[] = [];
+
+  // v2.9.0 NO-OP GUARD — the terminals were rebuilding their face index all day
+  // because the same people were re-issued dozens of times per hour by the
+  // sweeps. A person that a gate already accepted in the last DEDUPE_WINDOW is
+  // NOT re-issued unless the caller passes `force` (manual repair / real change).
+  const DEDUPE_WINDOW_MS = 12 * 60 * 60_000;
+  const recentlyDelivered = new Set<string>();
+  if (!force && entityId) {
+    try {
+      const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
+      const { data: recent } = await supabase
+        .from("mips_sync_attempts")
+        .select("device_id")
+        .eq("operation", "device_dispatch")
+        .eq("status", "success")
+        .eq("entity_id", entityId)
+        .gte("created_at", since)
+        .limit(50);
+      for (const r of recent || []) recentlyDelivered.add(String((r as any).device_id));
+    } catch (e) {
+      console.warn("[dispatchToDevices] dedupe lookup failed (continuing):", e);
+    }
+  }
+
   for (const mipsDeviceId of [...new Set(deviceIds)]) {
     const local = localDevices.find((d: any) => Number(d.mips_device_id) === mipsDeviceId);
+    if (local?.id && recentlyDelivered.has(String(local.id))) {
+      deliveredDeviceIds.push(mipsDeviceId);
+      results.push({ mipsDeviceId, status: "skipped", reason: "already delivered recently" });
+      continue;
+    }
     const started = Date.now();
     let result: any = null;
     let responseCode = 0;
