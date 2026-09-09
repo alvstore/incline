@@ -81,10 +81,10 @@ const MIPSDeviceCard = ({
         body: { action: "resync", branch_id: branchId, device_ids: [device.id] },
       });
       if (error) throw error;
-      const d = data as { error?: string; dispatched?: number; total_with_photo?: number; failed?: number; errors?: string[] };
+      const d = data as { error?: string; queued_people?: number; queued_dispatches?: number };
       if (d?.error) throw new Error(d.error);
-      toast.success(`Pushed ${d.dispatched ?? 0}/${d.total_with_photo ?? 0} faces to ${device.name || device.deviceKey}`, {
-        description: d.failed ? `${d.failed} failed — ${(d.errors || []).slice(0, 2).join("; ")}` : undefined,
+      toast.success(`Re-sync started for ${device.name || device.deviceKey}`, {
+        description: `${d.queued_people ?? 0} people queued (${d.queued_dispatches ?? 0} pushes). This runs in the background — progress updates on the gate card.`,
       });
       qc.invalidateQueries({ queryKey: ["mips-devices"] });
     } catch (e) {

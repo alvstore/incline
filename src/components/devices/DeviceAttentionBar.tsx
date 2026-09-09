@@ -47,9 +47,9 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
       });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
-      const d = data as { dispatched?: number; total_with_photo?: number; failed?: number };
-      toast.success(`Pushed ${d.dispatched ?? 0}/${d.total_with_photo ?? 0} faces to lagging gate(s)`, {
-        description: d.failed ? `${d.failed} failed` : undefined,
+      const d = data as { queued_people?: number; queued_dispatches?: number };
+      toast.success("Re-sync started for lagging gate(s)", {
+        description: `${d.queued_people ?? 0} people queued (${d.queued_dispatches ?? 0} pushes). Runs in the background.`,
       });
       qc.invalidateQueries({ queryKey: ["mips-devices"] });
     } catch (e) {

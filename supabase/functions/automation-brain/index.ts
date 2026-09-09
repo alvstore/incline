@@ -78,15 +78,16 @@ function nextCron(expr: string, after: Date): Date {
 // ---------- Worker dispatch ----------
 async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; status: number; body: string; gateway5xx: boolean }> {
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
-  // v2.1.0 — retry 502/503/504 (cold-boot gateway failures) with backoff.
-  //          Per-attempt 60s timeout via AbortController to avoid hanging the tick.
-  const BACKOFFS = [0, 800, 2000];
+  // v2.4.0 — retry 502/503/504 (cold-boot gateway failures) with backoff.
+  //          Per-attempt 25s timeout (was 60s): three 60s attempts alone blew
+  //          past the gateway wall clock and produced 504s on the whole tick.
+  const BACKOFFS = [0, 800];
   let r: Response | null = null;
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < BACKOFFS.length; attempt++) {
     if (BACKOFFS[attempt] > 0) await new Promise((res) => setTimeout(res, BACKOFFS[attempt]));
     const ctrl = new AbortController();
-    const tm = setTimeout(() => ctrl.abort(), 60_000);
+    const tm = setTimeout(() => ctrl.abort(), 25_000);
     try {
       r = await fetch(url, {
         method: "POST",
@@ -282,11 +283,31 @@ Deno.serve(async (req) => {
       .limit(50);
     if (error) throw error;
 
-    const results: any[] = [];
-    for (const r of rules ?? []) {
-      results.push(await processRule(r));
-    }
-    return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
+    // v2.4.0 — the tick no longer blocks the HTTP response. Rules run in the
+    // background with a small concurrency cap so one slow worker can never
+    // time out the whole tick (which used to leave next_run_at unwritten).
+    const queue = [...(rules ?? [])];
+    const CONCURRENCY = 4;
+    const runAll = async () => {
+      const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+        for (;;) {
+          const rule = queue.shift();
+          if (!rule) return;
+          try {
+            await processRule(rule);
+          } catch (e) {
+            console.error("[automation-brain] rule failed:", rule?.key, (e as Error)?.message);
+          }
+        }
+      });
+      await Promise.all(workers);
+    };
+    // @ts-ignore EdgeRuntime is provided by the Supabase edge runtime
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(runAll());
+    else await runAll();
+
+    return new Response(JSON.stringify({ ok: true, started: true, queued: rules?.length ?? 0 }), {
+      status: 202,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
