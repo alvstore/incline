@@ -1,3 +1,6 @@
+// v2.9.0 — no-op dispatch guard: a person a gate already accepted in the last
+// 12h is never re-issued unless `force` is passed. This is what stopped the
+// gates rebuilding their face index all day (and "restarting").
 // v2.7.0 — personnel routing fix: every synced person is `personType: 1`
 // (Personnel). Staff/trainers were previously pushed as `personType: 2`, which
 // filed them under MIPS Visitor Management. Department IDs 101/102 do not exist
@@ -1204,7 +1207,7 @@ Deno.serve(async (req) => {
       dispatchResult = { skipped: true, reason: "deploy_to_devices=false" };
     } else {
       try {
-        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id);
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id, force === true);
       } catch (e) {
         console.error("Dispatch error:", e);
         dispatchResult = { error: String(e) };
