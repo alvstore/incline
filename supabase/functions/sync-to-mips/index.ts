@@ -425,6 +425,7 @@ async function dispatchToDevices(
   branchId?: string,
   entityType?: "member" | "employee" | "trainer",
   entityId?: string,
+  force = false,
 ): Promise<{ results: any[]; deviceIds: number[] }> {
   // 1. Try to get device IDs from access_devices table
   //    IMPORTANT: include ALL mapped devices, not just is_online. MIPS server
@@ -698,7 +699,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices } = body as {
+    const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices, force } = body as {
 
       person_type: "member" | "employee" | "trainer";
       person_id: string;
@@ -707,6 +708,8 @@ Deno.serve(async (req) => {
       person_no?: string;
       /** false = upload to MIPS server only, let cron fan out to devices. Default true. */
       deploy_to_devices?: boolean;
+      /** true = bypass the no-op dedupe guards (manual re-push / enrolment repair). */
+      force?: boolean;
     };
 
 
