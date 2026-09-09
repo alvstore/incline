@@ -126,6 +126,8 @@ export async function preparePersonPhoto(file: File): Promise<PreparedPhoto> {
   if (side > TARGET_EDGE) notes.push(`Resized to ${TARGET_EDGE}px for the gates`);
 
   // Lift very dark captures — the terminals fail detection on underexposed faces.
+  let brightness = 0;
+  let sharpness = 0;
   try {
     const { data } = ctx.getImageData(0, 0, out, out);
     let sum = 0;
@@ -133,15 +135,46 @@ export async function preparePersonPhoto(file: File): Promise<PreparedPhoto> {
       sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
     }
     const mean = sum / (data.length / (4 * 16));
+    brightness = mean;
     if (mean < 70) {
       ctx.filter = `brightness(${Math.min(1.8, 90 / Math.max(mean, 25)).toFixed(2)}) contrast(1.05)`;
       ctx.drawImage(canvas, 0, 0);
       ctx.filter = 'none';
       notes.push('Brightened an underexposed photo');
+      brightness = Math.min(255, mean * (90 / Math.max(mean, 25)));
     }
+
+    // Blur check: variance of the horizontal luminance gradient. A sharp
+    // portrait has plenty of edge energy; a smeared one has almost none.
+    const { data: after } = ctx.getImageData(0, 0, out, out);
+    let gSum = 0;
+    let gSq = 0;
+    let n = 0;
+    for (let y = 0; y < out; y += 3) {
+      for (let x = 1; x < out - 1; x += 3) {
+        const i = (y * out + x) * 4;
+        const l = 0.299 * after[i] + 0.587 * after[i + 1] + 0.114 * after[i + 2];
+        const r = 0.299 * after[i + 4] + 0.587 * after[i + 5] + 0.114 * after[i + 6];
+        const g = Math.abs(r - l);
+        gSum += g;
+        gSq += g * g;
+        n += 1;
+      }
+    }
+    if (n > 0) sharpness = Math.max(0, gSq / n - (gSum / n) ** 2);
   } catch {
     /* tainted canvas or unsupported filter — the crop alone is still valid */
   }
+
+  const faces = await detectFaces(canvas);
+
+  const reasons: string[] = [];
+  if (out < GATE_MIN_EDGE) reasons.push('The photo is too small — move closer or use a better camera');
+  if (brightness > 0 && brightness < 55) reasons.push('Too dark — find brighter, even lighting');
+  if (brightness > 225) reasons.push('Too bright — move out of direct light');
+  if (sharpness > 0 && sharpness < 6) reasons.push('Looks blurry — hold still and tap to focus');
+  if (faces === 0) reasons.push('No face detected — look straight at the camera');
+  if (faces !== null && faces > 1) reasons.push('More than one face in the photo — make sure only you are in frame');
 
   let quality = 0.9;
   let blob = await toBlob(canvas, quality);
@@ -161,5 +194,13 @@ export async function preparePersonPhoto(file: File): Promise<PreparedPhoto> {
     height: out,
     sizeKB: Math.round(blob.size / 1024),
     notes,
+    quality: {
+      ok: reasons.length === 0,
+      reasons,
+      brightness: Math.round(brightness),
+      sharpness: Math.round(sharpness),
+      faces,
+    },
   };
+
 }
