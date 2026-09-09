@@ -1,3 +1,7 @@
+// v3.0.0 — photo fingerprint + stage separation. An unchanged face photo is
+// never re-uploaded to MIPS (identical SHA-256), and a momentarily busy gate no
+// longer stamps the person `failed` — that combination is what made the hourly
+// delta sweep re-push every person's photo every hour and reboot the terminals.
 // v2.9.0 — no-op dispatch guard: a person a gate already accepted in the last
 // 12h is never re-issued unless `force` is passed. This is what stopped the
 // gates rebuilding their face index all day (and "restarting").
@@ -712,11 +716,16 @@ Deno.serve(async (req) => {
         ["trainers", "trainer"],
       ] as const) {
         if (targets.length >= LIMIT) break;
+        // Only people whose PERSON record never landed. A pending gate hand-off
+        // is retried by the dispatch layer, not by re-running the whole sync
+        // (which would re-upload the photo and rebuild the gate's face index).
+        const sinceIso = new Date(Date.now() - 12 * 60 * 60_000).toISOString();
         const { data: rows } = await supabase
           .from(table)
-          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status")
+          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status, mips_photo_synced_at")
           .not("biometric_photo_path", "is", null)
           .or("mips_person_id.is.null,mips_sync_status.eq.failed")
+          .or(`mips_photo_synced_at.is.null,mips_photo_synced_at.lt.${sinceIso}`)
           .limit(LIMIT - targets.length);
         for (const r of rows ?? []) {
           targets.push({ person_type: personType, person_id: r.id, branch_id: r.branch_id ?? null });
