@@ -17146,6 +17146,22 @@ export type Database = {
       }
       voice_mask_phone: { Args: { _phone: string }; Returns: string }
       voice_ops_summary: { Args: { p_branch?: string }; Returns: Json }
+      voice_retention_blocked: {
+        Args: { p_branch?: string; p_limit?: number }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          days_absent: number
+          last_call_at: string
+          last_visit: string
+          masked_phone: string
+          member_code: string
+          member_id: string
+          member_name: string
+          skip_reason: string
+          total_count: number
+        }[]
+      }
       voice_retention_candidates: {
         Args: {
           _branch_ids?: string[]

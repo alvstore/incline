@@ -1,3 +1,7 @@
+// v3.0.0 — photo fingerprint + stage separation. An unchanged face photo is
+// never re-uploaded to MIPS (identical SHA-256), and a momentarily busy gate no
+// longer stamps the person `failed` — that combination is what made the hourly
+// delta sweep re-push every person's photo every hour and reboot the terminals.
 // v2.9.0 — no-op dispatch guard: a person a gate already accepted in the last
 // 12h is never re-issued unless `force` is passed. This is what stopped the
 // gates rebuilding their face index all day (and "restarting").
@@ -277,13 +281,19 @@ async function fetchDeviceReadyBytes(
  * 
  * MIPS rules: JPG only, max 400KB (oversized images are re-encoded here)
  */
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function uploadPhoto(
   baseUrl: string,
   token: string,
   personSn: string,
   photoUrl: string,
   supabase?: any,
-): Promise<{ success: boolean; message: string; fileName?: string; bytes?: Uint8Array }> {
+  knownHash?: string | null,
+): Promise<{ success: boolean; message: string; fileName?: string; bytes?: Uint8Array; hash?: string; skipped?: boolean }> {
 
   if (!photoUrl) return { success: false, message: "No photo URL" };
 
@@ -343,6 +353,21 @@ async function uploadPhoto(
     }
 
     console.log(`Photo fetched: ${sizeKB}KB`);
+
+    // v3.0.0 — the single biggest cause of Android terminal reboots: the same
+    // unchanged face was re-uploaded and the person re-saved on every sweep,
+    // which forces every gate to re-download and rebuild that face template.
+    // Identical bytes are now a no-op on the MIPS server.
+    const photoHash = await sha256Hex(photoBytes);
+    if (knownHash && knownHash === photoHash) {
+      console.log(`Photo unchanged (${photoHash.slice(0, 12)}…) — skipping MIPS upload`);
+      return {
+        success: true,
+        skipped: true,
+        message: "Photo unchanged — already on the MIPS server",
+        hash: photoHash,
+      };
+    }
 
 
     // Step 1: Upload to /common/uploadHeadPhoto — always as JPG
@@ -409,7 +434,7 @@ async function uploadPhoto(
       console.log(`Photo PUT response: ${putText.substring(0, 200)}`);
     }
 
-    return { success: true, message: "Photo uploaded and assigned", fileName: filePath, bytes: photoBytes };
+    return { success: true, message: "Photo uploaded and assigned", fileName: filePath, bytes: photoBytes, hash: photoHash };
   } catch (e) {
     console.warn("Photo upload error:", e);
     return { success: false, message: e instanceof Error ? e.message : String(e) };
@@ -571,9 +596,11 @@ async function dispatchToDevices(
       // Wait out the per-gate throttle rather than dropping the push.
       slotHeld = await waitForDispatchSlot(supabase, mipsDeviceId, branchId ?? null);
       if (!slotHeld) {
-        status = "failed";
-        lastError = "dispatch slot busy after retries";
-        result = { error: lastError };
+        // Not a failure of the person or the photo — the gate is simply busy.
+        // Recorded as deferred so nothing re-drives a full person sync for it.
+        status = "deferred";
+        lastError = "gate busy — hand-off deferred to the next tick";
+        result = { deferred: true, reason: lastError };
       }
       if (slotHeld) {
       const outcome = await dispatchPerson({
@@ -691,11 +718,16 @@ Deno.serve(async (req) => {
         ["trainers", "trainer"],
       ] as const) {
         if (targets.length >= LIMIT) break;
+        // Only people whose PERSON record never landed. A pending gate hand-off
+        // is retried by the dispatch layer, not by re-running the whole sync
+        // (which would re-upload the photo and rebuild the gate's face index).
+        const sinceIso = new Date(Date.now() - 12 * 60 * 60_000).toISOString();
         const { data: rows } = await supabase
           .from(table)
-          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status")
+          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status, mips_photo_synced_at")
           .not("biometric_photo_path", "is", null)
           .or("mips_person_id.is.null,mips_sync_status.eq.failed")
+          .or(`mips_photo_synced_at.is.null,mips_photo_synced_at.lt.${sinceIso}`)
           .limit(LIMIT - targets.length);
         for (const r of rows ?? []) {
           targets.push({ person_type: personType, person_id: r.id, branch_id: r.branch_id ?? null });
@@ -1143,10 +1175,26 @@ Deno.serve(async (req) => {
     // IS audited — an unaudited photo stage is why the queue read 100% success
     // while 16 faces were missing from the gates.
     let photoResult = { success: false, message: "No photo available" } as any;
+    let knownPhotoHash: string | null = null;
+    if (photoUrl && force !== true) {
+      const { data: hashRow } = await supabase
+        .from(tableName)
+        .select("mips_photo_hash")
+        .eq("id", person_id)
+        .maybeSingle();
+      knownPhotoHash = (hashRow as any)?.mips_photo_hash ?? null;
+    }
     if (photoUrl) {
       const photoStarted = Date.now();
       try {
-        photoResult = await uploadPhoto(baseUrl, token, mipsPersonSn, photoUrl, supabase);
+        photoResult = await uploadPhoto(
+          baseUrl,
+          token,
+          mipsPersonSn,
+          photoUrl,
+          supabase,
+          knownPhotoHash,
+        );
         console.log(`Photo upload: ${photoResult.success ? "✓" : "✗"} ${photoResult.message}`);
       } catch (photoErr) {
         console.warn("Photo upload failed (non-fatal):", photoErr);
@@ -1159,7 +1207,7 @@ Deno.serve(async (req) => {
           entity_id: person_id,
           mips_person_id: personId,
           operation: "photo_upload",
-          status: photoResult?.success ? "success" : "failed",
+          status: photoResult?.skipped ? "skipped" : (photoResult?.success ? "success" : "failed"),
           delivery_stage: photoResult?.success ? "server_face_ready" : "failed",
           last_error: photoResult?.success ? null : String(photoResult?.message || "photo upload failed"),
           latency_ms: Date.now() - photoStarted,
@@ -1224,9 +1272,19 @@ Deno.serve(async (req) => {
     const allDevicesDelivered = deploy_to_devices === false
       || (requestedDeviceIds.length > 0 && dispatchedDeviceIds.length === requestedDeviceIds.length);
 
-    // Step 6: Update CRM database with real personId AND mips_person_sn
+    // Step 6: Update CRM database with real personId AND mips_person_sn.
+    //
+    // v3.0.0 — the person record and the gate hand-off are DIFFERENT stages.
+    // Stamping the person `failed` because a gate was momentarily busy made the
+    // hourly delta sweep re-drive the whole person (person PUT + a fresh photo
+    // upload) every hour, which is what kept the terminals rebuilding.
+    const personOk = photoUploaded;
     await supabase.from(tableName).update({
-      mips_sync_status: photoUploaded && allDevicesDelivered ? "synced" : "failed",
+      mips_sync_status: personOk ? "synced" : "failed",
+      mips_dispatch_status: deploy_to_devices === false
+        ? null
+        : (allDevicesDelivered ? "delivered" : (dispatchedDeviceIds.length ? "partial" : "pending")),
+      ...(photoResult?.hash ? { mips_photo_hash: photoResult.hash, mips_photo_synced_at: new Date().toISOString() } : {}),
       mips_person_id: String(personId),
       mips_person_sn: mipsPersonSn,
     }).eq("id", person_id);
@@ -1236,7 +1294,9 @@ Deno.serve(async (req) => {
     try { await recordSuccess(supabase, ctxBranchId); } catch (_) { /* non-fatal */ }
 
     return new Response(JSON.stringify({
-      success: photoUploaded && allDevicesDelivered,
+      success: personOk,
+      devices_delivered: allDevicesDelivered,
+      photo_skipped: Boolean(photoResult?.skipped),
       mips_person_id: personId,
       action: existing ? "updated" : "created",
       photo_uploaded: photoUploaded,
