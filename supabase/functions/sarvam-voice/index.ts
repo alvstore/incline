@@ -570,6 +570,27 @@ Deno.serve(async (req) => {
       return await stateResponse({ saved: true });
     }
 
+    // Operator pause / resume. Pausing is always allowed; resuming only
+    // restores the switch that `save_automation` already vetted.
+    if (action === "set_paused") {
+      if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
+      const current = (row.retention_automation || {}) as Record<string, unknown>;
+      const paused = body.paused === true;
+      const next = {
+        ...current,
+        paused,
+        paused_at: paused ? new Date().toISOString() : null,
+        paused_by: paused ? userId : null,
+        pause_reason: paused ? String(body.reason || "Paused from the Voice AI console").slice(0, 200) : null,
+      };
+      const { error } = await sb
+        .from("voice_provider_integrations")
+        .update({ retention_automation: next, updated_by: userId })
+        .eq("id", row.id);
+      if (error) throw new Error(error.message);
+      return await stateResponse({ saved: true, paused });
+    }
+
     if (action === "set_active") {
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       const enable = body.is_active === true;
@@ -931,6 +952,7 @@ Deno.serve(async (req) => {
       // Pre-flight checks that need no lease.
       if (!row?.id) return json({ ok: true, skipped: true, skip_reason: "not_configured" });
       if (a.enabled !== true) return json({ ok: true, skipped: true, skip_reason: "automation_disabled" });
+      if (a.paused === true) return json({ ok: true, skipped: true, skip_reason: "paused_by_operator" });
 
       const rNow = istMinutesNow();
       const rStart = hhmmToMinutes(String(a.window_start ?? "10:00"), 600);
