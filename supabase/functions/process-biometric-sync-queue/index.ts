@@ -149,6 +149,11 @@ Deno.serve(async (req) => {
           || (!allDevicesDelivered ? `device delivery incomplete: ${dispatched.length}/${requested.length}` : "")
           || "sync-to-mips returned failure";
 
+        // Person + photo landed, but a gate was busy. That is a deferral, not a
+        // failure: re-queue without burning the retry budget, and never re-drive
+        // the photo upload (sync-to-mips skips unchanged photos anyway).
+        const gateDeferred = !invErr && !revoked && photoOk && !allDevicesDelivered;
+
         if (success) {
           await supabase
             .from("biometric_sync_queue")
@@ -160,6 +165,16 @@ Deno.serve(async (req) => {
             .eq("id", (row as any).id);
           await recordSuccess(supabase, null);
           ok++;
+        } else if (gateDeferred) {
+          await supabase
+            .from("biometric_sync_queue")
+            .update({
+              status: "pending",
+              error_message: `gate hand-off deferred: ${dispatched.length}/${requested.length} gates delivered`,
+              processed_at: new Date().toISOString(),
+            })
+            .eq("id", (row as any).id);
+          deferred++;
         } else if (classifyFailure({ status: invokeRes.status, message: partialReason }) === "transport") {
           // Server-side outage: reschedule without consuming the retry budget.
           await recordTransportFailure(supabase, null, partialReason);
