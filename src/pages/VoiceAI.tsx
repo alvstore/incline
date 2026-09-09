@@ -278,8 +278,32 @@ export default function VoiceAIPage() {
             <h1 className="text-2xl font-bold text-foreground">Voice AI</h1>
             <p className="text-sm text-muted-foreground">Incline Member Care · retention calling operations</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge className={`rounded-full ${readiness.className}`}>{readiness.label}</Badge>
+            {paused && <Badge className="rounded-full bg-amber-100 text-amber-700">PAUSED</Badge>}
+            {canControl && (
+              <>
+                <Button
+                  variant={paused ? 'default' : 'outline'} size="sm" className="cursor-pointer"
+                  disabled={pauseM.isPending || automationQ.isLoading}
+                  onClick={togglePause}
+                  aria-label={paused ? 'Resume retention calling' : 'Pause retention calling'}
+                >
+                  {paused
+                    ? <><Play className="mr-2 h-4 w-4" /> Resume calling</>
+                    : <><Pause className="mr-2 h-4 w-4" /> Pause calling</>}
+                </Button>
+                <Button
+                  variant="outline" size="sm" className="cursor-pointer"
+                  disabled={retryM.isPending}
+                  onClick={retryUnreached}
+                  aria-label="Retry members not reached today"
+                >
+                  <RotateCcw className={`mr-2 h-4 w-4 ${retryM.isPending ? 'animate-spin' : ''}`} />
+                  {retryM.isPending ? 'Retrying…' : 'Retry unreached'}
+                </Button>
+              </>
+            )}
             <Button
               variant="outline" size="sm" className="cursor-pointer"
               onClick={() => { summaryQ.refetch(); historyQ.refetch(); }}
@@ -288,6 +312,7 @@ export default function VoiceAIPage() {
               <RefreshCw className="mr-2 h-4 w-4" /> Refresh
             </Button>
           </div>
+
         </div>
 
         <Card className="rounded-2xl shadow-sm">
