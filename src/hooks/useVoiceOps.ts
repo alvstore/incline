@@ -5,7 +5,7 @@
  * selects `voice_call_attempts` directly, so raw provider payloads and
  * transcripts can never reach an unauthorized browser.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface VoiceCallRow {
@@ -302,5 +302,163 @@ export function useVoiceAutomationHealth() {
     },
     refetchInterval: 60_000,
     staleTime: 30_000,
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Queue controls — pause / resume the worker, retry one member,
+ * retry everyone the agent failed to reach today.
+ * ------------------------------------------------------------------ */
+
+export interface VoiceBlockedRow {
+  member_id: string;
+  member_name: string | null;
+  member_code: string | null;
+  masked_phone: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  last_visit: string | null;
+  days_absent: number | null;
+  last_call_at: string | null;
+  skip_reason: string;
+  total_count: number;
+}
+
+/** Members the agent passed over, with the reason for each. */
+export function useVoiceBlocked(branchId?: string | null, limit = 100) {
+  return useQuery({
+    queryKey: ['voice-blocked', branchId ?? 'all', limit],
+    queryFn: async (): Promise<VoiceBlockedRow[]> => {
+      const { data, error } = await rpc('voice_retention_blocked', {
+        p_branch: branchId ?? null,
+        p_limit: limit,
+      });
+      if (error) throw error;
+      return (data ?? []) as VoiceBlockedRow[];
+    },
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+interface VoiceAutomationState {
+  enabled: boolean;
+  paused: boolean;
+  paused_at: string | null;
+  pause_reason: string | null;
+}
+
+/** Live automation switch state (enabled + operator pause). */
+export function useVoiceAutomationState() {
+  return useQuery({
+    queryKey: ['voice-automation-state'],
+    queryFn: async (): Promise<VoiceAutomationState> => {
+      const { data, error } = await supabase.functions.invoke('sarvam-voice', {
+        body: { action: 'get_state' },
+      });
+      if (error) throw error;
+      const a = ((data as Record<string, unknown> | null)?.retention_automation ?? {}) as Record<string, unknown>;
+      return {
+        enabled: a.enabled === true,
+        paused: a.paused === true,
+        paused_at: (a.paused_at as string | null) ?? null,
+        pause_reason: (a.pause_reason as string | null) ?? null,
+      };
+    },
+    staleTime: 30_000,
+  });
+}
+
+async function invokeVoice(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('sarvam-voice', { body });
+  if (error) throw error;
+  const res = data as { ok?: boolean; error?: string } | null;
+  if (res && res.ok === false) throw new Error(res.error || 'Voice AI rejected the request');
+  return res;
+}
+
+export function useVoicePauseAutomation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (paused: boolean) => invokeVoice({ action: 'set_paused', paused }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['voice-automation-state'] });
+      qc.invalidateQueries({ queryKey: ['voice-automation-health'] });
+      qc.invalidateQueries({ queryKey: ['voice-ops-summary'] });
+    },
+  });
+}
+
+/** Call one member now, ignoring the cooldown the operator just overrode. */
+export function useVoiceCallMemberNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      invokeVoice({
+        action: 'place_call',
+        confirmed: true,
+        member_id: memberId,
+        reason: 'member_retention',
+        cooldown_days: 0,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['voice-calls'] });
+      qc.invalidateQueries({ queryKey: ['voice-queue'] });
+      qc.invalidateQueries({ queryKey: ['voice-blocked'] });
+      qc.invalidateQueries({ queryKey: ['voice-ops-summary'] });
+    },
+  });
+}
+
+/**
+ * Retry everyone today's run could not reach. Bounded (never more than
+ * `cap` members) so a retry can never blow the daily calling budget.
+ */
+export function useVoiceRetryFailedToday(branchId?: string | null, cap = 15) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<{ attempted: number; placed: number; failed: number }> => {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const { data, error } = await rpc('voice_calls_feed', {
+        p_branch: branchId ?? null,
+        p_from: today,
+        p_to: today,
+        p_status: null,
+        p_disposition: null,
+        p_search: null,
+        p_limit: 200,
+        p_offset: 0,
+      });
+      if (error) throw error;
+      const rows = (data ?? []) as VoiceCallRow[];
+      const seen = new Set<string>();
+      const targets = rows
+        .filter((r) => !!r.member_id && ['failed', 'no_answer', 'busy'].includes(String(r.status ?? '')))
+        .filter((r) => (seen.has(r.member_id!) ? false : (seen.add(r.member_id!), true)))
+        .slice(0, cap);
+
+      let placed = 0;
+      let failed = 0;
+      for (const t of targets) {
+        try {
+          await invokeVoice({
+            action: 'place_call',
+            confirmed: true,
+            member_id: t.member_id,
+            reason: 'member_retention',
+            cooldown_days: 0,
+          });
+          placed += 1;
+        } catch {
+          failed += 1;
+        }
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      return { attempted: targets.length, placed, failed };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['voice-calls'] });
+      qc.invalidateQueries({ queryKey: ['voice-ops-summary'] });
+    },
   });
 }
