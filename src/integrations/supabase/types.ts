@@ -16835,7 +16835,7 @@ export type Database = {
         Returns: boolean
       }
       staff_gate_check_out: {
-        Args: { p_at: string; p_branch_id: string; p_user_id: string }
+        Args: { _at: string; _branch_id: string; _staff_id: string }
         Returns: Json
       }
       staff_mark_block: {
