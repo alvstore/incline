@@ -96,6 +96,7 @@ export default function PublicRegistration() {
   const initialDraft = useInitialRegistrationDraft();
   const [newMember, setNewMember] = useState<{ memberId: string; userId: string; memberCode: string } | null>(null);
   const [photoState, setPhotoState] = useState<"idle" | "uploading" | "done">("idle");
+  const [photoIssues, setPhotoIssues] = useState<string[]>([]);
   const [step, setStep] = useState<"details" | "parq" | "sign" | "otp" | "done">(
 
     initialDraft?.step ?? "details",
