@@ -1281,8 +1281,14 @@ Deno.serve(async (req) => {
     // hourly delta sweep re-drive the whole person (person PUT + a fresh photo
     // upload) every hour, which is what kept the terminals rebuilding.
     const personOk = photoUploaded;
+    // A physically unusable source photo is TERMINAL — `failed` would put the
+    // person back in the hourly delta sweep, and every retry makes the gate's
+    // native face SDK leak memory on a template it can never build.
+    const photoRejected = !photoUploaded
+      && typeof photoResult?.message === "string"
+      && photoResult.message.includes("needs_better_source");
     await supabase.from(tableName).update({
-      mips_sync_status: personOk ? "synced" : "failed",
+      mips_sync_status: personOk ? "synced" : (photoRejected ? "photo_rejected" : "failed"),
       mips_dispatch_status: deploy_to_devices === false
         ? null
         : (allDevicesDelivered ? "delivered" : (dispatchedDeviceIds.length ? "partial" : "pending")),
