@@ -1,3 +1,8 @@
+// v3.1.0 — delta sweep no longer re-drives already-synced people on a 12h
+// timer (root cause of the terminal reboots: every re-push rebuilt the gate's
+// native face index and leaked memory until Android OOM-killed the app), and a
+// physically unusable source photo is parked as terminal `photo_rejected` so
+// the sweep can never pick it up again.
 // v3.0.0 — photo fingerprint + stage separation. An unchanged face photo is
 // never re-uploaded to MIPS (identical SHA-256), and a momentarily busy gate no
 // longer stamps the person `failed` — that combination is what made the hourly
