@@ -1,3 +1,8 @@
+// v3.1.0 — delta sweep no longer re-drives already-synced people on a 12h
+// timer (root cause of the terminal reboots: every re-push rebuilt the gate's
+// native face index and leaked memory until Android OOM-killed the app), and a
+// physically unusable source photo is parked as terminal `photo_rejected` so
+// the sweep can never pick it up again.
 // v3.0.0 — photo fingerprint + stage separation. An unchanged face photo is
 // never re-uploaded to MIPS (identical SHA-256), and a momentarily busy gate no
 // longer stamps the person `failed` — that combination is what made the hourly
@@ -718,16 +723,18 @@ Deno.serve(async (req) => {
         ["trainers", "trainer"],
       ] as const) {
         if (targets.length >= LIMIT) break;
-        // Only people whose PERSON record never landed. A pending gate hand-off
-        // is retried by the dispatch layer, not by re-running the whole sync
-        // (which would re-upload the photo and rebuild the gate's face index).
-        const sinceIso = new Date(Date.now() - 12 * 60 * 60_000).toISOString();
+        // v3.1.0 — ONLY people whose PERSON record never landed, or whose last
+        // push genuinely failed. There is NO time-based re-drive: re-pushing an
+        // already-synced person every 12h made the terminals rebuild their face
+        // index continuously and leak native memory until Android OOM-killed the
+        // app. A pending gate hand-off is retried by the dispatch layer instead.
+        // `photo_rejected` is terminal — the photo is physically unusable, so
+        // retrying it can only ever fail again.
         const { data: rows } = await supabase
           .from(table)
-          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status, mips_photo_synced_at")
+          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status")
           .not("biometric_photo_path", "is", null)
           .or("mips_person_id.is.null,mips_sync_status.eq.failed")
-          .or(`mips_photo_synced_at.is.null,mips_photo_synced_at.lt.${sinceIso}`)
           .limit(LIMIT - targets.length);
         for (const r of rows ?? []) {
           targets.push({ person_type: personType, person_id: r.id, branch_id: r.branch_id ?? null });
@@ -1279,8 +1286,14 @@ Deno.serve(async (req) => {
     // hourly delta sweep re-drive the whole person (person PUT + a fresh photo
     // upload) every hour, which is what kept the terminals rebuilding.
     const personOk = photoUploaded;
+    // A physically unusable source photo is TERMINAL — `failed` would put the
+    // person back in the hourly delta sweep, and every retry makes the gate's
+    // native face SDK leak memory on a template it can never build.
+    const photoRejected = !photoUploaded
+      && typeof photoResult?.message === "string"
+      && photoResult.message.includes("needs_better_source");
     await supabase.from(tableName).update({
-      mips_sync_status: personOk ? "synced" : "failed",
+      mips_sync_status: personOk ? "synced" : (photoRejected ? "photo_rejected" : "failed"),
       mips_dispatch_status: deploy_to_devices === false
         ? null
         : (allDevicesDelivered ? "delivered" : (dispatchedDeviceIds.length ? "partial" : "pending")),
