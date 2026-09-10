@@ -718,16 +718,18 @@ Deno.serve(async (req) => {
         ["trainers", "trainer"],
       ] as const) {
         if (targets.length >= LIMIT) break;
-        // Only people whose PERSON record never landed. A pending gate hand-off
-        // is retried by the dispatch layer, not by re-running the whole sync
-        // (which would re-upload the photo and rebuild the gate's face index).
-        const sinceIso = new Date(Date.now() - 12 * 60 * 60_000).toISOString();
+        // v3.1.0 — ONLY people whose PERSON record never landed, or whose last
+        // push genuinely failed. There is NO time-based re-drive: re-pushing an
+        // already-synced person every 12h made the terminals rebuild their face
+        // index continuously and leak native memory until Android OOM-killed the
+        // app. A pending gate hand-off is retried by the dispatch layer instead.
+        // `photo_rejected` is terminal — the photo is physically unusable, so
+        // retrying it can only ever fail again.
         const { data: rows } = await supabase
           .from(table)
-          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status, mips_photo_synced_at")
+          .select("id, branch_id, biometric_photo_path, mips_person_id, mips_sync_status")
           .not("biometric_photo_path", "is", null)
           .or("mips_person_id.is.null,mips_sync_status.eq.failed")
-          .or(`mips_photo_synced_at.is.null,mips_photo_synced_at.lt.${sinceIso}`)
           .limit(LIMIT - targets.length);
         for (const r of rows ?? []) {
           targets.push({ person_type: personType, person_id: r.id, branch_id: r.branch_id ?? null });
