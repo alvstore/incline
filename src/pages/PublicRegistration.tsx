@@ -895,6 +895,7 @@ export default function PublicRegistration() {
               {photoState === "done" && (
                 <p className="text-xs font-medium text-success">Photo received — you're set for gate entry.</p>
               )}
+              </ErrorBoundary>
 
               <a
                 href="/member-dashboard"
