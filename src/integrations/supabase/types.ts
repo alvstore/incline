@@ -13480,6 +13480,7 @@ export type Database = {
           provider_call_id: string | null
           provider_interaction_id: string | null
           reason: string | null
+          renewal_case_id: string | null
           source: string
           started_at: string
           status: string
@@ -13508,6 +13509,7 @@ export type Database = {
           provider_call_id?: string | null
           provider_interaction_id?: string | null
           reason?: string | null
+          renewal_case_id?: string | null
           source: string
           started_at?: string
           status?: string
@@ -13536,6 +13538,7 @@ export type Database = {
           provider_call_id?: string | null
           provider_interaction_id?: string | null
           reason?: string | null
+          renewal_case_id?: string | null
           source?: string
           started_at?: string
           status?: string
@@ -13547,6 +13550,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_call_attempts_renewal_case_id_fkey"
+            columns: ["renewal_case_id"]
+            isOneToOne: false
+            referencedRelation: "renewal_cases"
             referencedColumns: ["id"]
           },
         ]
@@ -15179,6 +15189,7 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_manage_renewal_case: { Args: { _case_id: string }; Returns: boolean }
       can_read_attachment_object: {
         Args: { _object_name: string }
         Returns: boolean
@@ -16023,6 +16034,10 @@ export type Database = {
         Args: { _equipment_no: string }
         Returns: boolean
       }
+      howbody_recover_assessment: {
+        Args: { _member_id: string; _scan_id: string }
+        Returns: Json
+      }
       howbody_scan_quota: {
         Args: { _kind: string; _member_id: string }
         Returns: Json
@@ -16769,7 +16784,57 @@ export type Database = {
         }
         Returns: Json
       }
+      renewal_case_action: {
+        Args: {
+          _action: string
+          _assignee?: string
+          _case_id: string
+          _churn_reason?: string
+          _note?: string
+          _outcome?: string
+          _snoozed_until?: string
+        }
+        Returns: Json
+      }
       renewal_cases_report: { Args: never; Returns: Json }
+      renewal_center_queue: {
+        Args: {
+          _branch_id?: string
+          _limit?: number
+          _offset?: number
+          _queue?: string
+          _search?: string
+        }
+        Returns: {
+          attempts_count: number
+          branch_id: string
+          case_id: string
+          churn_reason: string
+          claimed_by: string
+          claimed_name: string
+          days_to_expiry: number
+          expiry_date: string
+          last_contact_at: string
+          last_visit: string
+          latest_event: string
+          latest_event_at: string
+          masked_phone: string
+          member_code: string
+          member_id: string
+          member_name: string
+          membership_id: string
+          next_action_at: string
+          outcome: string
+          paused_reason: string
+          plan_name: string
+          renewal_evidence: string
+          snoozed_until: string
+          stage: Database["public"]["Enums"]["renewal_stage"]
+          total_count: number
+          value_score: number
+          voice_attempts_count: number
+        }[]
+      }
       renewal_due_cases: {
         Args: { _limit?: number }
         Returns: {
@@ -16802,6 +16867,10 @@ export type Database = {
           _status: string
         }
         Returns: undefined
+      }
+      renewal_funnel: {
+        Args: { _branch_id?: string; _days?: number }
+        Returns: Json
       }
       renewal_mark_contacted: {
         Args: {
