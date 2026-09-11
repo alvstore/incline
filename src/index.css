@@ -521,3 +521,20 @@
     clip: rect(0, 0, 0, 0) !important;
   }
 }
+
+/* Print: only the measurement summary sheet renders on paper. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-sheet,
+  .print-sheet * {
+    visibility: visible;
+  }
+  .print-sheet {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    background: #fff;
+  }
+}
