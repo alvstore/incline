@@ -2,9 +2,10 @@
 
 ## MIPS restart incident
 - [x] Pause face sweep, personnel delta sync, and device reconciliation.
-- [ ] Complete and verify cold-standby backup.
-- [ ] Harden all background dispatch paths and deploy.
-- [ ] Validate queue volume and controlled worker restart.
+- [ ] Complete and verify cold-standby backup — manual dump ran, but parity still reports 209 tables and 10 buckets drifting.
+- [x] Harden all background dispatch paths and deploy.
+- [x] Validate queue volume with workers paused — 6 successful targeted attempts and no retry storm in the latest 6-hour window.
+- [ ] Re-enable workers one at a time only after the gates remain stable and the recovery mirror reaches parity.
 
 Status: survey started (file sizes + policy reference map collected). No code changed yet.
 
