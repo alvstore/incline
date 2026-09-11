@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);
       await admin.rpc("renewal_engine_release_lease", { _status: "error", _error: lastError, _sent: sent });
-      await captureEdgeError(admin, { source: "renewal-engine-tick", message: lastError, severity: "error" }).catch(() => {});
+      await captureEdgeError("renewal-engine-tick", lastError, { severity: "error" });
       return json({ success: false, error: lastError, sent, failed }, 500);
     }
 
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     return json({ success: true, sent, failed, skipped, paused: pause, paused_reason: pauseReason });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await captureEdgeError(admin, { source: "renewal-engine-tick", message: msg, severity: "error" }).catch(() => {});
+    await captureEdgeError("renewal-engine-tick", e, { severity: "error" });
     return json({ success: false, error: msg }, 500);
   }
 });
