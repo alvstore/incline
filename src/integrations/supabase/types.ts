@@ -11457,6 +11457,7 @@ export type Database = {
         Row: {
           attempts_count: number
           branch_id: string
+          candidate_membership_id: string | null
           churn_reason: string | null
           claimed_at: string | null
           claimed_by: string | null
@@ -11471,7 +11472,9 @@ export type Database = {
           metadata: Json
           next_action_at: string | null
           outcome: string | null
+          paused_reason: string | null
           plan_id: string | null
+          renewal_evidence: string | null
           renewed_membership_id: string | null
           snoozed_until: string | null
           stage: Database["public"]["Enums"]["renewal_stage"]
@@ -11482,6 +11485,7 @@ export type Database = {
         Insert: {
           attempts_count?: number
           branch_id: string
+          candidate_membership_id?: string | null
           churn_reason?: string | null
           claimed_at?: string | null
           claimed_by?: string | null
@@ -11496,7 +11500,9 @@ export type Database = {
           metadata?: Json
           next_action_at?: string | null
           outcome?: string | null
+          paused_reason?: string | null
           plan_id?: string | null
+          renewal_evidence?: string | null
           renewed_membership_id?: string | null
           snoozed_until?: string | null
           stage?: Database["public"]["Enums"]["renewal_stage"]
@@ -11507,6 +11513,7 @@ export type Database = {
         Update: {
           attempts_count?: number
           branch_id?: string
+          candidate_membership_id?: string | null
           churn_reason?: string | null
           claimed_at?: string | null
           claimed_by?: string | null
@@ -11521,7 +11528,9 @@ export type Database = {
           metadata?: Json
           next_action_at?: string | null
           outcome?: string | null
+          paused_reason?: string | null
           plan_id?: string | null
+          renewal_evidence?: string | null
           renewed_membership_id?: string | null
           snoozed_until?: string | null
           stage?: Database["public"]["Enums"]["renewal_stage"]
@@ -16655,6 +16664,11 @@ export type Database = {
           _price?: number
         }
         Returns: Json
+      }
+      renewal_cases_report: { Args: never; Returns: Json }
+      renewal_payment_evidence: {
+        Args: { _membership_id: string }
+        Returns: string
       }
       request_booking_reschedule: {
         Args: {
