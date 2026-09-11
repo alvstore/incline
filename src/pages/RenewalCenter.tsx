@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { RenewalCaseRow, RenewalQueue, useRenewalAction, useRenewalFunnel, useRenewalQueue } from '@/hooks/useRenewalCenter';
-import { CalendarClock, CheckCircle2, Clock3, Headphones, PhoneCall, Search, ShieldCheck, UserCheck, Users, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Headphones, PhoneCall, Search, ShieldCheck, UserCheck, Users, XCircle, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 const queues: Array<{ value: RenewalQueue; label: string }> = [
@@ -46,6 +46,13 @@ export default function RenewalCenter() {
   const rows = cases.data ?? [];
   const total = rows[0]?.total_count ?? 0;
   const engineOff = true;
+  const statCards: Array<[string, string | number, LucideIcon]> = [
+    ['Open', Number(stats.open ?? 0), Users],
+    ['Contacted', Number(stats.contacted ?? 0), Headphones],
+    ['Renewed', Number(stats.renewed ?? 0), CheckCircle2],
+    ['Voice queue', Number(stats.voice ?? 0), PhoneCall],
+    ['Conversion', `${conversion}%`, UserCheck],
+  ];
 
   const conversion = useMemo(() => {
     const base = Number(stats.total ?? 0);
@@ -78,10 +85,7 @@ export default function RenewalCenter() {
         {engineOff && <div className="flex gap-3 rounded-xl bg-warning/10 p-4 text-sm text-foreground ring-1 ring-warning/20"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-warning" /><div><p className="font-semibold">Safe review mode</p><p className="text-muted-foreground">No renewal WhatsApp, email, SMS or Voice AI call is sent automatically. Existing expiry reminders continue unchanged.</p></div></div>}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {[
-            ['Open', stats.open, Users], ['Contacted', stats.contacted, Headphones], ['Renewed', stats.renewed, CheckCircle2],
-            ['Voice queue', stats.voice, PhoneCall], ['Conversion', `${conversion}%`, UserCheck],
-          ].map(([label, value, Icon]) => (
+          {statCards.map(([label, value, Icon]) => (
             <Card key={String(label)} className="rounded-2xl shadow-lg shadow-primary/5"><CardContent className="flex items-center gap-3 p-4"><div className="rounded-full bg-primary/10 p-2 text-primary"><Icon className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase text-muted-foreground">{String(label)}</p><p className="text-2xl font-bold">{String(value ?? 0)}</p></div></CardContent></Card>
           ))}
         </div>
@@ -96,7 +100,7 @@ export default function RenewalCenter() {
           : rows.length === 0 ? <Card className="rounded-2xl"><CardContent className="py-14 text-center"><CheckCircle2 className="mx-auto h-9 w-9 text-success" /><p className="mt-3 font-semibold">This queue is clear</p><p className="text-sm text-muted-foreground">No renewal cases match these filters.</p></CardContent></Card>
           : <div className="space-y-3">{rows.map((row) => (
             <Card key={row.case_id} className="rounded-2xl shadow-lg shadow-primary/5 transition-all hover:shadow-xl hover:shadow-primary/10"><CardContent className="grid gap-4 p-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] md:items-center">
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-bold">{row.member_name}</p><Badge variant="secondary">{row.member_code}</Badge><Badge variant={row.stage === 'renewed' ? 'default' : row.days_to_expiry < 0 ? 'destructive' : 'outline'}>{row.stage.replaceAll('_', ' ')}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{row.plan_name ?? 'Membership'} · {row.masked_phone ?? 'No phone'}</p></div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-bold">{row.member_name}</p><Badge variant="secondary">{row.member_code}</Badge><Badge variant={row.stage === 'renewed' ? 'default' : row.days_to_expiry < 0 ? 'destructive' : 'outline'}>{row.stage.split('_').join(' ')}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{row.plan_name ?? 'Membership'} · {row.masked_phone ?? 'No phone'}</p></div>
               <div className="text-sm"><p className="font-semibold">{row.days_to_expiry < 0 ? `${Math.abs(row.days_to_expiry)} days lapsed` : row.days_to_expiry === 0 ? 'Expires today' : `${row.days_to_expiry} days remaining`}</p><p className="text-muted-foreground">Next: {dateTime(row.next_action_at)}</p><p className="text-xs text-muted-foreground">{row.claimed_name ? `Owned by ${row.claimed_name}` : 'Unassigned'} · {row.attempts_count} contacts</p></div>
               <Button variant="outline" onClick={() => setSelected(row)}>Manage</Button>
             </CardContent></Card>
