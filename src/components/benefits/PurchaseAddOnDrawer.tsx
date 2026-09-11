@@ -323,12 +323,16 @@ export function PurchaseAddOnDrawer({
             );
           });
         } catch (payErr) {
-          await supabase
-            .rpc('abandon_online_addon_invoice' as any, { _invoice_id: result.invoice_id })
-            .then(() => queryClient.invalidateQueries({ queryKey: ['my-pending-invoices'] }))
-            .catch(() => undefined);
+          // Nothing was paid, so the draft bill must not survive.
+          try {
+            await supabase.rpc('abandon_online_addon_invoice' as any, { _invoice_id: result.invoice_id });
+            queryClient.invalidateQueries({ queryKey: ['my-pending-invoices'] });
+          } catch {
+            /* best effort — the reaper clears stale drafts too */
+          }
           throw payErr;
         }
+
       }
 
       toast.success(online ? 'Payment successful — credits added' : 'Add-on credits added');
