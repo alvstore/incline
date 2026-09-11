@@ -43,3 +43,12 @@ Status: survey started (file sizes + policy reference map collected). No code ch
 - [ ] Run Deno tests + `deno check` on edge functions; frontend tsgo typecheck if touched.
 - [ ] Review final diff for contradictory old logic.
 - [ ] DO NOT DEPLOY. Report: findings by severity, files changed, tests run, knowledge/migration changes, remaining risks, exact deploy steps.
+
+# Renewal Center + HOWBODY recovery (approved 2026-09-11)
+- [ ] Harden body/posture webhooks and delivery through central communication dispatcher.
+- [ ] Add idempotent HOWBODY recovery/status RPCs and repair Rehan's completed assessment.
+- [ ] Improve member/staff scan report visibility, delivery states, and retry controls.
+- [ ] Add Renewal Center queue, atomic staff actions, analytics, and configuration.
+- [ ] Link renewal cases to Voice AI outcomes while keeping the engine disabled.
+- [ ] Replace the legacy Follow-Up renewals action with the Renewal Center.
+- [ ] Verify RLS, tests, app build, live report visibility, and no duplicate usage/messages.
