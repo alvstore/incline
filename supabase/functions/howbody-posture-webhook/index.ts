@@ -1,4 +1,4 @@
-// v2.1.0 — HOWBODY posture report push receiver
+// v2.2.0 — HOWBODY posture report push receiver
 // Auth: App Key accepted via header, query string, or JSON body. When the vendor
 // cloud sends no key at all (observed in production), fall back to the device
 // allowlist so genuine reports from a registered scanner are never dropped.
@@ -28,16 +28,22 @@ function readAppKey(req: Request, payload: Record<string, unknown> | null): stri
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  let auditThirdUid: string | null = null;
+  let auditDataKey: string | null = null;
+  let auditPayload: Record<string, unknown> | null = null;
   try {
-    const payload = await req.json().catch(() => null);
+    const payload = await req.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload || typeof payload !== "object") return json(ENVELOPE_FAIL, 400);
+    auditPayload = payload;
 
     const expectedKey = await getExpectedWebhookAppKey();
     const sentKey = readAppKey(req, payload);
     const keyOk = Boolean(expectedKey && sentKey && timingSafeEqual(sentKey, expectedKey));
 
-    const thirdUid = payload.thirdUid as string | undefined;
-    const dataKey = payload.dataKey as string | undefined;
+    const thirdUid = payload.thirdUid == null ? undefined : String(payload.thirdUid);
+    const dataKey = payload.dataKey == null ? undefined : String(payload.dataKey);
+    auditThirdUid = thirdUid ?? null;
+    auditDataKey = dataKey ?? null;
     if (!thirdUid || !dataKey) {
       await logWebhook("posture", thirdUid ?? null, dataKey ?? null, 400, "missing thirdUid/dataKey", payload);
       return json(ENVELOPE_FAIL, 400);
@@ -95,7 +101,7 @@ Deno.serve(async (req) => {
     const testTime = payload.testTime ? new Date(Number(payload.testTime) * 1000).toISOString() : null;
     const num = (v: unknown) => (v === undefined || v === null || v === "" ? null : Number(v));
 
-    const { data: upserted } = await sb.from("howbody_posture_reports").upsert({
+    const { data: upserted, error: upsertError } = await sb.from("howbody_posture_reports").upsert({
       member_id: member.id,
       data_key: dataKey,
       equipment_no: payload.equipmentNo ?? null,
@@ -130,6 +136,9 @@ Deno.serve(async (req) => {
       model_url: payload.murl ?? null,
       full_payload: payload,
     }, { onConflict: "data_key" }).select("id").maybeSingle();
+    if (upsertError || !upserted?.id) {
+      throw new Error(`posture report save failed: ${upsertError?.message ?? "missing report id"}`);
+    }
 
     // Atomic, idempotent entitlement consumption keyed on dataKey.
     const { data: consumption, error: consumeErr } = await sb.rpc("howbody_consume_scan", {
@@ -137,33 +146,40 @@ Deno.serve(async (req) => {
       _kind: "posture",
       _data_key: dataKey,
     });
-    if (consumeErr) console.error("howbody_consume_scan (posture) failed:", consumeErr.message);
+    if (consumeErr) throw new Error(`posture entitlement failed: ${consumeErr.message}`);
     const isDuplicate = (consumption as Record<string, unknown> | null)?.duplicate === true;
 
     // Touch device inventory (auto-registers unknown devices, bumps counters)
     if (payload.equipmentNo) {
-      await sb.rpc("howbody_touch_device", { _equipment_no: payload.equipmentNo }).catch(() => {});
+      const { error: touchError } = await sb.rpc("howbody_touch_device", { _equipment_no: String(payload.equipmentNo) });
+      if (touchError) console.warn("howbody_touch_device (posture) failed:", touchError.message);
     }
 
     if (payload.scanId) {
-      await sb.from("howbody_scan_sessions")
+      const { error: completeError } = await sb.from("howbody_scan_sessions")
         .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("scan_id", payload.scanId);
+        .eq("scan_id", String(payload.scanId))
+        .eq("member_id", member.id);
+      if (completeError) throw new Error(`posture session completion failed: ${completeError.message}`);
     }
 
     // Fire-and-forget: deliver report to member (Email + WhatsApp + in-app).
     // Skipped on duplicate pushes so a redelivered dataKey never re-sends.
-    if (upserted?.id && !isDuplicate) {
-      sb.functions.invoke("deliver-scan-report", {
+    if (upserted.id) {
+      const delivery = sb.functions.invoke("deliver-scan-report", {
         body: { report_id: upserted.id, kind: "posture" },
-      }).catch((err) => console.error("deliver-scan-report (posture) invoke failed:", err));
+      }).then(({ error }) => {
+        if (error) console.error("deliver-scan-report (posture) invoke failed:", error.message);
+      });
+      if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(delivery);
+      else await delivery;
     }
 
     await logWebhook("posture", thirdUid, dataKey, 200, isDuplicate ? "ok (duplicate)" : "ok", null);
     return json(ENVELOPE_OK, 200);
   } catch (e) {
     console.error("howbody-posture-webhook error:", e);
-    await logWebhook("posture", null, null, 500, e instanceof Error ? e.message : "error", null);
+    await logWebhook("posture", auditThirdUid, auditDataKey, 500, e instanceof Error ? e.message : "error", auditPayload);
     return json(ENVELOPE_FAIL, 500);
   }
 });

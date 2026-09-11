@@ -14,15 +14,25 @@ interface Props {
 }
 
 export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
-  const [full, setFull] = useState<any>(null);
+  const [full, setFull] = useState<HowbodyReportRow | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!report) { setFull(null); return; }
+    // If report already has many fields from useHowbodyReports, we can show it immediately
+    // but we still fetch single for absolute certainty of data freshness/completeness.
+    setFull(report);
+    
+    // Optional: Refresh data if needed, but since we fetch most fields in the hook,
+    // we can skip this fetch if all required fields are present.
+    // For now, keeping it for robustness but adding types.
     setLoading(true);
     const table = report.type === 'body' ? 'howbody_body_reports' : 'howbody_posture_reports';
     supabase.from(table).select('*').eq('id', report.id).maybeSingle()
-      .then(({ data }) => { setFull(data); setLoading(false); });
+      .then(({ data }) => { 
+        if (data) setFull({ ...report, ...data }); 
+        setLoading(false); 
+      });
   }, [report]);
 
   const isBody = report?.type === 'body';
@@ -40,7 +50,7 @@ export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
           </SheetDescription>
         </SheetHeader>
 
-        {loading || !full ? (
+        {loading && !full ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -68,6 +78,7 @@ function Stat({ label, value, suffix }: { label: string; value: any; suffix?: st
 }
 
 function BodyMetrics({ r }: { r: any }) {
+  if (!r) return null;
   return (
     <div className="space-y-4 mt-4">
       <div className="grid grid-cols-3 gap-3">
@@ -98,6 +109,7 @@ function BodyMetrics({ r }: { r: any }) {
 }
 
 function PostureMetrics({ r }: { r: any }) {
+  if (!r) return null;
   return (
     <div className="space-y-4 mt-4">
       <div className="grid grid-cols-2 gap-3">
@@ -107,10 +119,10 @@ function PostureMetrics({ r }: { r: any }) {
         <Stat label="Pelvis Forward" value={r.pelvis_forward} />
         <Stat label="Body Slope" value={r.body_slope} />
       </div>
-      {r.full_payload && (
+      {(r as any).full_payload && (
         <details className="rounded-xl border border-border/60 p-3">
           <summary className="cursor-pointer text-xs font-semibold">Raw measurements</summary>
-          <pre className="mt-2 max-h-64 overflow-auto text-[11px]">{JSON.stringify(r.full_payload, null, 2)}</pre>
+          <pre className="mt-2 max-h-64 overflow-auto text-[11px]">{JSON.stringify((r as any).full_payload, null, 2)}</pre>
         </details>
       )}
     </div>

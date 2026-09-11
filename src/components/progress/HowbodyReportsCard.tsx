@@ -19,12 +19,21 @@ export function HowbodyReportsCard({ memberId }: Props) {
   async function downloadPdf(r: HowbodyReportRow) {
     try {
       setDownloading(r.data_key);
+      
+      // If we already have a signed URL from delivery, use it.
+      if (r.pdf_url) {
+        window.open(r.pdf_url, '_blank');
+        return;
+      }
+
+      // Fallback: generate on-the-fly (useful for legacy records or failed delivery)
       const { data, error } = await supabase.functions.invoke('howbody-report-pdf', {
         body: { dataKey: r.data_key, reportType: r.type },
       });
       if (error) throw error;
       const html = (data as any)?.html as string | undefined;
       if (!html) throw new Error('No report content');
+      
       const w = window.open('', '_blank');
       if (!w) throw new Error('Popup blocked — allow popups to download.');
       w.document.write(html);
