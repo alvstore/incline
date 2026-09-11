@@ -57,8 +57,19 @@ const Tile = ({ icon, label, value, hint, tone = "default", toneClass }: TilePro
 );
 
 const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
-  const { connection, isConnected, devices, online, maxFaces, target, faceGap, lastEvent, isLoading } =
-    useMipsFleet(branchId);
+  const {
+    connection,
+    isConnected,
+    connectionCheckedAt,
+    connectionStale,
+    devices,
+    online,
+    maxFaces,
+    target,
+    faceGap,
+    lastEvent,
+    isLoading,
+  } = useMipsFleet(branchId);
 
   if (isLoading) {
     return (
@@ -71,6 +82,9 @@ const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
   }
 
   const total = devices.length;
+  const checkedHint = connectionCheckedAt
+    ? `Last checked ${formatDistanceToNow(connectionCheckedAt, { addSuffix: true })}`
+    : "Not checked yet";
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -78,9 +92,16 @@ const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
         tone="hero"
         icon={<Server className="h-5 w-5" />}
         label="MIPS Server"
-        value={isConnected ? "Connected" : "Disconnected"}
-        hint={isConnected ? "Auto-checked every 30s" : connection?.message || "Check server credentials"}
+        value={!connectionCheckedAt ? "Checking…" : connectionStale ? "Status unknown" : isConnected ? "Connected" : "Disconnected"}
+        hint={
+          connectionStale
+            ? `${checkedHint} — this reading is out of date`
+            : isConnected
+              ? checkedHint
+              : connection?.message || "Check server credentials"
+        }
       />
+
       <Tile
         icon={<Wifi className="h-5 w-5" />}
         label="Devices Online"

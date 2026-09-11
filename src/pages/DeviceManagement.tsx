@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, RefreshCw, Monitor, Activity, Upload, Settings2 } from "lucide-react";
+import { Plus, RefreshCw, Monitor, Activity, Upload, Settings2, ScanFace } from "lucide-react";
 import { toast } from "sonner";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,6 +13,7 @@ import DeviceFleetTab from "@/components/devices/DeviceFleetTab";
 import PersonnelSyncTab from "@/components/devices/PersonnelSyncTab";
 import DeviceHealthStrip from "@/components/devices/DeviceHealthStrip";
 import DeviceAttentionBar from "@/components/devices/DeviceAttentionBar";
+import FaceEnrolmentPanel from "@/components/devices/FaceEnrolmentPanel";
 import MipsServerStatusBanner from "@/components/devices/MipsServerStatusBanner";
 
 import DeviceSetupSheet from "@/components/devices/DeviceSetupSheet";
@@ -90,6 +91,9 @@ const DeviceManagement = () => {
             <TabsTrigger value="sync" className="gap-1.5 rounded-lg">
               <Upload className="h-4 w-4" /> Personnel Sync
             </TabsTrigger>
+            <TabsTrigger value="faces" className="gap-1.5 rounded-lg">
+              <ScanFace className="h-4 w-4" /> Face Sync
+            </TabsTrigger>
             <TabsTrigger value="live-feed" className="gap-1.5 rounded-lg">
               <Activity className="h-4 w-4" /> Live Feed
             </TabsTrigger>
@@ -101,6 +105,10 @@ const DeviceManagement = () => {
 
           <TabsContent value="sync">
             <PersonnelSyncTab branchId={branchFilter || undefined} />
+          </TabsContent>
+
+          <TabsContent value="faces">
+            <FaceEnrolmentPanel branchId={branchFilter || undefined} />
           </TabsContent>
 
           <TabsContent value="live-feed">

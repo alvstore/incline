@@ -1869,6 +1869,7 @@ export type Database = {
           freeze_min_days: number | null
           id: string
           late_fee_rate: number | null
+          online_convenience_fee_pct: number
           overdue_grace_days: number
           tax_rate: number | null
           updated_at: string
@@ -1888,6 +1889,7 @@ export type Database = {
           freeze_min_days?: number | null
           id?: string
           late_fee_rate?: number | null
+          online_convenience_fee_pct?: number
           overdue_grace_days?: number
           tax_rate?: number | null
           updated_at?: string
@@ -1907,6 +1909,7 @@ export type Database = {
           freeze_min_days?: number | null
           id?: string
           late_fee_rate?: number | null
+          online_convenience_fee_pct?: number
           overdue_grace_days?: number
           tax_rate?: number | null
           updated_at?: string
@@ -14628,6 +14631,10 @@ export type Database = {
           m_start: string
         }[]
       }
+      abandon_online_addon_invoice: {
+        Args: { _invoice_id: string }
+        Returns: Json
+      }
       activate_benefit_credits_for_invoice: {
         Args: { _invoice_id: string }
         Returns: Json
@@ -16068,6 +16075,7 @@ export type Database = {
         }
         Returns: Json
       }
+      online_convenience_pct: { Args: { _branch_id: string }; Returns: number }
       payroll_adjust_item: {
         Args: { p_item_id: string; p_patch: Json; p_reason: string }
         Returns: undefined
@@ -17149,6 +17157,7 @@ export type Database = {
       voice_retention_blocked: {
         Args: { p_branch?: string; p_limit?: number }
         Returns: {
+          attempts_cycle: number
           branch_id: string
           branch_name: string
           days_absent: number
@@ -17158,6 +17167,7 @@ export type Database = {
           member_code: string
           member_id: string
           member_name: string
+          next_attempt_at: string
           skip_reason: string
           total_count: number
         }[]
@@ -17166,18 +17176,26 @@ export type Database = {
         Args: {
           _branch_ids?: string[]
           _cooldown_days?: number
+          _max_attempts?: number
           _min_absent_days?: number
           _recent_contact_days?: number
+          _retry_gap_hours?: number
         }
         Returns: {
+          attempts_cycle: number
+          attempts_exhausted: boolean
+          attempts_today: number
           branch_id: string
           contacted_today: boolean
           dnd: boolean
           in_cooldown: boolean
           last_call: string
+          last_reached_at: string
           last_seen: string
+          last_status: string
           member_id: string
           missing_phone: boolean
+          next_attempt_at: string
           no_visit_data: boolean
           paused: boolean
           phone: string
@@ -17199,6 +17217,8 @@ export type Database = {
       voice_retention_queue: {
         Args: { p_branch?: string; p_limit?: number; p_offset?: number }
         Returns: {
+          attempts_cycle: number
+          attempts_today: number
           branch_id: string
           branch_name: string
           days_absent: number
@@ -17211,6 +17231,7 @@ export type Database = {
           member_code: string
           member_id: string
           member_name: string
+          next_attempt_at: string
           plan_expiry: string
           plan_name: string
           total_count: number

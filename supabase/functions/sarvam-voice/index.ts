@@ -1012,7 +1012,8 @@ Deno.serve(async (req) => {
 
         const eligible = ((candidates || []) as Array<Record<string, unknown>>).filter((c) =>
           !c.missing_phone && !c.dnd && !c.paused && !c.too_recent && !c.in_cooldown &&
-          !c.contacted_today && !c.no_visit_data && !c.recent_human_contact
+          !c.contacted_today && !c.no_visit_data && !c.recent_human_contact &&
+          !c.attempts_exhausted
         );
         // A worker run with zero candidates is healthy, not an error.
         const batch = eligible.slice(0, Math.min(remaining, 10));

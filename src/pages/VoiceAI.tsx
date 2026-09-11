@@ -35,7 +35,7 @@ import { toast } from 'sonner';
 
 
 import { can } from '@/lib/auth/permissions';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 
 const PAGE_SIZE = 25;
 const ALL = '__all__';
@@ -64,6 +64,16 @@ function fmt(value?: string | null, pattern = 'dd MMM, HH:mm') {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '—' : format(d, pattern);
 }
+
+/** Plain-language "when do we ring them next". */
+function whenNext(value?: string | null) {
+  if (!value) return 'No further tries';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  if (d.getTime() <= Date.now()) return 'Due now';
+  return `In ${formatDistanceToNowStrict(d)}`;
+}
+
 
 function Kpi({ label, value, sub, icon: Icon, tone = 'indigo' }: {
   label: string; value: React.ReactNode; sub?: string;
@@ -482,6 +492,8 @@ export default function VoiceAIPage() {
                           <TableHead>Plan expiry</TableHead>
                           <TableHead>Trainer</TableHead>
                           <TableHead>Last outcome</TableHead>
+                          <TableHead>Tries</TableHead>
+                          <TableHead>Next attempt</TableHead>
                           {canControl && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
                       </TableHeader>
@@ -511,6 +523,8 @@ export default function VoiceAIPage() {
                                   ? <Badge className={`rounded-full ${disp.className}`}>{disp.label}</Badge>
                                   : <span className="text-xs text-muted-foreground">Never called</span>}
                               </TableCell>
+                              <TableCell className="text-sm">{q.attempts_cycle ?? 0}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{whenNext(q.next_attempt_at ?? q.eligible_at)}</TableCell>
                               {canControl && (
                                 <TableCell className="text-right">
                                   <Button
@@ -545,8 +559,9 @@ export default function VoiceAIPage() {
                 <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
                   <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <p>
-                    Each row shows exactly why the member was not called. Do-not-contact is never
-                    overridable; cooldown and recent-contact skips can be overridden with Call now.
+                    Each row shows exactly why the member was not called, how many times we have already
+                    tried, and when the next automatic attempt is due. Do-not-contact and a missing
+                    number are never overridable; the rest can be rung immediately with Call now.
                   </p>
                 </div>
                 {blockedQ.isError ? (
@@ -572,13 +587,16 @@ export default function VoiceAIPage() {
                           <TableHead>Days absent</TableHead>
                           <TableHead>Last call</TableHead>
                           <TableHead>Why skipped</TableHead>
+                          <TableHead>Tries</TableHead>
+                          <TableHead>Next attempt</TableHead>
                           {canControl && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {(blockedQ.data ?? []).map((b) => {
                           const look = skipLook(b.skip_reason);
-                          const overridable = !['do_not_contact', 'no_phone'].includes(b.skip_reason);
+                          // Never override a do-not-contact request or a missing number.
+                          const overridable = !/not to be contacted|No mobile number/i.test(b.skip_reason ?? '');
                           return (
                             <TableRow key={`${b.member_id}-${b.skip_reason}`} className="transition-colors duration-150 hover:bg-muted/50">
                               <TableCell>
@@ -594,6 +612,8 @@ export default function VoiceAIPage() {
                               <TableCell>
                                 <Badge className={`rounded-full ${look.className}`}>{look.label}</Badge>
                               </TableCell>
+                              <TableCell className="text-sm">{b.attempts_cycle ?? 0}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{whenNext(b.next_attempt_at)}</TableCell>
                               {canControl && (
                                 <TableCell className="text-right">
                                   {overridable ? (

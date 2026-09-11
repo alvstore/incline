@@ -141,8 +141,14 @@ export interface VoiceQueueRow {
   last_call_id: string | null;
   last_disposition: string | null;
   eligible_at: string | null;
+  /** Tries since the member last picked up, and tries made today. */
+  attempts_cycle: number | null;
+  attempts_today: number | null;
+  /** When the agent is due to ring them next. */
+  next_attempt_at: string | null;
   total_count: number;
 }
+
 
 export interface VoiceFeedFilters {
   branchId?: string | null;
@@ -321,8 +327,11 @@ export interface VoiceBlockedRow {
   days_absent: number | null;
   last_call_at: string | null;
   skip_reason: string;
+  attempts_cycle: number | null;
+  next_attempt_at: string | null;
   total_count: number;
 }
+
 
 /** Members the agent passed over, with the reason for each. */
 export function useVoiceBlocked(branchId?: string | null, limit = 100) {
