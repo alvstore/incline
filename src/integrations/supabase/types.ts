@@ -11406,6 +11406,153 @@ export type Database = {
           },
         ]
       }
+      renewal_case_events: {
+        Row: {
+          actor_id: string | null
+          branch_id: string
+          case_id: string
+          channel: string | null
+          created_at: string
+          detail: string | null
+          event_type: string
+          id: string
+          payload: Json
+          stage: Database["public"]["Enums"]["renewal_stage"] | null
+        }
+        Insert: {
+          actor_id?: string | null
+          branch_id: string
+          case_id: string
+          channel?: string | null
+          created_at?: string
+          detail?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          stage?: Database["public"]["Enums"]["renewal_stage"] | null
+        }
+        Update: {
+          actor_id?: string | null
+          branch_id?: string
+          case_id?: string
+          channel?: string | null
+          created_at?: string
+          detail?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          stage?: Database["public"]["Enums"]["renewal_stage"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_case_events_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "renewal_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      renewal_cases: {
+        Row: {
+          attempts_count: number
+          branch_id: string
+          churn_reason: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          closed_at: string | null
+          created_at: string
+          expiry_date: string
+          id: string
+          last_contact_at: string | null
+          last_stage_key: string | null
+          member_id: string
+          membership_id: string
+          metadata: Json
+          next_action_at: string | null
+          outcome: string | null
+          plan_id: string | null
+          renewed_membership_id: string | null
+          snoozed_until: string | null
+          stage: Database["public"]["Enums"]["renewal_stage"]
+          updated_at: string
+          value_score: number
+          voice_attempts_count: number
+        }
+        Insert: {
+          attempts_count?: number
+          branch_id: string
+          churn_reason?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          closed_at?: string | null
+          created_at?: string
+          expiry_date: string
+          id?: string
+          last_contact_at?: string | null
+          last_stage_key?: string | null
+          member_id: string
+          membership_id: string
+          metadata?: Json
+          next_action_at?: string | null
+          outcome?: string | null
+          plan_id?: string | null
+          renewed_membership_id?: string | null
+          snoozed_until?: string | null
+          stage?: Database["public"]["Enums"]["renewal_stage"]
+          updated_at?: string
+          value_score?: number
+          voice_attempts_count?: number
+        }
+        Update: {
+          attempts_count?: number
+          branch_id?: string
+          churn_reason?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          closed_at?: string | null
+          created_at?: string
+          expiry_date?: string
+          id?: string
+          last_contact_at?: string | null
+          last_stage_key?: string | null
+          member_id?: string
+          membership_id?: string
+          metadata?: Json
+          next_action_at?: string | null
+          outcome?: string | null
+          plan_id?: string | null
+          renewed_membership_id?: string | null
+          snoozed_until?: string | null
+          stage?: Database["public"]["Enums"]["renewal_stage"]
+          updated_at?: string
+          value_score?: number
+          voice_attempts_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_cases_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_cases_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_cases_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       retention_nudge_logs: {
         Row: {
           branch_id: string
@@ -15300,6 +15447,10 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      detect_renewal_cases: {
+        Args: { _lookahead_days?: number }
+        Returns: Json
+      }
       dr_dump_schema: { Args: never; Returns: string }
       dr_get_cron_manifest: { Args: never; Returns: Json }
       dr_get_or_create_token: { Args: never; Returns: string }
@@ -15890,6 +16041,17 @@ export type Database = {
             }
             Returns: Json
           }
+      log_renewal_case_event: {
+        Args: {
+          _case_id: string
+          _channel?: string
+          _detail?: string
+          _event_type: string
+          _payload?: Json
+          _stage?: Database["public"]["Enums"]["renewal_stage"]
+        }
+        Returns: string
+      }
       maintain_log_sizes: { Args: never; Returns: undefined }
       manages_branch: {
         Args: { _branch_id: string; _user_id: string }
@@ -17428,6 +17590,20 @@ export type Database = {
         | "replied"
         | "bounced"
         | "clicked"
+      renewal_stage:
+        | "eligible"
+        | "reminding"
+        | "voice_escalation"
+        | "staff_followup"
+        | "callback"
+        | "lapsed"
+        | "win_back"
+        | "renewed"
+        | "not_interested"
+        | "frozen"
+        | "cancelled"
+        | "churned"
+        | "suppressed"
       task_priority: "low" | "medium" | "high" | "urgent"
       task_status: "pending" | "in_progress" | "completed" | "cancelled"
       wallet_txn_type:
@@ -17729,6 +17905,21 @@ export const Constants = {
         "replied",
         "bounced",
         "clicked",
+      ],
+      renewal_stage: [
+        "eligible",
+        "reminding",
+        "voice_escalation",
+        "staff_followup",
+        "callback",
+        "lapsed",
+        "win_back",
+        "renewed",
+        "not_interested",
+        "frozen",
+        "cancelled",
+        "churned",
+        "suppressed",
       ],
       task_priority: ["low", "medium", "high", "urgent"],
       task_status: ["pending", "in_progress", "completed", "cancelled"],
