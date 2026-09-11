@@ -9,6 +9,7 @@ export interface HowbodyReportRow {
   created_at: string;
   type: 'body' | 'posture';
   pdf_url?: string | null;
+  pdf_source?: string | null;
   email_status?: string | null;
   whatsapp_status?: string | null;
   inapp_status?: string | null;
@@ -49,37 +50,38 @@ export function useHowbodyReports(memberId?: string, limit = 12) {
     queryKey: ['howbody-reports', memberId, limit],
     enabled: !!memberId,
     queryFn: async (): Promise<HowbodyReportRow[]> => {
+      if (!memberId) return [];
       const [body, posture, deliveries] = await Promise.all([
         supabase
           .from('howbody_body_reports')
           .select('id, member_id, data_key, test_time, created_at, health_score, weight, bmi, pbf, smm, tbw, bmr, vfr, metabolic_age, target_weight, weight_control, fat_control, muscle_control, icf, ecf, whr')
-          .eq('member_id', memberId!)
+          .eq('member_id', memberId)
           .order('created_at', { ascending: false })
           .limit(limit),
         supabase
           .from('howbody_posture_reports')
           .select('id, member_id, data_key, test_time, created_at, score, head_forward, high_low_shoulder, pelvis_forward, body_slope, equipment_no, front_img, left_img, right_img, back_img, model_url')
-          .eq('member_id', memberId!)
+          .eq('member_id', memberId)
           .order('created_at', { ascending: false })
           .limit(limit),
         supabase
           .from('scan_report_deliveries')
-          .select('report_id, kind, pdf_url, email_status, whatsapp_status, inapp_status, email_error, whatsapp_error')
-          .eq('member_id', memberId!),
+          .select('report_id, kind, pdf_url, pdf_source, email_status, whatsapp_status, inapp_status, email_error, whatsapp_error')
+          .eq('member_id', memberId),
       ]);
 
-      const deliveryMap = (deliveries.data || []).reduce<Record<string, { pdf_url: string | null; email_status: string | null; whatsapp_status: string | null; inapp_status: string | null; delivery_error: string | null }>>((acc, d) => {
+      const deliveryMap = (deliveries.data || []).reduce<Record<string, { pdf_url: string | null; pdf_source: string | null; email_status: string | null; whatsapp_status: string | null; inapp_status: string | null; delivery_error: string | null }>>((acc, d) => {
         acc[`${d.kind}-${d.report_id}`] = { ...d, delivery_error: d.email_error || d.whatsapp_error || null };
         return acc;
       }, {});
 
       const rows: HowbodyReportRow[] = [
-        ...((body.data || []) as any[]).map((r) => ({
+        ...(body.data || []).map((r) => ({
           ...r,
           type: 'body' as const,
           ...(deliveryMap[`body-${r.id}`] || {}),
         })),
-        ...((posture.data || []) as any[]).map((r) => ({
+        ...(posture.data || []).map((r) => ({
           ...r,
           type: 'posture' as const,
           ...(deliveryMap[`posture-${r.id}`] || {}),
@@ -104,18 +106,26 @@ export interface ScanQuota {
   reason: string;
 }
 
+const asScanQuota = (value: unknown): ScanQuota => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid scan quota response');
+  }
+  return value as ScanQuota;
+};
+
 export function useScanQuota(memberId?: string) {
   return useQuery({
     queryKey: ['howbody-scan-quota', memberId],
     enabled: !!memberId,
     queryFn: async (): Promise<{ body: ScanQuota; posture: ScanQuota }> => {
+      if (!memberId) throw new Error('Member is required');
       const [b, p] = await Promise.all([
-        supabase.rpc('howbody_scan_quota' as any, { _member_id: memberId, _kind: 'body' }),
-        supabase.rpc('howbody_scan_quota' as any, { _member_id: memberId, _kind: 'posture' }),
+        supabase.rpc('howbody_scan_quota', { _member_id: memberId, _kind: 'body' }),
+        supabase.rpc('howbody_scan_quota', { _member_id: memberId, _kind: 'posture' }),
       ]);
       return {
-        body: (b.data || {}) as ScanQuota,
-        posture: (p.data || {}) as ScanQuota,
+        body: asScanQuota(b.data),
+        posture: asScanQuota(p.data),
       };
     },
   });

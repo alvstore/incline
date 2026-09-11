@@ -36,7 +36,14 @@ interface MemberHit {
   full_name: string | null;
   phone: string | null;
 }
-interface DeliveryState { report_id: string; kind: string; email_status: string | null; whatsapp_status: string | null; inapp_status: string | null }
+interface DeliveryState { report_id: string; kind: string; email_status: string | null; whatsapp_status: string | null; inapp_status: string | null; whatsapp_error: string | null; pdf_source: string | null }
+
+const deliveryLabel = (status: string | null | undefined) => {
+  const value = String(status || 'pending').toLowerCase();
+  if (value === 'sent') return 'sent to provider';
+  if (value === 'suppressed') return 'not sent';
+  return value;
+};
 
 export default function MyScanReport() {
   const { user, profile, hasAnyRole, isLoading: authLoading } = useAuth();
@@ -90,7 +97,7 @@ export default function MyScanReport() {
           .order("test_time", { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle(),
-        supabase.from('scan_report_deliveries').select('report_id, kind, email_status, whatsapp_status, inapp_status').eq('member_id', memberId),
+        supabase.from('scan_report_deliveries').select('report_id, kind, email_status, whatsapp_status, inapp_status, whatsapp_error, pdf_source').eq('member_id', memberId),
       ]);
       setBody((b as BodyReport) || null);
       setPosture((p as PostureReport) || null);
@@ -132,15 +139,18 @@ export default function MyScanReport() {
   }
 
   // ---------- Reports view ----------
+  const latestDelivery = deliveries.find((d) => d.report_id === body?.id) || deliveries.find((d) => d.report_id === posture?.id) || deliveries[0];
+  const deliveryFailed = ['failed', 'bounced', 'suppressed'].includes(String(latestDelivery?.whatsapp_status || '').toLowerCase());
   return (
     <Shell>
-      <div className="mb-4 flex items-start gap-3 rounded-2xl bg-success/10 p-4 text-sm text-success ring-1 ring-success/25">
-        {deliveries.length > 0 ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />}
+      <div className={`mb-4 flex items-start gap-3 rounded-2xl p-4 text-sm ring-1 ${deliveryFailed ? 'bg-destructive/10 text-destructive ring-destructive/25' : 'bg-success/10 text-success ring-success/25'}`}>
+        {deliveryFailed ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" /> : deliveries.length > 0 ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />}
         <div>
-          <p className="font-semibold">{deliveries.length > 0 ? 'Report delivery status' : 'Your report is syncing'}</p>
-          <p className="mt-0.5 text-xs text-success">
-            {deliveries.length > 0 ? <>WhatsApp: {deliveries[0]?.whatsapp_status ?? 'pending'} · Email: {deliveries[0]?.email_status ?? 'pending'} · In app: {deliveries[0]?.inapp_status ?? 'pending'}</> : 'The assessment is saved. Delivery details will appear after the secure report is prepared.'}
+          <p className="font-semibold">{deliveries.length > 0 ? 'Report ready and delivery status' : 'Your report is syncing'}</p>
+          <p className="mt-0.5 text-xs">
+            {latestDelivery ? <>Report: {latestDelivery.pdf_source === 'howbody_original' ? 'original HOWBODY file' : 'prepared'} · WhatsApp: {deliveryLabel(latestDelivery.whatsapp_status)} · Email: {deliveryLabel(latestDelivery.email_status)} · In app: {deliveryLabel(latestDelivery.inapp_status)}</> : 'The assessment is saved. Delivery details will appear after the secure report is prepared.'}
           </p>
+          {latestDelivery?.whatsapp_error ? <p className="mt-1 text-xs">{latestDelivery.whatsapp_error}</p> : null}
         </div>
       </div>
 

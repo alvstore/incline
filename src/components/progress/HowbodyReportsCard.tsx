@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Scan, PersonStanding, Eye, Download, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Scan, PersonStanding, Eye, Download, Loader2, CheckCircle2, Clock3, Ban } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useHowbodyReports, type HowbodyReportRow } from '@/hooks/useHowbodyReports';
@@ -10,6 +10,18 @@ import { HowbodyReportDrawer } from './HowbodyReportDrawer';
 import { toast } from 'sonner';
 
 interface Props { memberId?: string }
+
+const statusLabel = (status?: string | null) => {
+  const normalized = String(status || 'pending').toLowerCase();
+  if (normalized === 'read') return 'Read';
+  if (normalized === 'delivered') return 'Delivered';
+  if (normalized === 'sent') return 'Sent to provider';
+  if (normalized === 'suppressed') return 'Not sent';
+  if (normalized === 'failed' || normalized === 'bounced') return 'Failed';
+  return 'Pending';
+};
+
+const isDeliveryFailure = (status?: string | null) => ['failed', 'bounced', 'suppressed'].includes(String(status || '').toLowerCase());
 
 export function HowbodyReportsCard({ memberId }: Props) {
   const { data: rows = [], isLoading } = useHowbodyReports(memberId, 8);
@@ -20,8 +32,9 @@ export function HowbodyReportsCard({ memberId }: Props) {
     try {
       setDownloading(r.data_key);
       
-      // If we already have a signed URL from delivery, use it.
-      if (r.pdf_url) {
+      // Generated legacy reports can use their current link. Original vendor
+      // reports are re-signed on demand so an expired private URL is never reused.
+      if (r.pdf_url && r.pdf_source !== 'howbody_original') {
         window.open(r.pdf_url, '_blank');
         return;
       }
@@ -86,10 +99,16 @@ export function HowbodyReportsCard({ memberId }: Props) {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{main}</p>
-                       <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                         {r.pdf_url ? <CheckCircle2 className="h-3 w-3 text-success" /> : <AlertCircle className="h-3 w-3 text-warning" />}
-                         {r.pdf_url ? `WhatsApp ${r.whatsapp_status ?? 'pending'} · Email ${r.email_status ?? 'pending'}` : 'Delivery pending — PDF will repair on request'}
+                        <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                          {r.pdf_url ? <CheckCircle2 className="h-3 w-3 text-success" /> : <Clock3 className="h-3 w-3 text-warning" />}
+                          <span>{r.pdf_source === 'howbody_original' ? 'Original HOWBODY report ready' : r.pdf_url ? 'Report ready' : 'Report preparation pending'}</span>
+                          <span aria-hidden="true">·</span>
+                          {isDeliveryFailure(r.whatsapp_status) ? <Ban className="h-3 w-3 text-destructive" /> : null}
+                          <span>WhatsApp: {statusLabel(r.whatsapp_status)}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>Email: {statusLabel(r.email_status)}</span>
                        </div>
+                        {r.delivery_error ? <p className="mt-1 text-[11px] text-destructive line-clamp-2">{r.delivery_error}</p> : null}
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => setOpen(r)}>
                       <Eye className="mr-1 h-3.5 w-3.5" /> View
