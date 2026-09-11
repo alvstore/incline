@@ -35,7 +35,7 @@ import { toast } from 'sonner';
 
 
 import { can } from '@/lib/auth/permissions';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 
 const PAGE_SIZE = 25;
 const ALL = '__all__';
