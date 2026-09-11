@@ -12047,46 +12047,88 @@ export type Database = {
         Row: {
           branch_id: string | null
           created_at: string
+          email_communication_log_id: string | null
           email_error: string | null
           email_status: string | null
           id: string
           inapp_status: string | null
           kind: string
           member_id: string | null
+          original_pdf_path: string | null
+          pdf_source: string
           pdf_url: string | null
           report_id: string
+          updated_at: string
+          whatsapp_accepted_at: string | null
+          whatsapp_communication_log_id: string | null
+          whatsapp_delivered_at: string | null
           whatsapp_error: string | null
+          whatsapp_provider_message_id: string | null
+          whatsapp_read_at: string | null
           whatsapp_status: string | null
         }
         Insert: {
           branch_id?: string | null
           created_at?: string
+          email_communication_log_id?: string | null
           email_error?: string | null
           email_status?: string | null
           id?: string
           inapp_status?: string | null
           kind: string
           member_id?: string | null
+          original_pdf_path?: string | null
+          pdf_source?: string
           pdf_url?: string | null
           report_id: string
+          updated_at?: string
+          whatsapp_accepted_at?: string | null
+          whatsapp_communication_log_id?: string | null
+          whatsapp_delivered_at?: string | null
           whatsapp_error?: string | null
+          whatsapp_provider_message_id?: string | null
+          whatsapp_read_at?: string | null
           whatsapp_status?: string | null
         }
         Update: {
           branch_id?: string | null
           created_at?: string
+          email_communication_log_id?: string | null
           email_error?: string | null
           email_status?: string | null
           id?: string
           inapp_status?: string | null
           kind?: string
           member_id?: string | null
+          original_pdf_path?: string | null
+          pdf_source?: string
           pdf_url?: string | null
           report_id?: string
+          updated_at?: string
+          whatsapp_accepted_at?: string | null
+          whatsapp_communication_log_id?: string | null
+          whatsapp_delivered_at?: string | null
           whatsapp_error?: string | null
+          whatsapp_provider_message_id?: string | null
+          whatsapp_read_at?: string | null
           whatsapp_status?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "scan_report_deliveries_email_communication_log_id_fkey"
+            columns: ["email_communication_log_id"]
+            isOneToOne: false
+            referencedRelation: "communication_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_report_deliveries_whatsapp_communication_log_id_fkey"
+            columns: ["whatsapp_communication_log_id"]
+            isOneToOne: false
+            referencedRelation: "communication_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings: {
         Row: {

@@ -1,4 +1,4 @@
-// v1.2.0 — Auto-deliver body/posture scan reports (templates-driven, logged to communication_logs)
+// v2.0.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -155,14 +155,14 @@ Deno.serve(async (req) => {
     // Idempotency: if delivery row exists with success on all channels, skip.
     const { data: existing } = await supabase
       .from("scan_report_deliveries")
-      .select("id, email_status, whatsapp_status, inapp_status, pdf_url")
+      .select("id, email_status, whatsapp_status, inapp_status, pdf_url, original_pdf_path, pdf_source")
       .eq("report_id", report_id)
       .eq("kind", kind)
       .maybeSingle();
     if (
       existing &&
       existing.email_status === "sent" &&
-      existing.whatsapp_status === "sent" &&
+      ["sent", "delivered", "read"].includes(existing.whatsapp_status || "") &&
       existing.inapp_status === "sent"
     ) {
       return jr({ skipped: true, reason: "already_delivered" });
@@ -194,23 +194,26 @@ Deno.serve(async (req) => {
       .from("branches").select("id,name").eq("id", member.branch_id).single();
     const branchName = branch?.name || "Incline";
 
-    // PDF
+    // PDF — original vendor report wins. The generated summary exists only as a
+    // recovery fallback when HOWBODY did not provide a source PDF.
     const title = kind === "body" ? "Body Composition Report" : "Posture Analysis Report";
     const rows = kind === "body" ? bodyRows(report) : postureRows(report);
     const scanDateLabel = fmtDate(report.test_time || report.created_at);
-    const pdfBytes = await buildPdf({ title, memberName, branchName, scanDateLabel, rows });
-
-    // Upload to attachments bucket
-    const path = `scans/${member.id}/${kind}-${report_id}.pdf`;
-    const { error: upErr } = await supabase.storage
-      .from("attachments")
-      .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
-    if (upErr) console.error("PDF upload failed:", upErr.message);
+    const originalPath = existing?.original_pdf_path || null;
+    const path = originalPath || `scans/${member.id}/${kind}-${report_id}.pdf`;
+    if (!originalPath) {
+      const pdfBytes = await buildPdf({ title, memberName, branchName, scanDateLabel, rows });
+      const { error: upErr } = await supabase.storage
+        .from("attachments")
+        .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
+      if (upErr) throw new Error(`PDF upload failed: ${upErr.message}`);
+    }
 
     const { data: signed } = await supabase.storage
       .from("attachments")
       .createSignedUrl(path, 60 * 60 * 24 * 30); // 30 days
     const pdfUrl = signed?.signedUrl || null;
+    if (!pdfUrl) throw new Error("Could not prepare a secure report link");
 
     // Upsert delivery row early so idempotency works on partial failure
     const { data: delivery } = await supabase
@@ -221,6 +224,8 @@ Deno.serve(async (req) => {
         member_id: member.id,
         branch_id: member.branch_id,
         pdf_url: pdfUrl,
+        original_pdf_path: originalPath,
+        pdf_source: originalPath ? "howbody_original" : "generated_fallback",
       }, { onConflict: "report_id,kind" })
       .select("id")
       .single();
@@ -271,7 +276,10 @@ Deno.serve(async (req) => {
       .eq("is_active", true);
 
     const renderTpl = (s: string | null | undefined) =>
-      (s || "").replace(/\{\{(\w+)\}\}/g, (_m, k) => templateVars[k] ?? "");
+      (s || "").replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, k) => {
+        if (/^\d+$/.test(String(k))) return String(k) === "1" ? memberName : "";
+        return templateVars[k] ?? "";
+      });
 
     const emailTpl = memberTemplates?.find((t: any) => t.type === "email");
     const waTpl = memberTemplates?.find((t: any) => t.type === "whatsapp");
@@ -288,124 +296,69 @@ Deno.serve(async (req) => {
       ? renderTpl(waTpl.content)
       : [`Hi ${memberName}, your ${kind === "body" ? "body scan" : "posture scan"} from ${branchName} is ready.`, ...summaryLines, pdfUrl ? `\nReport: ${pdfUrl}` : ""].filter(Boolean).join("\n");
 
-    // Helper to write a communication_logs row for this delivery
-    async function logComm(opts: {
-      type: 'email' | 'whatsapp' | 'sms';
-      recipient: string;
-      content: string;
-      subject?: string | null;
-      template_id?: string | null;
-      status: 'sent' | 'failed';
-      error?: string | null;
-      provider_message_id?: string | null;
-    }) {
-      try {
-        await supabase.from("communication_logs").insert({
+    type DispatchResult = {
+      status?: "sent" | "queued" | "deduped" | "suppressed" | "failed";
+      log_id?: string;
+      reason?: string;
+      provider_message_id?: string;
+    };
+    const dispatch = async (channel: "email" | "whatsapp", recipient: string, body: string, templateId?: string | null) => {
+      const response = await supabase.functions.invoke("dispatch-communication", {
+        body: {
           branch_id: member.branch_id,
+          channel,
+          category: "transactional",
+          recipient,
           member_id: member.id,
-          type: opts.type,
-          recipient: opts.recipient,
-          subject: opts.subject ?? null,
-          content: opts.content,
-          template_id: opts.template_id ?? null,
-          status: opts.status,
-          delivery_status: opts.status === 'sent' ? 'sent' : 'failed',
-          provider_message_id: opts.provider_message_id ?? null,
-          error_message: opts.error ?? null,
-          delivery_metadata: {
-            scan_report_delivery_id: deliveryId,
-            report_id,
-            kind,
-            trigger_event: triggerEvent,
+          template_id: templateId || undefined,
+          payload: {
+            subject: channel === "email" ? subject : undefined,
+            body,
+            variables: { ...templateVars, event_key: triggerEvent, recipient_name: memberName },
+            use_branded_template: true,
           },
-        });
-      } catch (e) {
-        console.error("communication_logs insert failed:", e);
-      }
-    }
+          attachment: { url: pdfUrl, filename: `${kind}-scan-${member.member_code || report_id.slice(0, 8)}.pdf`, content_type: "application/pdf", kind: "document" },
+          dedupe_key: `scan-report:${kind}:${report_id}:${channel}:v2`,
+          ttl_seconds: 31536000,
+          force: true,
+          source_caller: "deliver-scan-report",
+          source_type: "system",
+          skip_notification: true,
+        },
+      });
+      if (response.error) throw new Error(response.error.message || String(response.error));
+      return (response.data || {}) as DispatchResult;
+    };
 
     // ── Member Email ────────────────────────────────────────────────
     let emailStatus = "skipped";
     let emailError: string | null = null;
-    if (memberEmail) {
+    let emailLogId: string | null = null;
+    if (memberEmail && existing?.email_status !== "sent" && existing?.email_status !== "delivered") {
       try {
-        const r = await supabase.functions.invoke("send-email", {
-          body: {
-            to: memberEmail,
-            subject,
-            html: greetingHtml,
-            branch_id: member.branch_id,
-            use_branded_template: true,
-          },
-        });
-        emailStatus = r.error ? "failed" : "sent";
-        if (r.error) emailError = r.error.message || String(r.error);
-        await logComm({
-          type: 'email',
-          recipient: memberEmail,
-          content: greetingHtml,
-          subject,
-          template_id: emailTpl?.id || null,
-          status: emailStatus === 'sent' ? 'sent' : 'failed',
-          error: emailError,
-        });
+        const result = await dispatch("email", memberEmail, greetingHtml, emailTpl?.id);
+        emailStatus = result.status || "failed";
+        emailError = result.reason || null;
+        emailLogId = result.log_id || null;
       } catch (e) {
         emailStatus = "failed"; emailError = String(e);
-        await logComm({ type: 'email', recipient: memberEmail, content: greetingHtml, subject, template_id: emailTpl?.id || null, status: 'failed', error: emailError });
       }
     }
 
     // ── Member WhatsApp (document) ───────────────────────────────────
     let waStatus = "skipped";
     let waError: string | null = null;
-    if (memberPhone && pdfUrl) {
+    let waLogId: string | null = null;
+    let waProviderMessageId: string | null = null;
+    if (memberPhone && pdfUrl && !["sent", "delivered", "read"].includes(existing?.whatsapp_status || "")) {
       try {
-        const { data: msgRow, error: msgErr } = await supabase
-          .from("whatsapp_messages")
-          .insert({
-            branch_id: member.branch_id,
-            phone_number: memberPhone,
-            member_id: member.id,
-            content: captionWa,
-            direction: "outbound",
-            status: "pending",
-            message_type: "document",
-            media_url: pdfUrl,
-          } as any)
-          .select("id")
-          .single();
-        if (msgErr || !msgRow) throw msgErr || new Error("insert failed");
-
-        const r = await supabase.functions.invoke("send-whatsapp", {
-          body: {
-            message_id: msgRow.id,
-            phone_number: memberPhone,
-            branch_id: member.branch_id,
-            message_type: "document",
-            media_url: pdfUrl,
-            caption: captionWa,
-            filename: `${kind}-scan-${report_id.slice(0, 8)}.pdf`,
-          },
-        });
-        if (r.error) {
-          waStatus = "failed";
-          waError = r.error.message || String(r.error);
-          await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", msgRow.id);
-        } else {
-          waStatus = "sent";
-          await supabase.from("whatsapp_messages").update({ status: "sent" }).eq("id", msgRow.id);
-        }
-        await logComm({
-          type: 'whatsapp',
-          recipient: memberPhone,
-          content: captionWa,
-          template_id: waTpl?.id || null,
-          status: waStatus === 'sent' ? 'sent' : 'failed',
-          error: waError,
-        });
+        const result = await dispatch("whatsapp", memberPhone, captionWa, waTpl?.id);
+        waStatus = result.status || "failed";
+        waError = result.reason || null;
+        waLogId = result.log_id || null;
+        waProviderMessageId = result.provider_message_id || null;
       } catch (e) {
         waStatus = "failed"; waError = String(e);
-        await logComm({ type: 'whatsapp', recipient: memberPhone, content: captionWa, template_id: waTpl?.id || null, status: 'failed', error: waError });
       }
     }
 
@@ -420,7 +373,7 @@ Deno.serve(async (req) => {
     const notifRows: any[] = [];
 
     // Member
-    if (member.user_id) {
+    if (member.user_id && existing?.inapp_status !== "sent") {
       notifRows.push({
         user_id: member.user_id,
         branch_id: member.branch_id,
@@ -509,8 +462,12 @@ Deno.serve(async (req) => {
         .update({
           email_status: emailStatus,
           email_error: emailError,
+          email_communication_log_id: emailLogId,
           whatsapp_status: waStatus,
           whatsapp_error: waError,
+          whatsapp_communication_log_id: waLogId,
+          whatsapp_provider_message_id: waProviderMessageId,
+          whatsapp_accepted_at: waStatus === "sent" ? new Date().toISOString() : null,
           inapp_status: inappStatus,
         })
         .eq("id", deliveryId);
