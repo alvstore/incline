@@ -24,6 +24,7 @@ import inclineLogo from "@/assets/incline-logo.png";
 import { cn } from "@/lib/utils";
 
 import SEO from "@/components/seo/SEO";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import {
   AGREEMENT_PARTS,
   AGREEMENT_ACKNOWLEDGEMENTS,
@@ -818,7 +819,25 @@ export default function PublicRegistration() {
                 your member code and login link.
               </p>
 
-              {/* Face photo — optional but prompted, so the gates recognise you on day one. */}
+              {newMember?.memberCode && (
+                <div className="mx-auto inline-flex flex-col items-center rounded-2xl bg-primary-foreground/10 px-5 py-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/60">
+                    Your member code
+                  </span>
+                  <span className="text-lg font-bold tracking-wide">{newMember.memberCode}</span>
+                </div>
+              )}
+
+              {/* Face photo — optional. Isolated so a failure here can never blank the
+                  success screen of a member whose account is already created. */}
+              <ErrorBoundary
+                fallback={
+                  <p className="rounded-2xl bg-primary-foreground/10 p-4 text-xs text-primary-foreground/70">
+                    You're registered. We couldn't open the photo step here — reception will take your
+                    gate photo on your first visit.
+                  </p>
+                }
+              >
               {newMember && photoState !== "done" && (
                 <div className="rounded-2xl bg-primary-foreground/10 p-4 text-left">
                   <p className="text-sm font-semibold">Add your photo for gate entry</p>
@@ -877,6 +896,7 @@ export default function PublicRegistration() {
               {photoState === "done" && (
                 <p className="text-xs font-medium text-success">Photo received — you're set for gate entry.</p>
               )}
+              </ErrorBoundary>
 
               <a
                 href="/member-dashboard"
