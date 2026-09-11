@@ -112,6 +112,7 @@ const MealCatalogPage = lazy(() => import("./pages/MealCatalog"));
 // Staff-specific pages
 const StaffDashboard = lazy(() => import("./pages/StaffDashboard"));
 const FollowUpCenter = lazy(() => import("./pages/FollowUpCenter"));
+const RenewalCenter = lazy(() => import("./pages/RenewalCenter"));
 
 // Admin pages
 const AdminRoles = lazy(() => import("./pages/AdminRoles"));
@@ -244,6 +245,7 @@ function RoutedContent() {
           {/* ==================== STAFF ROUTES ==================== */}
           <Route path="/staff-dashboard" element={<ProtectedRoute requiredRoles={['staff']}><StaffDashboard /></ProtectedRoute>} />
           <Route path="/follow-up-center" element={<ProtectedRoute requiredRoles={['staff', 'manager', 'admin', 'owner']}><FollowUpCenter /></ProtectedRoute>} />
+          <Route path="/renewal-center" element={<ProtectedRoute requiredRoles={['staff', 'manager', 'admin', 'owner']}><RenewalCenter /></ProtectedRoute>} />
 
           {/* ==================== ADMIN/MANAGER/OWNER ROUTES ==================== */}
           <Route path="/dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><DashboardPage /></ProtectedRoute>} />
