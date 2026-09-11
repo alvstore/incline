@@ -1,4 +1,4 @@
-// send-reminders v2.3 — channel-correct template resolution + local variable substitution.
+// send-reminders v2.4.0 — channel-correct template resolution + local variable substitution; skips membership-expiry reminders for branches handed over to the Renewal Engine.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
