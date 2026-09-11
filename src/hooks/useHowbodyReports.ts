@@ -7,19 +7,37 @@ export interface HowbodyReportRow {
   data_key: string;
   test_time: string | null;
   created_at: string;
-  type: 'body' | 'posture';
+  type: "body" | "posture";
+  pdf_url?: string | null;
   // body
   health_score?: number | null;
   weight?: number | null;
   bmi?: number | null;
   pbf?: number | null;
   smm?: number | null;
+  tbw?: number | null;
+  bmr?: number | null;
+  vfr?: number | null;
+  metabolic_age?: number | null;
+  target_weight?: number | null;
+  weight_control?: number | null;
+  fat_control?: number | null;
+  muscle_control?: number | null;
+  icf?: number | null;
+  ecf?: number | null;
+  whr?: number | null;
   // posture
   score?: number | null;
   head_forward?: number | null;
   high_low_shoulder?: number | null;
   pelvis_forward?: number | null;
   body_slope?: number | null;
+  equipment_no?: string | null;
+  front_img?: string | null;
+  left_img?: string | null;
+  right_img?: string | null;
+  back_img?: string | null;
+  model_url?: string | null;
 }
 
 export function useHowbodyReports(memberId?: string, limit = 12) {
