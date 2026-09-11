@@ -1,4 +1,4 @@
-// send-reminders v2.3 — channel-correct template resolution + local variable substitution.
+// send-reminders v2.4.0 — channel-correct template resolution + local variable substitution; skips membership-expiry reminders for branches handed over to the Renewal Engine.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
@@ -441,9 +441,23 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Membership expiry reminders (HONEST delivery) ────────────
+    // Renewal Engine hand-over: when a branch has the renewal engine enabled AND
+    // asked for the legacy expiry reminder to be silenced, skip it here so the
+    // member is never contacted twice. Default config = engine off → unchanged.
+    const { data: renewalCfgRows } = await adminClient
+      .from("renewal_engine_config")
+      .select("branch_id, enabled, suppress_legacy_expiry_reminders");
+    const renewalGlobalCfg = (renewalCfgRows || []).find((r: any) => r.branch_id === null);
+    const legacyExpirySuppressed = (branchId: string) => {
+      const cfg = (renewalCfgRows || []).find((r: any) => r.branch_id === branchId) || renewalGlobalCfg;
+      return !!(cfg?.enabled && cfg?.suppress_legacy_expiry_reminders);
+    };
+
     const { data: activeBranches } = await adminClient.from("branches").select("id").eq("is_active", true);
     for (const branch of activeBranches || []) {
+      if (legacyExpirySuppressed(branch.id)) continue;
       if (!isReminderEnabled(branch.id, "membership_expiry")) continue;
+
       const channel = getChannel(branch.id, "membership_expiry");
       const daysBeforeArr = getDaysBefore(branch.id, "membership_expiry");
 

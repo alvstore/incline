@@ -11418,6 +11418,7 @@ export type Database = {
           id: string
           payload: Json
           stage: Database["public"]["Enums"]["renewal_stage"] | null
+          stage_key: string | null
         }
         Insert: {
           actor_id?: string | null
@@ -11430,6 +11431,7 @@ export type Database = {
           id?: string
           payload?: Json
           stage?: Database["public"]["Enums"]["renewal_stage"] | null
+          stage_key?: string | null
         }
         Update: {
           actor_id?: string | null
@@ -11442,6 +11444,7 @@ export type Database = {
           id?: string
           payload?: Json
           stage?: Database["public"]["Enums"]["renewal_stage"] | null
+          stage_key?: string | null
         }
         Relationships: [
           {
@@ -11561,6 +11564,107 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      renewal_engine_config: {
+        Row: {
+          branch_id: string | null
+          channel: string
+          created_at: string
+          daily_cap: number
+          enabled: boolean
+          id: string
+          quiet_end: string
+          quiet_start: string
+          stage_offsets: number[]
+          suppress_legacy_expiry_reminders: boolean
+          updated_at: string
+          voice_escalate_after: number
+        }
+        Insert: {
+          branch_id?: string | null
+          channel?: string
+          created_at?: string
+          daily_cap?: number
+          enabled?: boolean
+          id?: string
+          quiet_end?: string
+          quiet_start?: string
+          stage_offsets?: number[]
+          suppress_legacy_expiry_reminders?: boolean
+          updated_at?: string
+          voice_escalate_after?: number
+        }
+        Update: {
+          branch_id?: string | null
+          channel?: string
+          created_at?: string
+          daily_cap?: number
+          enabled?: boolean
+          id?: string
+          quiet_end?: string
+          quiet_start?: string
+          stage_offsets?: number[]
+          suppress_legacy_expiry_reminders?: boolean
+          updated_at?: string
+          voice_escalate_after?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_engine_config_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      renewal_engine_state: {
+        Row: {
+          consecutive_failures: number
+          id: string
+          last_error: string | null
+          last_run_at: string | null
+          last_sent_count: number
+          last_status: string | null
+          lease_holder: string | null
+          lease_until: string | null
+          paused: boolean
+          paused_reason: string | null
+          sent_date: string | null
+          sent_today: number
+          updated_at: string
+        }
+        Insert: {
+          consecutive_failures?: number
+          id?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_sent_count?: number
+          last_status?: string | null
+          lease_holder?: string | null
+          lease_until?: string | null
+          paused?: boolean
+          paused_reason?: string | null
+          sent_date?: string | null
+          sent_today?: number
+          updated_at?: string
+        }
+        Update: {
+          consecutive_failures?: number
+          id?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_sent_count?: number
+          last_status?: string | null
+          lease_holder?: string | null
+          lease_until?: string | null
+          paused?: boolean
+          paused_reason?: string | null
+          sent_date?: string | null
+          sent_today?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       retention_nudge_logs: {
         Row: {
@@ -16666,6 +16770,50 @@ export type Database = {
         Returns: Json
       }
       renewal_cases_report: { Args: never; Returns: Json }
+      renewal_due_cases: {
+        Args: { _limit?: number }
+        Returns: {
+          attempts_count: number
+          branch_id: string
+          case_id: string
+          channel: string
+          days_to_expiry: number
+          email: string
+          expiry_date: string
+          member_id: string
+          member_name: string
+          membership_id: string
+          phone: string
+          plan_name: string
+          stage_key: string
+          voice_escalate_after: number
+        }[]
+      }
+      renewal_engine_acquire_lease: {
+        Args: { _holder?: string; _ttl_seconds?: number }
+        Returns: boolean
+      }
+      renewal_engine_release_lease: {
+        Args: {
+          _error?: string
+          _pause?: boolean
+          _pause_reason?: string
+          _sent?: number
+          _status: string
+        }
+        Returns: undefined
+      }
+      renewal_mark_contacted: {
+        Args: {
+          _case_id: string
+          _channel: string
+          _detail?: string
+          _payload?: Json
+          _stage_key: string
+          _status: string
+        }
+        Returns: Json
+      }
       renewal_payment_evidence: {
         Args: { _membership_id: string }
         Returns: string
