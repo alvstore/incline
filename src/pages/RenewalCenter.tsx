@@ -46,6 +46,10 @@ export default function RenewalCenter() {
   const rows = cases.data ?? [];
   const total = rows[0]?.total_count ?? 0;
   const engineOff = true;
+  const conversion = useMemo(() => {
+    const base = Number(stats.total ?? 0);
+    return base ? Math.round((Number(stats.renewed ?? 0) / base) * 100) : 0;
+  }, [stats]);
   const statCards: Array<[string, string | number, LucideIcon]> = [
     ['Open', Number(stats.open ?? 0), Users],
     ['Contacted', Number(stats.contacted ?? 0), Headphones],
@@ -53,11 +57,6 @@ export default function RenewalCenter() {
     ['Voice queue', Number(stats.voice ?? 0), PhoneCall],
     ['Conversion', `${conversion}%`, UserCheck],
   ];
-
-  const conversion = useMemo(() => {
-    const base = Number(stats.total ?? 0);
-    return base ? Math.round((Number(stats.renewed ?? 0) / base) * 100) : 0;
-  }, [stats]);
 
   async function run(input: Parameters<typeof action.mutateAsync>[0], message: string) {
     try {
