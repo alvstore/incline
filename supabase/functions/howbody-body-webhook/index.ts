@@ -164,8 +164,7 @@ Deno.serve(async (req) => {
       }).then(({ error }) => {
         if (error) console.error("deliver-scan-report (body) invoke failed:", error.message);
       });
-      if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(delivery);
-      else await delivery;
+      await delivery;
     }
 
     await logWebhook("body", thirdUid, dataKey, 200, isDuplicate ? "ok (duplicate)" : "ok", null);

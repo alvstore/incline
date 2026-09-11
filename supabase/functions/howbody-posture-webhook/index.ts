@@ -171,8 +171,7 @@ Deno.serve(async (req) => {
       }).then(({ error }) => {
         if (error) console.error("deliver-scan-report (posture) invoke failed:", error.message);
       });
-      if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(delivery);
-      else await delivery;
+      await delivery;
     }
 
     await logWebhook("posture", thirdUid, dataKey, 200, isDuplicate ? "ok (duplicate)" : "ok", null);
