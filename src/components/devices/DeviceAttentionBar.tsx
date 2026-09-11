@@ -37,23 +37,40 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
   const qc = useQueryClient();
   const [resyncing, setResyncing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const { devices, offline, unmapped, laggingDevices, laggingGates, target } = useMipsFleet(branchId);
+  const [lastResync, setLastResync] = useState<string | null>(null);
+  const { devices, offline, unmapped, laggingGates, actionableDevices, retakeNeeded, target } =
+    useMipsFleet(branchId);
 
   const handleResync = async () => {
     setResyncing(true);
+    setLastResync(null);
     try {
       const { data, error } = await supabase.functions.invoke("mips-face-parity", {
-        body: { action: "resync", branch_id: branchId, device_ids: laggingDevices.map((d) => d.id) },
+        body: { action: "resync", branch_id: branchId, device_ids: actionableDevices.map((d) => d.id) },
       });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
       const d = data as { queued_people?: number; queued_dispatches?: number };
-      toast.success("Re-sync started for lagging gate(s)", {
-        description: `${d.queued_people ?? 0} people queued (${d.queued_dispatches ?? 0} pushes). Runs in the background.`,
-      });
+      const people = d.queued_people ?? 0;
+      if (people === 0) {
+        setLastResync("Nothing was queued — no photo on this gate is waiting to be sent right now.");
+        toast.info("Nothing to re-send", {
+          description: "Every photo we can push is already queued or delivered.",
+        });
+      } else {
+        setLastResync(
+          `Queued ${people} ${people === 1 ? "person" : "people"} (${d.queued_dispatches ?? 0} pushes). They are sent in the background over the next few minutes.`,
+        );
+        toast.success("Re-sync started", {
+          description: `${people} queued (${d.queued_dispatches ?? 0} pushes).`,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["mips-devices"] });
+      qc.invalidateQueries({ queryKey: ["mips-face-ledger"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Face re-sync failed");
+      const msg = e instanceof Error ? e.message : "Face re-sync failed";
+      setLastResync(`Re-sync failed: ${msg}`);
+      toast.error(msg);
     } finally {
       setResyncing(false);
     }
@@ -81,7 +98,9 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
   };
 
   if (devices.length === 0) return null;
-  if (offline.length === 0 && laggingDevices.length === 0 && unmapped.length === 0) return null;
+  if (offline.length === 0 && laggingGates.length === 0 && unmapped.length === 0) return null;
+
+  const canResync = actionableDevices.length > 0;
 
   return (
     <div className="space-y-3">
@@ -98,21 +117,42 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
         />
       )}
 
-      {laggingDevices.length > 0 && (
+      {laggingGates.length > 0 && (
         <AlertRow
           tone="warning"
           icon={<AlertTriangle className="h-4 w-4" />}
           message={
             <>
-              Missing face photos:{" "}
-              {laggingGates
-                .map((g) => `${g.name} is missing ${g.behind ?? 0} of ${target} photo(s)`)
-                .join(" · ")}
-              .
+              <strong>Face photos not yet on every gate.</strong>{" "}
+              {laggingGates.map((g) => {
+                const parts: string[] = [];
+                if (g.gapWaiting > 0) parts.push(`${g.gapWaiting} waiting to be sent`);
+                if (g.gapRejected > 0) parts.push(`${g.gapRejected} need a clearer photo`);
+                if (g.gapUnaccounted > 0) parts.push(`${g.gapUnaccounted} not yet traced to a person`);
+                return (
+                  <span key={g.deviceId} className="block">
+                    {g.name}: {g.behind ?? 0} of {target} missing
+                    {parts.length > 0 ? ` — ${parts.join(", ")}` : ""}.
+                  </span>
+                );
+              })}
+              {retakeNeeded > 0 && (
+                <span className="block pt-1">
+                  Re-syncing cannot fix a rejected photo — those {retakeNeeded}{" "}
+                  {retakeNeeded === 1 ? "person needs" : "people need"} a new close-up photo in Personnel Sync.
+                </span>
+              )}
+              {lastResync && <span className="block pt-1 font-medium">{lastResync}</span>}
             </>
           }
           action={
-            <Button size="sm" onClick={handleResync} disabled={resyncing} className="min-h-[36px] rounded-xl">
+            <Button
+              size="sm"
+              onClick={handleResync}
+              disabled={resyncing || !canResync}
+              title={canResync ? undefined : "Nothing is waiting to be sent to these gates"}
+              className="min-h-[36px] cursor-pointer rounded-xl focus:ring-2 focus:ring-indigo-500"
+            >
               <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${resyncing ? "animate-pulse" : ""}`} />
               {resyncing ? "Pushing faces…" : "Re-sync faces"}
             </Button>

@@ -50,6 +50,16 @@ export interface GateTruth {
   unverified: number;
   awaiting: FaceLedgerRow[];
   rejected: FaceLedgerRow[];
+  /**
+   * The gap, broken into buckets that always add back up to `behind`:
+   * people queued for a push, people whose photo the gate refused, and the
+   * remainder we cannot yet attribute to a named person.
+   */
+  gapWaiting: number;
+  gapRejected: number;
+  gapUnaccounted: number;
+  /** People a re-sync can actually help right now. */
+  gapActionable: number;
 }
 
 /**
@@ -212,6 +222,16 @@ export function useMipsFleet(branchId?: string) {
     // anything above the gate's own counter is stale bookkeeping, not truth.
     const verified = faces !== null ? Math.min(enrolled, faces) : enrolled;
     const counted = faces !== null ? Math.max(faces - verified, 0) : 0;
+    const awaiting = rows.filter((r) => r.state === "pending" || r.state === "missing");
+    const rejected = rows.filter((r) => r.state === "rejected");
+
+    // Split the gap into buckets that always sum back to `behind`, so the
+    // banner can never claim more missing people than it can explain.
+    const gap = behind ?? 0;
+    const gapWaiting = Math.min(awaiting.length, gap);
+    const gapRejected = Math.min(rejected.length, gap - gapWaiting);
+    const gapUnaccounted = Math.max(gap - gapWaiting - gapRejected, 0);
+
     return {
       deviceId,
       name: live?.deviceName || rows[0]?.device_name || `Device ${deviceId}`,
@@ -224,8 +244,12 @@ export function useMipsFleet(branchId?: string) {
       rows,
       verified,
       unverified: counted,
-      awaiting: rows.filter((r) => r.state === "pending" || r.state === "missing"),
-      rejected: rows.filter((r) => r.state === "rejected"),
+      awaiting,
+      rejected,
+      gapWaiting,
+      gapRejected,
+      gapUnaccounted,
+      gapActionable: gapWaiting + gapUnaccounted,
     };
   });
 
@@ -234,10 +258,26 @@ export function useMipsFleet(branchId?: string) {
   const laggingDevices = devices.filter((d) =>
     laggingGates.some((g) => g.deviceId === d.id),
   );
+  /** Gates a re-sync can actually move forward right now. */
+  const actionableGates = laggingGates.filter((g) => g.gapActionable > 0);
+  const actionableDevices = devices.filter((d) => actionableGates.some((g) => g.deviceId === d.id));
+  const retakeNeeded = new Set(
+    laggingGates.flatMap((g) => g.rejected.map((r) => r.person_sn)),
+  ).size;
+
+  // A connection reading older than two minutes is stale, not "connected".
+  const connectionCheckedAt = connectionQuery.dataUpdatedAt || 0;
+  const connectionStale = connectionCheckedAt > 0 && Date.now() - connectionCheckedAt > 120_000;
 
   return {
     connection: connectionQuery.data,
     isConnected: Boolean(connectionQuery.data?.success),
+    connectionCheckedAt: connectionCheckedAt ? new Date(connectionCheckedAt) : null,
+    connectionStale,
+    connectionChecking: connectionQuery.isFetching,
+    actionableGates,
+    actionableDevices,
+    retakeNeeded,
     devices,
     bySerial,
     online,

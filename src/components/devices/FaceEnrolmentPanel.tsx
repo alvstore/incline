@@ -269,6 +269,16 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                     own and the gate's counter moved.
                   </p>
 
+                  {(behind ?? 0) > 0 && (
+                    <p className="mb-2 rounded-lg bg-background p-2 text-[10px] leading-relaxed text-muted-foreground">
+                      The {behind} missing {behind === 1 ? "photo breaks" : "photos break"} down as{" "}
+                      <strong>{gate.gapWaiting} waiting to be sent</strong>,{" "}
+                      <strong>{gate.gapRejected} needing a clearer photo</strong> and{" "}
+                      <strong>{gate.gapUnaccounted} we cannot yet trace to a person</strong> — these always add
+                      up to {behind}. Re-syncing only helps the first and last groups.
+                    </p>
+                  )}
+
                   {waiting.length > 0 && (
                     <ScrollArea className="h-40 rounded-lg">
                       <div className="space-y-1.5 pr-2">

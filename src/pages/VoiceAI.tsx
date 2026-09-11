@@ -65,6 +65,16 @@ function fmt(value?: string | null, pattern = 'dd MMM, HH:mm') {
   return Number.isNaN(d.getTime()) ? '—' : format(d, pattern);
 }
 
+/** Plain-language "when do we ring them next". */
+function whenNext(value?: string | null) {
+  if (!value) return 'No further tries';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  if (d.getTime() <= Date.now()) return 'Due now';
+  return `In ${formatDistanceToNowStrict(d)}`;
+}
+
+
 function Kpi({ label, value, sub, icon: Icon, tone = 'indigo' }: {
   label: string; value: React.ReactNode; sub?: string;
   icon: React.ComponentType<{ className?: string }>; tone?: 'indigo' | 'emerald' | 'amber' | 'red' | 'slate';

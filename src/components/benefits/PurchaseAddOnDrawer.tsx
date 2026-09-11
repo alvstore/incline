@@ -107,7 +107,7 @@ export function PurchaseAddOnDrawer({
   const [selectedBenefitPkg, setSelectedBenefitPkg] = useState<string | null>(null);
   const [selectedPtPkg, setSelectedPtPkg] = useState<string | null>(null);
   const [selectedTrainer, setSelectedTrainer] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<string>(mode === 'member' ? 'pending' : 'cash');
+  const [paymentMethod, setPaymentMethod] = useState<string>(mode === 'member' ? 'online' : 'cash');
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -130,6 +130,23 @@ export function PurchaseAddOnDrawer({
     'addon_pt',
     selectedPtPkg && selectedTrainer ? `${selectedPtPkg}:${selectedTrainer}` : null,
   );
+
+  // Branch-configured online convenience charge, shown before the member pays.
+  const { data: conveniencePct = 0 } = useQuery({
+    queryKey: ['branch-online-convenience-pct', branchId],
+    enabled: open && !!branchId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branch_settings')
+        .select('online_convenience_fee_pct')
+        .eq('branch_id', branchId)
+        .maybeSingle();
+      if (error) throw error;
+      return Number((data as { online_convenience_fee_pct?: number } | null)?.online_convenience_fee_pct ?? 0);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
 
   const { data: benefitPackages = [], isLoading: loadingBenefit } = useQuery({
     queryKey: ['addon-benefit-packages', branchId],
@@ -242,7 +259,7 @@ export function PurchaseAddOnDrawer({
     setAcknowledged(false);
     setDone(false);
     setLastPurchase(null);
-    setPaymentMethod(mode === 'member' ? 'pending' : 'cash');
+    setPaymentMethod(mode === 'member' ? 'online' : 'cash');
   };
 
   const handleClose = () => {
@@ -277,31 +294,41 @@ export function PurchaseAddOnDrawer({
       if (!result?.success) throw new Error(result?.error || 'Purchase failed');
 
       if (online && result.invoice_id) {
-        const order = await initializePayment(result.invoice_id, branchId);
-        await new Promise<void>((resolve, reject) => {
-          openRazorpayCheckout(
-            order,
-            { name: memberName || 'Member', email: '', phone: '' },
-            async (response) => {
-              try {
-                await verifyRazorpayPayment({
-                  invoiceId: result.invoice_id!,
-                  branchId,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_signature: response.razorpay_signature,
-                });
-                await supabase.rpc('activate_benefit_credits_for_invoice' as any, {
-                  _invoice_id: result.invoice_id,
-                });
-                resolve();
-              } catch (e) {
-                reject(e);
-              }
-            },
-            (err) => reject(err instanceof Error ? err : new Error('Payment cancelled')),
-          );
-        });
+        // Nothing is owed until the gateway confirms. An abandoned or failed
+        // checkout removes the draft bill so no cash-looking invoice survives.
+        try {
+          const order = await initializePayment(result.invoice_id, branchId);
+          await new Promise<void>((resolve, reject) => {
+            openRazorpayCheckout(
+              order,
+              { name: memberName || 'Member', email: '', phone: '' },
+              async (response) => {
+                try {
+                  await verifyRazorpayPayment({
+                    invoiceId: result.invoice_id!,
+                    branchId,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                  });
+                  await supabase.rpc('activate_benefit_credits_for_invoice' as any, {
+                    _invoice_id: result.invoice_id,
+                  });
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              },
+              (err) => reject(err instanceof Error ? err : new Error('Payment cancelled')),
+            );
+          });
+        } catch (payErr) {
+          await supabase
+            .rpc('abandon_online_addon_invoice' as any, { _invoice_id: result.invoice_id })
+            .then(() => queryClient.invalidateQueries({ queryKey: ['my-pending-invoices'] }))
+            .catch(() => undefined);
+          throw payErr;
+        }
       }
 
       toast.success(online ? 'Payment successful — credits added' : 'Add-on credits added');
@@ -339,7 +366,7 @@ export function PurchaseAddOnDrawer({
         _branch_id: branchId,
         _price_paid: pkg.price,
         _gst_rate: 5,
-        _payment_method: paymentMethod,
+        _payment_method: mode === 'member' ? 'pending' : paymentMethod,
         _payment_source: 'in_person',
         _idempotency_key: ptIdemKey,
       });
@@ -618,30 +645,37 @@ export function PurchaseAddOnDrawer({
             </TabsContent>
 
             {((tab === 'benefits' && selectedBenefitPkg) || (tab === 'pt' && selectedPtPkg)) && (
-              <div className="space-y-2 pt-4">
-                <Label htmlFor="addon-payment">Payment Method</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger id="addon-payment">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mode === 'staff' ? (
-                      <>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="card">Card</SelectItem>
-                        <SelectItem value="upi">UPI</SelectItem>
-                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                        <SelectItem value="pending">Pending (invoice only)</SelectItem>
-                      </>
-                    ) : (
-                      <>
-                        <SelectItem value="pending">Pay at front desk</SelectItem>
-                        <SelectItem value="online">Pay online</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+              mode === 'staff' ? (
+                <div className="space-y-2 pt-4">
+                  <Label htmlFor="addon-payment">Payment Method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger id="addon-payment">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="upi">UPI</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="pending">Pending (invoice only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-1 rounded-2xl bg-indigo-50 p-4 dark:bg-indigo-950/30">
+                  <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Pay online to confirm</p>
+                  <p className="text-xs text-indigo-800/80 dark:text-indigo-300/80">
+                    {conveniencePct > 0
+                      ? `A ${conveniencePct}% online convenience charge is added and shown on your bill.`
+                      : 'Your bill is created only after the payment succeeds.'}
+                  </p>
+                  {tab === 'benefits' && selectedPackage && conveniencePct > 0 && (
+                    <p className="pt-1 text-sm font-bold text-indigo-900 dark:text-indigo-100">
+                      Total ₹{(Number(selectedPackage.price) * (1 + conveniencePct / 100)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    </p>
+                  )}
+                </div>
+              )
             )}
 
             <SheetFooter className="pt-6 gap-2">

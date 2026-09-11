@@ -20,7 +20,6 @@ import {
 } from "@/services/mipsService";
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
-import FaceEnrolmentPanel from "./FaceEnrolmentPanel";
 import { useMipsFleet } from "./useMipsFleet";
 
 
@@ -617,7 +616,8 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
 
 
-      <FaceEnrolmentPanel branchId={branchId} />
+      {/* Per-gate face truth now lives in its own "Face Sync" tab so the same
+          numbers are not rendered twice under two different headings. */}
 
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
