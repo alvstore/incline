@@ -24,6 +24,7 @@ import inclineLogo from "@/assets/incline-logo.png";
 import { cn } from "@/lib/utils";
 
 import SEO from "@/components/seo/SEO";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import {
   AGREEMENT_PARTS,
   AGREEMENT_ACKNOWLEDGEMENTS,
