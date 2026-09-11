@@ -561,22 +561,22 @@ async function dispatchToDevices(
   const results: any[] = [];
   const deliveredDeviceIds: number[] = [];
 
-  // v2.9.0 NO-OP GUARD — the terminals were rebuilding their face index all day
+  // v3.2.0 NO-OP GUARD — the terminals were rebuilding their face index all day
   // because the same people were re-issued dozens of times per hour by the
   // sweeps. A person that a gate already accepted in the last DEDUPE_WINDOW is
   // NOT re-issued unless the caller passes `force` (manual repair / real change).
-  const DEDUPE_WINDOW_MS = 12 * 60 * 60_000;
+  // Delivery does not expire merely because time passed. Real person/photo/access
+  // changes use the event-driven path with force=true.
   const recentlyDelivered = new Set<string>();
   if (!force && entityId) {
     try {
-      const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString();
       const { data: recent } = await supabase
         .from("mips_sync_attempts")
         .select("device_id")
         .eq("operation", "device_dispatch")
         .eq("status", "success")
         .eq("entity_id", entityId)
-        .gte("created_at", since)
+        .order("created_at", { ascending: false })
         .limit(50);
       for (const r of recent || []) recentlyDelivered.add(String((r as any).device_id));
     } catch (e) {
@@ -599,7 +599,10 @@ async function dispatchToDevices(
     let slotHeld = false;
     try {
       // Wait out the per-gate throttle rather than dropping the push.
-      slotHeld = await waitForDispatchSlot(supabase, mipsDeviceId, branchId ?? null);
+      slotHeld = await waitForDispatchSlot(supabase, mipsDeviceId, branchId ?? null, {
+        dailyCap: 100,
+        failOpen: false,
+      });
       if (!slotHeld) {
         // Not a failure of the person or the photo — the gate is simply busy.
         // Recorded as deferred so nothing re-drives a full person sync for it.
@@ -750,7 +753,9 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${SERVICE_KEY}`,
             },
-            body: JSON.stringify({ ...t, deploy_to_devices: true }),
+            // Delta repair restores the MIPS server record only. Gate delivery is
+            // event-driven; an hourly sweep must never fan out speculative work.
+            body: JSON.stringify({ ...t, deploy_to_devices: false }),
           });
           results.push({ ...t, status: res.status, ok: res.ok });
         } catch (e) {

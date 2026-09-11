@@ -1,5 +1,11 @@
 # AI Lead-Enquiry Architecture — Full Audit & Fix (NO DEPLOY)
 
+## MIPS restart incident
+- [x] Pause face sweep, personnel delta sync, and device reconciliation.
+- [ ] Complete and verify cold-standby backup.
+- [ ] Harden all background dispatch paths and deploy.
+- [ ] Validate queue volume and controlled worker restart.
+
 Status: survey started (file sizes + policy reference map collected). No code changed yet.
 
 ## Facts collected so far

@@ -1,4 +1,6 @@
-// mips-face-sweep v2.1.0
+// mips-face-sweep v2.2.0
+// v2.2.0: verification-only for unverified rows. Only genuinely pending or
+// missing photos can produce a gate issue; successful delivery never expires.
 // v2.1.0: adds Tier-A verification (a real face recognition at a gate proves
 // that gate holds the template), keeps `unverified` rows retry-eligible on a
 // cooldown instead of freezing at counter parity, only degrades rows that were
@@ -53,8 +55,6 @@ const PER_TICK = 2;
 const MAX_PER_TICK = 6;
 const SETTLE_MS = 6_000;
 const INVOCATION_BUDGET_MS = 45_000;
-// How long an `unverified` row rests before we try to prove it again.
-const VERIFY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 // How far back a face recognition still counts as proof of a live template.
 const RECOGNITION_WINDOW_DAYS = 120;
 
@@ -318,11 +318,9 @@ Deno.serve(async (req) => {
       const outstanding = ledger.filter((r) => r.state === "pending" || r.state === "missing");
       const rejected = ledger.filter((r) => r.state === "rejected");
       const unverified = ledger.filter((r) => r.state === "unverified");
-      // `unverified` rows are retried on a slow cadence so the ledger keeps
-      // converting guesswork into proof even when every gate is at parity.
-      const verifyDue = unverified.filter(
-        (r) => !r.last_attempt_at || Date.now() - Date.parse(r.last_attempt_at) > VERIFY_COOLDOWN_MS,
-      );
+      // Unverified is bookkeeping uncertainty, not permission to rebuild a
+      // template. Recognition events can still promote these rows to enrolled.
+      const verifyDue: typeof unverified = [];
 
       // Nothing queued → do not even touch the MIPS server.
       if (outstanding.length === 0 && verifyDue.length === 0 && !force) {
@@ -412,15 +410,10 @@ Deno.serve(async (req) => {
 
       // ---- Pick the next people, one push each -----------------------------
       const settled = await readLedger(supabase, branchId);
-      // `unverified` rows are always retry-eligible once their cooldown has
-      // elapsed — parity is not proof, so the ledger must keep working towards
-      // a per-person answer instead of freezing forever.
       const stillOutstanding = settled.filter(
         (r) =>
           r.state === "pending" ||
-          r.state === "missing" ||
-          (r.state === "unverified" &&
-            (!r.last_attempt_at || Date.now() - Date.parse(r.last_attempt_at) > VERIFY_COOLDOWN_MS)),
+          r.state === "missing",
       );
       const perTick = pinned ?? PER_TICK;
 
