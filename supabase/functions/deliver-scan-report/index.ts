@@ -1,4 +1,4 @@
-// v2.0.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
+// v2.1.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -141,16 +141,40 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { report_id, kind } = await req.json();
+    const { report_id, kind, resend, channels } = await req.json();
     if (!report_id || !kind || (kind !== "body" && kind !== "posture")) {
       return jr({ error: "Missing or invalid report_id/kind" }, 400);
     }
+    // Staff-triggered re-send: explicit channels bypass the "already sent" guard.
+    const forcedChannels: string[] = Array.isArray(channels)
+      ? channels.filter((c: unknown) => c === "email" || c === "whatsapp")
+      : [];
+    const isResend = Boolean(resend) && forcedChannels.length > 0;
+    const attemptSuffix = isResend ? `:r${Date.now()}` : "";
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false } },
     );
+
+    // A re-send pushes a fresh message to the member, so it needs an
+    // authenticated staff caller with owner/admin/manager/staff rights.
+    if (isResend) {
+      const authHeader = req.headers.get("Authorization") || "";
+      const token = authHeader.replace(/^Bearer\s+/i, "");
+      const { data: userRes } = await supabase.auth.getUser(token);
+      const uid = userRes?.user?.id;
+      if (!uid) return jr({ error: "Unauthorized" }, 401);
+      const { data: roleRows } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", uid);
+      const allowed = (roleRows || []).some((r: { role: string }) =>
+        ["owner", "admin", "manager", "staff"].includes(r.role)
+      );
+      if (!allowed) return jr({ error: "Not allowed to re-send reports" }, 403);
+    }
 
     // Idempotency: if delivery row exists with success on all channels, skip.
     const { data: existing } = await supabase
@@ -160,6 +184,7 @@ Deno.serve(async (req) => {
       .eq("kind", kind)
       .maybeSingle();
     if (
+      !isResend &&
       existing &&
       existing.email_status === "sent" &&
       ["sent", "delivered", "read"].includes(existing.whatsapp_status || "") &&
@@ -318,7 +343,7 @@ Deno.serve(async (req) => {
             use_branded_template: true,
           },
           attachment: { url: pdfUrl, filename: `${kind}-scan-${member.member_code || report_id.slice(0, 8)}.pdf`, content_type: "application/pdf", kind: "document" },
-          dedupe_key: `scan-report:${kind}:${report_id}:${channel}:v2`,
+          dedupe_key: `scan-report:${kind}:${report_id}:${channel}:v2${attemptSuffix}`,
           ttl_seconds: 31536000,
           force: true,
           source_caller: "deliver-scan-report",
@@ -334,7 +359,7 @@ Deno.serve(async (req) => {
     let emailStatus = "skipped";
     let emailError: string | null = null;
     let emailLogId: string | null = null;
-    if (memberEmail && existing?.email_status !== "sent" && existing?.email_status !== "delivered") {
+    if (memberEmail && (isResend ? forcedChannels.includes("email") : (existing?.email_status !== "sent" && existing?.email_status !== "delivered"))) {
       try {
         const result = await dispatch("email", memberEmail, greetingHtml, emailTpl?.id);
         emailStatus = result.status || "failed";
@@ -350,7 +375,7 @@ Deno.serve(async (req) => {
     let waError: string | null = null;
     let waLogId: string | null = null;
     let waProviderMessageId: string | null = null;
-    if (memberPhone && pdfUrl && !["sent", "delivered", "read"].includes(existing?.whatsapp_status || "")) {
+    if (memberPhone && pdfUrl && (isResend ? forcedChannels.includes("whatsapp") : !["sent", "delivered", "read"].includes(existing?.whatsapp_status || ""))) {
       try {
         const result = await dispatch("whatsapp", memberPhone, captionWa, waTpl?.id);
         waStatus = result.status || "failed";
@@ -373,7 +398,7 @@ Deno.serve(async (req) => {
     const notifRows: any[] = [];
 
     // Member
-    if (member.user_id && existing?.inapp_status !== "sent") {
+    if (member.user_id && !isResend && existing?.inapp_status !== "sent") {
       notifRows.push({
         user_id: member.user_id,
         branch_id: member.branch_id,
