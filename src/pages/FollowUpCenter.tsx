@@ -54,26 +54,22 @@ export default function FollowUpCenter() {
     },
   });
 
-  // ---- MEMBERSHIP RENEWALS (expiring within 7 days) ----
-  const { data: renewals = [] } = useQuery({
-    queryKey: ['followup-renewals', branchId],
+  // Renewal Center is the single source of truth for renewal work.
+  const { data: renewalSummary = [] } = useQuery({
+    queryKey: ['followup-renewal-summary', branchId],
     enabled: !!branchId,
     queryFn: async () => {
-      const next7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('memberships')
-        .select('id, end_date, plan:membership_plans(name), member:members(member_code, user_id, profiles:user_id(full_name, phone))')
-        .eq('branch_id', branchId!)
-        .eq('status', 'active')
-        .lte('end_date', next7Days)
-        .gte('end_date', today)
-        .order('end_date', { ascending: true })
-        .limit(50);
+      const { data, error } = await supabase.rpc('renewal_center_queue', {
+        _branch_id: branchId,
+        _queue: 'due_soon',
+        _limit: 1,
+        _offset: 0,
+      });
       if (error) throw error;
       return data || [];
     },
   });
+  const renewalCount = renewalSummary[0]?.total_count ?? 0;
 
   // ---- LEADS FOLLOW-UP ----
   const { data: leadFollowups = [] } = useQuery({
@@ -173,7 +169,7 @@ export default function FollowUpCenter() {
           <Card className="rounded-2xl border-warning/20">
             <CardContent className="pt-4 pb-3 text-center">
               <RefreshCw className="h-6 w-6 mx-auto text-warning mb-1" />
-              <p className="text-2xl font-bold">{renewals.length}</p>
+              <p className="text-2xl font-bold">{renewalCount}</p>
               <p className="text-xs text-muted-foreground">Renewals Due</p>
             </CardContent>
           </Card>
@@ -258,37 +254,14 @@ export default function FollowUpCenter() {
           <TabsContent value="renewals">
             <Card className="rounded-2xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-warning" />Membership Renewals (Next 7 Days)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-warning" />Membership Renewals</CardTitle>
               </CardHeader>
               <CardContent>
-                {renewals.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No renewals due this week</p>
-                ) : (
-                  <div className="space-y-3">
-                    {renewals.map((ms: any) => {
-                      const daysLeft = Math.ceil((new Date(ms.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                      return (
-                        <div key={ms.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-xl border">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium">{ms.member?.profiles?.full_name || ms.member?.member_code}</p>
-                            <p className="text-sm text-muted-foreground">{ms.plan?.name || 'Plan'} • Expires {format(new Date(ms.end_date), 'dd MMM')}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={daysLeft <= 1 ? 'destructive' : daysLeft <= 3 ? 'secondary' : 'outline'}>
-                              {daysLeft <= 0 ? 'Today' : `${daysLeft}d left`}
-                            </Badge>
-                            {ms.member?.profiles?.phone && (
-                              <Button size="icon" variant="ghost" className="h-8 w-8"
-                                onClick={() => communicationService.sendWhatsApp(ms.member.profiles.phone, `Hi ${ms.member.profiles.full_name}, your membership (${ms.plan?.name || 'plan'}) expires on ${format(new Date(ms.end_date), 'dd MMM yyyy')}. Please visit us to renew!`)}>
-                                <MessageSquare className="h-4 w-4 text-success" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="rounded-xl bg-muted/50 p-6 text-center">
+                  <p className="text-2xl font-bold">{renewalCount}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Manage ownership, callbacks, Voice AI review and outcomes in one controlled queue.</p>
+                  <Button asChild className="mt-4"><Link to="/renewal-center"><RefreshCw className="mr-2 h-4 w-4" />Open Renewal Center</Link></Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

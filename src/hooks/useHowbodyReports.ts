@@ -9,6 +9,10 @@ export interface HowbodyReportRow {
   created_at: string;
   type: 'body' | 'posture';
   pdf_url?: string | null;
+  email_status?: string | null;
+  whatsapp_status?: string | null;
+  inapp_status?: string | null;
+  delivery_error?: string | null;
   // body
   health_score?: number | null;
   weight?: number | null;
@@ -60,12 +64,12 @@ export function useHowbodyReports(memberId?: string, limit = 12) {
           .limit(limit),
         supabase
           .from('scan_report_deliveries')
-          .select('report_id, kind, pdf_url')
+          .select('report_id, kind, pdf_url, email_status, whatsapp_status, inapp_status, email_error, whatsapp_error')
           .eq('member_id', memberId!),
       ]);
 
-      const deliveryMap = (deliveries.data || []).reduce((acc: any, d: any) => {
-        acc[`${d.kind}-${d.report_id}`] = d.pdf_url;
+      const deliveryMap = (deliveries.data || []).reduce<Record<string, { pdf_url: string | null; email_status: string | null; whatsapp_status: string | null; inapp_status: string | null; delivery_error: string | null }>>((acc, d) => {
+        acc[`${d.kind}-${d.report_id}`] = { ...d, delivery_error: d.email_error || d.whatsapp_error || null };
         return acc;
       }, {});
 
@@ -73,12 +77,12 @@ export function useHowbodyReports(memberId?: string, limit = 12) {
         ...((body.data || []) as any[]).map((r) => ({
           ...r,
           type: 'body' as const,
-          pdf_url: deliveryMap[`body-${r.id}`] || null,
+          ...(deliveryMap[`body-${r.id}`] || {}),
         })),
         ...((posture.data || []) as any[]).map((r) => ({
           ...r,
           type: 'posture' as const,
-          pdf_url: deliveryMap[`posture-${r.id}`] || null,
+          ...(deliveryMap[`posture-${r.id}`] || {}),
         })),
       ];
       rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());

@@ -36,6 +36,7 @@ interface MemberHit {
   full_name: string | null;
   phone: string | null;
 }
+interface DeliveryState { report_id: string; kind: string; email_status: string | null; whatsapp_status: string | null; inapp_status: string | null }
 
 export default function MyScanReport() {
   const { user, profile, hasAnyRole, isLoading: authLoading } = useAuth();
@@ -51,6 +52,7 @@ export default function MyScanReport() {
   const [body, setBody] = useState<BodyReport | null>(null);
   const [posture, setPosture] = useState<PostureReport | null>(null);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [deliveries, setDeliveries] = useState<DeliveryState[]>([]);
 
   // Auto-resolve self for members
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function MyScanReport() {
     if (!memberId) return;
     (async () => {
       setLoadingReports(true);
-      const [{ data: b }, { data: p }] = await Promise.all([
+      const [{ data: b }, { data: p }, { data: d }] = await Promise.all([
         supabase
           .from("howbody_body_reports")
           .select("id, test_time, health_score, weight, bmi, pbf, smm")
@@ -88,9 +90,11 @@ export default function MyScanReport() {
           .order("test_time", { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle(),
+        supabase.from('scan_report_deliveries').select('report_id, kind, email_status, whatsapp_status, inapp_status').eq('member_id', memberId),
       ]);
       setBody((b as BodyReport) || null);
       setPosture((p as PostureReport) || null);
+      setDeliveries((d as DeliveryState[]) || []);
       setLoadingReports(false);
     })();
   }, [memberId]);
@@ -130,14 +134,12 @@ export default function MyScanReport() {
   // ---------- Reports view ----------
   return (
     <Shell>
-      {/* Auto-delivery banner */}
-      <div className="mb-4 flex items-start gap-3 rounded-2xl bg-gradient-to-br from-success/10 to-success/10 p-4 text-sm text-success ring-1 ring-success/25">
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+      <div className="mb-4 flex items-start gap-3 rounded-2xl bg-success/10 p-4 text-sm text-success ring-1 ring-success/25">
+        {deliveries.length > 0 ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />}
         <div>
-          <p className="font-semibold">Your report has already been delivered</p>
+          <p className="font-semibold">{deliveries.length > 0 ? 'Report delivery status' : 'Your report is syncing'}</p>
           <p className="mt-0.5 text-xs text-success">
-            We auto-sent it to your <span className="inline-flex items-center gap-1"><Smartphone className="h-3 w-3" />WhatsApp</span> and{" "}
-            <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />email</span>. This page is for re-viewing.
+            {deliveries.length > 0 ? <>WhatsApp: {deliveries[0]?.whatsapp_status ?? 'pending'} · Email: {deliveries[0]?.email_status ?? 'pending'} · In app: {deliveries[0]?.inapp_status ?? 'pending'}</> : 'The assessment is saved. Delivery details will appear after the secure report is prepared.'}
           </p>
         </div>
       </div>
