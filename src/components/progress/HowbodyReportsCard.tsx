@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Scan, PersonStanding, Eye, Download, Loader2 } from 'lucide-react';
+import { Scan, PersonStanding, Eye, Download, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useHowbodyReports, type HowbodyReportRow } from '@/hooks/useHowbodyReports';
@@ -26,21 +26,16 @@ export function HowbodyReportsCard({ memberId }: Props) {
         return;
       }
 
-      // Fallback: generate on-the-fly (useful for legacy records or failed delivery)
-      const { data, error } = await supabase.functions.invoke('howbody-report-pdf', {
-        body: { dataKey: r.data_key, reportType: r.type },
+       // Repair legacy or failed delivery through the tracked delivery pipeline.
+       const { data, error } = await supabase.functions.invoke('deliver-scan-report', {
+         body: { report_id: r.id, kind: r.type },
       });
       if (error) throw error;
-      const html = (data as any)?.html as string | undefined;
-      if (!html) throw new Error('No report content');
-      
-      const w = window.open('', '_blank');
-      if (!w) throw new Error('Popup blocked — allow popups to download.');
-      w.document.write(html);
-      w.document.close();
-      setTimeout(() => w.print(), 400);
-    } catch (e: any) {
-      toast.error(e.message || 'Could not generate PDF');
+       const pdfUrl = typeof data === 'object' && data && 'pdf_url' in data ? String(data.pdf_url) : null;
+       if (!pdfUrl) throw new Error('Report delivery is still processing');
+       window.open(pdfUrl, '_blank');
+     } catch (e: unknown) {
+       toast.error(e instanceof Error ? e.message : 'Could not prepare PDF');
     } finally {
       setDownloading(null);
     }
@@ -91,6 +86,10 @@ export function HowbodyReportsCard({ memberId }: Props) {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{main}</p>
+                       <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                         {r.pdf_url ? <CheckCircle2 className="h-3 w-3 text-success" /> : <AlertCircle className="h-3 w-3 text-warning" />}
+                         {r.pdf_url ? `WhatsApp ${r.whatsapp_status ?? 'pending'} · Email ${r.email_status ?? 'pending'}` : 'Delivery pending — PDF will repair on request'}
+                       </div>
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => setOpen(r)}>
                       <Eye className="mr-1 h-3.5 w-3.5" /> View
