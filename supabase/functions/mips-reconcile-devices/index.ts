@@ -26,8 +26,6 @@ const INVOCATION_BUDGET_MS = 45_000;
 // Roster entries examined per run. Examining is a cheap local comparison; only
 // genuine drift is turned into a device dispatch.
 const SCAN_WINDOW = 60;
-// Safety net: even a perfectly in-sync person is re-proven this often.
-const MAX_SYNC_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** 23:00-06:00 IST — gym closed, no speculative device traffic. */
 function isQuietHourIST(now = new Date()): boolean {
@@ -128,19 +126,19 @@ Deno.serve(async (req) => {
         if (t > (lastOk.get(key) ?? 0)) lastOk.set(key, t);
       }
 
-      // 5. Drift = a device that has NEVER received this person, or whose last
-      //    successful delivery is older than MAX_SYNC_AGE_MS.
+      // 5. Drift = a device that has NEVER received this person. Successful
+      //    delivery does not expire with age; event-driven writes handle real
+      //    person, photo and access changes.
       //
       //    Real changes (new photo, access revoked/restored, name edits) are
       //    pushed immediately by the event-driven sync path, so reconciliation
       //    is only a slow safety net. Deliberately NOT keyed off `updated_at`:
       //    unrelated row updates fire constantly and would put every person
       //    back into the queue, which is exactly the 24x7 churn we removed.
-      const now = Date.now();
       const drifted = scanned.filter((p) =>
         localDeviceIds.some((dev) => {
           const seen = lastOk.get(`${p.id}|${dev}`) ?? 0;
-          return seen === 0 || now - seen > MAX_SYNC_AGE_MS;
+          return seen === 0;
         })
       );
 

@@ -273,7 +273,7 @@ export async function claimDispatchSlot(
   supabase: SupabaseLike,
   mipsDeviceId: number,
   branchId?: string | null,
-  opts: { minGapSeconds?: number; dailyCap?: number; inFlightSeconds?: number } = {},
+  opts: { minGapSeconds?: number; dailyCap?: number; inFlightSeconds?: number; failOpen?: boolean } = {},
 ): Promise<boolean> {
   try {
     const { data, error } = await supabase.rpc("mips_claim_dispatch_slot", {
@@ -283,10 +283,10 @@ export async function claimDispatchSlot(
       p_daily_cap: opts.dailyCap ?? 800,
       p_in_flight_seconds: opts.inFlightSeconds ?? 20,
     });
-    if (error) return true; // never block a real push on a throttle bookkeeping failure
+    if (error) return opts.failOpen === true;
     return data === true;
   } catch {
-    return true;
+    return opts.failOpen === true;
   }
 }
 
@@ -306,6 +306,7 @@ export async function waitForDispatchSlot(
     inFlightSeconds?: number;
     attempts?: number;
     waitMs?: number;
+    failOpen?: boolean;
   } = {},
 ): Promise<boolean> {
   const attempts = opts.attempts ?? 12;

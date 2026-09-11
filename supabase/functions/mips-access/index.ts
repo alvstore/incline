@@ -133,7 +133,12 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
     try {
       // Wait for the gate's throttle window instead of dropping the change:
       // a skipped revoke/restore silently diverges the hardware from the CRM.
-      slotHeld = await waitForDispatchSlot(supabase, deviceId, branchId ?? null);
+      slotHeld = await waitForDispatchSlot(supabase, deviceId, branchId ?? null, {
+        dailyCap: 800,
+        // Access revocation/restoration is safety-critical and may proceed if
+        // throttle bookkeeping alone is unavailable. Background writers fail closed.
+        failOpen: true,
+      });
       if (!slotHeld) {
         console.warn(`[mips-access] gate ${deviceId} stayed busy — dispatch not delivered`);
         undelivered.push(deviceId);
