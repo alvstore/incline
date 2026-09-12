@@ -393,9 +393,9 @@ async function handleStaffCheckout(
   const label = personType === "trainer" ? "Trainer" : "Staff";
   try {
     const { data, error } = await supabase.rpc("staff_gate_check_out", {
-      p_user_id: userId,
-      p_branch_id: branchId,
-      p_at: scanTime,
+      _staff_id: userId,
+      _branch_id: branchId,
+      _at: scanTime,
     });
     if (error) throw error;
     const mins = Math.round(Number((data as any)?.duration_minutes ?? 0));

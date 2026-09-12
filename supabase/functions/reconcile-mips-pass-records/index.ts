@@ -430,9 +430,9 @@ async function markAttendance(
 
   if (doorRole === "exit") {
     const { data, error } = await supabase.rpc("staff_gate_check_out", {
-      p_user_id: person.user_id,
-      p_branch_id: person.branch_id,
-      p_at: scanTime,
+      _staff_id: person.user_id,
+      _branch_id: person.branch_id,
+      _at: scanTime,
     });
     if (error) return `Staff attendance error: ${error.message}`;
     const out = data as { success?: boolean; message?: string } | null;
