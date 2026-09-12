@@ -282,10 +282,18 @@ async function syncStorage(
 
 // ── Row mirror ────────────────────────────────────────────────────────────────
 
+interface RowSliceOpts {
+  from?: number;      // index into the replication table list (inclusive)
+  count?: number;     // how many tables to process in this call
+  only?: string[];    // explicit table subset
+  oneWay?: boolean;   // primary → standby only (no standby → primary merge)
+}
+
 async function syncRows(
   primary: SupabaseClient,
   dr: SupabaseClient,
   report: MirrorReport,
+  opts: RowSliceOpts = {},
 ): Promise<void> {
   const stat = {
     tables: 0,
@@ -294,12 +302,30 @@ async function syncRows(
     perTable: [] as Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>,
   };
 
-  const { data: tables, error: tErr } = await primary.rpc("dr_get_replication_tables");
-  if (tErr || !Array.isArray(tables)) {
+  const { data: allTables, error: tErr } = await primary.rpc("dr_get_replication_tables");
+  if (tErr || !Array.isArray(allTables)) {
     report.errors.push(`dr_get_replication_tables: ${tErr?.message ?? "no data"}`);
     report.mirrored.rows = stat;
     return;
   }
+
+  // Slice the table list so a single invocation always finishes inside the
+  // edge-function wall-clock limit. Callers drive the cursor.
+  let tables = allTables as Array<{ table_name: string; has_id_pk: boolean }>;
+  if (opts.only?.length) {
+    const wanted = new Set(opts.only);
+    tables = tables.filter((t) => wanted.has(t.table_name));
+  } else if (typeof opts.from === "number" || typeof opts.count === "number") {
+    const from = Math.max(0, opts.from ?? 0);
+    const count = Math.max(1, opts.count ?? tables.length);
+    tables = tables.slice(from, from + count);
+  }
+  (report as any).slice = {
+    totalTables: (allTables as unknown[]).length,
+    from: opts.from ?? 0,
+    processing: tables.length,
+    oneWay: opts.oneWay === true,
+  };
 
   const PAGE = 500;
 

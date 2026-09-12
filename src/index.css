@@ -522,16 +522,18 @@
   }
 }
 
-/* Print: only the measurement summary sheet renders on paper. */
+/* Print: when a measurement summary sheet is mounted, it becomes the only
+   thing on paper. Scoped via :has() so invoices, contracts and every other
+   existing print flow keep printing the live DOM normally. */
 @media print {
-  body * {
+  body:has(.print-sheet) * {
     visibility: hidden;
   }
-  .print-sheet,
-  .print-sheet * {
+  body:has(.print-sheet) .print-sheet,
+  body:has(.print-sheet) .print-sheet * {
     visibility: visible;
   }
-  .print-sheet {
+  body:has(.print-sheet) .print-sheet {
     display: block !important;
     position: absolute;
     inset: 0;
