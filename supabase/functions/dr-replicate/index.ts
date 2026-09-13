@@ -377,6 +377,8 @@ async function syncRows(
     return copied;
   };
 
+  const oneWay = opts.oneWay === true;
+
   for (let pass = 1; pass <= 2; pass++) {
     for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
       const table = row.table_name;
@@ -386,13 +388,13 @@ async function syncRows(
       let lastErr: string | undefined;
 
       try {
-        perTableRows += await copyRows(dr, primary, table, hasId, false);
+        if (!oneWay) perTableRows += await copyRows(dr, primary, table, hasId, false);
         perTableRows += await copyRows(primary, dr, table, hasId, false);
         if (pass === 2) perTableRows += await copyRows(primary, dr, table, hasId, false);
 
         const primaryCount = await countRows(primary, table);
         const standbyCount = await countRows(dr, table);
-        if (primaryCount !== standbyCount) {
+        if (oneWay ? standbyCount < primaryCount : primaryCount !== standbyCount) {
           throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
         }
       } catch (e) {
@@ -563,7 +565,7 @@ Deno.serve(async (req) => {
 
     const report: MirrorReport = {
       ok: true,
-      version: "1.4.0",
+      version: "1.5.0",
       mode,
       startedAt: new Date().toISOString(),
       mirrored: {},
@@ -577,7 +579,12 @@ Deno.serve(async (req) => {
       await syncAuthUsers(primary, dr, report);
     }
     if (mode === "rows" || mode === "all") {
-      await syncRows(primary, dr, report);
+      await syncRows(primary, dr, report, {
+        from: typeof body?.from === "number" ? body.from : undefined,
+        count: typeof body?.count === "number" ? body.count : undefined,
+        only: Array.isArray(body?.only) ? body.only.map(String) : undefined,
+        oneWay: body?.one_way === true,
+      });
     }
     if (mode === "storage" || mode === "all") {
       await syncStorage(primary, dr, primaryUrl, serviceRoleKey, report);
