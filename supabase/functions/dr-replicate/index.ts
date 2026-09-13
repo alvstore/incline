@@ -565,7 +565,7 @@ Deno.serve(async (req) => {
 
     const report: MirrorReport = {
       ok: true,
-      version: "1.4.0",
+      version: "1.5.0",
       mode,
       startedAt: new Date().toISOString(),
       mirrored: {},
@@ -579,7 +579,12 @@ Deno.serve(async (req) => {
       await syncAuthUsers(primary, dr, report);
     }
     if (mode === "rows" || mode === "all") {
-      await syncRows(primary, dr, report);
+      await syncRows(primary, dr, report, {
+        from: typeof body?.from === "number" ? body.from : undefined,
+        count: typeof body?.count === "number" ? body.count : undefined,
+        only: Array.isArray(body?.only) ? body.only.map(String) : undefined,
+        oneWay: body?.one_way === true,
+      });
     }
     if (mode === "storage" || mode === "all") {
       await syncStorage(primary, dr, primaryUrl, serviceRoleKey, report);
