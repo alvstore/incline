@@ -158,6 +158,22 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
   return { undelivered };
 }
 
+// v2.12.0 — Face/photo payloads make terminals re-enrol the person, which is what
+// was rebooting the gates. Access enforcement only needs validTimeEnd, so every
+// image-bearing field is dropped before the PUT. The stored photo on the device
+// and the photoUri reference in MIPS are left untouched.
+const PHOTO_FIELD_RE = /(photo|face|img|image|pic|avatar).*(data|base64|byte|blob|content|stream)|^(photoData|photoBase64|imgBase64|faceData|faceFeature|picData|imageBase64|photoFile|facePhoto)$/i;
+
+function stripPhotoPayload<T extends Record<string, unknown>>(person: T): T {
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(person)) {
+    if (PHOTO_FIELD_RE.test(k)) continue;
+    if (typeof v === "string" && (v.startsWith("data:image") || v.length > 4096)) continue;
+    clean[k] = v;
+  }
+  return clean as T;
+}
+
 function formatDate(dateStr: string | null, fallback: string): string {
   if (!dateStr) return fallback;
   const d = new Date(dateStr);
