@@ -1,3 +1,6 @@
+// v2.12.0 — validity-only enforcement: person updates never carry face/photo
+//          payloads (base64 image fields are stripped), so gates apply the new
+//          validTimeEnd without re-enrolling faces (which rebooted terminals).
 // v2.11.0 — sweep also closes members with hardware_access_status="none" that
 //          still hold a MIPS person record (pre-membership biometric enrolment).
 // v2.10.0 — restore path: targeted per-member restore from the access trigger,
@@ -155,6 +158,22 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
   return { undelivered };
 }
 
+// v2.12.0 — Face/photo payloads make terminals re-enrol the person, which is what
+// was rebooting the gates. Access enforcement only needs validTimeEnd, so every
+// image-bearing field is dropped before the PUT. The stored photo on the device
+// and the photoUri reference in MIPS are left untouched.
+const PHOTO_FIELD_RE = /(photo|face|img|image|pic|avatar).*(data|base64|byte|blob|content|stream)|^(photoData|photoBase64|imgBase64|faceData|faceFeature|picData|imageBase64|photoFile|facePhoto)$/i;
+
+function stripPhotoPayload<T extends Record<string, unknown>>(person: T): T {
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(person)) {
+    if (PHOTO_FIELD_RE.test(k)) continue;
+    if (typeof v === "string" && (v.startsWith("data:image") || v.length > 4096)) continue;
+    clean[k] = v;
+  }
+  return clean as T;
+}
+
 function formatDate(dateStr: string | null, fallback: string): string {
   if (!dateStr) return fallback;
   const d = new Date(dateStr);
@@ -286,13 +305,13 @@ async function applyMemberAction(
   }
 
   const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
-  const updatedPerson = {
+  const updatedPerson = stripPhotoPayload({
     ...(detail || existing),
     personId: existing.personId,
     personSn,
     validTimeEnd: newValidTimeEnd,
     expiredType: 0,
-  };
+  });
   console.log(
     `[MIPS-ACCESS] Updating ${personSn} (${updatedPerson.name || existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action}, full_record=${!!detail})`,
   );
@@ -353,13 +372,13 @@ async function applyMemberAction(
       const retryRes = await fetch(`${baseUrl}/personInfo/person`, {
         method: "PUT",
         headers: authHeaders(token),
-        body: JSON.stringify({
+        body: JSON.stringify(stripPhotoPayload({
           ...(retryDetail || updatedPerson),
           personId: existing.personId,
           personSn,
           validTimeEnd: newValidTimeEnd,
           expiredType: 0,
-        }),
+        })),
       });
       await retryRes.json().catch(() => ({}));
       await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId).catch(() => {});
@@ -665,13 +684,13 @@ async function applyStaffAction(
 
   const newValidTimeEnd = action === "revoke_staff" ? REVOKED_DATE : PERMANENT_END;
   const staffDetail = await fetchPersonDetail(baseUrl, token, existing.personId);
-  const updatedPerson = {
+  const updatedPerson = stripPhotoPayload({
     ...(staffDetail || existing),
     personId: existing.personId,
     personSn,
     validTimeEnd: newValidTimeEnd,
     expiredType: 0,
-  };
+  });
 
 
   // Use the canonical person endpoint for updates as discovered.
