@@ -305,13 +305,13 @@ async function applyMemberAction(
   }
 
   const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
-  const updatedPerson = {
+  const updatedPerson = stripPhotoPayload({
     ...(detail || existing),
     personId: existing.personId,
     personSn,
     validTimeEnd: newValidTimeEnd,
     expiredType: 0,
-  };
+  });
   console.log(
     `[MIPS-ACCESS] Updating ${personSn} (${updatedPerson.name || existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action}, full_record=${!!detail})`,
   );
@@ -372,13 +372,13 @@ async function applyMemberAction(
       const retryRes = await fetch(`${baseUrl}/personInfo/person`, {
         method: "PUT",
         headers: authHeaders(token),
-        body: JSON.stringify({
+        body: JSON.stringify(stripPhotoPayload({
           ...(retryDetail || updatedPerson),
           personId: existing.personId,
           personSn,
           validTimeEnd: newValidTimeEnd,
           expiredType: 0,
-        }),
+        })),
       });
       await retryRes.json().catch(() => ({}));
       await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId).catch(() => {});
@@ -684,13 +684,13 @@ async function applyStaffAction(
 
   const newValidTimeEnd = action === "revoke_staff" ? REVOKED_DATE : PERMANENT_END;
   const staffDetail = await fetchPersonDetail(baseUrl, token, existing.personId);
-  const updatedPerson = {
+  const updatedPerson = stripPhotoPayload({
     ...(staffDetail || existing),
     personId: existing.personId,
     personSn,
     validTimeEnd: newValidTimeEnd,
     expiredType: 0,
-  };
+  });
 
 
   // Use the canonical person endpoint for updates as discovered.
