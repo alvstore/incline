@@ -1,3 +1,6 @@
+// v2.12.0 — validity-only enforcement: person updates never carry face/photo
+//          payloads (base64 image fields are stripped), so gates apply the new
+//          validTimeEnd without re-enrolling faces (which rebooted terminals).
 // v2.11.0 — sweep also closes members with hardware_access_status="none" that
 //          still hold a MIPS person record (pre-membership biometric enrolment).
 // v2.10.0 — restore path: targeted per-member restore from the access trigger,
