@@ -91,6 +91,11 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
                 <Gift className="h-3 w-3" /> Complimentary
               </Badge>
             )}
+            {hasPurchased && (
+              <Badge className="bg-primary/10 text-primary border-primary/30 text-[10px] gap-1 hover:bg-primary/15">
+                <ShoppingBag className="h-3 w-3" /> {isPurchasedOnly ? 'Add-on' : `+${purchasedRemaining}`}
+              </Badge>
+            )}
             <Badge variant={balance.isUnlimited ? 'default' : 'outline'} className="text-[10px]">
               {frequencyLabels[balance.frequency]}
             </Badge>
