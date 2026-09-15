@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_access_logs_branch_created_at ON public.access_logs (branch_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON public.access_logs (created_at DESC);
