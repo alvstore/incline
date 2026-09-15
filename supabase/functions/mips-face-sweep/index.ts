@@ -1,4 +1,8 @@
-// mips-face-sweep v2.2.0
+// mips-face-sweep v2.3.0
+// v2.3.0: roster skips `photo_rejected` / `revoked` persons entirely; gate
+// face-related rejection messages (unqualified face data, FacePassHandler,
+// person is null) immediately mark the person photo_rejected so the photo is
+// never re-pushed.
 // v2.2.0: verification-only for unverified rows. Only genuinely pending or
 // missing photos can produce a gate issue; successful delivery never expires.
 // v2.1.0: adds Tier-A verification (a real face recognition at a gate proves
@@ -39,6 +43,7 @@ import {
   markEnrolled,
   pruneLedger,
   readLedger,
+  REJECT_AFTER_ATTEMPTS,
   seedLedger,
 } from "../_shared/mipsFaceState.ts";
 import { fetchPushLedger, latestLedgerState } from "../_shared/mipsDispatch.ts";
@@ -276,17 +281,28 @@ Deno.serve(async (req) => {
         // Blocked/expired/dues members must never be re-pushed with photo
         // payloads — that is what rebuilds face templates and reboots gates.
         // Their access is handled by validity-date-only updates in mips-access.
+        // photo_rejected / revoked persons are excluded so a photo the terminal
+        // cannot use is never retried.
         supabase.from("members")
           .select("id, mips_person_sn, member_code, profiles:user_id(full_name), leads:lead_id(full_name)")
           .eq("branch_id", branchId).eq("hardware_access_status", "active")
-          .not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+          .not("mips_person_id", "is", null).or(photoFilter)
+          .neq("mips_sync_status", "photo_rejected")
+          .neq("mips_sync_status", "revoked")
+          .limit(1000),
         supabase.from("employees")
           .select("id, mips_person_sn, employee_code, profiles:user_id(full_name)")
-          .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+          .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter)
+          .neq("mips_sync_status", "photo_rejected")
+          .neq("mips_sync_status", "revoked")
+          .limit(1000),
         supabase.from("trainers")
           .select("id, mips_person_sn, trainer_code, profiles:user_id(full_name)")
           .eq("branch_id", branchId).eq("is_active", true)
-          .not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+          .not("mips_person_id", "is", null).or(photoFilter)
+          .neq("mips_sync_status", "photo_rejected")
+          .neq("mips_sync_status", "revoked")
+          .limit(1000),
       ]);
 
       // The ledger stores the human name (falling back to the code) so every
@@ -493,10 +509,34 @@ Deno.serve(async (req) => {
             await markEnrolled(supabase, branchId, r.mips_device_id, personSn);
           } else if (entry?.failureMessage) {
             stalled++;
+            const isFaceError =
+              entry.failureMessage.includes("unqualified face data") ||
+              entry.failureMessage.includes("FacePassHandler") ||
+              entry.failureMessage.includes("person is null");
+            // Face-related failures mean the photo itself is unusable — force
+            // the ledger row straight to `rejected` (REJECT_AFTER_ATTEMPTS as
+            // the attempts value trips the threshold on this pass) and mark
+            // the person photo_rejected so neither this sweep nor the
+            // sync-to-mips delta mode ever re-uploads that photo.
             await markAttempt(
-              supabase, branchId, r.mips_device_id, personSn, r.attempts,
+              supabase, branchId, r.mips_device_id, personSn,
+              isFaceError ? REJECT_AFTER_ATTEMPTS : r.attempts,
               `Gate rejected the template: ${entry.failureMessage}`,
             );
+            if (isFaceError && r.person_id) {
+              const tbl =
+                r.person_type === "member"
+                  ? "members"
+                  : r.person_type === "employee"
+                  ? "employees"
+                  : "trainers";
+              await supabase.from(tbl)
+                .update({ mips_sync_status: "photo_rejected" })
+                .eq("id", r.person_id);
+              if (notes.length < 10) {
+                notes.push(`${personSn} → photo_rejected (gate face error)`);
+              }
+            }
           } else {
             // Queued or still pushing — normal, the gate drains asynchronously.
             stalled++;
