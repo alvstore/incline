@@ -51,8 +51,14 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
   const compRemaining = Math.max(0, balance.compRemaining ?? (compTotal - compUsed));
   const hasComp = compTotal > 0;
 
-  const totalLimit = planLimit + compTotal;
-  const totalUsed = planUsed + compUsed;
+  const purchasedTotal = balance.purchasedTotal || 0;
+  const purchasedRemaining = Math.max(0, balance.purchasedRemaining || 0);
+  const purchasedUsed = Math.max(0, purchasedTotal - purchasedRemaining);
+  const hasPurchased = purchasedTotal > 0;
+  const isPurchasedOnly = !!balance.isPurchasedOnly;
+
+  const totalLimit = planLimit + compTotal + purchasedTotal;
+  const totalUsed = planUsed + compUsed + purchasedUsed;
   const totalRemaining = balance.isUnlimited ? null : Math.max(0, totalLimit - totalUsed);
 
   const progressValue = balance.isUnlimited
