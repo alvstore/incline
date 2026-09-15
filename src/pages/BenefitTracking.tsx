@@ -147,6 +147,23 @@ export default function BenefitTracking() {
     },
   });
 
+  // Fetch purchased add-on credits (body scan, posture scan, etc.)
+  const { data: purchasedCredits = [] } = useQuery({
+    queryKey: ['member-benefit-credits-tracking', selectedMember?.id],
+    enabled: !!selectedMember?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_benefit_credits')
+        .select('id, benefit_type, benefit_type_id, credits_total, credits_remaining, expires_at, benefit_types:benefit_type_id(name)')
+        .eq('member_id', selectedMember!.id)
+        .gt('credits_remaining', 0)
+        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+        .order('expires_at', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   // Realtime: keep balances, history, and comps in sync as they change
   useEffect(() => {
     if (!selectedMember?.id) return;
