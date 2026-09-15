@@ -32,6 +32,11 @@ export interface MemberBenefitBalance {
   compUsed?: number;
   compRemaining?: number;
   isGiftOnly?: boolean;
+  // Purchased add-on credits (member_benefit_credits), non-breaking
+  purchasedTotal?: number;
+  purchasedRemaining?: number;
+  purchasedExpiresAt?: string | null;
+  isPurchasedOnly?: boolean;
 }
 
 export interface MembershipWithBenefits {

@@ -141,7 +141,8 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
       let query = supabase
         .from("access_logs")
         .select(
-          `*, members:member_id(id, member_code, biometric_photo_url, profiles:user_id(full_name, avatar_url), memberships(status, end_date, membership_plans(name)))`,
+          `id, created_at, captured_at, branch_id, member_id, profile_id, device_sn, hardware_device_id, event_type, result, message, payload,
+           members:member_id(id, member_code, biometric_photo_url, profiles:user_id(full_name, avatar_url), memberships(status, end_date))`,
         )
         .gte("created_at", istDayStartIso())
         .order("created_at", { ascending: false })

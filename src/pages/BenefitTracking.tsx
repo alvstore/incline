@@ -147,6 +147,23 @@ export default function BenefitTracking() {
     },
   });
 
+  // Fetch purchased add-on credits (body scan, posture scan, etc.)
+  const { data: purchasedCredits = [] } = useQuery({
+    queryKey: ['member-benefit-credits-tracking', selectedMember?.id],
+    enabled: !!selectedMember?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_benefit_credits')
+        .select('id, benefit_type, benefit_type_id, credits_total, credits_remaining, expires_at, benefit_types:benefit_type_id(name)')
+        .eq('member_id', selectedMember!.id)
+        .gt('credits_remaining', 0)
+        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+        .order('expires_at', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   // Realtime: keep balances, history, and comps in sync as they change
   useEffect(() => {
     if (!selectedMember?.id) return;
@@ -212,9 +229,53 @@ export default function BenefitTracking() {
     });
   });
 
-  // Stats — combine plan balance + active gift sessions
+  // Aggregate purchased add-on credits. Key by benefit_type_id when present,
+  // otherwise fall back to the legacy enum (older credits have no type link).
+  const creditMap: Record<string, { total: number; remaining: number; name?: string; enum?: string; typeId?: string | null; expires?: string | null }> = {};
+  purchasedCredits.forEach((c: any) => {
+    const key = c.benefit_type_id || `enum:${c.benefit_type}`;
+    const m = creditMap[key] || { total: 0, remaining: 0, name: c.benefit_types?.name, enum: c.benefit_type, typeId: c.benefit_type_id || null, expires: c.expires_at || null };
+    m.total += c.credits_total || 0;
+    m.remaining += Math.max(0, c.credits_remaining || 0);
+    m.name = m.name || c.benefit_types?.name;
+    if (c.expires_at && (!m.expires || c.expires_at < m.expires)) m.expires = c.expires_at;
+    creditMap[key] = m;
+  });
+
+  // Merge purchased credits into existing cards, then append purchase-only cards
+  const usedCreditKeys = new Set<string>();
+  for (let i = 0; i < combinedBalances.length; i++) {
+    const b: any = combinedBalances[i];
+    const key = b.benefit_type_id && creditMap[b.benefit_type_id]
+      ? b.benefit_type_id
+      : creditMap[`enum:${b.benefit_type}`] ? `enum:${b.benefit_type}` : null;
+    if (!key) continue;
+    usedCreditKeys.add(key);
+    const c = creditMap[key];
+    combinedBalances[i] = { ...b, purchasedTotal: c.total, purchasedRemaining: c.remaining, purchasedExpiresAt: c.expires ?? null };
+  }
+  Object.entries(creditMap).forEach(([key, c]) => {
+    if (usedCreditKeys.has(key)) return;
+    combinedBalances.push({
+      benefit_type: (c.enum || 'other') as any,
+      benefit_type_id: c.typeId || null,
+      label: c.name || benefitTypeLabels[(c.enum || 'other') as keyof typeof benefitTypeLabels] || 'Add-on Benefit',
+      frequency: 'per_membership' as any,
+      limit_count: 0,
+      description: 'Purchased add-on credits',
+      used: 0,
+      remaining: 0,
+      isUnlimited: false,
+      purchasedTotal: c.total,
+      purchasedRemaining: c.remaining,
+      purchasedExpiresAt: c.expires ?? null,
+      isPurchasedOnly: true,
+    });
+  });
+
+  // Stats — combine plan balance + active gift sessions + purchased credits
   const totalBenefits = combinedBalances.length;
-  const exhaustedBenefits = combinedBalances.filter((b: any) => !b.isUnlimited && (b.remaining || 0) + (b.compRemaining || 0) === 0).length;
+  const exhaustedBenefits = combinedBalances.filter((b: any) => !b.isUnlimited && (b.remaining || 0) + (b.compRemaining || 0) + (b.purchasedRemaining || 0) === 0).length;
   const todayUsage = usageHistory?.filter(u => u.usage_date === new Date().toISOString().split('T')[0]).length || 0;
 
   const handleRecordUsage = (benefitType?: BenefitType, benefitTypeId?: string | null) => {

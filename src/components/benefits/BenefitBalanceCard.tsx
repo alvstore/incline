@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Dumbbell, Droplets, Thermometer, Snowflake,
-  Users, Ticket, Apple, Activity, Car, Bath, Scan, PersonStanding, Gift,
+  Users, Ticket, Apple, Activity, Car, Bath, Scan, PersonStanding, Gift, ShoppingBag,
 } from 'lucide-react';
 import { type MemberBenefitBalance, benefitTypeLabels, frequencyLabels } from '@/services/benefitService';
 import type { Database } from '@/integrations/supabase/types';
@@ -51,8 +51,14 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
   const compRemaining = Math.max(0, balance.compRemaining ?? (compTotal - compUsed));
   const hasComp = compTotal > 0;
 
-  const totalLimit = planLimit + compTotal;
-  const totalUsed = planUsed + compUsed;
+  const purchasedTotal = balance.purchasedTotal || 0;
+  const purchasedRemaining = Math.max(0, balance.purchasedRemaining || 0);
+  const purchasedUsed = Math.max(0, purchasedTotal - purchasedRemaining);
+  const hasPurchased = purchasedTotal > 0;
+  const isPurchasedOnly = !!balance.isPurchasedOnly;
+
+  const totalLimit = planLimit + compTotal + purchasedTotal;
+  const totalUsed = planUsed + compUsed + purchasedUsed;
   const totalRemaining = balance.isUnlimited ? null : Math.max(0, totalLimit - totalUsed);
 
   const progressValue = balance.isUnlimited
@@ -65,7 +71,7 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
   const isGiftOnly = !!balance.isGiftOnly;
 
   return (
-    <Card className={`rounded-xl shadow-sm transition-all hover:shadow-md ${isExhausted ? 'opacity-70' : ''} ${isGiftOnly ? 'border-warning/40 bg-warning/10' : ''}`}>
+    <Card className={`rounded-xl shadow-sm transition-all hover:shadow-md ${isExhausted ? 'opacity-70' : ''} ${isGiftOnly ? 'border-warning/40 bg-warning/10' : ''} ${isPurchasedOnly ? 'border-primary/30 bg-primary/5' : ''}`}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -83,6 +89,11 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
             {isGiftOnly && (
               <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] gap-1">
                 <Gift className="h-3 w-3" /> Complimentary
+              </Badge>
+            )}
+            {hasPurchased && (
+              <Badge className="bg-primary/10 text-primary border-primary/30 text-[10px] gap-1 hover:bg-primary/15">
+                <ShoppingBag className="h-3 w-3" /> {isPurchasedOnly ? 'Add-on' : `+${purchasedRemaining}`}
               </Badge>
             )}
             <Badge variant={balance.isUnlimited ? 'default' : 'outline'} className="text-[10px]">
@@ -106,10 +117,11 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
                   <span className="text-sm text-muted-foreground font-normal ml-1">/ {totalLimit}</span>
                 </div>
               </div>
-              {hasComp && (
+              {(hasComp || hasPurchased) && (
                 <div className="text-right text-xs text-muted-foreground leading-tight">
-                  <div>{planRemaining ?? 0} plan</div>
-                  <div className="text-warning font-medium">+ {compRemaining} gift</div>
+                  {!isPurchasedOnly && <div>{planRemaining ?? 0} plan</div>}
+                  {hasComp && <div className="text-warning font-medium">+ {compRemaining} gift</div>}
+                  {hasPurchased && <div className="text-primary font-medium">+ {purchasedRemaining} add-on</div>}
                 </div>
               )}
             </div>

@@ -105,12 +105,16 @@ Deno.serve(async (req) => {
     const { data: quota } = await sb.rpc("howbody_scan_quota", { _member_id: memberId, _kind: kind });
     const allowed = (quota as Record<string, unknown> | null)?.allowed === true;
     if (!allowed) {
+      // Expected business outcome (no entitlement), NOT a system error.
+      // Returned as 200 so observability does not record it as an edge-function failure;
+      // the client already branches on `ok === false`.
       return json({
         ok: false,
+        code: "no_entitlement",
         error: denialReason(kind, quota as Record<string, unknown> | null),
         kind,
         quota,
-      }, 403);
+      }, 200);
     }
 
     const profile: Record<string, string | null> = (member.profiles || {}) as Record<string, string | null>;
