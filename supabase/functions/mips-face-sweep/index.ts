@@ -272,9 +272,14 @@ Deno.serve(async (req) => {
       // ---- CRM roster: people who should carry a face on every gate ---------
       const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
       const [members, employees, trainers] = await Promise.all([
+        // Only members whose gate access is currently active carry a face.
+        // Blocked/expired/dues members must never be re-pushed with photo
+        // payloads — that is what rebuilds face templates and reboots gates.
+        // Their access is handled by validity-date-only updates in mips-access.
         supabase.from("members")
           .select("id, mips_person_sn, member_code, profiles:user_id(full_name), leads:lead_id(full_name)")
-          .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+          .eq("branch_id", branchId).eq("hardware_access_status", "active")
+          .not("mips_person_id", "is", null).or(photoFilter).limit(1000),
         supabase.from("employees")
           .select("id, mips_person_sn, employee_code, profiles:user_id(full_name)")
           .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
