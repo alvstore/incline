@@ -71,7 +71,7 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
   const isGiftOnly = !!balance.isGiftOnly;
 
   return (
-    <Card className={`rounded-xl shadow-sm transition-all hover:shadow-md ${isExhausted ? 'opacity-70' : ''} ${isGiftOnly ? 'border-warning/40 bg-warning/10' : ''}`}>
+    <Card className={`rounded-xl shadow-sm transition-all hover:shadow-md ${isExhausted ? 'opacity-70' : ''} ${isGiftOnly ? 'border-warning/40 bg-warning/10' : ''} ${isPurchasedOnly ? 'border-primary/30 bg-primary/5' : ''}`}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
