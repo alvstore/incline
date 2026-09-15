@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Dumbbell, Droplets, Thermometer, Snowflake,
-  Users, Ticket, Apple, Activity, Car, Bath, Scan, PersonStanding, Gift,
+  Users, Ticket, Apple, Activity, Car, Bath, Scan, PersonStanding, Gift, ShoppingBag,
 } from 'lucide-react';
 import { type MemberBenefitBalance, benefitTypeLabels, frequencyLabels } from '@/services/benefitService';
 import type { Database } from '@/integrations/supabase/types';
