@@ -117,10 +117,11 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
                   <span className="text-sm text-muted-foreground font-normal ml-1">/ {totalLimit}</span>
                 </div>
               </div>
-              {hasComp && (
+              {(hasComp || hasPurchased) && (
                 <div className="text-right text-xs text-muted-foreground leading-tight">
-                  <div>{planRemaining ?? 0} plan</div>
-                  <div className="text-warning font-medium">+ {compRemaining} gift</div>
+                  {!isPurchasedOnly && <div>{planRemaining ?? 0} plan</div>}
+                  {hasComp && <div className="text-warning font-medium">+ {compRemaining} gift</div>}
+                  {hasPurchased && <div className="text-primary font-medium">+ {purchasedRemaining} add-on</div>}
                 </div>
               )}
             </div>
