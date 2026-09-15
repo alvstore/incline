@@ -86,8 +86,12 @@ Deno.serve(async (req) => {
       // 2. Build the complete branch roster, including trainers.
       const cols = "id, mips_person_id";
       const [{ data: members }, { data: employees }, { data: trainers }] = await Promise.all([
+        // Blocked / expired / dues members are excluded: reconciliation issues
+        // a full person+photo sync, which rebuilds face templates and restarts
+        // the terminals. Their access is enforced by validity-date-only writes.
         supabase.from("members").select(cols)
-          .eq("branch_id", branchId).not("mips_person_id", "is", null),
+          .eq("branch_id", branchId).eq("hardware_access_status", "active")
+          .not("mips_person_id", "is", null),
         supabase.from("employees").select(cols)
           .eq("branch_id", branchId).not("mips_person_id", "is", null),
         supabase.from("trainers").select(cols)
