@@ -2,7 +2,7 @@
 //
 // The same physical face scan can reach us through two paths:
 //   1. `mips-webhook-receiver`  (terminal pushes the event)
-//   2. `reconcile-mips-pass-records` (cron pulls /through/record/list)
+//   2. `reconcile-mips-pass-records` (cron pulls /interface/exterior/getCheckRecordList)
 //
 // Both MUST derive the SAME instant for the same raw value, otherwise the two
 // paths disagree about when someone arrived and lateness is computed twice with
