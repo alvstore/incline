@@ -1497,6 +1497,13 @@ export function MemberProfileDrawer({
 
           {/* Quick Actions - Row 2 */}
           <div className="grid grid-cols-2 gap-2">
+            {isManagerOrAbove && activeMembership?.status === 'active' && daysLeft > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setUpgradeOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
+                <ArrowUpCircle className="h-4 w-4 mr-2 shrink-0" />
+                Upgrade Plan (mid-term)
+              </Button>
+            )}
+
             {activeMembership?.status === 'active' && (
               <Button variant="outline" size="sm" onClick={() => setFreezeOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
                 <Snowflake className="h-4 w-4 mr-2 shrink-0" />
