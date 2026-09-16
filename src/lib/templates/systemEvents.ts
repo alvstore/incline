@@ -54,6 +54,8 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'class_schedule_weekly', label: 'Weekly Class Schedule', category: 'booking', description: 'Weekly class roster broadcast', channels: ALL },
   { event: 'facility_booked', label: 'Facility Slot Confirmed', category: 'booking', description: 'Sauna / pool / ice bath booking', channels: ALL },
   { event: 'facility_cancelled', label: 'Facility Slot Cancelled', category: 'booking', description: 'Facility booking cancelled', channels: ALL },
+  { event: 'facility_reminder', label: 'Facility Slot Reminder', category: 'booking', description: 'Reminder before a steam / sauna / ice bath / pool slot. Vars: {{member_name}} {{facility_name}} {{booking_date}} {{booking_time}}.', channels: ALL },
+  { event: 'universal_utility', label: 'Universal Utility Fallback', category: 'operations', description: 'Reusable utility template used when a transactional message has no dedicated event template (closed 24h session). Vars: {{member_name}} {{facility_name}} {{booking_date}} {{booking_time}}.', channels: ALL },
   { event: 'pt_session_booked', label: 'PT Session Booked', category: 'booking', description: 'Personal training session scheduled', channels: ALL },
   { event: 'pt_session_reminder', label: 'PT Session Reminder', category: 'booking', description: 'Reminder before a PT session', channels: ALL },
   { event: 'pt_session_logged', label: 'PT Session Logged (Receipt)', category: 'booking', description: 'Trainer marked a PT session done — sends a WhatsApp receipt with sessions left or plan expiry', channels: ALL },
