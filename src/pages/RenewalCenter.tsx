@@ -78,6 +78,15 @@ export default function RenewalCenter() {
     }
   }
 
+  async function callNow(row: RenewalCaseRow) {
+    try {
+      await voiceCall.mutateAsync({ caseId: row.case_id, memberId: row.member_id });
+      toast.success(`Ananya is calling ${row.member_name} now`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Voice AI could not start this call');
+    }
+  }
+
   return (
     <AppLayout>
       <div className="space-y-5">
@@ -87,10 +96,28 @@ export default function RenewalCenter() {
             <h1 className="text-3xl font-bold tracking-tight">Renewal Center</h1>
             <p className="mt-1 text-sm text-muted-foreground">One queue for upcoming expiries, callbacks, staff ownership and outcomes.</p>
           </div>
-          <Badge variant="secondary" className="w-fit gap-2 rounded-full px-3 py-1.5"><span className="h-2 w-2 rounded-full bg-warning" />Automation paused</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="w-fit gap-2 rounded-full px-3 py-1.5"><span className="h-2 w-2 rounded-full bg-warning" />Auto-sequences paused</Badge>
+            <Badge variant="secondary" className={`w-fit gap-2 rounded-full px-3 py-1.5 ${voiceLive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+              <PhoneCall className="h-3.5 w-3.5" />{voiceLive ? `Voice AI live · ${callingWindow}` : 'Voice AI not configured'}
+            </Badge>
+            <Button asChild variant="outline" size="sm" className="rounded-full"><Link to="/voice-ai">Voice AI console</Link></Button>
+          </div>
         </header>
 
-        {engineOff && <div className="flex gap-3 rounded-xl bg-warning/10 p-4 text-sm text-foreground ring-1 ring-warning/20"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-warning" /><div><p className="font-semibold">Safe review mode</p><p className="text-muted-foreground">No renewal WhatsApp, email, SMS or Voice AI call is sent automatically. Existing expiry reminders continue unchanged.</p></div></div>}
+        {engineOff && (
+          <div className="flex gap-3 rounded-xl bg-warning/10 p-4 text-sm text-foreground ring-1 ring-warning/20">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <div>
+              <p className="font-semibold">Staff-led mode</p>
+              <p className="text-muted-foreground">
+                Nothing is sent to members automatically from here. Existing expiry reminders continue unchanged.
+                Voice AI renewal calls happen only when a staff member presses Call now, inside the calling window
+                {callingWindow ? ` (${callingWindow})` : ''}; the outcome comes straight back into this queue.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {statCards.map(([label, value, Icon]) => (
