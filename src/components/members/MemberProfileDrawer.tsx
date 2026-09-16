@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   User, Users, Phone, Mail, Calendar, MapPin, Building2, 
-  CreditCard, Dumbbell, Clock, Gift, AlertCircle, ArrowUpCircle,
+  CreditCard, Dumbbell, Clock, Gift, AlertCircle, ArrowUpCircle, RefreshCw,
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
@@ -1411,35 +1411,31 @@ export function MemberProfileDrawer({
 
           {/* Quick Actions - Row 1 */}
           <div className="flex gap-2">
-            <Button 
-              variant={activeMembership && daysLeft > 0 ? 'outline' : 'default'} 
+            <Button
+              variant="default"
               className="flex-1 min-h-[44px] h-auto py-2 whitespace-normal"
               onClick={() => {
-                // Mid-term upgrade keeps the same invoice + joining date; renewals/new plans go to purchase.
-                if (isManagerOrAbove && activeMembership?.status === 'active' && daysLeft > 0) {
-                  setUpgradeOpen(true);
-                  return;
-                }
                 onOpenChange(false);
                 onPurchaseMembership();
               }}
               disabled={activeMembership?.status === 'frozen'}
             >
               {activeMembership && daysLeft > 0 ? (
-                <ArrowUpCircle className="h-4 w-4 mr-2 shrink-0" />
+                <RefreshCw className="h-4 w-4 mr-2 shrink-0" />
               ) : pendingMembership ? (
                 <Calendar className="h-4 w-4 mr-2 shrink-0" />
               ) : (
                 <CreditCard className="h-4 w-4 mr-2 shrink-0" />
               )}
-              {activeMembership?.status === 'frozen' 
-                ? 'Frozen – Cannot Purchase' 
-                : activeMembership && daysLeft > 0 
-                ? 'Upgrade Plan' 
-                : pendingMembership 
+              {activeMembership?.status === 'frozen'
+                ? 'Frozen – Cannot Purchase'
+                : activeMembership
+                ? 'Renew Plan'
+                : pendingMembership
                 ? 'Adjust Future Plan'
-                : (activeMembership && daysLeft <= 0 ? 'Renew Plan' : 'Add Plan')}
+                : 'Add Plan'}
             </Button>
+
 
             <Button 
               variant="outline" 
@@ -1501,6 +1497,13 @@ export function MemberProfileDrawer({
 
           {/* Quick Actions - Row 2 */}
           <div className="grid grid-cols-2 gap-2">
+            {isManagerOrAbove && activeMembership?.status === 'active' && daysLeft > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setUpgradeOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
+                <ArrowUpCircle className="h-4 w-4 mr-2 shrink-0" />
+                Upgrade Plan (mid-term)
+              </Button>
+            )}
+
             {activeMembership?.status === 'active' && (
               <Button variant="outline" size="sm" onClick={() => setFreezeOpen(true)} className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left">
                 <Snowflake className="h-4 w-4 mr-2 shrink-0" />

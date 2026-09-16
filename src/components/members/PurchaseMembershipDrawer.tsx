@@ -204,10 +204,16 @@ export function PurchaseMembershipDrawer({
     return gross + calculateGstAmount();
   };
 
+  /** The date the new package actually begins — stacked after the current plan on renewals. */
+  const displayStartDate = (!advanceBooking && activeMembership && canRenew && activeMembership.end_date)
+    ? format(addDays(new Date(activeMembership.end_date), 1), 'yyyy-MM-dd')
+    : startDate;
+
   const calculateEndDate = () => {
     if (!selectedPlan) return '';
-    return membershipEndDateISO(startDate, selectedPlan.duration_days);
+    return membershipEndDateISO(displayStartDate, selectedPlan.duration_days);
   };
+
   const todayIso = format(new Date(), 'yyyy-MM-dd');
   const isBackdated = !isMemberMode && !advanceBooking && startDate < todayIso;
   const backdatedDays = isBackdated ? differenceInDays(new Date(todayIso), new Date(startDate)) : 0;
@@ -353,9 +359,10 @@ export function PurchaseMembershipDrawer({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Purchase Membership
+            {activeMembership && canRenew && !advanceBooking ? 'Renew Membership' : 'Purchase Membership'}
           </SheetTitle>
         </SheetHeader>
+
 
         <div className="mt-6 space-y-6">
           <MemberIdentityHeader memberId={memberId} memberName={memberName} />
@@ -588,15 +595,21 @@ export function PurchaseMembershipDrawer({
                   onChange={(e) => setStartDate(e.target.value)}
                 />
                 <div className="flex flex-col gap-1.5 mt-1.5">
+                  {displayStartDate !== startDate && (
+                    <p className="text-sm font-medium text-success">
+                      Stacks after the current plan — starts {format(new Date(displayStartDate), 'dd MMM yyyy')}
+                    </p>
+                  )}
                   <p className="text-sm font-medium text-primary">
                     Ends on: {calculateEndDate() || '—'}
                   </p>
-                  {!isMemberMode && !advanceBooking && (
+                  {!isMemberMode && !advanceBooking && displayStartDate === startDate && (
                     <p className="text-xs text-muted-foreground">
                       Staff can backdate up to 90 days for members who already started training.
                     </p>
                   )}
                 </div>
+
                 {isBackdated && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                     Backdated start: this membership counts as already running since{' '}
@@ -837,7 +850,10 @@ export function PurchaseMembershipDrawer({
                     ? 'Schedule & Collect Payment'
                     : isMemberMode
                       ? 'Pay Now'
-                      : 'Complete Purchase'}
+                      : activeMembership
+                        ? 'Complete Renewal'
+                        : 'Complete Purchase'}
+
             </Button>
           </div>
         </div>
