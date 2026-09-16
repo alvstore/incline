@@ -275,35 +275,38 @@ Deno.serve(async (req) => {
         }));
 
       // ---- CRM roster: people who should carry a face on every gate ---------
+      // photo_rejected persons STAY in the roster so they remain visible in the
+      // "needs a new photo" report; their ledger rows are forced to `rejected`
+      // right after seeding, which keeps them out of every push loop.
       const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
       const [members, employees, trainers] = await Promise.all([
         // Only members whose gate access is currently active carry a face.
         // Blocked/expired/dues members must never be re-pushed with photo
         // payloads — that is what rebuilds face templates and reboots gates.
         // Their access is handled by validity-date-only updates in mips-access.
-        // photo_rejected / revoked persons are excluded so a photo the terminal
-        // cannot use is never retried.
         supabase.from("members")
-          .select("id, mips_person_sn, member_code, profiles:user_id(full_name), leads:lead_id(full_name)")
+          .select("id, mips_person_sn, member_code, mips_sync_status, profiles:user_id(full_name), leads:lead_id(full_name)")
           .eq("branch_id", branchId).eq("hardware_access_status", "active")
           .not("mips_person_id", "is", null).or(photoFilter)
-          .neq("mips_sync_status", "photo_rejected")
           .neq("mips_sync_status", "revoked")
           .limit(1000),
         supabase.from("employees")
-          .select("id, mips_person_sn, employee_code, profiles:user_id(full_name)")
+          .select("id, mips_person_sn, employee_code, mips_sync_status, profiles:user_id(full_name)")
           .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter)
-          .neq("mips_sync_status", "photo_rejected")
           .neq("mips_sync_status", "revoked")
           .limit(1000),
         supabase.from("trainers")
-          .select("id, mips_person_sn, trainer_code, profiles:user_id(full_name)")
+          .select("id, mips_person_sn, trainer_code, mips_sync_status, profiles:user_id(full_name)")
           .eq("branch_id", branchId).eq("is_active", true)
           .not("mips_person_id", "is", null).or(photoFilter)
-          .neq("mips_sync_status", "photo_rejected")
           .neq("mips_sync_status", "revoked")
           .limit(1000),
       ]);
+
+      const rejectedSns = [
+        ...(members.data || []), ...(employees.data || []), ...(trainers.data || []),
+      ].filter((p: any) => p.mips_sync_status === "photo_rejected" && p.mips_person_sn)
+       .map((p: any) => String(p.mips_person_sn));
 
       // The ledger stores the human name (falling back to the code) so every
       // gate screen can say WHO is waiting, not just which code.
