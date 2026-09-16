@@ -8,7 +8,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhone, phoneVariants } from '@/lib/contacts/phone';
 
-export type IdentitySource = 'member' | 'lead' | 'contact' | 'unknown';
+export type IdentitySource = 'member' | 'staff' | 'lead' | 'contact' | 'unknown';
 
 export interface ResolvedIdentity {
   source: IdentitySource;
