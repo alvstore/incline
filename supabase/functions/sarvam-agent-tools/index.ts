@@ -1,4 +1,7 @@
-// v1.1.0 — Sarvam Voice Agent API tools (HTTPS tool endpoint).
+// v1.2.0 — Sarvam Voice Agent API tools (HTTPS tool endpoint).
+// v1.2.0: accurate ai_tool_logs status (business-rule failures log as "error"),
+//         and book_callback never drops a callback — falls back to the primary
+//         branch and files a high-priority staff task for an unresolved caller.
 //
 // Registered in Sarvam → Build → Tools as HTTPS tools. Authenticated with the
 // shared tool token stored in the integration config and sent by Sarvam as the
@@ -67,6 +70,18 @@ Deno.serve(async (req) => {
         .from("branches")
         .select("id")
         .ilike("name", branchName)
+        .limit(1)
+        .maybeSingle();
+      return (data as { id?: string } | null)?.id ?? null;
+    };
+
+    /** Primary branch, used as a last-resort fallback so callbacks are never lost. */
+    const resolvePrimaryBranch = async (): Promise<string | null> => {
+      const { data } = await sb
+        .from("branches")
+        .select("id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
       return (data as { id?: string } | null)?.id ?? null;
