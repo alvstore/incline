@@ -144,7 +144,7 @@ import {
   type LeadContext,
 } from "./ai-memory.ts";
 
-import { buildSystemPrompt } from "./ai-prompt.ts";
+import { buildLeadSystemPrompt, buildMemberSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 import {
   renderConversationContextBlock,
