@@ -50,7 +50,7 @@ export function MemberBodyAvatarCanvas({
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-muted via-muted to-primary shadow-xl shadow-primary/20">
-      <div className="flex items-center justify-between gap-2 px-4 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
         <div className="flex items-center gap-2">
           <Badge className="border-0 bg-card/15 text-primary-foreground">
             <Sparkles className="mr-1 h-3 w-3" /> {label}
