@@ -423,16 +423,29 @@ export default function MemberDashboard() {
                             )}
                           </div>
                         </div>
-                        <div className="text-right">
-                          {totalRemaining === null ? (
-                            <Badge variant="outline" className="text-success border-success/30">Unlimited</Badge>
-                          ) : (
-                            <span className="text-sm font-semibold">
-                              {totalRemaining}{' '}
-                              <span className="text-muted-foreground font-normal">
-                                / {(ent.totalAllowed || 0) + addOnRemaining}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            {totalRemaining === null ? (
+                              <Badge variant="outline" className="text-success border-success/30">Unlimited</Badge>
+                            ) : (
+                              <span className="text-sm font-semibold">
+                                {totalRemaining}{' '}
+                                <span className="text-muted-foreground font-normal">
+                                  / {(ent.totalAllowed || 0) + addOnRemaining}
+                                </span>
                               </span>
-                            </span>
+                            )}
+                          </div>
+                          {!isFrozen && /steam|sauna|ice|pool|spa|recovery/i.test(`${ent.name || ''} ${ent.code || ''}`) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-9 rounded-full px-3 text-xs cursor-pointer"
+                              asChild
+                              aria-label={`Book ${ent.name}`}
+                            >
+                              <Link to="/book?type=recovery">Book</Link>
+                            </Button>
                           )}
                         </div>
                       </div>

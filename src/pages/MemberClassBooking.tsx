@@ -481,7 +481,12 @@ export default function MemberClassBooking() {
         slot.benefit_type || slot.benefit_type_info?.code || '',
       ).toLowerCase();
       // Steam Room is included in every plan — it is NEVER locked behind an add-on.
-      const isSteam = benefitType === 'steam' || benefitType === 'steam_access';
+      // Match every shape the steam room can arrive in: enum, catalogue code, facility name.
+      const isSteam =
+        benefitType.startsWith('steam') ||
+        String(slot.benefit_type_info?.code || '').toLowerCase().startsWith('steam') ||
+        String(facilityName).toLowerCase().includes('steam') ||
+        slot.benefit_type_id === '60df5f6a-2fe1-4911-b6a3-f5076511fe3a';
       const locked = !isBooked && !isSteam && benefitType !== '' && !entitledTypes.has(benefitType);
 
       items.push({
@@ -770,18 +775,20 @@ export default function MemberClassBooking() {
         {/* ─── Time-bucket sub-tabs ─── */}
         {!isLoading && totalForDay > 0 && (
           <Tabs value={timeBucket} onValueChange={(v) => setTimeBucket(v as any)} className="w-full">
-            <TabsList className="grid grid-cols-5 w-full h-auto p-1 rounded-2xl bg-muted/60">
-              <TabsTrigger value="all" className="rounded-xl text-xs py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                All <span className="ml-1 opacity-60">{totalForDay}</span>
+            <TabsList className="grid grid-cols-5 w-full h-auto p-1 rounded-2xl bg-muted/60 gap-1">
+              <TabsTrigger value="all" className="flex-col gap-0.5 rounded-xl text-[11px] sm:text-xs py-2 min-h-[44px] cursor-pointer data-[state=active]:bg-card data-[state=active]:shadow-sm focus:ring-2 focus:ring-primary focus:outline-none">
+                <span className="font-semibold">All</span>
+                <span className="opacity-60 text-[10px]">{totalForDay}</span>
               </TabsTrigger>
               {(['Morning', 'Afternoon', 'Evening', 'Night'] as const).map(b => (
                 <TabsTrigger
                   key={b}
                   value={b}
                   disabled={timeGroups[b].length === 0}
-                  className="rounded-xl text-xs py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                  className="flex-col gap-0.5 rounded-xl text-[11px] sm:text-xs py-2 min-h-[44px] cursor-pointer data-[state=active]:bg-card data-[state=active]:shadow-sm focus:ring-2 focus:ring-primary focus:outline-none"
                 >
-                  {b} <span className="ml-1 opacity-60">{timeGroups[b].length}</span>
+                  <span className="font-semibold">{b}</span>
+                  <span className="opacity-60 text-[10px]">{timeGroups[b].length}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -790,25 +797,57 @@ export default function MemberClassBooking() {
               const items = bucket === 'all'
                 ? (['Morning', 'Afternoon', 'Evening', 'Night'] as const).flatMap(b => timeGroups[b])
                 : timeGroups[bucket];
+              const recoveryItems = items.filter(i => i.type === 'recovery');
+              const otherItems = items.filter(i => i.type !== 'recovery');
+              const facilityGroups = Array.from(
+                recoveryItems.reduce((map, it) => {
+                  const list = map.get(it.title) ?? [];
+                  list.push(it);
+                  map.set(it.title, list);
+                  return map;
+                }, new Map<string, AgendaItem[]>()),
+              );
               return (
-                <TabsContent key={bucket} value={bucket} className="mt-4 space-y-2.5">
+                <TabsContent key={bucket} value={bucket} className="mt-4 space-y-4">
                   {items.length === 0 ? (
                     <div className="text-center py-8 text-sm text-muted-foreground">No sessions in this time slot.</div>
                   ) : (
-                    items.map(item => (
-                      <AgendaCard
-                        key={`${item.type}-${item.id}`}
-                        item={item}
-                        activeMembership={activeMembership}
-                        onBookClass={(id) => bookClass.mutate(id)}
-                        onCancelClass={(id) => cancelClassBooking.mutate(id)}
-                        onBookSlot={(id) => bookSlot.mutate(id)}
-                        onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
-                        onUnlock={(pkgId) => openUpsell(pkgId)}
-                        isBooking={bookClass.isPending || bookSlot.isPending}
-                        isCancelling={cancelClassBooking.isPending || cancelSlotBooking.isPending}
-                      />
-                    ))
+                    <>
+                      {/* Recovery — compact tap-to-book time grid (mobile first) */}
+                      {facilityGroups.map(([facility, slots]) => (
+                        <RecoveryTimeGrid
+                          key={facility}
+                          facility={facility}
+                          slots={slots}
+                          activeMembership={activeMembership}
+                          onBookSlot={(id) => bookSlot.mutate(id)}
+                          onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
+                          onUnlock={(pkgId) => openUpsell(pkgId)}
+                          isBooking={bookSlot.isPending}
+                          isCancelling={cancelSlotBooking.isPending}
+                        />
+                      ))}
+
+                      {/* Classes & PT keep the detailed card layout */}
+                      {otherItems.length > 0 && (
+                        <div className="space-y-2.5">
+                          {otherItems.map(item => (
+                            <AgendaCard
+                              key={`${item.type}-${item.id}`}
+                              item={item}
+                              activeMembership={activeMembership}
+                              onBookClass={(id) => bookClass.mutate(id)}
+                              onCancelClass={(id) => cancelClassBooking.mutate(id)}
+                              onBookSlot={(id) => bookSlot.mutate(id)}
+                              onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
+                              onUnlock={(pkgId) => openUpsell(pkgId)}
+                              isBooking={bookClass.isPending || bookSlot.isPending}
+                              isCancelling={cancelClassBooking.isPending || cancelSlotBooking.isPending}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </TabsContent>
               );
@@ -971,6 +1010,147 @@ function AgendaCard({
             )}
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Recovery Time Grid — compact, thumb-friendly slot picker ───
+function RecoveryTimeGrid({
+  facility,
+  slots,
+  activeMembership,
+  onBookSlot,
+  onCancelSlot,
+  onUnlock,
+  isBooking,
+  isCancelling,
+}: {
+  facility: string;
+  slots: AgendaItem[];
+  activeMembership: any;
+  onBookSlot: (id: string) => void;
+  onCancelSlot: (bookingId: string) => void;
+  onUnlock: (packageId?: string | null) => void;
+  isBooking: boolean;
+  isCancelling: boolean;
+}) {
+  const ordered = [...slots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+  const bookedCount = ordered.filter(s => s.isBooked).length;
+  const lockedGroup = ordered.every(s => s.locked);
+  const unlockPackage = ordered.find(s => s.unlockPackage)?.unlockPackage ?? null;
+  const duration = ordered[0]?.duration ?? 30;
+
+  return (
+    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="bg-accent/10 text-accent p-2 rounded-full shrink-0">
+              <Droplets className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-sm truncate">{facility}</h3>
+              <p className="text-xs text-muted-foreground">
+                {duration} min sessions • {ordered.length} time{ordered.length > 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+          {bookedCount > 0 && (
+            <Badge className="bg-emerald-100 text-emerald-700 border-0 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
+              <Check className="h-3 w-3 mr-1" />{bookedCount} booked
+            </Badge>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          {ordered.map(slot => {
+            const isFull = slot.spotsLeft !== undefined && slot.spotsLeft <= 0;
+            const label = format(slot.datetime, 'h:mm a');
+
+            if (slot.isBooked) {
+              return (
+                <AlertDialog key={slot.id}>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={isCancelling}
+                      aria-label={`Cancel ${facility} at ${label}`}
+                      className="min-h-[44px] rounded-xl px-2 py-2 text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 cursor-pointer transition-all duration-200 hover:bg-emerald-100 focus:ring-2 focus:ring-primary focus:outline-none"
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        <Check className="h-3 w-3" />{label}
+                      </span>
+                      <span className="block text-[10px] font-normal opacity-80">Booked</span>
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Cancel your <strong>{facility}</strong> session at {label}? The session goes back to your balance.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep Booking</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() => onCancelSlot(slot.bookingId!)}
+                      >
+                        Yes, Cancel
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              );
+            }
+
+            const disabled = isFull || !activeMembership || isBooking;
+            return (
+              <button
+                key={slot.id}
+                type="button"
+                disabled={disabled}
+                aria-label={
+                  slot.locked
+                    ? `Unlock ${facility} at ${label}`
+                    : `Book ${facility} at ${label}`
+                }
+                onClick={() => (slot.locked ? onUnlock(slot.unlockPackage?.id ?? null) : onBookSlot(slot.id))}
+                className={`min-h-[44px] rounded-xl px-2 py-2 text-xs font-semibold transition-all duration-200 focus:ring-2 focus:ring-primary focus:outline-none ${
+                  disabled
+                    ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                    : slot.locked
+                      ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 cursor-pointer hover:bg-amber-100'
+                      : 'bg-card text-foreground ring-1 ring-border cursor-pointer hover:bg-primary hover:text-primary-foreground hover:ring-primary'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-1">
+                  {slot.locked && <Lock className="h-3 w-3" />}
+                  {label}
+                </span>
+                <span className="block text-[10px] font-normal opacity-70">
+                  {isFull ? 'Full' : slot.locked ? 'Unlock' : `${slot.spotsLeft} left`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {lockedGroup && (
+          <Button
+            size="sm"
+            className="w-full cursor-pointer"
+            disabled={!activeMembership}
+            onClick={() => onUnlock(unlockPackage?.id ?? null)}
+            aria-label={`Unlock ${facility}`}
+          >
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            {unlockPackage
+              ? `Unlock ${facility} — ₹${Number(unlockPackage.price).toLocaleString('en-IN')}`
+              : `Unlock ${facility}`}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
