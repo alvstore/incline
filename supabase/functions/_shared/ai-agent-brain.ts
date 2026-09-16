@@ -126,6 +126,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
+import { getOpsToolDefinitions, executeOpsToolCall, isFinancialRole } from "./ai-ops-tools.ts";
 import {
   CALLBACK_YES_RE,
   lastBotOfferedCallback,
