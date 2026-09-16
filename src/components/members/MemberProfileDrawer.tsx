@@ -722,14 +722,32 @@ export function MemberProfileDrawer({
     if (!member?.id) return;
     setIsTogglingStatus(true);
     try {
-      const newStatus = member.status === 'active' ? 'inactive' : 'active';
+      const newStatus = liveMemberStatus === 'active' ? 'inactive' : 'active';
       const { error } = await supabase
         .from('members')
         .update({ status: newStatus })
         .eq('id', member.id);
-      
+
       if (error) throw error;
-      toast.success(newStatus === 'active' ? 'Member activated' : 'Member deactivated');
+
+      // Re-evaluate turnstile/gate access immediately so an inactive member is
+      // locked out (and a re-activated member regains entry) without waiting
+      // for the next sweep.
+      const { error: accessError } = await supabase.rpc('evaluate_member_access_state', {
+        p_member_id: member.id,
+        p_reason: newStatus === 'active' ? 'Member re-activated by staff' : 'Member deactivated by staff',
+      });
+      if (accessError) {
+        toast.warning('Status saved, but gate access could not be refreshed automatically.');
+      }
+
+      toast.success(
+        newStatus === 'active'
+          ? 'Member activated — gate access restored'
+          : 'Member deactivated — gate access revoked',
+      );
+      setDeactivateConfirmOpen(false);
+      await refetchMemberCore();
       invalidateMembersData(queryClient);
     } catch (error) {
       toast.error('Failed to update member status');
