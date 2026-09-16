@@ -53,6 +53,17 @@ export function getOpsToolDefinitions(role: StaffRole | undefined): any[] {
       "Memberships purchased or renewed in the last N days — member name, plan, purchase date, start and end date, amount.",
       { days: ["number", "Look-back window, default 7."], limit: ["number", "Max rows, default 20."] },
     ),
+    tool(
+      "find_member",
+      "Look up a person by name, member code or phone. Returns who they are (member / team member / lead), their membership plan, status, expiry, and pending dues. Use this whenever a colleague asks 'who is X' or asks about a specific person by name.",
+      { query: ["string", "Name, member code or phone number."] },
+      ["query"],
+    ),
+    tool(
+      "list_day_transactions",
+      "Every payment received on a given day (defaults to today, IST) with the payer's name, amount, mode and what it was for.",
+      { date: ["string", "YYYY-MM-DD in IST. Defaults to today."] },
+    ),
   ];
 
   if (!isFinancialRole(role)) return base.slice(1); // no revenue summary for non-financial roles
