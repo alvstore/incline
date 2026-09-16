@@ -45,10 +45,16 @@ export default function RenewalCenter() {
   const cases = useRenewalQueue(branchFilter, queue, search);
   const funnel = useRenewalFunnel(branchFilter);
   const action = useRenewalAction();
+  const voiceCall = useRenewalVoiceCall();
+  const voiceOps = useVoiceOpsSummary(branchFilter);
+  const caseCalls = useRenewalCaseVoiceCalls(selected?.case_id);
   const stats = funnel.data ?? {};
   const rows = cases.data ?? [];
   const total = rows[0]?.total_count ?? 0;
   const engineOff = true;
+  const integration = voiceOps.data?.integration;
+  const voiceLive = integration?.is_active === true && Boolean(integration?.agent_phone_number);
+  const callingWindow = integration ? `${integration.window_start ?? '10:00'}–${integration.window_end ?? '19:00'} IST` : null;
   const conversion = useMemo(() => {
     const base = Number(stats.total ?? 0);
     return base ? Math.round((Number(stats.renewed ?? 0) / base) * 100) : 0;
