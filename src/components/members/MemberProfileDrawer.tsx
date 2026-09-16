@@ -817,6 +817,12 @@ export function MemberProfileDrawer({
     enabled: !!member?.id && open,
   });
 
+  // Always read the status from the freshly fetched record so the button
+  // flips immediately after activate/deactivate instead of waiting for the
+  // parent list to refetch.
+  const liveMemberStatus: string = (memberCore as any)?.status ?? member?.status ?? 'active';
+
+
   const memberDetails = useMemo(() => {
     if (!memberCore) return null;
     return {
