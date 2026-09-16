@@ -595,15 +595,21 @@ export function PurchaseMembershipDrawer({
                   onChange={(e) => setStartDate(e.target.value)}
                 />
                 <div className="flex flex-col gap-1.5 mt-1.5">
+                  {displayStartDate !== startDate && (
+                    <p className="text-sm font-medium text-success">
+                      Stacks after the current plan — starts {format(new Date(displayStartDate), 'dd MMM yyyy')}
+                    </p>
+                  )}
                   <p className="text-sm font-medium text-primary">
                     Ends on: {calculateEndDate() || '—'}
                   </p>
-                  {!isMemberMode && !advanceBooking && (
+                  {!isMemberMode && !advanceBooking && displayStartDate === startDate && (
                     <p className="text-xs text-muted-foreground">
                       Staff can backdate up to 90 days for members who already started training.
                     </p>
                   )}
                 </div>
+
                 {isBackdated && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                     Backdated start: this membership counts as already running since{' '}
