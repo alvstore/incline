@@ -353,9 +353,10 @@ export function PurchaseMembershipDrawer({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Purchase Membership
+            {activeMembership && canRenew && !advanceBooking ? 'Renew Membership' : 'Purchase Membership'}
           </SheetTitle>
         </SheetHeader>
+
 
         <div className="mt-6 space-y-6">
           <MemberIdentityHeader memberId={memberId} memberName={memberName} />
