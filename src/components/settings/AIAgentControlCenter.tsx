@@ -635,7 +635,7 @@ function ToolsTab() {
                         key={tool.name}
                         className={`group flex items-start gap-3 p-3 rounded-xl border transition-all ${
                           isEnabled
-                            ? 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow/60'
+                            ? 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow-slate-200/60'
                             : 'bg-muted/60 border-border/60 opacity-70'
                         }`}
                       >

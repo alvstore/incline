@@ -200,7 +200,7 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, hint, icon, gradient }: KpiCardProps) {
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow/60 dark:shadow/40 overflow-hidden">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/60 dark:shadow-slate-900/40 overflow-hidden">
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
