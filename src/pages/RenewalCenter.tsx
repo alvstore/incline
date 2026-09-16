@@ -163,6 +163,38 @@ export default function RenewalCenter() {
             {['not_interested', 'cancelled', 'churned'].includes(outcome) && <div className="space-y-2"><Label htmlFor="renewal-reason">Reason</Label><Input id="renewal-reason" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Capture the member's reason" /></div>}
             <div className="space-y-2"><Label htmlFor="renewal-note">Staff notes</Label><Textarea id="renewal-note" value={note} onChange={(event) => setNote(event.target.value)} placeholder="What happened and what should happen next?" /></div>
             <div className="rounded-xl bg-muted/50 p-4 text-sm"><p className="font-semibold">Journey status</p><p className="mt-1 text-muted-foreground">Last contact: {dateTime(selected?.last_contact_at ?? null)}</p><p className="text-muted-foreground">Last visit: {dateTime(selected?.last_visit ?? null)}</p><p className="text-muted-foreground">Voice attempts: {selected?.voice_attempts_count ?? 0}</p></div>
+
+            <div className="space-y-3 rounded-xl border p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex items-center gap-2 text-sm font-semibold"><PhoneCall className="h-4 w-4 text-primary" />Voice AI calls</p>
+                <Button size="sm" variant="secondary" className="gap-2" disabled={!voiceLive || voiceCall.isPending} onClick={() => selected && callNow(selected)}>
+                  {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
+                </Button>
+              </div>
+              {!voiceLive && (
+                <p className="flex items-start gap-2 text-xs text-muted-foreground"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-warning" />Voice calling is not active yet. Finish the Sarvam setup in the Voice AI console to enable it.</p>
+              )}
+              {caseCalls.isLoading ? <Skeleton className="h-12 rounded-lg" />
+                : (caseCalls.data ?? []).length === 0 ? <p className="text-xs text-muted-foreground">No Voice AI call has been placed for this renewal yet.</p>
+                : <ul className="space-y-2">
+                    {(caseCalls.data ?? []).map((call) => {
+                      const status = statusLook(call.status);
+                      const outcomeLook = dispositionLook(call.disposition);
+                      return (
+                        <li key={call.call_id} className="rounded-lg bg-muted/40 p-3 text-xs">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-0.5 font-medium ${status.className}`}>{status.label}</span>
+                            {outcomeLook && <span className={`rounded-full px-2.5 py-0.5 font-medium ${outcomeLook.className}`}>{outcomeLook.label}</span>}
+                            <span className="text-muted-foreground">{dateTime(call.started_at)} · {formatDuration(call.duration_seconds)}</span>
+                          </div>
+                          {call.call_summary && <p className="mt-2 text-muted-foreground">{call.call_summary}</p>}
+                          {call.next_step_agreed && <p className="mt-1 text-muted-foreground">Next step: {call.next_step_agreed}</p>}
+                          {call.callback_datetime && <p className="mt-1 text-muted-foreground">Callback asked for: {call.callback_datetime}</p>}
+                        </li>
+                      );
+                    })}
+                  </ul>}
+            </div>
           </div>
           <SheetFooter className="grid gap-2 border-t p-4 sm:grid-cols-2">
             <Button variant="outline" disabled={action.isPending} onClick={() => selected && run({ caseId: selected.case_id, action: 'voice_escalate', note }, 'Added to Voice AI review queue')}><PhoneCall className="mr-2 h-4 w-4" />Voice AI queue</Button>
