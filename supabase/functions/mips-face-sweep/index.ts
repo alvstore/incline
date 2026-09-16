@@ -1,8 +1,11 @@
-// mips-face-sweep v2.3.0
-// v2.3.0: roster skips `photo_rejected` / `revoked` persons entirely; gate
-// face-related rejection messages (unqualified face data, FacePassHandler,
-// person is null) immediately mark the person photo_rejected so the photo is
-// never re-pushed.
+// mips-face-sweep v2.4.0
+// v2.4.0: photo_rejected persons stay ON the roster (so staff still see
+// "needs a new photo") but their ledger rows are forced to `rejected`, which
+// keeps them out of every push loop. A new photo resets the person's sync
+// status to `pending` (DB trigger) and they are retried automatically.
+// v2.3.0: gate face-related rejection messages (unqualified face data,
+// FacePassHandler, person is null) immediately mark the person photo_rejected
+// so the photo is never re-pushed.
 // v2.2.0: verification-only for unverified rows. Only genuinely pending or
 // missing photos can produce a gate issue; successful delivery never expires.
 // v2.1.0: adds Tier-A verification (a real face recognition at a gate proves
@@ -330,6 +333,21 @@ Deno.serve(async (req) => {
 
       await seedLedger(supabase, branchId, branchDevices, roster);
       const pruned = await pruneLedger(supabase, branchId, branchDevices, roster);
+
+      // Keep people with an unusable photo visible on the gate report, but
+      // never push them again until a new photo arrives (which resets the
+      // person's sync status back to `pending` via the DB trigger).
+      if (rejectedSns.length) {
+        await supabase
+          .from("mips_device_face_state")
+          .update({
+            state: "rejected",
+            reason: "The gate could not build a face template from this photo — a new photo is needed.",
+          })
+          .eq("branch_id", branchId)
+          .in("person_sn", rejectedSns)
+          .neq("state", "enrolled");
+      }
 
       // ---- Tier A proof: real face recognition at the gate ------------------
       // If a person has actually been recognised BY FACE on a given gate, that
