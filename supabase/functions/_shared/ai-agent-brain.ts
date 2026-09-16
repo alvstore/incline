@@ -1324,8 +1324,7 @@ ANSWER-FIRST RULE (highest priority in this block):
       messages: aiMessages,
       supabase,
       model: aiConfig.model || undefined,
-      tools: tools || undefined,
-      tool_choice: tools ? "auto" : undefined,
+      // No tools — the lead agent is a pure conversational sales funnel.
     });
     aiResult = r.raw;
     // Log resolved provider for observability
@@ -1342,77 +1341,13 @@ ANSWER-FIRST RULE (highest priority in this block):
       contact_key: ctx.senderId ?? null,
     }); } catch { /* noop */ }
   } catch (e) {
-    console.error(`[AI:${ctx.platform}] dispatcher failed:`, e);
+    console.error(`[AI:${ctx.platform}] lead agent dispatcher failed:`, e);
     return skip("ai_gateway_error");
   }
 
   const choice = aiResult?.choices?.[0];
-  const toolCalls = choice?.message?.tool_calls;
   let replyText: string | null = choice?.message?.content || null;
-
-  // 9. Handle tool calls
-  if (toolCalls?.length && tools && memberCtx.memberId) {
-    const toolMessages: any[] = [];
-    for (const tc of toolCalls) {
-      let parsedArgs: any = {};
-      try { parsedArgs = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
-      const toolStart = Date.now();
-      let toolResult: any = null;
-      let toolStatus: "success" | "error" = "success";
-      let toolError: string | null = null;
-      try {
-        toolResult = await executeSharedToolCall(
-          supabase, supabaseUrl, serviceKey,
-          tc.function.name, parsedArgs,
-          {
-            isMember: true,
-            memberId: memberCtx.memberId,
-            memberName: memberCtx.memberName || "Member",
-            branchId: ctx.branchId,
-            membershipId: memberCtx.membershipId ?? null,
-            planId: memberCtx.planId ?? null,
-            contextPrompt: memberCtx.contextPrompt,
-          },
-          ctx.senderId, ctx.branchId, ctx.platform,
-        );
-        if (toolResult && typeof toolResult === "object" && (toolResult as any).success === false) {
-          toolStatus = "error";
-          toolError = String((toolResult as any).error || (toolResult as any).message || "tool_returned_failure").slice(0, 500);
-        }
-      } catch (toolErr) {
-        toolStatus = "error";
-        toolError = (toolErr as Error)?.message?.slice(0, 500) || String(toolErr);
-        toolResult = { success: false, error: toolError };
-      }
-      // Live Activity Feed: one row per tool call (fire-and-forget)
-      try {
-        await supabase.from("ai_tool_logs").insert({
-          tool_name: tc.function.name,
-          status: toolStatus,
-          execution_time_ms: Date.now() - toolStart,
-          error_message: toolError,
-          arguments: parsedArgs ?? {},
-          result: toolResult ?? {},
-          branch_id: ctx.branchId ?? null,
-          phone_number: ctx.platform === "whatsapp" ? ctx.senderId : null,
-          platform: ctx.platform ?? null,
-          contact_key: ctx.senderId ?? null,
-        });
-      } catch { /* noop */ }
-      toolMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
-    }
-    try {
-      const r2 = await callAI({
-        scope: "whatsapp_ai",
-        supabase,
-        model: aiConfig.model || undefined,
-        messages: [...aiMessages, choice.message, ...toolMessages],
-      });
-      replyText = r2.raw?.choices?.[0]?.message?.content || replyText;
-    } catch (e) {
-      console.error(`[AI:${ctx.platform}] tool follow-up failed:`, e);
-    }
-  }
+  void tools;
 
   // v4.6.0 — STRUCTURED NO-REPLY. The model may decide a reply adds no value
   // (pure acknowledgement / emoji reaction). Honoured only when the entire
