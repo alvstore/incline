@@ -277,6 +277,10 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: `Unknown tool: ${tool}` }, 400);
     }
 
+    // A 200 response is not automatically a success: business-rule failures
+    // (nothing booked, nobody found, opt-out not applied) must log as errors.
+    const failed = result.booked === false || result.done === false || result.found === false ||
+      typeof result.error === "string";
     await sb.from("ai_tool_logs").insert({
       tool_name: tool,
       platform: "sarvam_voice",
@@ -284,7 +288,8 @@ Deno.serve(async (req) => {
       branch_id: branchId,
       arguments: args,
       result,
-      status: "success",
+      status: failed ? "error" : "success",
+      error_message: failed ? redact(String(result.message ?? result.error ?? "Tool returned no result")) : null,
       execution_time_ms: Date.now() - started,
     });
 
