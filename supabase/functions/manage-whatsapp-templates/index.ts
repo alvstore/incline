@@ -373,15 +373,33 @@ serve(async (req) => {
         const variableCount = numberedSlots.length ? Math.max(...numberedSlots) : 0;
         const variables = Array.from({ length: variableCount }, (_, i) => `variable_${i + 1}`);
 
+        // v1.x: NEVER clobber an admin's parameter mapping with generic
+        // `variable_N` labels. A mapping saved in the Template Manager is the
+        // only thing that tells the dispatcher what goes into {{2}} — losing it
+        // on every Meta sync is what produced Meta 132018 (empty parameter).
+        const { data: current } = await supabase
+          .from('templates')
+          .select('id, variables')
+          .eq('meta_template_name', mt.name);
+        const hasSemanticMapping = (current || []).some((row: any) => {
+          const vars = Array.isArray(row?.variables) ? row.variables : [];
+          return (
+            vars.length >= variableCount &&
+            vars.some((v: unknown) => !/^(variable|var|param|p|v|slot|field)[\s_-]*\d+$/i.test(String(v || '').trim()))
+          );
+        });
+
+        const updatePayload: Record<string, unknown> = {
+          meta_template_status: mt.status,
+          meta_rejection_reason: mt.rejected_reason || null,
+          content: bodyText,
+          header_type: headerType,
+        };
+        if (!hasSemanticMapping) updatePayload.variables = variables;
+
         const { data: updated } = await supabase
           .from('templates')
-          .update({
-            meta_template_status: mt.status,
-            meta_rejection_reason: mt.rejected_reason || null,
-            content: bodyText,
-            variables,
-            header_type: headerType,
-          })
+          .update(updatePayload)
           .eq('meta_template_name', mt.name)
           .select('id');
 

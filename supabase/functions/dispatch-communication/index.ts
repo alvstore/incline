@@ -322,8 +322,25 @@ function inferSlotSemantics(content: string): Record<string, string> {
     const before = body.slice(Math.max(0, match.index - 60), match.index).toLowerCase();
     // Nearest label wins: check the tail of the preceding copy.
     const tail = before.replace(/\s+/g, ' ');
+    // v1.38.0: also look at the copy immediately AFTER the slot — booking
+    // bodies read "your booking for the {{2}} class on {{3}}", where the noun
+    // that identifies the slot sits on the right-hand side.
+    const after = body
+      .slice(match.index + match[0].length, match.index + match[0].length + 24)
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trimStart();
     let key = '';
-    if (/(₹|rs\.?|inr)\s*$/.test(tail)) key = 'amount_due';
+    // v1.38.0: booking/reservation slot — previously unmatched, which left the
+    // facility name empty and produced Meta 132018 (template_param_empty).
+    if (/(booking for( the)?|booked for( the)?|reserved( the)?|reservation for( the)?|slot for( the)?|session for( the)?)\s*$/.test(tail)) {
+      key = /^class\b/.test(after)
+        ? 'class_name'
+        : /^(session|pt)\b/.test(after)
+          ? 'session_name'
+          : 'facility_name';
+    }
+    else if (/(₹|rs\.?|inr)\s*$/.test(tail)) key = 'amount_due';
     else if (/(amount|outstanding|balance|due|total|fees|price)[^a-z]*$/.test(tail)) key = 'amount_due';
     else if (/(interest|looking for)[^a-z]*$/.test(tail)) key = 'plan_interest';
     else if (/(plan|membership)[^a-z]*$/.test(tail) || /your\s*$/.test(tail)) key = 'plan_name';
@@ -409,6 +426,11 @@ function resolveVarValue(
   if (k.includes('member') || k === 'name' || k === 'first_name' || k === 'full_name') tryKeys.push('member_name', 'name', 'full_name', 'first_name', 'lead_name', 'contact_name');
   if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name', 'plan', 'membership_plan', 'plan_interest');
   if (k.includes('trainer')) tryKeys.push('trainer_name');
+  // v1.38.0: facility/benefit/class names are interchangeable across booking
+  // payloads (facility slots send `benefit_name`, classes send `class_name`).
+  if (k.includes('facility') || k.includes('benefit') || k.includes('service') || k.includes('class') || k.includes('session_name')) {
+    tryKeys.push('facility_name', 'benefit_name', 'class_name', 'service_name', 'session_name', 'item_name');
+  }
   if (k.includes('interest')) tryKeys.push('interest', 'plan_interest', 'interest_name');
   if (k.includes('source')) tryKeys.push('source', 'lead_source', 'utm_source');
   const isDateLike = /(date|time|day|when)/.test(k);
