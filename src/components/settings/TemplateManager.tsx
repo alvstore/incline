@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Plus, Edit, Trash2, MessageSquare, Mail, Phone, Copy, Send, CheckCircle, Clock, XCircle, PauseCircle, Info, AlertCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
@@ -812,7 +812,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
 
       {/* Template Editor Drawer */}
       <Sheet open={showEditor} onOpenChange={setShowEditor}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>
               {selectedTemplate ? 'Edit Template' : 'Create Template'}
@@ -854,19 +854,36 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
               </div>
 
               <div className="space-y-2">
-                <Label>Trigger</Label>
+                <Label htmlFor="template-trigger">Sends on</Label>
                 <Select
                   value={formData.trigger}
-                  onValueChange={(v) => setFormData({ ...formData, trigger: v })}
+                  onValueChange={(v) =>
+                    setFormData((prev) => {
+                      setPendingEventName(v !== 'custom' ? v : null);
+                      return {
+                        ...prev,
+                        trigger: v,
+                        // Re-suggest the field mapping for the newly picked event.
+                        variables: buildOrderedVariables(prev.content, v, []),
+                      };
+                    })
+                  }
                 >
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger id="template-trigger" className="cursor-pointer">
+                    <SelectValue placeholder="Pick an event" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {TEMPLATE_TRIGGERS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
+                  <SelectContent className="max-h-80">
+                    {TRIGGER_GROUPS.map((g) => (
+                      <SelectGroup key={g.category}>
+                        <SelectLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {g.label}
+                        </SelectLabel>
+                        {g.options.map((t) => (
+                          <SelectItem key={t.value} value={t.value} className="cursor-pointer">
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
@@ -916,9 +933,13 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
               )}
               {/* Live preview & validation */}
               {(() => {
-                const validation = validateTemplate(formData.content || '', formData.trigger);
-                const preview = renderPreview(formData.content || '', formData.trigger);
                 const evt = getEvent(formData.trigger);
+                // Only the legacy event registry knows named-variable contracts.
+                // Modern system events are validated by the parameter mapper below.
+                const validation = evt
+                  ? validateTemplate(formData.content || '', formData.trigger)
+                  : { unknown: [] as string[], unused: [] as string[], ok: true };
+                const preview = renderPreview(formData.content || '', formData.trigger);
                 return (
                   <div className="rounded-lg border bg-card p-3 space-y-3 mt-2">
                     <div className="flex items-center justify-between">
