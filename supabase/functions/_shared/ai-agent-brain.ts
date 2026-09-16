@@ -1161,44 +1161,28 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
   dynamicSegments.push(
     `You are responding on ${platformLabel}. Conversation history may include messages from other channels — treat them as one continuous conversation.`,
   );
-  if (memberCtx.isMember && memberCtx.memberName) {
-    dynamicSegments.push(
-      `KNOWN MEMBER NAME: ${memberCtx.memberName}. Greet them by name on your first reply.`,
-    );
-  }
 
-  // Build identity for SSOT prompt routing (member vs lead vs unknown).
-  const identity: Parameters<typeof buildSystemPrompt>[0]["identity"] =
-    memberCtx.isMember
+  // Lead-agent identity: lead (known CRM row) or unknown (cold contact).
+  // A member can never reach this agent — the router sent them to runMemberAgent.
+  const identity: Parameters<typeof buildLeadSystemPrompt>[0]["identity"] =
+    memberCtx.leadId
       ? {
-          role: "member",
+          role: "lead",
           senderId: ctx.senderId,
-          memberId: memberCtx.memberId ?? null,
-          name: memberCtx.memberName ?? null,
-          phone: memberCtx.memberPhone ?? null,
-          email: memberCtx.memberEmail ?? null,
-          planLabel: memberCtx.planName ?? null,
-          planEndsAt: memberCtx.planEndsAt ?? null,
+          leadId: memberCtx.leadId,
+          name: memberCtx.leadName ?? null,
+          phone: memberCtx.leadPhone ?? null,
+          email: memberCtx.leadEmail ?? null,
+          funnelStage: memberCtx.leadStage ?? null,
           branchName: orgConfig?.name ?? null,
         }
-      : memberCtx.leadId
-        ? {
-            role: "lead",
-            senderId: ctx.senderId,
-            leadId: memberCtx.leadId,
-            name: memberCtx.leadName ?? null,
-            phone: memberCtx.leadPhone ?? null,
-            email: memberCtx.leadEmail ?? null,
-            funnelStage: memberCtx.leadStage ?? null,
-            branchName: orgConfig?.name ?? null,
-          }
-        : {
-            role: "unknown",
-            senderId: ctx.senderId,
-            branchName: orgConfig?.name ?? null,
-          };
+      : {
+          role: "unknown",
+          senderId: ctx.senderId,
+          branchName: orgConfig?.name ?? null,
+        };
 
-  const built = await buildSystemPrompt({
+  const built = await buildLeadSystemPrompt({
     supabase,
     purpose: "whatsapp_reply",
     branchId: ctx.branchId,
@@ -1209,36 +1193,8 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
   });
   let systemPrompt = built.prompt;
 
-
-  // Member tool instructions — gated by ai_purposes.tools_allowed (SSOT, UI-managed).
-  // Empty array means permissive (all tools allowed).
-  let tools: any[] | undefined;
-  if (memberCtx.isMember && memberCtx.memberId) {
-    tools = getAllToolDefinitions();
-    const allowList = (aiConfig as any)._tools_allowed as string[] | undefined;
-    if (allowList && allowList.length > 0) {
-      tools = tools.filter((t: any) => allowList.includes(t.function.name));
-    }
-    if (tools.length === 0) tools = undefined;
-
-    if (tools) {
-      systemPrompt += `\n\nIMPORTANT TOOL USAGE INSTRUCTIONS:
-You have access to real tools that can query and modify the member's account. USE THEM when the member asks about membership status, benefits, bookings, PT sessions, etc.
-
-SELF-SERVICE BOOKING FLOW:
-1. When a member wants to book a facility (sauna, ice bath, etc.), ask for the facility, date, and preferred time range.
-2. Use the available tools to check slot availability for that date.
-3. Present available time slots in a clear, numbered list (e.g., 1️⃣ 10:00 AM, 2️⃣ 11:30 AM).
-4. Once they pick a number or confirm a time, call book_facility_slot with the exact details.
-5. Confirm the booking with a "Success" message including *facility*, *date*, and *time*.
-6. If no slots are available, suggested the next available date or an alternative facility.
-
-GENERAL RULES:
-- Always confirm booking details with the member BEFORE calling book_facility_slot.
-- If the member asks for a manager, complains, or you encounter errors twice, IMMEDIATELY use transfer_to_human.
-- Be proactive: if a member says "book sauna tomorrow", infer tomorrow's date and check slots immediately.`;
-    }
-  }
+  // HARD RULE (Two-Agent Workflow): the lead agent gets NO operational tools.
+  const tools: any[] | undefined = undefined;
 
   // Lead capture for non-members
   const leadCaptureConfig = aiConfig.lead_capture;
