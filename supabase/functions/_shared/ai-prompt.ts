@@ -458,3 +458,30 @@ export async function buildSystemPrompt(
     retrieval_mode: mode,
   };
 }
+
+// ─── Two-Agent Workflow entry points (v4.0.0) ───────────────────────────────
+// The inbound router in ai-agent-brain.ts picks exactly one of these per turn.
+// Keeping them separate is what stops lead-funnel copy bleeding into member
+// conversations (and vice versa) and keeps each prompt small.
+
+export interface MemberPromptInput extends Omit<BuildSystemPromptInput, "identity"> {
+  identity: Extract<Identity, { role: "member" }>;
+}
+
+export interface LeadPromptInput extends Omit<BuildSystemPromptInput, "identity"> {
+  identity: Exclude<Identity, { role: "member" }>;
+}
+
+/** AGENT A — member self-service concierge (tools enabled by the caller). */
+export function buildMemberSystemPrompt(
+  input: MemberPromptInput,
+): Promise<BuildSystemPromptResult> {
+  return buildSystemPrompt(input);
+}
+
+/** AGENT B — lead sales funnel (caller must pass NO tools). */
+export function buildLeadSystemPrompt(
+  input: LeadPromptInput,
+): Promise<BuildSystemPromptResult> {
+  return buildSystemPrompt(input);
+}
