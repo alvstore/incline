@@ -218,6 +218,15 @@ export function TemplateCoverageMatrix({ channel }: Props) {
         </Card>
       </div>
 
+      <MapTemplateDrawer
+        open={!!mapTarget}
+        onOpenChange={(v) => !v && setMapTarget(null)}
+        channel={channel}
+        event={mapTarget?.event ?? null}
+        eventLabel={mapTarget?.label}
+        currentTemplateId={mapTarget?.templateId}
+      />
+
       <AIGenerateTemplatesDrawer
         open={aiOpen}
         onOpenChange={setAiOpen}
