@@ -337,8 +337,10 @@ Deno.serve(async (req) => {
 
           if (success) { ok++; perDevice[String(t)].ok++; }
           else { failed++; perDevice[String(t)].failed++; }
-          // gentle pacing so the server queue does not drop dispatches
-          await new Promise((r) => setTimeout(r, 40));
+          // Pacing: the Android face engine rebuilds a template per dispatch and
+          // leaks native memory when they arrive back-to-back (OOM -> reboot).
+          // 1.2s between dispatches keeps the queue drained instead of piling up.
+          await new Promise((r) => setTimeout(r, 1200));
         }
       }
       console.log(`[mips-face-parity] resync done: ok=${ok} failed=${failed} errors=${errors.slice(0, 5).join(" | ")}`);

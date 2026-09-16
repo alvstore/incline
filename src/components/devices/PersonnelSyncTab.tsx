@@ -311,7 +311,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     mutationFn: async (targets: SyncPerson[]) => {
       if (targets.length === 0) return { total: 0, success: 0 };
       let successCount = 0;
+      let first = true;
       for (const person of targets) {
+        // Pacing: each direct-to-gate sync makes the terminal rebuild a face
+        // template. Back-to-back rebuilds exhaust the Android SDK's native
+        // memory and reboot the gate, so we space the queue out.
+        if (!first) {
+          await new Promise((r) => setTimeout(r, serverOnlyBulk ? 250 : 1500));
+        }
+        first = false;
         try {
           // Server-only sync uploads to MIPS once and lets the
           // mips-reconcile-devices cron fan out to every device — much faster
