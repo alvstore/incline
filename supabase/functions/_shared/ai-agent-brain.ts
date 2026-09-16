@@ -822,12 +822,127 @@ export async function runUnifiedAgent(
     memberCtx,
   };
 
-  console.log(`[AI:${ctx.platform}] router → ${memberCtx.isMember ? "member_agent" : "lead_agent"} (sender=${ctx.senderId})`);
+  const routeName = memberCtx.isMember && memberCtx.memberId
+    ? "member_agent"
+    : memberCtx.isStaff ? "staff_agent" : "lead_agent";
+  console.log(`[AI:${ctx.platform}] router → ${routeName} (sender=${ctx.senderId})`);
 
   if (memberCtx.isMember && memberCtx.memberId) {
     return await runMemberAgent(state);
   }
+  // v12.0.0 — internal team gets the operations agent (live business data),
+  // never the sales funnel and never member self-service tools.
+  if (memberCtx.isStaff) {
+    return await runStaffAgent(state);
+  }
   return await runLeadAgent(state);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AGENT C — INTERNAL TEAM / OPERATIONS
+// Reached only when resolveMemberContext confirms the sender is a trainer,
+// employee or privileged role holder. Tools: read-only operations registry.
+// Financial figures (revenue, dues) are gated to owner / admin / manager.
+// ═══════════════════════════════════════════════════════════════════════════════
+export async function runStaffAgent(state: AgentRunState): Promise<AgentResult> {
+  const { supabase, ctx, aiConfig, orgConfig, memberCtx } = state;
+
+  const role = String(memberCtx.staffRole || "staff").toLowerCase();
+  const staffName = memberCtx.staffName || "Team";
+  const financial = isFinancialRole(role);
+
+  const { data: recentMessages } = await supabase
+    .from("whatsapp_messages")
+    .select("content, direction")
+    .in("phone_number", phoneVariants(ctx.senderId))
+    .order("created_at", { ascending: false })
+    .limit(20);
+  const history = (recentMessages || []).reverse().map((m: any) => ({
+    role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
+    content: String(m.content || ""),
+  }));
+
+  const todayIST = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const systemPrompt = [
+    `You are the internal operations assistant for "${orgConfig?.name || "Incline"}".`,
+    `You are speaking with ${staffName}, role: ${role}. This is a verified colleague — never ask for their name, never pitch memberships, never run any sales funnel.`,
+    `Today's date (IST) is ${todayIST}.`,
+    ``,
+    `HARD RULES:`,
+    `1. NEVER state a business number from memory, guess or estimate. Every figure — check-ins, revenue, dues, expiries, renewals — must come from a tool call in THIS turn. If a tool fails, say the data could not be fetched.`,
+    `2. Report exactly what the tool returned. Do not add, round or invent rows.`,
+    financial
+      ? `3. ${staffName} is authorised for financial data (revenue, dues, amounts).`
+      : `3. ${staffName} is NOT authorised for revenue or dues. If asked, say financial figures are limited to owners, admins and managers.`,
+    `4. Member personal data shared here is confidential and only for internal use.`,
+    `5. Keep replies short and scannable for WhatsApp. Use compact lines like "• Name (CODE) — ₹1,200 due, invoice 12 Sep, due 20 Sep". Max ~10 rows, then say how many more remain.`,
+  ].join("\n");
+
+  const tools = getOpsToolDefinitions(role);
+  const aiMessages: any[] = [{ role: "system", content: systemPrompt }, ...history];
+
+  let aiResult: any;
+  try {
+    const r = await callAI({
+      scope: "whatsapp_ai",
+      messages: aiMessages,
+      supabase,
+      model: aiConfig.model || undefined,
+      tools,
+      tool_choice: "auto",
+    });
+    aiResult = r.raw;
+  } catch (e) {
+    console.error(`[AI:${ctx.platform}] staff agent dispatcher failed:`, e);
+    return skip("ai_gateway_error");
+  }
+
+  const choice = aiResult?.choices?.[0];
+  const toolCalls = choice?.message?.tool_calls;
+  let replyText: string | null = choice?.message?.content || null;
+
+  if (toolCalls?.length) {
+    const toolMessages: any[] = [];
+    for (const tc of toolCalls) {
+      let parsedArgs: any = {};
+      try { parsedArgs = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
+      const started = Date.now();
+      const result = await executeOpsToolCall(supabase, tc.function.name, parsedArgs, {
+        role,
+        branchId: ctx.branchId,
+      });
+      try {
+        await supabase.from("ai_tool_logs").insert({
+          tool_name: tc.function.name,
+          status: (result as any)?.error ? "error" : "success",
+          execution_time_ms: Date.now() - started,
+          error_message: (result as any)?.error ?? null,
+          arguments: parsedArgs ?? {},
+          result: result ?? {},
+          branch_id: ctx.branchId ?? null,
+          phone_number: ctx.platform === "whatsapp" ? ctx.senderId : null,
+          platform: ctx.platform ?? null,
+          contact_key: ctx.senderId ?? null,
+        });
+      } catch { /* noop */ }
+      toolMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
+    }
+    try {
+      const r2 = await callAI({
+        scope: "whatsapp_ai",
+        supabase,
+        model: aiConfig.model || undefined,
+        messages: [...aiMessages, choice.message, ...toolMessages],
+      });
+      replyText = r2.raw?.choices?.[0]?.message?.content || replyText;
+    } catch (e) {
+      console.error(`[AI:${ctx.platform}] staff tool follow-up failed:`, e);
+    }
+  }
+
+  if (!replyText) return skip("no_reply_text");
+  return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
 }
 
 // ─── Shared router state handed to both agents ─────────────────────────────────
