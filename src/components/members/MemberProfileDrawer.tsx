@@ -703,6 +703,7 @@ export function MemberProfileDrawer({
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
   const [compGiftOpen, setCompGiftOpen] = useState(false);
   
   const [upgradeOpen, setUpgradeOpen] = useState(false);
