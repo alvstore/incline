@@ -1556,15 +1556,15 @@ export function MemberProfileDrawer({
                 Cancel Plan
               </Button>
             )}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className={`justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left ${member.status === 'active' ? 'text-destructive' : 'text-success'}`}
-              onClick={toggleMemberStatus}
+            <Button
+              variant="outline"
+              size="sm"
+              className={`justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left ${liveMemberStatus === 'active' ? 'text-destructive' : 'text-success'}`}
+              onClick={() => (liveMemberStatus === 'active' ? setDeactivateConfirmOpen(true) : toggleMemberStatus())}
               disabled={isTogglingStatus}
             >
-              {member.status === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
-              {member.status === 'active' ? 'Deactivate' : 'Activate'}
+              {liveMemberStatus === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
+              {liveMemberStatus === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
             {isManagerOrAbove && !(memberDetails?.user_id ?? (member as any).user_id) && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setCreateLoginOpen(true)}>
