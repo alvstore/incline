@@ -475,7 +475,9 @@ export default function MemberClassBooking() {
       const benefitType = String(
         slot.benefit_type || slot.benefit_type_info?.code || '',
       ).toLowerCase();
-      const locked = !isBooked && benefitType !== '' && !entitledTypes.has(benefitType);
+      // Steam Room is included in every plan — it is NEVER locked behind an add-on.
+      const isSteam = benefitType === 'steam' || benefitType === 'steam_access';
+      const locked = !isBooked && !isSteam && benefitType !== '' && !entitledTypes.has(benefitType);
 
       items.push({
         id: slot.id,
