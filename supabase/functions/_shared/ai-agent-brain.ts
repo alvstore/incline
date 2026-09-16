@@ -941,10 +941,9 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
     const { data: recentForExtract } = await supabase
       .from("whatsapp_messages")
       .select("content, direction")
-      .eq("phone_number", ctx.senderId)
-      .eq("branch_id", ctx.branchId)
+      .in("phone_number", phoneVariants(ctx.senderId))
       .order("created_at", { ascending: false })
-      .limit(6);
+      .limit(30);
     const extractHistory = (recentForExtract || []).reverse().map((m: any) => ({
       role: m.direction === "inbound" ? "user" : "assistant",
       content: String(m.content || ""),
@@ -1041,10 +1040,9 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
   const { data: recentMessages } = await supabase
     .from("whatsapp_messages")
     .select("content, direction, platform")
-    .eq("phone_number", ctx.senderId)
-    .eq("branch_id", ctx.branchId)
+    .in("phone_number", phoneVariants(ctx.senderId))
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(30);
 
   const history = (recentMessages || []).reverse().map((m: any) => ({
     role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
@@ -1592,10 +1590,9 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
   const { data: recentMessages } = await supabase
     .from("whatsapp_messages")
     .select("content, direction, platform")
-    .eq("phone_number", ctx.senderId)
-    .eq("branch_id", ctx.branchId)
+    .in("phone_number", phoneVariants(ctx.senderId))
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(30);
 
   const history = (recentMessages || []).reverse().map((m: any) => ({
     role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
@@ -2777,8 +2774,7 @@ async function tryParseAndCaptureLead(
     const { count: msgCount } = await supabase
       .from("whatsapp_messages")
       .select("*", { count: "exact", head: true })
-      .eq("phone_number", ctx.senderId)
-      .eq("branch_id", ctx.branchId)
+      .in("phone_number", phoneVariants(ctx.senderId))
       .eq("direction", "inbound");
 
     if ((msgCount || 0) >= 2 && nameMatch && emailMatch) {
