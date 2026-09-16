@@ -1411,35 +1411,31 @@ export function MemberProfileDrawer({
 
           {/* Quick Actions - Row 1 */}
           <div className="flex gap-2">
-            <Button 
-              variant={activeMembership && daysLeft > 0 ? 'outline' : 'default'} 
+            <Button
+              variant="default"
               className="flex-1 min-h-[44px] h-auto py-2 whitespace-normal"
               onClick={() => {
-                // Mid-term upgrade keeps the same invoice + joining date; renewals/new plans go to purchase.
-                if (isManagerOrAbove && activeMembership?.status === 'active' && daysLeft > 0) {
-                  setUpgradeOpen(true);
-                  return;
-                }
                 onOpenChange(false);
                 onPurchaseMembership();
               }}
               disabled={activeMembership?.status === 'frozen'}
             >
               {activeMembership && daysLeft > 0 ? (
-                <ArrowUpCircle className="h-4 w-4 mr-2 shrink-0" />
+                <RefreshCw className="h-4 w-4 mr-2 shrink-0" />
               ) : pendingMembership ? (
                 <Calendar className="h-4 w-4 mr-2 shrink-0" />
               ) : (
                 <CreditCard className="h-4 w-4 mr-2 shrink-0" />
               )}
-              {activeMembership?.status === 'frozen' 
-                ? 'Frozen – Cannot Purchase' 
-                : activeMembership && daysLeft > 0 
-                ? 'Upgrade Plan' 
-                : pendingMembership 
+              {activeMembership?.status === 'frozen'
+                ? 'Frozen – Cannot Purchase'
+                : activeMembership
+                ? 'Renew Plan'
+                : pendingMembership
                 ? 'Adjust Future Plan'
-                : (activeMembership && daysLeft <= 0 ? 'Renew Plan' : 'Add Plan')}
+                : 'Add Plan'}
             </Button>
+
 
             <Button 
               variant="outline" 
