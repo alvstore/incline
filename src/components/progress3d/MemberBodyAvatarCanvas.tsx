@@ -218,8 +218,8 @@ function MetricsList({ scan, compact }: { scan: { body: any; posture: any } | un
   }
   if (!rows.length) return null;
   return (
-    <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
-      {rows.slice(0, compact ? 6 : 12).map((r) => (
+    <div className={compact ? "grid grid-cols-2 gap-2 sm:grid-cols-3" : "space-y-2"}>
+      {rows.slice(0, 12).map((r) => (
         <div key={r.label} className="flex items-center justify-between rounded-lg bg-card/5 px-2 py-1.5 text-xs">
           <span className="text-primary-foreground/70">{r.label}</span>
           <span className={`font-semibold ${r.tone || "text-primary-foreground"}`}>{r.value}</span>
