@@ -163,7 +163,7 @@ export function HowbodySettings() {
 
       {/* === Tab 1: Credentials === */}
       <TabsContent value="credentials" className="mt-6 space-y-6">
-        <Card className="rounded-2xl p-6 shadow-lg shadow/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-primary/10 p-2 text-primary"><KeyRound className="h-5 w-5" /></div>
@@ -242,7 +242,7 @@ export function HowbodySettings() {
         </Card>
 
         {/* Test connection */}
-        <Card className="rounded-2xl p-6 shadow-lg shadow/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-success/10 p-2 text-success"><CheckCircle2 className="h-5 w-5" /></div>
             <div className="flex-1">
@@ -267,7 +267,7 @@ export function HowbodySettings() {
 
       {/* === Tab 2: Webhooks === */}
       <TabsContent value="webhooks" className="mt-6 space-y-6">
-        <Card className="rounded-2xl p-6 shadow-lg shadow/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-success/10 p-2 text-success"><ScanLine className="h-5 w-5" /></div>
             <div>

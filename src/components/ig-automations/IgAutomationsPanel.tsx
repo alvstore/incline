@@ -174,7 +174,7 @@ export function IgAutomationsPanel() {
 
       <IgTrendCard branchId={branchId} />
 
-      <Card className="rounded-2xl border-0 shadow-lg shadow/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base font-bold text-foreground">Campaigns</CardTitle>
@@ -418,7 +418,7 @@ function MetricTile({
     amber: "bg-warning/10 text-warning",
   } as const;
   return (
-    <Card className="group rounded-2xl border-0 shadow-lg shadow/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/20">
+    <Card className="group rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/20">
       <CardContent className="flex items-center gap-3 p-4">
         <div className={`rounded-xl p-2.5 ${toneMap[tone]} transition-transform duration-200 group-hover:scale-110`}>
           {icon}
@@ -440,7 +440,7 @@ function IgTrendCard({ branchId }: { branchId: string | null }) {
     { sent: 0, failed: 0, matched: 0 },
   );
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
           <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">

@@ -166,7 +166,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
       <Card
-        className={`rounded-2xl shadow-lg shadow/50 transition-all ${
+        className={`rounded-2xl shadow-lg shadow-slate-200/50 transition-all ${
           open ? 'ring-1 ring-primary/25' : 'hover:shadow-xl hover:shadow-primary/20'
         }`}
       >

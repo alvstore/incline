@@ -151,7 +151,7 @@ export default function ContractSignPage() {
   if (signed) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center p-6">
-        <Card className="max-w-lg w-full rounded-2xl shadow-lg shadow/50">
+        <Card className="max-w-lg w-full rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 h-14 w-14 rounded-full bg-success/15 flex items-center justify-center">
               <CheckCircle2 className="h-8 w-8 text-success" />
@@ -179,7 +179,7 @@ export default function ContractSignPage() {
   return (
     <div className="min-h-screen bg-muted py-10 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileSignature className="h-5 w-5 text-primary" />

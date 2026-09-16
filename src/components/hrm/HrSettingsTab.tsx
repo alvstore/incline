@@ -138,7 +138,7 @@ export default function HrSettingsTab() {
     <div className="space-y-6">
       <EmployerSummaryCard branchId={branchId} />
 
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><IdCard className="h-4 w-4 text-primary" /> Statutory identity (HR-only)</CardTitle>
           <CardDescription>Used on signed contracts and payslip footers. PAN and proprietor identity are statutory employer fields and live with HR — branch GSTIN is the per-location billing identity.</CardDescription>
@@ -150,7 +150,7 @@ export default function HrSettingsTab() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Scale className="h-4 w-4 text-primary" /> Statutory & contractual defaults</CardTitle>
           <CardDescription>Applied to all new contracts. Tiered notice per role complies with 2026 Labour Codes.</CardDescription>
@@ -170,7 +170,7 @@ export default function HrSettingsTab() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-primary" /> Statutory payroll deductions</CardTitle>
           <CardDescription>All deductions are <strong>OFF by default</strong>. Enable individually when your establishment is registered. Changes apply to the next payroll run.</CardDescription>
@@ -265,7 +265,7 @@ export default function HrSettingsTab() {
 
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> POSH Internal Committee</CardTitle>
           <CardDescription>Mandatory under the Sexual Harassment of Women at Workplace Act, 2013. Minimum 4 members; presiding officer must be a senior woman; one external member required.</CardDescription>

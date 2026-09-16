@@ -185,7 +185,7 @@ export function AILogsTab() {
   const StreamIcon = STREAM_META[stream].icon;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50 overflow-hidden">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
       {/* Stream selector */}
       <div className="p-4 border-b bg-muted/50 space-y-3">
         <div className="flex items-center gap-2 p-1 bg-card rounded-xl border w-fit">

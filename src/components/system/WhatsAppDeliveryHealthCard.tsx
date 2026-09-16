@@ -41,7 +41,7 @@ export function WhatsAppDeliveryHealthCard() {
     totals.sent === 0 ? 0 : Math.round((totals.delivered / totals.sent) * 100);
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <MessageSquare className="h-5 w-5 text-primary" />

@@ -198,7 +198,7 @@ export default function MyScanReport() {
           />
 
           {!body && !posture && (
-            <Card className="rounded-2xl p-8 text-center shadow-lg shadow/50">
+            <Card className="rounded-2xl p-8 text-center shadow-lg shadow-slate-200/50">
               <ScanLine className="mx-auto h-10 w-10 text-muted-foreground" />
               <p className="mt-3 font-semibold text-foreground">No scans yet</p>
               <p className="mt-1 text-sm text-muted-foreground">

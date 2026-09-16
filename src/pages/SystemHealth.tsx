@@ -303,7 +303,7 @@ export default function SystemHealth() {
           <TabsContent value="overview" className="space-y-6 mt-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {stats.map((s) => (
-                <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow/50">
+                <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className={`p-2 rounded-xl bg-muted ${s.color}`}>
                       <s.icon className="h-5 w-5" />

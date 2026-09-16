@@ -78,7 +78,7 @@ export function ProductBatchesTab({ product }: Props) {
         </Button>
       </div>
 
-      <Card className="rounded-2xl shadow-lg shadow/50 overflow-hidden">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading batches…

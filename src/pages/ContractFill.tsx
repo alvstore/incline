@@ -125,7 +125,7 @@ export default function ContractFillPage() {
   return (
     <div className="min-h-screen bg-muted py-10 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-primary" />

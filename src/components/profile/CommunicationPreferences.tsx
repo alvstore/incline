@@ -64,7 +64,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
 
   if (isLoading) {
     return (
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardContent className="p-8 flex items-center justify-center text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading preferences…
         </CardContent>
@@ -76,7 +76,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
     setDraft((d) => ({ ...d, [k]: v }));
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">
           <Bell className="w-5 h-5 text-primary" />
