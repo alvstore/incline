@@ -345,6 +345,129 @@ export async function executeOpsToolCall(
         return { count: rows.length, total_pending: `₹${inr(total)}`, invoices: rows };
       }
 
+      case "find_member": {
+        const q = String(args.query || "").trim();
+        if (!q) return { error: "Provide a name, member code or phone." };
+        const digits = q.replace(/\D/g, "");
+
+        // Profiles matching by name / phone / email.
+        let profQuery = supabase.from("profiles").select("id, full_name, phone, email").limit(10);
+        profQuery = digits.length >= 6
+          ? profQuery.ilike("phone", `%${digits.slice(-10)}%`)
+          : profQuery.ilike("full_name", `%${q}%`);
+        const [{ data: profs }, { data: byCode }] = await Promise.all([
+          profQuery,
+          supabase.from("members").select("id, member_code, user_id, status, branch_id").ilike("member_code", `%${q}%`).limit(5),
+        ]);
+
+        const userIds = (profs ?? []).map((p: any) => p.id);
+        const { data: memberRows } = userIds.length
+          ? await supabase.from("members").select("id, member_code, user_id, status, branch_id").in("user_id", userIds)
+          : { data: [] as any[] };
+        const allMembers = [...(memberRows ?? []), ...(byCode ?? [])]
+          .filter((m: any, i: number, a: any[]) => a.findIndex((x) => x.id === m.id) === i)
+          .slice(0, 5);
+
+        const results: any[] = [];
+        for (const m of allMembers) {
+          const p = (profs ?? []).find((x: any) => x.id === m.user_id);
+          let name = p?.full_name as string | undefined;
+          if (!name && m.user_id) {
+            const { data: p2 } = await supabase.from("profiles").select("full_name, phone").eq("id", m.user_id).maybeSingle();
+            name = (p2 as any)?.full_name;
+          }
+          const [{ data: ms }, { data: invs }] = await Promise.all([
+            supabase.from("memberships").select("status, start_date, end_date, plan_id")
+              .eq("member_id", m.id).order("end_date", { ascending: false }).limit(1),
+            supabase.from("invoices").select("total_amount, amount_paid, refund_amount")
+              .eq("member_id", m.id).in("status", ["pending", "partial", "overdue"]),
+          ]);
+          const cur: any = (ms ?? [])[0];
+          let planName: string | null = null;
+          if (cur?.plan_id) {
+            const { data: pl } = await supabase.from("membership_plans").select("name").eq("id", cur.plan_id).maybeSingle();
+            planName = (pl as any)?.name ?? null;
+          }
+          const due = (invs ?? []).reduce(
+            (s: number, i: any) =>
+              s + Math.max(0, Number(i.total_amount || 0) - Number(i.amount_paid || 0) - Number(i.refund_amount || 0)),
+            0,
+          );
+          results.push({
+            type: "member",
+            name: name || "Member",
+            member_code: m.member_code,
+            phone: p?.phone ?? null,
+            member_status: m.status,
+            plan: planName,
+            membership_status: cur?.status ?? null,
+            valid_from: cur?.start_date ?? null,
+            valid_till: cur?.end_date ?? null,
+            ...(financial ? { pending_dues: `₹${inr(due)}` } : {}),
+          });
+        }
+
+        // Internal team match (owner / admin / manager / trainer / employee).
+        for (const p of profs ?? []) {
+          if (results.some((r) => r.phone && p.phone && r.phone === p.phone)) continue;
+          const [{ data: roles }, { data: emp }] = await Promise.all([
+            supabase.from("user_roles").select("role").eq("user_id", p.id),
+            supabase.from("employees").select("position").eq("user_id", p.id).limit(1).maybeSingle(),
+          ]);
+          const privileged = (roles ?? []).map((r: any) => String(r.role)).filter((r: string) => r !== "member");
+          if (privileged.length || emp) {
+            results.push({
+              type: "team",
+              name: p.full_name,
+              phone: p.phone ?? null,
+              role: privileged[0] ?? (emp as any)?.position ?? "staff",
+            });
+          }
+        }
+
+        if (results.length === 0) {
+          const { data: leads } = await supabase
+            .from("leads").select("full_name, phone, status, source")
+            .ilike("full_name", `%${q}%`).limit(5);
+          for (const l of leads ?? []) {
+            results.push({ type: "lead", name: (l as any).full_name, phone: (l as any).phone, status: (l as any).status });
+          }
+        }
+
+        return { query: q, count: results.length, matches: results };
+      }
+
+      case "list_day_transactions": {
+        if (!financial) return { error: "Payment details are limited to owner, admin and manager." };
+        const { startUtc, endUtc, isoDate } = istDayBounds(args.date);
+        const { data: payments, error } = await supabase
+          .from("payments")
+          .select("amount, payment_method, member_id, invoice_id, notes, payment_date")
+          .gte("payment_date", startUtc.toISOString())
+          .lt("payment_date", endUtc.toISOString())
+          .eq("status", "completed")
+          .order("payment_date", { ascending: true });
+        if (error) return { error: error.message };
+        const dir = await memberDirectory(supabase, (payments ?? []).map((p: any) => p.member_id));
+        const invoiceIds = (payments ?? []).map((p: any) => p.invoice_id).filter(Boolean);
+        const invMap = new Map<string, string>();
+        if (invoiceIds.length) {
+          const { data: invs } = await supabase.from("invoices").select("id, invoice_number").in("id", invoiceIds);
+          for (const i of invs ?? []) invMap.set((i as any).id, (i as any).invoice_number);
+        }
+        const rows = (payments ?? []).map((p: any) => ({
+          name: dir.get(p.member_id)?.name ?? "Walk-in / POS",
+          member_code: dir.get(p.member_id)?.code ?? "",
+          amount: `₹${inr(Number(p.amount || 0))}`,
+          mode: p.payment_method,
+          invoice_number: p.invoice_id ? invMap.get(p.invoice_id) ?? null : null,
+          note: p.notes ?? null,
+          time: String(p.payment_date).slice(11, 16),
+        }));
+        const total = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+        return { date: isoDate, count: rows.length, total_received: `₹${inr(total)}`, payments: rows };
+      }
+
       default:
         return { error: `Unknown operations tool: ${toolName}` };
     }
