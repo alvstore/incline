@@ -1532,13 +1532,7 @@ ANSWER-FIRST RULE (highest priority in this block):
     }
   }
 
-  // 10b. Always touch memory with member identity + last-seen + last question asked
-  const profilePatch: Record<string, any> = {};
-  if (memberCtx.isMember) {
-    profilePatch.is_member = true;
-    if (memberCtx.memberId) profilePatch.member_id = memberCtx.memberId;
-    if (memberCtx.memberName) profilePatch.name = memberCtx.memberName;
-  }
+  // 10b. Touch memory with last-seen + last question asked
   // Heuristic: if the reply ends with "?" treat it as an asked question we remember
   const askedNow: string[] = [];
   const trimmed = (replyText || "").trim();
@@ -1559,18 +1553,15 @@ ANSWER-FIRST RULE (highest priority in this block):
   }
 
   await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
-    profile: profilePatch,
+    profile: {},
     asked_questions_add: askedNow,
-    current_intent: memberCtx.isMember ? "member_assist" : (memory?.current_intent ?? null),
+    current_intent: memory?.current_intent ?? null,
   });
 
   // v4.9.0 — Hallucinated-callback guard. If the LLM emitted "I've notified
   // our team / shared your details" but no real handoff task was triggered
   // on this turn, strip the claim and substitute a safe deterministic offer.
-  // We pass handoffOk=false here because this code path runs ONLY when the
-  // 6b callback-consent short-circuit did NOT fire (which is the only place
-  // a real founder handoff is created from within runUnifiedAgent).
-  if (replyText && !memberCtx.isMember) {
+  if (replyText) {
     try {
       replyText = await assertCallbackPromiseAllowed(supabase, replyText, false, {
         branchId: ctx.branchId,
@@ -1582,6 +1573,255 @@ ANSWER-FIRST RULE (highest priority in this block):
 
   return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AGENT A — MEMBER / SELF-SERVICE CONCIERGE
+// Objective: membership status, facility slot booking, renewals, PT & workout
+// booking, add-on purchases, invoices and payment links.
+// Tools: the FULL operational registry from ai-tools.ts (optionally narrowed by
+// ai_purposes.tools_allowed).
+// No lead capture, no funnel, no Founding Member pitch — ever.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function runMemberAgent(state: AgentRunState): Promise<AgentResult> {
+  const { supabase, supabaseUrl, serviceKey, ctx, aiConfig, orgConfig, chatSettings, memberCtx } = state;
+
+  const memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+  // Conversation history (cross-platform, treated as one thread).
+  const { data: recentMessages } = await supabase
+    .from("whatsapp_messages")
+    .select("content, direction, platform")
+    .eq("phone_number", ctx.senderId)
+    .eq("branch_id", ctx.branchId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  const history = (recentMessages || []).reverse().map((m: any) => ({
+    role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
+    content: String(m.content || ""),
+  }));
+
+  const platformLabel =
+    ctx.platform === "instagram"
+      ? "Instagram DM"
+      : ctx.platform === "messenger"
+        ? "Facebook Messenger"
+        : "WhatsApp";
+
+  const dynamicSegments: string[] = [];
+  if (ctx.conversationContext) {
+    dynamicSegments.push(renderConversationContextBlock(ctx.conversationContext));
+  }
+  if (memberCtx.contextPrompt) dynamicSegments.push(memberCtx.contextPrompt);
+  if (chatSettings?.conversation_summary) {
+    dynamicSegments.push(`[PRIOR CONVERSATION SUMMARY]\n${chatSettings.conversation_summary}`);
+  }
+  const memoryBlock = renderMemoryBlock(memory);
+  if (memoryBlock) dynamicSegments.push(memoryBlock.trim());
+  // Member-safe facts only (no plan/pricing catalogue — they already have a plan).
+  const gymFacts = await hydrateGymFacts(supabase, ctx.branchId, false);
+  if (gymFacts) dynamicSegments.push(gymFacts.trim());
+  dynamicSegments.push(
+    `You are responding on ${platformLabel}. Conversation history may include messages from other channels — treat them as one continuous conversation.`,
+  );
+  if (memberCtx.memberName) {
+    dynamicSegments.push(`KNOWN MEMBER NAME: ${memberCtx.memberName}. Greet them by first name on your first reply.`);
+  }
+
+  const built = await buildMemberSystemPrompt({
+    supabase,
+    purpose: "whatsapp_reply",
+    branchId: ctx.branchId,
+    userMessage: ctx.messageContent,
+    identity: {
+      role: "member",
+      senderId: ctx.senderId,
+      memberId: memberCtx.memberId ?? null,
+      name: memberCtx.memberName ?? null,
+      phone: memberCtx.memberPhone ?? null,
+      email: memberCtx.memberEmail ?? null,
+      planLabel: memberCtx.planName ?? null,
+      planEndsAt: memberCtx.planEndsAt ?? null,
+      branchName: orgConfig?.name ?? null,
+    },
+    dynamicContext: dynamicSegments.join("\n\n"),
+    defaultPersona: `You are the member concierge for "${orgConfig?.name || "Incline"}". Help the member with their account, bookings and sessions. Keep responses short and warm.`,
+  });
+  const systemPrompt = built.prompt;
+
+  // Operational tools — full registry, optionally narrowed by ai_purposes.tools_allowed.
+  let tools: any[] | undefined = getAllToolDefinitions();
+  const allowList = aiConfig._tools_allowed;
+  if (allowList && allowList.length > 0) {
+    tools = tools.filter((t: any) => allowList.includes(t.function.name));
+  }
+  if (!tools || tools.length === 0) tools = undefined;
+
+  const aiMessages: any[] = [{ role: "system", content: systemPrompt }, ...history];
+
+  let aiResult: any;
+  try {
+    const r = await callAI({
+      scope: "whatsapp_ai",
+      messages: aiMessages,
+      supabase,
+      model: aiConfig.model || undefined,
+      tools: tools || undefined,
+      tool_choice: tools ? "auto" : undefined,
+    });
+    aiResult = r.raw;
+    try {
+      await supabase.from("ai_call_logs").insert({
+        purpose: "whatsapp_reply",
+        scope: "whatsapp_ai",
+        branch_id: ctx.branchId,
+        provider: r.provider,
+        model: r.model,
+        status: r.fallback_used ? "fallback" : "success",
+        duration_ms: 0,
+        fallback_used: r.fallback_used,
+        platform: ctx.platform ?? null,
+        contact_key: ctx.senderId ?? null,
+      });
+    } catch { /* noop */ }
+  } catch (e) {
+    console.error(`[AI:${ctx.platform}] member agent dispatcher failed:`, e);
+    return skip("ai_gateway_error");
+  }
+
+  const choice = aiResult?.choices?.[0];
+  const toolCalls = choice?.message?.tool_calls;
+  let replyText: string | null = choice?.message?.content || null;
+
+  // Tool execution loop.
+  if (toolCalls?.length && tools && memberCtx.memberId) {
+    const toolMessages: any[] = [];
+    for (const tc of toolCalls) {
+      let parsedArgs: any = {};
+      try { parsedArgs = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
+      const toolStart = Date.now();
+      let toolResult: any = null;
+      let toolStatus: "success" | "error" = "success";
+      let toolError: string | null = null;
+      try {
+        toolResult = await executeSharedToolCall(
+          supabase, supabaseUrl, serviceKey,
+          tc.function.name, parsedArgs,
+          {
+            isMember: true,
+            memberId: memberCtx.memberId,
+            memberName: memberCtx.memberName || "Member",
+            branchId: ctx.branchId,
+            membershipId: memberCtx.membershipId ?? null,
+            planId: memberCtx.planId ?? null,
+            contextPrompt: memberCtx.contextPrompt,
+          },
+          ctx.senderId, ctx.branchId, ctx.platform,
+        );
+        if (toolResult && typeof toolResult === "object" && (toolResult as any).success === false) {
+          toolStatus = "error";
+          toolError = String((toolResult as any).error || (toolResult as any).message || "tool_returned_failure").slice(0, 500);
+        }
+      } catch (toolErr) {
+        toolStatus = "error";
+        toolError = (toolErr as Error)?.message?.slice(0, 500) || String(toolErr);
+        toolResult = { success: false, error: toolError };
+      }
+      try {
+        await supabase.from("ai_tool_logs").insert({
+          tool_name: tc.function.name,
+          status: toolStatus,
+          execution_time_ms: Date.now() - toolStart,
+          error_message: toolError,
+          arguments: parsedArgs ?? {},
+          result: toolResult ?? {},
+          branch_id: ctx.branchId ?? null,
+          phone_number: ctx.platform === "whatsapp" ? ctx.senderId : null,
+          platform: ctx.platform ?? null,
+          contact_key: ctx.senderId ?? null,
+        });
+      } catch { /* noop */ }
+      toolMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+    }
+    try {
+      const r2 = await callAI({
+        scope: "whatsapp_ai",
+        supabase,
+        model: aiConfig.model || undefined,
+        messages: [...aiMessages, choice.message, ...toolMessages],
+      });
+      replyText = r2.raw?.choices?.[0]?.message?.content || replyText;
+    } catch (e) {
+      console.error(`[AI:${ctx.platform}] member tool follow-up failed:`, e);
+    }
+  }
+
+  // Structured no-reply decision (pure acknowledgement / emoji reaction).
+  {
+    const decision = parseNoReplyDecision(replyText);
+    if (decision.noReply) {
+      return {
+        replyText: null,
+        leadCaptured: false,
+        leadId: null,
+        handoffTriggered: false,
+        skipped: true,
+        skipReason: `no_reply:${decision.reason ?? "model_decision"}`,
+        noReply: true,
+        noReplyReason: decision.reason ?? "model_decision",
+      };
+    }
+  }
+
+  if (!replyText) {
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "ai_agent_brain",
+        p_severity: "warning",
+        p_message: `Empty member-agent reply for ${ctx.platform} ${ctx.senderId}`,
+        p_context: {
+          branch_id: ctx.branchId,
+          platform: ctx.platform,
+          sender: ctx.senderId,
+          member_id: memberCtx.memberId ?? null,
+          had_tool_calls: Array.isArray(toolCalls) && toolCalls.length > 0,
+          message_id: ctx.messageId ?? null,
+        },
+      });
+    } catch { /* noop */ }
+    return skip("no_reply_text");
+  }
+
+  // Member-safe sanitizers only — canonical facts + no parroting.
+  // The lead-funnel guards (name ladder, pricing/tour funnel, lead capture)
+  // deliberately do NOT run here.
+  replyText = correctSocialHandles(replyText);
+  replyText = ensureMapsLink(replyText);
+  replyText = blockConsecutiveDuplicate(replyText, history);
+
+  // Memory touch — member identity + last question asked.
+  const askedNow: string[] = [];
+  const trimmedReply = (replyText || "").trim();
+  if (trimmedReply.endsWith("?")) {
+    const lastSentence = trimmedReply.split(/(?<=[.!?])\s+/).pop() || trimmedReply;
+    askedNow.push(lastSentence.slice(0, 200));
+  }
+  try {
+    await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+      profile: {
+        is_member: true,
+        ...(memberCtx.memberId ? { member_id: memberCtx.memberId } : {}),
+        ...(memberCtx.memberName ? { name: memberCtx.memberName } : {}),
+      },
+      asked_questions_add: askedNow,
+      current_intent: "member_assist",
+    });
+  } catch { /* non-fatal */ }
+
+  return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
+}
+
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
