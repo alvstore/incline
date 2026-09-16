@@ -475,6 +475,22 @@ export async function resolveConversationContext(
       } catch { /* non-fatal */ }
     }
 
+    // v1.1.0 — native template sends store an empty body on the CRM row, so the
+    // AI never saw what we actually sent. Recover the rendered copy from the
+    // dispatcher's log so a reply like "yes" can be interpreted correctly.
+    if (!ctx.originalOutboundMessage && ctx.communicationLogId) {
+      try {
+        const { data: logBody } = await supabase
+          .from("communication_logs")
+          .select("content, subject")
+          .eq("id", ctx.communicationLogId)
+          .maybeSingle();
+        ctx.originalOutboundMessage =
+          (logBody?.content as string | null) ?? (logBody?.subject as string | null) ?? null;
+      } catch { /* non-fatal */ }
+    }
+
+
     // Campaign hydration
     if (ctx.campaignId) {
       try {
