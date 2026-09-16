@@ -57,7 +57,19 @@ export async function loadMemory(
       .limit(1);
     q = branch ? q.eq("branch_id", branch) : q.is("branch_id", null);
     const { data } = await q.maybeSingle();
-    return (data as AiMemoryRow) || null;
+    if (data) return data as AiMemoryRow;
+
+    // Fallback: the same person may have first written in under a different
+    // branch (or with no branch at all). Never make them start from scratch.
+    const { data: anyBranch } = await supabase
+      .from("ai_memory")
+      .select("*")
+      .eq("platform", platform)
+      .eq("contact_key", contactKey)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return (anyBranch as AiMemoryRow) || null;
   } catch (e) {
     console.warn("[ai-memory] loadMemory failed:", (e as Error).message);
     return null;
