@@ -5,6 +5,17 @@ import { AlertTriangle, ScanFace, WifiOff, Download } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMipsFleet } from "./useMipsFleet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface DeviceAttentionBarProps {
   branchId?: string;
@@ -146,16 +157,35 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
             </>
           }
           action={
-            <Button
-              size="sm"
-              onClick={handleResync}
-              disabled={resyncing || !canResync}
-              title={canResync ? undefined : "Nothing is waiting to be sent to these gates"}
-              className="min-h-[36px] cursor-pointer rounded-xl focus:ring-2 focus:ring-indigo-500"
-            >
-              <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${resyncing ? "animate-pulse" : ""}`} />
-              {resyncing ? "Pushing faces…" : "Re-sync faces"}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  disabled={resyncing || !canResync}
+                  title={canResync ? undefined : "Nothing is waiting to be sent to these gates"}
+                  className="min-h-[36px] cursor-pointer rounded-xl focus:ring-2 focus:ring-indigo-500"
+                >
+                  <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${resyncing ? "animate-pulse" : ""}`} />
+                  {resyncing ? "Pushing faces…" : "Re-sync faces"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Re-send face photos to these gates?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Each photo makes the terminal rebuild a face record, so they are sent slowly —
+                    roughly one every 1–2 seconds. A large batch can take 10–20 minutes to finish.
+                    Only start this when the gates are not busy.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                  <AlertDialogAction className="cursor-pointer" onClick={handleResync}>
+                    Start re-sync
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           }
         />
       )}
