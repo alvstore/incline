@@ -775,18 +775,20 @@ export default function MemberClassBooking() {
         {/* ─── Time-bucket sub-tabs ─── */}
         {!isLoading && totalForDay > 0 && (
           <Tabs value={timeBucket} onValueChange={(v) => setTimeBucket(v as any)} className="w-full">
-            <TabsList className="grid grid-cols-5 w-full h-auto p-1 rounded-2xl bg-muted/60">
-              <TabsTrigger value="all" className="rounded-xl text-xs py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                All <span className="ml-1 opacity-60">{totalForDay}</span>
+            <TabsList className="grid grid-cols-5 w-full h-auto p-1 rounded-2xl bg-muted/60 gap-1">
+              <TabsTrigger value="all" className="flex-col gap-0.5 rounded-xl text-[11px] sm:text-xs py-2 min-h-[44px] cursor-pointer data-[state=active]:bg-card data-[state=active]:shadow-sm focus:ring-2 focus:ring-primary focus:outline-none">
+                <span className="font-semibold">All</span>
+                <span className="opacity-60 text-[10px]">{totalForDay}</span>
               </TabsTrigger>
               {(['Morning', 'Afternoon', 'Evening', 'Night'] as const).map(b => (
                 <TabsTrigger
                   key={b}
                   value={b}
                   disabled={timeGroups[b].length === 0}
-                  className="rounded-xl text-xs py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                  className="flex-col gap-0.5 rounded-xl text-[11px] sm:text-xs py-2 min-h-[44px] cursor-pointer data-[state=active]:bg-card data-[state=active]:shadow-sm focus:ring-2 focus:ring-primary focus:outline-none"
                 >
-                  {b} <span className="ml-1 opacity-60">{timeGroups[b].length}</span>
+                  <span className="font-semibold">{b}</span>
+                  <span className="opacity-60 text-[10px]">{timeGroups[b].length}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -795,25 +797,57 @@ export default function MemberClassBooking() {
               const items = bucket === 'all'
                 ? (['Morning', 'Afternoon', 'Evening', 'Night'] as const).flatMap(b => timeGroups[b])
                 : timeGroups[bucket];
+              const recoveryItems = items.filter(i => i.type === 'recovery');
+              const otherItems = items.filter(i => i.type !== 'recovery');
+              const facilityGroups = Array.from(
+                recoveryItems.reduce((map, it) => {
+                  const list = map.get(it.title) ?? [];
+                  list.push(it);
+                  map.set(it.title, list);
+                  return map;
+                }, new Map<string, AgendaItem[]>()),
+              );
               return (
-                <TabsContent key={bucket} value={bucket} className="mt-4 space-y-2.5">
+                <TabsContent key={bucket} value={bucket} className="mt-4 space-y-4">
                   {items.length === 0 ? (
                     <div className="text-center py-8 text-sm text-muted-foreground">No sessions in this time slot.</div>
                   ) : (
-                    items.map(item => (
-                      <AgendaCard
-                        key={`${item.type}-${item.id}`}
-                        item={item}
-                        activeMembership={activeMembership}
-                        onBookClass={(id) => bookClass.mutate(id)}
-                        onCancelClass={(id) => cancelClassBooking.mutate(id)}
-                        onBookSlot={(id) => bookSlot.mutate(id)}
-                        onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
-                        onUnlock={(pkgId) => openUpsell(pkgId)}
-                        isBooking={bookClass.isPending || bookSlot.isPending}
-                        isCancelling={cancelClassBooking.isPending || cancelSlotBooking.isPending}
-                      />
-                    ))
+                    <>
+                      {/* Recovery — compact tap-to-book time grid (mobile first) */}
+                      {facilityGroups.map(([facility, slots]) => (
+                        <RecoveryTimeGrid
+                          key={facility}
+                          facility={facility}
+                          slots={slots}
+                          activeMembership={activeMembership}
+                          onBookSlot={(id) => bookSlot.mutate(id)}
+                          onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
+                          onUnlock={(pkgId) => openUpsell(pkgId)}
+                          isBooking={bookSlot.isPending}
+                          isCancelling={cancelSlotBooking.isPending}
+                        />
+                      ))}
+
+                      {/* Classes & PT keep the detailed card layout */}
+                      {otherItems.length > 0 && (
+                        <div className="space-y-2.5">
+                          {otherItems.map(item => (
+                            <AgendaCard
+                              key={`${item.type}-${item.id}`}
+                              item={item}
+                              activeMembership={activeMembership}
+                              onBookClass={(id) => bookClass.mutate(id)}
+                              onCancelClass={(id) => cancelClassBooking.mutate(id)}
+                              onBookSlot={(id) => bookSlot.mutate(id)}
+                              onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
+                              onUnlock={(pkgId) => openUpsell(pkgId)}
+                              isBooking={bookClass.isPending || bookSlot.isPending}
+                              isCancelling={cancelClassBooking.isPending || cancelSlotBooking.isPending}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </TabsContent>
               );
