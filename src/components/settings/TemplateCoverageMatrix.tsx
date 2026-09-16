@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { Sparkles, CheckCircle2, AlertCircle, ShieldAlert, ShieldX, Wand2, Info } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, ShieldAlert, ShieldX, Wand2, Info, Link2 } from 'lucide-react';
 
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
+import { MapTemplateDrawer } from './MapTemplateDrawer';
 import { getEventsForChannel, type EventChannel } from '@/lib/templates/systemEvents';
 
 type Channel = EventChannel;
@@ -33,6 +34,9 @@ export function TemplateCoverageMatrix({ channel }: Props) {
   const { effectiveBranchId } = useBranchContext();
   const [aiOpen, setAiOpen] = useState(false);
   const [aiSeed, setAiSeed] = useState<string[] | undefined>(undefined);
+  const [mapTarget, setMapTarget] = useState<
+    { event: string; label: string; templateId?: string | null } | null
+  >(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['template-coverage', channel, effectiveBranchId],
