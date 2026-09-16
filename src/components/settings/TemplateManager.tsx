@@ -17,6 +17,9 @@ import { toast } from 'sonner';
 import { TEMPLATE_EVENTS, getEvent, validateTemplate, renderPreview } from '@/lib/templates/eventRegistry';
 import { type TemplatePreset } from '@/lib/templates/dynamicAttachment';
 import { QuickPresetsMenu } from './QuickPresetsMenu';
+import { SYSTEM_EVENTS } from '@/lib/templates/systemEvents';
+import { buildOrderedVariables } from '@/lib/templates/payloadVariables';
+import { TemplateParameterMapper } from './TemplateParameterMapper';
 
 import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -31,18 +34,36 @@ const TEMPLATE_TYPES = [
   { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
 ];
 
-const TEMPLATE_TRIGGERS = [
-  { value: 'welcome', label: 'Welcome Message' },
-  { value: 'expiry_reminder', label: 'Expiry Reminder' },
-  { value: 'payment_received', label: 'Payment Received' },
-  { value: 'payment_due', label: 'Payment Due' },
-  { value: 'birthday', label: 'Birthday Wishes' },
-  { value: 'class_reminder', label: 'Class Reminder' },
-  { value: 'pt_session', label: 'PT Session Reminder' },
-  { value: 'lead_welcome', label: 'Lead Welcome' },
-  { value: 'team_alert', label: 'Team Alert (New Lead)' },
-  { value: 'custom', label: 'Custom / Broadcast' },
-];
+// Unified event catalog — every system event that can fire a message, grouped
+// by category, plus the manual/broadcast escape hatch. Selecting an event here
+// wires the saved template into `whatsapp_triggers` for that event.
+const CATEGORY_LABELS: Record<string, string> = {
+  lifecycle: 'Membership lifecycle',
+  billing: 'Billing & payments',
+  booking: 'Bookings & classes',
+  engagement: 'Engagement',
+  document: 'Documents',
+  retention: 'Retention',
+  lead: 'Leads',
+  marketing: 'Marketing',
+  operations: 'Operations',
+};
+
+const TRIGGER_GROUPS: Array<{ category: string; label: string; options: Array<{ value: string; label: string }> }> = (() => {
+  const byCategory = new Map<string, Array<{ value: string; label: string }>>();
+  for (const e of SYSTEM_EVENTS) {
+    const list = byCategory.get(e.category) || [];
+    list.push({ value: e.event, label: e.label });
+    byCategory.set(e.category, list);
+  }
+  const groups = [...byCategory.entries()].map(([category, options]) => ({
+    category,
+    label: CATEGORY_LABELS[category] || category,
+    options,
+  }));
+  groups.push({ category: 'manual', label: 'Manual', options: [{ value: 'custom', label: 'Custom / Broadcast' }] });
+  return groups;
+})();
 
 const AVAILABLE_VARIABLES = [
   '{{member_name}}',
@@ -173,6 +194,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     header_media_url: '',
     attachment_source: 'none' as 'none' | 'static' | 'dynamic',
     attachment_filename_template: '',
+    /** Ordered data fields for positional {{1}}…{{n}} placeholders. */
+    variables: [] as string[],
   });
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
@@ -318,11 +341,16 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
 
   const openEditor = (template?: Template) => {
     if (template) {
+      const trigger = template.trigger || (template as any).trigger_event || 'custom';
+      const existing = Array.isArray(template.variables)
+        ? template.variables.map((v) => String(v).replace(/[{}]/g, '').trim())
+        : [];
       setSelectedTemplate(template);
+      setPendingEventName(trigger !== 'custom' ? trigger : null);
       setFormData({
         name: template.name,
         type: template.type,
-        trigger: template.trigger || 'custom',
+        trigger,
         subject: template.subject || '',
         content: template.content,
         is_active: template.is_active,
@@ -330,6 +358,9 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
         header_media_url: template.header_media_url || '',
         attachment_source: (template.attachment_source as any) || 'none',
         attachment_filename_template: template.attachment_filename_template || '',
+        // Pre-fill the mapper: keep any saved mapping, fill the gaps with the
+        // event's known field order / copy heuristics.
+        variables: buildOrderedVariables(template.content || '', trigger, existing),
       });
     } else {
       setSelectedTemplate(null);
@@ -344,6 +375,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
         header_media_url: '',
         attachment_source: 'none',
         attachment_filename_template: '',
+        variables: [],
       });
     }
     setShowEditor(true);
@@ -352,6 +384,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
   /** Apply a one-click preset (e.g. Invoice PDF) to the editor form. */
   const applyPreset = (preset: TemplatePreset) => {
     setSelectedTemplate(null);
+    setPendingEventName(preset.trigger && preset.trigger !== 'custom' ? preset.trigger : null);
     setFormData({
       name: preset.label,
       type: preset.type,
@@ -363,6 +396,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       header_media_url: '',
       attachment_source: preset.attachment_source,
       attachment_filename_template: preset.attachment_filename_template || '',
+      variables: buildOrderedVariables(preset.content || '', preset.trigger, []),
     });
     setShowEditor(true);
     toast.success(`Loaded preset: ${preset.label}`);
@@ -432,6 +466,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       header_media_url: '',
       attachment_source: 'none',
       attachment_filename_template: '',
+      variables: buildOrderedVariables(prefill.content || '', prefill.eventName || prefill.trigger, []),
     });
     setShowEditor(true);
     onPrefillConsumed?.();
@@ -454,7 +489,10 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       subject: formData.type === 'email' ? formData.subject : null,
       content: formData.content,
       is_active: formData.is_active,
-      variables: AVAILABLE_VARIABLES.filter((v) => formData.content.includes(v)),
+      // Positional WhatsApp bodies: `variables[n]` is the data field for {{n+1}}.
+      // Named bodies: the placeholder list itself. Either way this is what the
+      // dispatcher reads, so an explicit mapping prevents Meta error 132018.
+      variables: buildOrderedVariables(formData.content, formData.trigger, formData.variables),
       header_type: formData.header_type,
       header_media_url: formData.header_media_url || null,
       attachment_source: formData.attachment_source,
