@@ -210,7 +210,8 @@ Deno.serve(async (req) => {
       const member = await resolveMember();
       const when = typeof args.callback_datetime === "string" ? args.callback_datetime : null;
       const note = typeof args.note === "string" ? args.note.slice(0, 500) : "";
-      const target = member?.branch_id ?? (await resolveBranchByName());
+      const resolved = member?.branch_id ?? (await resolveBranchByName());
+      const target = resolved ?? (await resolvePrimaryBranch());
       if (!target) {
         result = { booked: false, message: "No branch could be resolved, callback not booked." };
       } else {
@@ -219,19 +220,33 @@ Deno.serve(async (req) => {
         const who = (member?.full_name as string | null) ??
           (typeof args.member_name === "string" ? args.member_name : null);
         const identity = [who, member?.member_code ?? (memberCode || null)].filter(Boolean).join(" · ");
+        const unresolved = !resolved || !member;
+        const details = [
+          identity ? `Member: ${identity}.` : "",
+          phone ? `Phone ${phone}.` : "",
+          branchName ? `Branch stated: ${branchName}.` : "",
+          when ? `Requested time: ${when}.` : "",
+          note ? `Note: ${note}` : "",
+        ].filter(Boolean).join(" ");
         const { error } = await sb.from("tasks").insert({
           branch_id: target,
-          title: "Voice AI: callback requested by member",
-          description: `Requested during a Sarvam Voice AI call.${identity ? ` Member: ${identity}.` : ""}${
-            phone ? ` Phone ${phone}.` : ""
-          }${note ? ` Note: ${note}` : ""}`,
+          title: unresolved
+            ? "Voice AI: callback requested (unresolved caller)"
+            : "Voice AI: callback requested by member",
+          description: `Requested during a Sarvam Voice AI call.${details ? ` ${details}` : ""}${
+            unresolved ? " Caller could not be matched automatically — please verify and follow up." : ""
+          }`,
           priority: "high",
           due_date: (Number.isNaN(due.getTime()) ? new Date() : due).toISOString().slice(0, 10),
           linked_entity_type: member ? "member" : null,
           linked_entity_id: member?.id ?? null,
         });
         if (error) throw new Error(error.message);
-        result = { booked: true, message: "Callback noted for the team." };
+        result = {
+          booked: true,
+          unresolved_caller: unresolved,
+          message: "Callback noted for the team.",
+        };
       }
     } else if (tool === "mark_do_not_contact") {
       const member = await resolveMember();
