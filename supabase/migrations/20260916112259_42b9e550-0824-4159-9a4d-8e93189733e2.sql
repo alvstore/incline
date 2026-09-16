@@ -1,0 +1,80 @@
+-- 1) Pin search_path on email queue helpers
+ALTER FUNCTION public.enqueue_email(text, jsonb) SET search_path = public;
+ALTER FUNCTION public.delete_email(text, bigint) SET search_path = public;
+ALTER FUNCTION public.read_email_batch(text, integer, integer) SET search_path = public;
+ALTER FUNCTION public.move_to_dlq(text, text, bigint, jsonb) SET search_path = public;
+
+-- 2) Internal-only routines: revoke from PUBLIC/anon/authenticated, keep service_role
+REVOKE EXECUTE ON FUNCTION public.tg_auto_issue_proforma_on_payment() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_block_gateway_on_bill_of_supply() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_guard_biometric_photo_write() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_invoice_activate_pt_package() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_profiles_block_privileged_self_update() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.communication_send_allowed(text, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.dr_get_or_create_token() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.email_queue_dispatch() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.email_queue_wake() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.maintain_log_sizes() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_renewal_case_event(uuid, text, renewal_stage, text, text, jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.supersede_fitness_plans(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.voice_claim_call_slot(text, uuid, text, text, text, uuid, uuid, text, integer, integer, integer, integer, jsonb, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.voice_retention_eligibility(integer, integer, integer, text, text, uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.whatsapp_breaker_close(text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.whatsapp_breaker_open(text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.whatsapp_record_pacing_error(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.enqueue_email(text, jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.delete_email(text, bigint) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.read_email_batch(text, integer, integer) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.move_to_dlq(text, text, bigint, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.communication_send_allowed(text, text, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.dr_get_or_create_token() TO service_role;
+GRANT EXECUTE ON FUNCTION public.email_queue_dispatch() TO service_role;
+GRANT EXECUTE ON FUNCTION public.email_queue_wake() TO service_role;
+GRANT EXECUTE ON FUNCTION public.maintain_log_sizes() TO service_role;
+GRANT EXECUTE ON FUNCTION public.log_renewal_case_event(uuid, text, renewal_stage, text, text, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.supersede_fitness_plans(uuid[]) TO service_role;
+GRANT EXECUTE ON FUNCTION public.voice_claim_call_slot(text, uuid, text, text, text, uuid, uuid, text, integer, integer, integer, integer, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.voice_retention_eligibility(integer, integer, integer, text, text, uuid[]) TO service_role;
+GRANT EXECUTE ON FUNCTION public.whatsapp_breaker_close(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.whatsapp_breaker_open(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.whatsapp_record_pacing_error(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.enqueue_email(text, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.delete_email(text, bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.read_email_batch(text, integer, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.move_to_dlq(text, text, bigint, jsonb) TO service_role;
+
+-- 3) Signed-in-only routines: revoke PUBLIC/anon, keep authenticated + service_role
+REVOKE EXECUTE ON FUNCTION public.can_use_realtime_topic(text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_active_fitness_plan_conflicts(uuid[], text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_my_duty_presence() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_my_trainers() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.howbody_token_in_visible_branch(text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.is_pure_trainer(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.notification_recipients(uuid, text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.resolve_staff_shift(uuid, timestamp with time zone, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.user_scope_branch_ids(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.whatsapp_recipient_eligibility(text[], text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.dr_is_operational() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.voice_automation_health() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.abandon_online_addon_invoice(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_trainer_client_visits(integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_use_realtime_topic(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_active_fitness_plan_conflicts(uuid[], text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_my_duty_presence() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_my_trainers() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.howbody_token_in_visible_branch(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_pure_trainer(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.notification_recipients(uuid, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.resolve_staff_shift(uuid, timestamp with time zone, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.user_scope_branch_ids(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.whatsapp_recipient_eligibility(text[], text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.dr_is_operational() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.voice_automation_health() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.abandon_online_addon_invoice(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_trainer_client_visits(integer) TO authenticated, service_role;
+
+-- 4) Secret vault tables: revoke table grants and add explicit deny-all policies
+REVOKE ALL ON public.branch_sync_secrets FROM anon, authenticated;
+REVOKE ALL ON public.voice_provider_secrets FROM anon, authenticated;
+CREATE POLICY "deny all direct access" ON public.branch_sync_secrets FOR ALL TO anon, authenticated USING (false) WITH CHECK (false);
+CREATE POLICY "deny all direct access" ON public.voice_provider_secrets FOR ALL TO anon, authenticated USING (false) WITH CHECK (false);
