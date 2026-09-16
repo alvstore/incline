@@ -2559,6 +2559,38 @@ export function MemberProfileDrawer({
         </div>
         )}
 
+        {/* Deactivation confirmation — destructive, so a modal is correct here */}
+        <AlertDialog open={deactivateConfirmOpen} onOpenChange={setDeactivateConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Deactivate {profile?.full_name || 'this member'}?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm text-slate-600">
+                  <p>This takes effect immediately:</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>Entry gate access is revoked at every turnstile</li>
+                    <li>They can no longer book classes or recovery slots</li>
+                    <li>They lose access to the member app</li>
+                  </ul>
+                  <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">
+                    Their membership, invoices and history are kept. You can activate them again at any time.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isTogglingStatus}>Keep active</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); toggleMemberStatus(); }}
+                disabled={isTogglingStatus}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isTogglingStatus ? 'Deactivating…' : 'Deactivate member'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Drawer Components */}
         {activeMembership && (
           <>
