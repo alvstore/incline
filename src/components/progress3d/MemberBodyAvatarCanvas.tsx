@@ -119,19 +119,15 @@ export function MemberBodyAvatarCanvas({
         ) : (
           <PhotoGrid posture={scan?.posture ?? null} />
         )}
-
-        {/* Metrics overlay */}
-        {(scan?.body || scan?.posture) && (
-          <div className="pointer-events-none absolute inset-y-3 right-3 hidden w-56 rounded-2xl bg-card/10 p-4 text-primary-foreground shadow-2xl backdrop-blur-md md:block">
-            <MetricsList scan={scan} />
-          </div>
-        )}
       </div>
 
-      {/* Mobile metrics panel */}
-      <div className="border-t border-primary-foreground/10 bg-card/5 p-3 text-primary-foreground md:hidden">
-        <MetricsList scan={scan} compact />
-      </div>
+      {/* Metrics always sit below the model so they never cover it, however
+          narrow the container is (e.g. inside the member profile drawer). */}
+      {(scan?.body || scan?.posture) && (
+        <div className="border-t border-primary-foreground/10 bg-card/5 p-3 text-primary-foreground">
+          <MetricsList scan={scan} compact />
+        </div>
+      )}
     </div>
   );
 }
