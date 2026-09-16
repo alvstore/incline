@@ -68,6 +68,26 @@ export async function resolveIdentity(rawPhone: string): Promise<ResolvedIdentit
         cache.set(phone, out);
         return out;
       }
+
+      // 1b) Internal team — owner / admin / manager / trainer / employee.
+      const [{ data: roleRows }, { data: trainerRow }, { data: employeeRow }] = await Promise.all([
+        supabase.from('user_roles').select('role').eq('user_id', prof.id),
+        supabase.from('trainers').select('id').eq('user_id', prof.id).limit(1).maybeSingle(),
+        supabase.from('employees').select('id, position').eq('user_id', prof.id).limit(1).maybeSingle(),
+      ]);
+      const privileged = (roleRows ?? []).map((r) => String(r.role)).filter((r) => r !== 'member');
+      if (privileged.length > 0 || trainerRow?.id || employeeRow?.id) {
+        const out: ResolvedIdentity = {
+          source: 'staff',
+          display_name: prof.full_name || prof.email || phone,
+          phone,
+          email: prof.email,
+          avatar_url: (prof as any).avatar_url ?? null,
+          staff_role: privileged[0] ?? (trainerRow?.id ? 'trainer' : (employeeRow as any)?.position ?? 'staff'),
+        };
+        cache.set(phone, out);
+        return out;
+      }
     }
   } catch (_) { /* fall through */ }
 
