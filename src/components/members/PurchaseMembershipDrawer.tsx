@@ -131,12 +131,12 @@ export function PurchaseMembershipDrawer({
     enabled: !!memberId && open,
   });
 
-  // Calculate if renewal is allowed (only 7 days before expiry or after expiry)
+  // Calculate if renewal is allowed (up to 30 days before expiry or after expiry)
   const daysUntilExpiry = activeMembership 
     ? differenceInDays(new Date(activeMembership.end_date), new Date())
     : null;
   
-  const canRenew = !activeMembership || (daysUntilExpiry !== null && daysUntilExpiry <= 7);
+  const canRenew = !activeMembership || (daysUntilExpiry !== null && daysUntilExpiry <= 30);
 
   // Check if member has a pending referral
   const { data: pendingReferral } = useQuery({
