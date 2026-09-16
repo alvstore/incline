@@ -83,7 +83,7 @@ export function MemberBodyAvatarCanvas({
         </div>
       </div>
 
-      <div className="relative h-[480px] w-full">
+      <div className="relative h-[360px] w-full sm:h-[440px] xl:h-[480px]">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary-foreground/70" />
