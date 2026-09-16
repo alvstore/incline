@@ -204,10 +204,16 @@ export function PurchaseMembershipDrawer({
     return gross + calculateGstAmount();
   };
 
+  /** The date the new package actually begins — stacked after the current plan on renewals. */
+  const displayStartDate = (!advanceBooking && activeMembership && canRenew && activeMembership.end_date)
+    ? format(addDays(new Date(activeMembership.end_date), 1), 'yyyy-MM-dd')
+    : startDate;
+
   const calculateEndDate = () => {
     if (!selectedPlan) return '';
-    return membershipEndDateISO(startDate, selectedPlan.duration_days);
+    return membershipEndDateISO(displayStartDate, selectedPlan.duration_days);
   };
+
   const todayIso = format(new Date(), 'yyyy-MM-dd');
   const isBackdated = !isMemberMode && !advanceBooking && startDate < todayIso;
   const backdatedDays = isBackdated ? differenceInDays(new Date(todayIso), new Date(startDate)) : 0;
