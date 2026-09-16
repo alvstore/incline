@@ -85,12 +85,24 @@ async function memberDirectory(supabase: any, memberIds: string[]) {
   const ids = [...new Set(memberIds.filter(Boolean))];
   const out = new Map<string, { name: string; code: string; phone: string | null }>();
   if (ids.length === 0) return out;
+  // NOTE: `members` carries no FK to `profiles`, so a PostgREST embed fails.
+  // Resolve names in two explicit steps via members.user_id → profiles.id.
   const { data } = await supabase
     .from("members")
-    .select("id, member_code, profiles(full_name, phone)")
+    .select("id, member_code, user_id")
     .in("id", ids);
-  for (const m of data ?? []) {
-    const p: any = (m as any).profiles || {};
+  const rows = data ?? [];
+  const userIds = rows.map((m: any) => m.user_id).filter(Boolean);
+  const profileMap = new Map<string, { full_name?: string; phone?: string }>();
+  if (userIds.length) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, full_name, phone")
+      .in("id", userIds);
+    for (const p of profs ?? []) profileMap.set((p as any).id, p as any);
+  }
+  for (const m of rows) {
+    const p = profileMap.get((m as any).user_id) || {};
     out.set((m as any).id, {
       name: p.full_name || "Member",
       code: (m as any).member_code || "",
