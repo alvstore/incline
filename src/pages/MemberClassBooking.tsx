@@ -266,7 +266,8 @@ export default function MemberClassBooking() {
       // and prompt member to update profile.
       const memberGender = profile?.gender;
       return (data || []).filter((slot: any) => {
-        if (!slot.facility) return true;
+        // Facility details hidden by access rules (e.g. opposite-gender facility) → not bookable.
+        if (!slot.facility) return !slot.facility_id;
         const access = slot.facility.gender_access;
         if (!access || access === 'unisex') return true;
         if (!memberGender) return false; // unknown gender → cannot book gender-locked
