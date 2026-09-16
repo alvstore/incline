@@ -135,12 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch timeout value once and cache it
   const fetchTimeoutValue = useCallback(async () => {
     try {
-      const { data } = await supabase
-        .from('organization_settings')
-        .select('session_timeout_hours')
-        .limit(1)
-        .maybeSingle();
-      const hours = data?.session_timeout_hours;
+      const { data } = await supabase.rpc('get_org_config', { _branch_id: null });
+      const row = (Array.isArray(data) ? data[0] : data) as { session_timeout_hours?: number | null } | null;
+      const hours = row?.session_timeout_hours;
       timeoutMsRef.current = hours && hours > 0 ? hours * 60 * 60 * 1000 : null;
     } catch {
       timeoutMsRef.current = null;
