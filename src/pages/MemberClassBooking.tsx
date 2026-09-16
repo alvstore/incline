@@ -481,7 +481,12 @@ export default function MemberClassBooking() {
         slot.benefit_type || slot.benefit_type_info?.code || '',
       ).toLowerCase();
       // Steam Room is included in every plan — it is NEVER locked behind an add-on.
-      const isSteam = benefitType === 'steam' || benefitType === 'steam_access';
+      // Match every shape the steam room can arrive in: enum, catalogue code, facility name.
+      const isSteam =
+        benefitType.startsWith('steam') ||
+        String(slot.benefit_type_info?.code || '').toLowerCase().startsWith('steam') ||
+        String(facilityName).toLowerCase().includes('steam') ||
+        slot.benefit_type_id === '60df5f6a-2fe1-4911-b6a3-f5076511fe3a';
       const locked = !isBooked && !isSteam && benefitType !== '' && !entitledTypes.has(benefitType);
 
       items.push({
