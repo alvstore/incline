@@ -171,13 +171,17 @@ export function AIAgentControlCenter() {
 }
 
 function AIAgentTabs() {
-  const [tab, setTab] = useState<'overview' | 'knowledge' | 'training' | 'handles' | 'plumbing'>('overview');
+  const [tab, setTab] = useState<'overview' | 'flow' | 'knowledge' | 'training' | 'handles' | 'plumbing'>('overview');
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
-      <TabsList className="grid grid-cols-5 w-full h-auto p-1">
+      <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full h-auto p-1">
         <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5 py-2">
           <Activity className="h-3.5 w-3.5 hidden sm:block" />
           Overview
+        </TabsTrigger>
+        <TabsTrigger value="flow" className="text-xs sm:text-sm gap-1.5 py-2">
+          <Workflow className="h-3.5 w-3.5 hidden sm:block" />
+          Visual Flow
         </TabsTrigger>
         <TabsTrigger value="knowledge" className="text-xs sm:text-sm gap-1.5 py-2">
           <Brain className="h-3.5 w-3.5 hidden sm:block" />
@@ -199,6 +203,10 @@ function AIAgentTabs() {
 
       <TabsContent value="overview">
         <DashboardTab />
+      </TabsContent>
+
+      <TabsContent value="flow">
+        <AgentFlowCanvas />
       </TabsContent>
 
       <TabsContent value="knowledge">
