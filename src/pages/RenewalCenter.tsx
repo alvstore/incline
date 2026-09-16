@@ -11,8 +11,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useBranchContext } from '@/contexts/BranchContext';
-import { RenewalCaseRow, RenewalQueue, useRenewalAction, useRenewalFunnel, useRenewalQueue } from '@/hooks/useRenewalCenter';
-import { CalendarClock, CheckCircle2, Headphones, PhoneCall, Search, ShieldCheck, UserCheck, Users, XCircle, type LucideIcon } from 'lucide-react';
+import { RenewalCaseRow, RenewalQueue, useRenewalAction, useRenewalCaseVoiceCalls, useRenewalFunnel, useRenewalQueue, useRenewalVoiceCall } from '@/hooks/useRenewalCenter';
+import { useVoiceOpsSummary } from '@/hooks/useVoiceOps';
+import { dispositionLook, formatDuration, statusLook } from '@/lib/voice/voiceOutcomes';
+import { AlertTriangle, CalendarClock, CheckCircle2, Headphones, Loader2, PhoneCall, Search, ShieldCheck, UserCheck, Users, XCircle, type LucideIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const queues: Array<{ value: RenewalQueue; label: string }> = [
