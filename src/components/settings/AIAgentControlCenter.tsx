@@ -19,13 +19,14 @@ import {
   Bot, Brain, MessageSquare, Search, Power, PowerOff,
   IdCard, Gift, CalendarDays, CalendarPlus, CalendarX, Dumbbell, UserCog,
   CreditCard, Receipt, Wallet, Link2, FileText, Snowflake, RotateCcw,
-  Users, Star, ShoppingBag, Bell, MapPin, ClipboardList, Sparkles,
+  Users, Star, ShoppingBag, Bell, MapPin, ClipboardList, Sparkles, Workflow,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AIBrainTab } from '@/components/settings/AIBrainTab';
 import { HandlesTab } from '@/components/settings/ai/HandlesTab';
 import { PlumbingTab } from '@/components/settings/ai/PlumbingTab';
 import { AITrainingTab } from '@/components/settings/ai/AITrainingTab';
+import { AgentFlowCanvas } from '@/components/settings/ai/AgentFlowCanvas';
 
 type ToolDef = {
   name: string;
@@ -171,13 +172,17 @@ export function AIAgentControlCenter() {
 }
 
 function AIAgentTabs() {
-  const [tab, setTab] = useState<'overview' | 'knowledge' | 'training' | 'handles' | 'plumbing'>('overview');
+  const [tab, setTab] = useState<'overview' | 'flow' | 'knowledge' | 'training' | 'handles' | 'plumbing'>('overview');
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
-      <TabsList className="grid grid-cols-5 w-full h-auto p-1">
+      <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full h-auto p-1">
         <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5 py-2">
           <Activity className="h-3.5 w-3.5 hidden sm:block" />
           Overview
+        </TabsTrigger>
+        <TabsTrigger value="flow" className="text-xs sm:text-sm gap-1.5 py-2">
+          <Workflow className="h-3.5 w-3.5 hidden sm:block" />
+          Visual Flow
         </TabsTrigger>
         <TabsTrigger value="knowledge" className="text-xs sm:text-sm gap-1.5 py-2">
           <Brain className="h-3.5 w-3.5 hidden sm:block" />
@@ -199,6 +204,10 @@ function AIAgentTabs() {
 
       <TabsContent value="overview">
         <DashboardTab />
+      </TabsContent>
+
+      <TabsContent value="flow">
+        <AgentFlowCanvas />
       </TabsContent>
 
       <TabsContent value="knowledge">

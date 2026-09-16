@@ -9,6 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemberIdentity } from '@/components/members/MemberIdentityHeader';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   User, Users, Phone, Mail, Calendar, MapPin, Building2, 
   CreditCard, Dumbbell, Clock, Gift, AlertCircle, ArrowUpCircle, RefreshCw,
@@ -703,6 +707,7 @@ export function MemberProfileDrawer({
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
   const [compGiftOpen, setCompGiftOpen] = useState(false);
   
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -722,14 +727,32 @@ export function MemberProfileDrawer({
     if (!member?.id) return;
     setIsTogglingStatus(true);
     try {
-      const newStatus = member.status === 'active' ? 'inactive' : 'active';
+      const newStatus = liveMemberStatus === 'active' ? 'inactive' : 'active';
       const { error } = await supabase
         .from('members')
         .update({ status: newStatus })
         .eq('id', member.id);
-      
+
       if (error) throw error;
-      toast.success(newStatus === 'active' ? 'Member activated' : 'Member deactivated');
+
+      // Re-evaluate turnstile/gate access immediately so an inactive member is
+      // locked out (and a re-activated member regains entry) without waiting
+      // for the next sweep.
+      const { error: accessError } = await supabase.rpc('evaluate_member_access_state', {
+        p_member_id: member.id,
+        p_reason: newStatus === 'active' ? 'Member re-activated by staff' : 'Member deactivated by staff',
+      });
+      if (accessError) {
+        toast.warning('Status saved, but gate access could not be refreshed automatically.');
+      }
+
+      toast.success(
+        newStatus === 'active'
+          ? 'Member activated — gate access restored'
+          : 'Member deactivated — gate access revoked',
+      );
+      setDeactivateConfirmOpen(false);
+      await refetchMemberCore();
       invalidateMembersData(queryClient);
     } catch (error) {
       toast.error('Failed to update member status');
@@ -797,6 +820,12 @@ export function MemberProfileDrawer({
     },
     enabled: !!member?.id && open,
   });
+
+  // Always read the status from the freshly fetched record so the button
+  // flips immediately after activate/deactivate instead of waiting for the
+  // parent list to refetch.
+  const liveMemberStatus: string = (memberCore as any)?.status ?? member?.status ?? 'active';
+
 
   const memberDetails = useMemo(() => {
     if (!memberCore) return null;
@@ -1531,15 +1560,15 @@ export function MemberProfileDrawer({
                 Cancel Plan
               </Button>
             )}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className={`justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left ${member.status === 'active' ? 'text-destructive' : 'text-success'}`}
-              onClick={toggleMemberStatus}
+            <Button
+              variant="outline"
+              size="sm"
+              className={`justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left ${liveMemberStatus === 'active' ? 'text-destructive' : 'text-success'}`}
+              onClick={() => (liveMemberStatus === 'active' ? setDeactivateConfirmOpen(true) : toggleMemberStatus())}
               disabled={isTogglingStatus}
             >
-              {member.status === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
-              {member.status === 'active' ? 'Deactivate' : 'Activate'}
+              {liveMemberStatus === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
+              {liveMemberStatus === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
             {isManagerOrAbove && !(memberDetails?.user_id ?? (member as any).user_id) && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setCreateLoginOpen(true)}>
@@ -2533,6 +2562,38 @@ export function MemberProfileDrawer({
           </Tabs>
         </div>
         )}
+
+        {/* Deactivation confirmation — destructive, so a modal is correct here */}
+        <AlertDialog open={deactivateConfirmOpen} onOpenChange={setDeactivateConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Deactivate {profile?.full_name || 'this member'}?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm text-slate-600">
+                  <p>This takes effect immediately:</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>Entry gate access is revoked at every turnstile</li>
+                    <li>They can no longer book classes or recovery slots</li>
+                    <li>They lose access to the member app</li>
+                  </ul>
+                  <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">
+                    Their membership, invoices and history are kept. You can activate them again at any time.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isTogglingStatus}>Keep active</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); toggleMemberStatus(); }}
+                disabled={isTogglingStatus}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isTogglingStatus ? 'Deactivating…' : 'Deactivate member'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Drawer Components */}
         {activeMembership && (

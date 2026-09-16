@@ -50,14 +50,16 @@ export function MemberBodyAvatarCanvas({
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-muted via-muted to-primary shadow-xl shadow-primary/20">
-      <div className="flex items-center justify-between gap-2 px-4 pt-3">
-        <div className="flex items-center gap-2">
-          <Badge className="border-0 bg-card/15 text-primary-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Badge className="shrink-0 border-0 bg-card/15 text-primary-foreground">
             <Sparkles className="mr-1 h-3 w-3" /> {label}
           </Badge>
           {scan?.posture?.test_time && (
-            <span className="text-[11px] text-muted-foreground">
-              {new Date(scan.posture.test_time).toLocaleString()}
+            <span className="truncate text-[11px] text-primary-foreground/70">
+              {new Date(scan.posture.test_time).toLocaleDateString('en-IN', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              })}
             </span>
           )}
         </div>
@@ -81,7 +83,7 @@ export function MemberBodyAvatarCanvas({
         </div>
       </div>
 
-      <div className="relative h-[480px] w-full">
+      <div className="relative h-[360px] w-full sm:h-[440px] xl:h-[480px]">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary-foreground/70" />
@@ -119,19 +121,15 @@ export function MemberBodyAvatarCanvas({
         ) : (
           <PhotoGrid posture={scan?.posture ?? null} />
         )}
-
-        {/* Metrics overlay */}
-        {(scan?.body || scan?.posture) && (
-          <div className="pointer-events-none absolute inset-y-3 right-3 hidden w-56 rounded-2xl bg-card/10 p-4 text-primary-foreground shadow-2xl backdrop-blur-md md:block">
-            <MetricsList scan={scan} />
-          </div>
-        )}
       </div>
 
-      {/* Mobile metrics panel */}
-      <div className="border-t border-primary-foreground/10 bg-card/5 p-3 text-primary-foreground md:hidden">
-        <MetricsList scan={scan} compact />
-      </div>
+      {/* Metrics always sit below the model so they never cover it, however
+          narrow the container is (e.g. inside the member profile drawer). */}
+      {(scan?.body || scan?.posture) && (
+        <div className="border-t border-primary-foreground/10 bg-card/5 p-3 text-primary-foreground">
+          <MetricsList scan={scan} compact />
+        </div>
+      )}
     </div>
   );
 }
@@ -220,8 +218,8 @@ function MetricsList({ scan, compact }: { scan: { body: any; posture: any } | un
   }
   if (!rows.length) return null;
   return (
-    <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
-      {rows.slice(0, compact ? 6 : 12).map((r) => (
+    <div className={compact ? "grid grid-cols-2 gap-2 sm:grid-cols-3" : "space-y-2"}>
+      {rows.slice(0, 12).map((r) => (
         <div key={r.label} className="flex items-center justify-between rounded-lg bg-card/5 px-2 py-1.5 text-xs">
           <span className="text-primary-foreground/70">{r.label}</span>
           <span className={`font-semibold ${r.tone || "text-primary-foreground"}`}>{r.value}</span>

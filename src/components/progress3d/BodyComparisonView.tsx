@@ -22,11 +22,23 @@ function getCalloutIcon(direction: 'up' | 'down' | 'stable') {
 export function BodyComparisonView({ latest, previous, memberGender, memberId }: BodyComparisonViewProps) {
   const callouts = buildMeasurementCallouts(latest, previous).slice(0, 4);
 
+  // Only show a side-by-side comparison when there genuinely is an earlier
+  // check-in. With a single scan we used to render the same body twice.
+  const hasComparison = Boolean(previous && previous.id !== latest?.id);
+
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_1.15fr_0.8fr]">
-        <MemberBodyAvatarCanvas memberId={memberId} measurement={previous} previousMeasurement={latest} label="Previous form" memberGender={memberGender} />
-        <MemberBodyAvatarCanvas memberId={memberId} measurement={latest} previousMeasurement={previous} label="Current form" memberGender={memberGender} />
+      <div className={`grid gap-5 ${hasComparison ? 'xl:grid-cols-[1.15fr_1.15fr_0.8fr]' : 'xl:grid-cols-[1.4fr_0.9fr]'}`}>
+        {hasComparison && (
+          <MemberBodyAvatarCanvas memberId={memberId} measurement={previous} previousMeasurement={latest} label="Previous form" memberGender={memberGender} />
+        )}
+        <MemberBodyAvatarCanvas
+          memberId={memberId}
+          measurement={latest}
+          previousMeasurement={previous}
+          label={hasComparison ? 'Current form' : 'Latest scan'}
+          memberGender={memberGender}
+        />
         <Card className="rounded-2xl border-border/60 bg-card shadow-lg shadow-primary/5">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
