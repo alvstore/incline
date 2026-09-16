@@ -1,4 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +58,13 @@ const MIPSDeviceCard = ({
   const [isRestarting, setIsRestarting] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [syncingFaces, setSyncingFaces] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   const handleOpenDoor = async () => {
     setIsOpening(true);
@@ -67,6 +85,9 @@ const MIPSDeviceCard = ({
       const result = await restartDevice(device.id, branchId);
       if (result.success) toast.success(result.message);
       else toast.error(result.message);
+      // A terminal needs ~90s to boot. Block a second restart in that window so
+      // repeated clicks cannot put the gate into a boot loop.
+      setCooldown(90);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -172,27 +193,65 @@ const MIPSDeviceCard = ({
             <DoorOpen className={`mr-1.5 h-3.5 w-3.5 ${isOpening ? "animate-pulse" : ""}`} />
             {isOpening ? "Opening…" : "Open door"}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-[36px] rounded-xl"
-            aria-label={`Restart ${device.name || device.deviceKey}`}
-            onClick={handleRestart}
-            disabled={!isOnline || isRestarting}
-          >
-            <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-[36px] rounded-xl"
-            onClick={handleFaceResync}
-            disabled={syncingFaces}
-            aria-label={`Re-push all enrolled faces to ${device.name || device.deviceKey}`}
-          >
-            <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${syncingFaces ? "animate-pulse" : ""}`} />
-            {syncingFaces ? "Pushing…" : "Faces"}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[36px] cursor-pointer rounded-xl"
+                aria-label={`Restart ${device.name || device.deviceKey}`}
+                title={cooldown > 0 ? `Booting — available in ${cooldown}s` : "Restart this terminal"}
+                disabled={!isOnline || isRestarting || cooldown > 0}
+              >
+                <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
+                {cooldown > 0 && <span className="ml-1 text-xs tabular-nums">{cooldown}s</span>}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Restart {device.name || device.deviceKey}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The terminal will be offline for about 90 seconds. Nobody can enter or exit
+                  through this door until it finishes starting up.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                <AlertDialogAction className="cursor-pointer" onClick={handleRestart}>
+                  Restart terminal
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[36px] cursor-pointer rounded-xl"
+                disabled={syncingFaces}
+                aria-label={`Re-push all enrolled faces to ${device.name || device.deviceKey}`}
+              >
+                <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${syncingFaces ? "animate-pulse" : ""}`} />
+                {syncingFaces ? "Pushing…" : "Faces"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Re-send every face photo to this gate?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Photos are sent one at a time, roughly one every 1–2 seconds, so the terminal has
+                  time to store each one. A full gym can take 10–20 minutes to finish.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                <AlertDialogAction className="cursor-pointer" onClick={handleFaceResync}>
+                  Start sending
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {localDeviceId ? (
