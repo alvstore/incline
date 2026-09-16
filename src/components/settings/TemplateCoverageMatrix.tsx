@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { Sparkles, CheckCircle2, AlertCircle, ShieldAlert, ShieldX, Wand2, Info } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, ShieldAlert, ShieldX, Wand2, Info, Link2 } from 'lucide-react';
 
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
+import { MapTemplateDrawer } from './MapTemplateDrawer';
 import { getEventsForChannel, type EventChannel } from '@/lib/templates/systemEvents';
 
 type Channel = EventChannel;
@@ -33,6 +34,9 @@ export function TemplateCoverageMatrix({ channel }: Props) {
   const { effectiveBranchId } = useBranchContext();
   const [aiOpen, setAiOpen] = useState(false);
   const [aiSeed, setAiSeed] = useState<string[] | undefined>(undefined);
+  const [mapTarget, setMapTarget] = useState<
+    { event: string; label: string; templateId?: string | null } | null
+  >(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['template-coverage', channel, effectiveBranchId],
@@ -181,11 +185,24 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                       <Badge variant="outline" className={`${meta.cls} gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold border shadow-sm`}>
                         <Icon className="h-3 w-3" /> {meta.label}
                       </Badge>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Map a template to ${r.label}`}
+                        className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        onClick={() =>
+                          setMapTarget({ event: r.event, label: r.label, templateId: r.tpl?.id ?? null })
+                        }
+                        title="Map an existing template"
+                      >
+                        <Link2 className="h-4 w-4" />
+                      </Button>
                       {(r.state === 'missing' || r.state === 'rejected') && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-8 w-8 p-0 rounded-full text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          aria-label={`Generate a template for ${r.label} with AI`}
+                          className="h-8 w-8 p-0 rounded-full text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                           onClick={() => openAi([r.event])}
                           title="Generate with AI"
                         >
@@ -200,6 +217,15 @@ export function TemplateCoverageMatrix({ channel }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      <MapTemplateDrawer
+        open={!!mapTarget}
+        onOpenChange={(v) => !v && setMapTarget(null)}
+        channel={channel}
+        event={mapTarget?.event ?? null}
+        eventLabel={mapTarget?.label}
+        currentTemplateId={mapTarget?.templateId}
+      />
 
       <AIGenerateTemplatesDrawer
         open={aiOpen}

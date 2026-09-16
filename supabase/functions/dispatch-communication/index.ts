@@ -1298,6 +1298,17 @@ Deno.serve(async (req) => {
               review_request: ['review_request', 'feedback_request'],
               low_stock: ['low_stock_alert'],
               announcement: ['announcement', 'broadcast', 'offer_announcement', 'gym_closure_update'],
+              // v1.39.0: `transactional` is the catch-all category used by
+              // booking/session notifications that carry no dedicated event.
+              // Without a mapping every one of them was suppressed with
+              // no_template_for_closed_session. Reuse the generic utility
+              // templates (a single reusable "booking / session update" shape).
+              transactional: [
+                'universal_utility', 'transactional_update',
+                'facility_reminder', 'facility_booked', 'facility_cancelled',
+                'class_booked', 'pt_session_booked',
+              ],
+              marketing: ['announcement', 'broadcast', 'offer_announcement'],
             };
 
             const events = CATEGORY_TO_TRIGGER_EVENTS[input.category] ?? [];
