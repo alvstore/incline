@@ -53,7 +53,7 @@ export function AgentFlowCanvas() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ai_purposes')
-        .select('id, is_active, tools_allowed, ops_config')
+        .select('id, enabled, tools_allowed, ops_config')
         .eq('purpose', 'whatsapp_reply')
         .is('branch_id', null)
         .maybeSingle();
@@ -66,7 +66,7 @@ export function AgentFlowCanvas() {
   const channelOn = (key: string) => channels[key] !== false;
   const toolCount = ((purpose?.tools_allowed as string[] | null) ?? []).length;
   const toolLabel = toolCount === 0 ? 'All tools available' : `${toolCount} tools allowed`;
-  const agentLive = purpose?.is_active !== false;
+  const agentLive = purpose?.enabled !== false;
 
   const nodes: FlowNode[] = useMemo(() => {
     const entry: FlowNode = {
