@@ -1,0 +1,1 @@
+CREATE POLICY "deny all direct access" ON private.dr_config FOR ALL TO anon, authenticated USING (false) WITH CHECK (false);
