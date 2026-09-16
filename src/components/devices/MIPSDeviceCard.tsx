@@ -193,27 +193,65 @@ const MIPSDeviceCard = ({
             <DoorOpen className={`mr-1.5 h-3.5 w-3.5 ${isOpening ? "animate-pulse" : ""}`} />
             {isOpening ? "Opening…" : "Open door"}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-[36px] rounded-xl"
-            aria-label={`Restart ${device.name || device.deviceKey}`}
-            onClick={handleRestart}
-            disabled={!isOnline || isRestarting}
-          >
-            <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-[36px] rounded-xl"
-            onClick={handleFaceResync}
-            disabled={syncingFaces}
-            aria-label={`Re-push all enrolled faces to ${device.name || device.deviceKey}`}
-          >
-            <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${syncingFaces ? "animate-pulse" : ""}`} />
-            {syncingFaces ? "Pushing…" : "Faces"}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[36px] cursor-pointer rounded-xl"
+                aria-label={`Restart ${device.name || device.deviceKey}`}
+                title={cooldown > 0 ? `Booting — available in ${cooldown}s` : "Restart this terminal"}
+                disabled={!isOnline || isRestarting || cooldown > 0}
+              >
+                <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
+                {cooldown > 0 && <span className="ml-1 text-xs tabular-nums">{cooldown}s</span>}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Restart {device.name || device.deviceKey}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The terminal will be offline for about 90 seconds. Nobody can enter or exit
+                  through this door until it finishes starting up.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                <AlertDialogAction className="cursor-pointer" onClick={handleRestart}>
+                  Restart terminal
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[36px] cursor-pointer rounded-xl"
+                disabled={syncingFaces}
+                aria-label={`Re-push all enrolled faces to ${device.name || device.deviceKey}`}
+              >
+                <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${syncingFaces ? "animate-pulse" : ""}`} />
+                {syncingFaces ? "Pushing…" : "Faces"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Re-send every face photo to this gate?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Photos are sent one at a time, roughly one every 1–2 seconds, so the terminal has
+                  time to store each one. A full gym can take 10–20 minutes to finish.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                <AlertDialogAction className="cursor-pointer" onClick={handleFaceResync}>
+                  Start sending
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {localDeviceId ? (
