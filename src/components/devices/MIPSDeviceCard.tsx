@@ -58,6 +58,13 @@ const MIPSDeviceCard = ({
   const [isRestarting, setIsRestarting] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [syncingFaces, setSyncingFaces] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   const handleOpenDoor = async () => {
     setIsOpening(true);
@@ -78,6 +85,9 @@ const MIPSDeviceCard = ({
       const result = await restartDevice(device.id, branchId);
       if (result.success) toast.success(result.message);
       else toast.error(result.message);
+      // A terminal needs ~90s to boot. Block a second restart in that window so
+      // repeated clicks cannot put the gate into a boot loop.
+      setCooldown(90);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
