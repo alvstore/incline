@@ -99,11 +99,10 @@ export const cmsService = {
   // Async version that reads from database
   async getThemeAsync(): Promise<ThemeSettings> {
     try {
-      const { data } = await supabase
-        .from('organization_settings')
-        .select('website_theme')
-        .limit(1)
-        .maybeSingle();
+      // Safe config reader: works for every signed-in role, not just admins.
+      const { data: rows } = await supabase.rpc('get_org_config', { _branch_id: null });
+      const data = (Array.isArray(rows) ? rows[0] : rows) as { website_theme?: unknown } | null;
+      
       
       if (data?.website_theme && Object.keys(data.website_theme as object).length > 0) {
         const theme = { ...DEFAULT_THEME, ...(data.website_theme as Record<string, any>) };

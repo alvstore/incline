@@ -15925,6 +15925,22 @@ export type Database = {
           website_theme: Json
         }[]
       }
+      get_org_config: {
+        Args: { _branch_id?: string }
+        Returns: {
+          branch_id: string
+          currency: string
+          fiscal_year_start: string
+          gst_rates: Json
+          hsn_defaults: Json
+          id: string
+          logo_url: string
+          name: string
+          session_timeout_hours: number
+          timezone: string
+          website_theme: Json
+        }[]
+      }
       get_payment_webhook_payload: {
         Args: { p_id: string }
         Returns: {

@@ -7,13 +7,12 @@ export function useGstRates() {
   return useQuery({
     queryKey: ['org-gst-rates'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('organization_settings')
-        .select('gst_rates')
-        .limit(1)
-        .maybeSingle();
+      // Read through the safe config function so staff and managers (who have
+      // no direct access to the company settings row) still get the real rates.
+      const { data, error } = await supabase.rpc('get_org_config', { _branch_id: null });
       if (error) throw error;
-      const rates = data?.gst_rates as number[] | null;
+      const row = Array.isArray(data) ? data[0] : data;
+      const rates = (row as { gst_rates?: unknown } | null)?.gst_rates as number[] | null;
       return (rates && Array.isArray(rates) && rates.length > 0) ? rates : DEFAULT_GST_RATES;
     },
     staleTime: 5 * 60 * 1000,
