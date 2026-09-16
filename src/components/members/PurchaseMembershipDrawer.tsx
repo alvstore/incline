@@ -131,12 +131,12 @@ export function PurchaseMembershipDrawer({
     enabled: !!memberId && open,
   });
 
-  // Calculate if renewal is allowed (only 7 days before expiry or after expiry)
+  // Calculate if renewal is allowed (up to 30 days before expiry or after expiry)
   const daysUntilExpiry = activeMembership 
     ? differenceInDays(new Date(activeMembership.end_date), new Date())
     : null;
   
-  const canRenew = !activeMembership || (daysUntilExpiry !== null && daysUntilExpiry <= 7);
+  const canRenew = !activeMembership || (daysUntilExpiry !== null && daysUntilExpiry <= 30);
 
   // Check if member has a pending referral
   const { data: pendingReferral } = useQuery({
@@ -367,9 +367,11 @@ export function PurchaseMembershipDrawer({
               <AlertDescription>
                 Member already has an active membership ({activeMembership.membership_plans?.name}) 
                 expiring on {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}. 
-                Renewal is allowed only 7 days before expiry — or enable "Advance booking" below to schedule a future start.
+                Renewal is allowed within 30 days of expiry — or enable "Advance booking" below to schedule a future start.
                 <br />
-                <span className="font-medium">Days remaining: {daysUntilExpiry}</span>
+                <span className="font-medium">
+                  Days remaining: {daysUntilExpiry} — renewal unlocks when {daysUntilExpiry - 30} day{daysUntilExpiry - 30 === 1 ? '' : 's'} remain.
+                </span>
               </AlertDescription>
             </Alert>
           )}
@@ -379,8 +381,13 @@ export function PurchaseMembershipDrawer({
             <Alert className="border-success/50 bg-success/5">
               <CheckCircle className="h-4 w-4 text-success" />
               <AlertDescription className="text-success">
-                Current membership expires in {daysUntilExpiry} days. 
-                New membership will start after current one ends.
+                <span className="font-semibold">Renewal allowed.</span>{' '}
+                {daysUntilExpiry !== null && daysUntilExpiry > 0 && (
+                  <>The current membership expires in {daysUntilExpiry} day{daysUntilExpiry === 1 ? '' : 's'}. </>
+                )}
+                {selectedPlan
+                  ? `The new ${selectedPlan.name} (${selectedPlan.duration_days}-day package) will automatically stack and start on the day after the current package expires (${format(addDays(new Date(activeMembership.end_date), 1), 'dd MMM yyyy')}).`
+                  : 'The new package will automatically stack and start on the day after the current package expires.'}
               </AlertDescription>
             </Alert>
           )}

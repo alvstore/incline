@@ -182,9 +182,14 @@ export default function MemberClassBooking() {
     return map;
   }, [addOnPackages]);
 
-  /** Packages for facilities the member is not currently entitled to — the upsell rail. */
+  /** Packages for facilities the member is not currently entitled to — the upsell rail.
+   *  Steam is included in every plan, so steam add-ons are never advertised here. */
   const upsellPackages = useMemo(
-    () => addOnPackages.filter((p) => !entitledTypes.has(String(p.benefit_type || '').toLowerCase())),
+    () => addOnPackages.filter((p) => {
+      const t = String(p.benefit_type || '').toLowerCase();
+      if (t === 'steam' || t === 'steam_access') return false;
+      return !entitledTypes.has(t);
+    }),
     [addOnPackages, entitledTypes],
   );
 
@@ -475,7 +480,9 @@ export default function MemberClassBooking() {
       const benefitType = String(
         slot.benefit_type || slot.benefit_type_info?.code || '',
       ).toLowerCase();
-      const locked = !isBooked && benefitType !== '' && !entitledTypes.has(benefitType);
+      // Steam Room is included in every plan — it is NEVER locked behind an add-on.
+      const isSteam = benefitType === 'steam' || benefitType === 'steam_access';
+      const locked = !isBooked && !isSteam && benefitType !== '' && !entitledTypes.has(benefitType);
 
       items.push({
         id: slot.id,
