@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   User, Users, Phone, Mail, Calendar, MapPin, Building2, 
-  CreditCard, Dumbbell, Clock, Gift, AlertCircle, ArrowUpCircle,
+  CreditCard, Dumbbell, Clock, Gift, AlertCircle, ArrowUpCircle, RefreshCw,
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
