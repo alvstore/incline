@@ -203,8 +203,12 @@ function extractRows(json: Record<string, unknown>): MipsPassRecord[] {
 
 type PassEndpoint = { path: string; pageParam: "pageNum" | "pageNo" };
 
+// Verified against the live MIPS server (RuoYi-Vue v3, 2026-09-16): the only
+// pass-record endpoint that exists is `/interface/exterior/getCheckRecordList`.
+// `/through/record/list`, `/through/device/record/list`, `/through/devicePerson/list`
+// and `/through/device/syncRecord/list` all answer `code 500 "No endpoint GET ..."`,
+// so probing them only wasted a round trip per run.
 const PASS_ENDPOINTS: PassEndpoint[] = [
-  { path: "/through/record/list", pageParam: "pageNum" },
   { path: "/interface/exterior/getCheckRecordList", pageParam: "pageNum" },
   { path: "/interface/exterior/getCheckRecordList", pageParam: "pageNo" },
 ];

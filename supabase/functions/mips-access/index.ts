@@ -103,7 +103,12 @@ async function fetchPersonDetail(baseUrl: string, token: string, personId: numbe
 }
 
 
-async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string): Promise<{ undelivered: number[] }> {
+// v2.13.0 — `authType` decides what the terminal does with the hand-off:
+//   1 = Issue  → the gate (re)builds the person's face template (expensive, and
+//                the repeated native-bitmap decode is what exhausted device RAM)
+//   2 = Revoke → the gate only drops/expires the authorisation, no template work
+// Access denial never needs a template rebuild, so revokes must dispatch with 2.
+async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string, authType: 1 | 2 = 1): Promise<{ undelivered: number[] }> {
   let deviceIds: number[] = [];
   try {
     let query = supabase.from("access_devices").select("mips_device_id").eq("is_online", true);
@@ -147,7 +152,7 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
         undelivered.push(deviceId);
         continue;
       }
-      await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId] });
+      await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId], authType });
     } catch (e) {
       console.warn(`[mips-access] dispatch to device ${deviceId} failed:`, e);
     } finally {
@@ -332,7 +337,8 @@ async function applyMemberAction(
 
   let undeliveredGates: number[] = [];
   try {
-    undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId)).undelivered;
+    const dispatchAuthType: 1 | 2 = newValidTimeEnd === REVOKED_DATE ? 2 : 1;
+    undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, dispatchAuthType)).undelivered;
     console.log(`Dispatched ${action} to devices for personId=${existing.personId}`);
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
@@ -381,7 +387,14 @@ async function applyMemberAction(
         })),
       });
       await retryRes.json().catch(() => ({}));
-      await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId).catch(() => {});
+      await dispatchToDevices(
+        baseUrl,
+        token,
+        existing.personId,
+        supabase,
+        effectiveBranchId,
+        newValidTimeEnd === REVOKED_DATE ? 2 : 1,
+      ).catch(() => {});
       await new Promise((r) => setTimeout(r, 1500));
       verified = await readBack();
     } catch (e) {
@@ -711,7 +724,14 @@ async function applyStaffAction(
   }
 
   try {
-    await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId);
+    await dispatchToDevices(
+      baseUrl,
+      token,
+      existing.personId,
+      supabase,
+      effectiveBranchId,
+      newValidTimeEnd === REVOKED_DATE ? 2 : 1,
+    );
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
   }

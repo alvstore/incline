@@ -205,7 +205,10 @@ export async function fetchMIPSPassRecords(
   if (filters?.endTime) params.endTime = filters.endTime;
   if (filters?.personName) params.personName = filters.personName;
   if (filters?.deviceId !== undefined && filters?.deviceId !== null) params.deviceId = String(filters.deviceId);
-  const result = await callMIPSProxy("/through/record/list", "GET", params, undefined, branchId);
+  // `/through/record/list` does not exist on the MIPS server (it answers
+  // code 500 "No endpoint GET /through/record/list"). The live pass-record
+  // list is exposed as `/interface/exterior/getCheckRecordList`.
+  const result = await callMIPSProxy("/interface/exterior/getCheckRecordList", "GET", params, undefined, branchId);
   const rows = result.data?.rows || result.data?.data;
   const total = (result.data?.total as number) || 0;
   return { records: Array.isArray(rows) ? rows as MIPSPassRecord[] : [], total };
