@@ -986,6 +986,14 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
               })()}
             </div>
 
+            <TemplateParameterMapper
+              content={formData.content}
+              eventName={formData.trigger}
+              value={formData.variables}
+              onChange={(next) => setFormData((prev) => ({ ...prev, variables: next }))}
+            />
+
+
             <div className="space-y-2">
               <Label className="text-sm">Available Variables</Label>
               <div className="flex flex-wrap gap-1">
