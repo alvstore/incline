@@ -20,6 +20,8 @@ export interface ResolvedIdentity {
   email?: string | null;
   member_code?: string | null;
   avatar_url?: string | null;
+  /** Populated when source === 'staff' (owner / admin / manager / trainer / employee). */
+  staff_role?: string | null;
 }
 
 const cache = new Map<string, ResolvedIdentity>();
