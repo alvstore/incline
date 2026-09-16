@@ -802,8 +802,56 @@ export async function runUnifiedAgent(
     await new Promise((r) => setTimeout(r, delaySeconds * 1000));
   }
 
-  // 5. Resolve member/lead context + persistent ai_memory
+  // ─── 5. ROUTE (v11.0.0 — Two-Agent Workflow) ────────────────────────────────
+  // resolveMemberContext prioritises mobile-number matching (phone variants →
+  // profiles.phone → members.user_id), then lead/staff fallbacks. Its verdict
+  // is the ONLY thing that decides which agent handles this turn.
+  //   isMember === true  → runMemberAgent  (self-service concierge + all tools)
+  //   isMember === false → runLeadAgent    (sales funnel, ZERO operational tools)
   const memberCtx = await resolveMemberContext(supabase, ctx.senderId, ctx.branchId, ctx.platform);
+
+  const state: AgentRunState = {
+    supabase,
+    supabaseUrl,
+    serviceKey,
+    ctx,
+    aiConfig,
+    orgConfig,
+    chatSettings: chatSettings ?? null,
+    memberCtx,
+  };
+
+  console.log(`[AI:${ctx.platform}] router → ${memberCtx.isMember ? "member_agent" : "lead_agent"} (sender=${ctx.senderId})`);
+
+  if (memberCtx.isMember && memberCtx.memberId) {
+    return await runMemberAgent(state);
+  }
+  return await runLeadAgent(state);
+}
+
+// ─── Shared router state handed to both agents ─────────────────────────────────
+
+interface AgentRunState {
+  supabase: any;
+  supabaseUrl: string;
+  serviceKey: string;
+  ctx: AgentContext;
+  aiConfig: OrgAiConfig & { _tools_allowed?: string[] };
+  orgConfig: any;
+  chatSettings: any | null;
+  memberCtx: MemberResolveResult;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AGENT B — LEAD / SALES FUNNEL
+// Objective: lead capture (name → email → goal → plan interest), gym facts from
+// knowledge retrieval, objection handling, VIP tour conversion.
+// Tools: NONE. This agent is never given any operational tool from ai-tools.ts.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
+  const { supabase, supabaseUrl, serviceKey, ctx, aiConfig, orgConfig, chatSettings, memberCtx } = state;
+
   const alreadyCaptured = chatSettings?.captured_lead_id ? await loadCapturedSnapshot(supabase, chatSettings.captured_lead_id) : "";
   const summaryBlock = chatSettings?.conversation_summary ? `\n\n[PRIOR CONVERSATION SUMMARY]\n${chatSettings.conversation_summary}\n` : "";
 
