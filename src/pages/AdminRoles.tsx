@@ -325,7 +325,7 @@ export default function AdminRoles() {
         </div>
 
         {/* Search + Tabs */}
-        <Card className="rounded-xl shadow-lg shadow/50">
+        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="relative flex-1">

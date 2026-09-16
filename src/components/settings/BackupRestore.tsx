@@ -125,7 +125,7 @@ export function BackupRestore() {
       </Card>
 
       {/* Export */}
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Download className="h-5 w-5 text-primary" /> Export full backup</CardTitle>
           <CardDescription>
@@ -141,7 +141,7 @@ export function BackupRestore() {
       </Card>
 
       {/* Import */}
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-success" /> Restore from backup</CardTitle>
           <CardDescription>
@@ -211,7 +211,7 @@ export function BackupRestore() {
 
       {/* Summary */}
       {lastSummary && (
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader>
             <CardTitle>Restore summary</CardTitle>
           </CardHeader>

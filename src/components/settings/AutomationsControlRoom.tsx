@@ -194,7 +194,7 @@ export function AutomationsControlRoom() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {kpis.map((k) => (
-          <Card key={k.label} className="rounded-2xl shadow-lg shadow/50 border-0">
+          <Card key={k.label} className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
             <CardContent className="p-5 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{k.label}</p>
@@ -213,7 +213,7 @@ export function AutomationsControlRoom() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
         <div className="space-y-4 min-w-0">
           {/* Toolbar */}
-          <Card className="rounded-2xl shadow-lg shadow/50 border-0">
+          <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
             <CardContent className="p-3 flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -253,7 +253,7 @@ export function AutomationsControlRoom() {
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
             </div>
           ) : filteredRules.length === 0 ? (
-            <Card className="rounded-2xl shadow-lg shadow/50 border-0">
+            <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
               <CardContent className="p-10 text-center text-muted-foreground">
                 <Bot className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm">No automations match your filters.</p>
@@ -265,7 +265,7 @@ export function AutomationsControlRoom() {
               const isOpen = collapsed[cat] !== true;
               return (
                 <Collapsible key={cat} open={isOpen} onOpenChange={(o) => setCollapsed((p) => ({ ...p, [cat]: !o }))}>
-                  <Card className="rounded-2xl shadow-lg shadow/50 border-0">
+                  <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
                     <CollapsibleTrigger asChild>
                       <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 rounded-t-2xl">
                         <CardTitle className="flex items-center gap-2 text-base">

@@ -380,13 +380,17 @@ export async function resolveConversationContext(
     // 5. Most recent non-AI/non-human outbound in the window — only when the
     //    candidate is unambiguous (a single distinct campaign in the window).
     try {
+      // v1.1.0 — phone-format tolerant and branch tolerant. A campaign row can
+      // be written with a global (null) branch or a differently formatted phone
+      // (+91… vs 91… vs 0…); the old strict equality silently found nothing and
+      // the AI then treated a campaign reply as a brand-new lead.
+      const variantList = variants.length ? variants : [input.phoneNumber];
       const { data: rows } = await supabase
         .from("whatsapp_messages")
         .select(
           "id, whatsapp_message_id, content, source_type, campaign_id, communication_log_id, media_meta, created_at, direction",
         )
-        .eq("branch_id", input.branchId)
-        .eq("phone_number", input.phoneNumber)
+        .in("phone_number", variantList)
         .eq("direction", "outbound")
         .gte("created_at", hoursAgo(RECENT_OUTBOUND_WINDOW_HOURS))
         .order("created_at", { ascending: false })
@@ -413,20 +417,25 @@ export async function resolveConversationContext(
           }
         }
 
-        if (!outbound && !ambiguous && input.allowRecencyFallback !== false) {
+        if (!outbound && input.allowRecencyFallback !== false) {
+          // Even when several campaigns landed in the window, the MOST RECENT
+          // outbound is the message the person is looking at on their phone.
+          // Dropping it entirely (old behaviour) lost all context; we keep it
+          // and simply mark the confidence lower when ambiguous.
           outbound = top;
           ctx.correlationMethod = "recent_outbound";
           ctx.correlationConfidence = "low";
-        } else if (!outbound && (ambiguous || input.allowRecencyFallback === false)) {
-
-          console.log(
-            "[WhatsApp Context Resolver] ambiguous fallback — multiple campaigns in window, no context.id",
-            JSON.stringify({ branch_id: input.branchId, campaigns: distinctCampaigns.size }),
-          );
+          if (ambiguous) {
+            console.log(
+              "[WhatsApp Context Resolver] multiple campaigns in window — using most recent outbound",
+              JSON.stringify({ branch_id: input.branchId, campaigns: distinctCampaigns.size }),
+            );
+          }
         }
       }
     } catch { /* non-fatal */ }
   }
+
 
   // ── Hydrate provenance from the correlated outbound row ────────────────────
   if (outbound) {
@@ -465,6 +474,22 @@ export async function resolveConversationContext(
           : ctx.correlationMethod;
       } catch { /* non-fatal */ }
     }
+
+    // v1.1.0 — native template sends store an empty body on the CRM row, so the
+    // AI never saw what we actually sent. Recover the rendered copy from the
+    // dispatcher's log so a reply like "yes" can be interpreted correctly.
+    if (!ctx.originalOutboundMessage && ctx.communicationLogId) {
+      try {
+        const { data: logBody } = await supabase
+          .from("communication_logs")
+          .select("content, subject")
+          .eq("id", ctx.communicationLogId)
+          .maybeSingle();
+        ctx.originalOutboundMessage =
+          (logBody?.content as string | null) ?? (logBody?.subject as string | null) ?? null;
+      } catch { /* non-fatal */ }
+    }
+
 
     // Campaign hydration
     if (ctx.campaignId) {

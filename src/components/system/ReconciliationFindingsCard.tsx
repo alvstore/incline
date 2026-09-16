@@ -236,7 +236,7 @@ export function ReconciliationFindingsCard() {
   const totalOpen = open.length;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">

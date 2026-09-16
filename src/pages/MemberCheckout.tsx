@@ -241,7 +241,7 @@ export default function MemberCheckout() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-muted p-4">
-      <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow/50">
+      <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow-slate-200/50">
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 text-primary-foreground px-6 py-5">
           <h1 className="text-xl font-bold">Secure Payment — Incline Fitness</h1>
           <p className="text-warning text-sm">{invoice.branch_name}</p>

@@ -50,7 +50,7 @@ export function WhatsAppRoutingSettings() {
   };
 
   return (
-    <Card className="rounded-2xl shadow-md shadow/50">
+    <Card className="rounded-2xl shadow-md shadow-slate-200/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Phone className="h-4 w-4 text-primary" /> My WhatsApp Routing

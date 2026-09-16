@@ -44,7 +44,7 @@ export function CommunicationFunnelCard() {
   const { data, isLoading } = useQuery({ queryKey: ['comm-funnel-24h'], queryFn: fetchFunnel });
 
   return (
-    <Card className="rounded-2xl border-border/50 shadow-lg shadow/50">
+    <Card className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <Send className="h-5 w-5 text-primary" />

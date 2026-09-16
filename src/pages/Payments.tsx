@@ -408,7 +408,7 @@ export default function PaymentsPage() {
           </p>
         )}
 
-        <Card className="rounded-2xl border-border/50 shadow-lg shadow/50">
+        <Card className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2"><Filter className="h-4 w-4" />Filters</CardTitle>

@@ -252,7 +252,7 @@ export default function FeedbackPage() {
         </div>
 
         {/* Feedback Table */}
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader><CardTitle>All Feedback</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? (

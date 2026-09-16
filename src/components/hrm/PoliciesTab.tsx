@@ -103,7 +103,7 @@ export default function PoliciesTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-primary" /> Policy Library</CardTitle>

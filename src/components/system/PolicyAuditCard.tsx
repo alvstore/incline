@@ -34,7 +34,7 @@ export function PolicyAuditCard() {
   const healthy = total - noRls.length - noPolicies.length;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldCheck className="h-5 w-5 text-primary" />

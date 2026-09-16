@@ -83,7 +83,7 @@ export default function DRReadiness() {
         </p>
       </header>
 
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-lg">Status</CardTitle>

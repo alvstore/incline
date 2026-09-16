@@ -252,7 +252,7 @@ function ClientRosterCard({
 
   return (
     <div className={cn(
-      'group relative rounded-2xl bg-card shadow-lg shadow/50 p-4 transition-all',
+      'group relative rounded-2xl bg-card shadow-lg shadow-slate-200/50 p-4 transition-all',
       'hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-0.5',
       isCompletedish && 'ring-1 ring-success/25 bg-gradient-to-br from-success/10 to-white',
     )}>
@@ -475,7 +475,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
   };
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between p-4 hover:bg-muted rounded-2xl transition-colors"
@@ -751,7 +751,7 @@ export function PtAttendanceTabContent() {
   return (
     <div className="space-y-4">
       {/* Top: Week strip */}
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardContent className="p-4">
           <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
         </CardContent>
@@ -763,7 +763,7 @@ export function PtAttendanceTabContent() {
         isTrainerOnly ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[260px_1fr]',
       )}>
         {!isTrainerOnly && (
-          <Card className="rounded-2xl shadow-lg shadow/50 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+          <Card className="rounded-2xl shadow-lg shadow-slate-200/50 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Users className="h-3.5 w-3.5" />
@@ -781,7 +781,7 @@ export function PtAttendanceTabContent() {
           </Card>
         )}
 
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base text-foreground">

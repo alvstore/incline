@@ -397,7 +397,7 @@ export default function ExternalReviewsTab() {
             const isDrafting = draftingId === r.id && draftWithAI.isPending;
             const Icon = cb.icon;
             return (
-              <Card key={r.id} className="rounded-2xl shadow-lg shadow/50">
+              <Card key={r.id} className="rounded-2xl shadow-lg shadow-slate-200/50">
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>

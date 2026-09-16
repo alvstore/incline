@@ -55,7 +55,7 @@ export function HowbodyDevicesCard() {
   }
 
   return (
-    <Card className="rounded-2xl p-6 shadow-lg shadow/50">
+    <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="rounded-full bg-primary/10 p-2 text-primary"><Cpu className="h-5 w-5" /></div>

@@ -518,7 +518,7 @@ export default function PlansPage() {
               <p className="text-sm opacity-80 mt-0.5">Active Members</p>
             </CardContent>
           </Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow/50 rounded-2xl">
+          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl">
             <CardContent className="pt-6 pb-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 rounded-lg bg-warning/10 dark:bg-warning/10">
@@ -531,7 +531,7 @@ export default function PlansPage() {
               </p>
             </CardContent>
           </Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow/50 rounded-2xl">
+          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl">
             <CardContent className="pt-6 pb-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 rounded-lg bg-primary/10">

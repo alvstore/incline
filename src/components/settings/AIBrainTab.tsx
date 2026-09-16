@@ -215,7 +215,7 @@ export function AIBrainTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
@@ -242,7 +242,7 @@ export function AIBrainTab() {
 
       {/* Health */}
       {health && health.length > 0 && (
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Handle Health (last 24h)</CardTitle>
             <CardDescription>
@@ -281,7 +281,7 @@ export function AIBrainTab() {
       )}
 
       {/* Entries table */}
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-2">

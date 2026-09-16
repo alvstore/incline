@@ -34,7 +34,7 @@ export function AutomationActivityRail({ runs, rules, filterRuleId, onClearFilte
   const filterRule = filterRuleId ? rules.find((r) => r.id === filterRuleId) : null;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow/50 border-0 sticky top-4">
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0 sticky top-4">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base flex items-center gap-2">

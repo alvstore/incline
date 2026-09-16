@@ -251,7 +251,7 @@ function DashboardTab() {
     <div className="space-y-6">
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="rounded-xl shadow-lg shadow/50">
+        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="bg-success/10 text-success p-2.5 rounded-full"><Activity className="h-5 w-5" /></div>
             <div>
@@ -260,7 +260,7 @@ function DashboardTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-xl shadow-lg shadow/50">
+        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="bg-primary/10 text-primary p-2.5 rounded-full"><Activity className="h-5 w-5" /></div>
             <div>
@@ -269,7 +269,7 @@ function DashboardTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-xl shadow-lg shadow/50">
+        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="bg-warning/10 text-warning p-2.5 rounded-full"><Clock className="h-5 w-5" /></div>
             <div>
@@ -281,7 +281,7 @@ function DashboardTab() {
       </div>
 
       {/* Live Activity Feed */}
-      <Card className="rounded-xl shadow-lg shadow/50">
+      <Card className="rounded-xl shadow-lg shadow-slate-200/50">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
@@ -519,7 +519,7 @@ function ToolsTab() {
   return (
     <div className="space-y-6">
       {/* Hero summary */}
-      <Card className="rounded-2xl shadow-lg shadow/50 overflow-hidden border-0">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden border-0">
         <div className="bg-gradient-to-br from-primary via-primary to-info text-primary-foreground p-5 md:p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -582,7 +582,7 @@ function ToolsTab() {
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
         </div>
       ) : filteredCategories.length === 0 ? (
-        <Card className="rounded-2xl shadow-lg shadow/50">
+        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
           <CardContent className="py-12 text-center text-muted-foreground">
             <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No tools match "{search}"</p>
@@ -594,7 +594,7 @@ function ToolsTab() {
           const catEnabled = category.tools.filter((t) => toolEnabled(t.name)).length;
           const catTotal = category.tools.length;
           return (
-            <Card key={category.id} className="rounded-2xl shadow-lg shadow/50 overflow-hidden">
+            <Card key={category.id} className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
@@ -635,7 +635,7 @@ function ToolsTab() {
                         key={tool.name}
                         className={`group flex items-start gap-3 p-3 rounded-xl border transition-all ${
                           isEnabled
-                            ? 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow/60'
+                            ? 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow-slate-200/60'
                             : 'bg-muted/60 border-border/60 opacity-70'
                         }`}
                       >
@@ -668,7 +668,7 @@ function ToolsTab() {
       )}
 
       {/* Manual Test Lab */}
-      <Card className="rounded-2xl shadow-lg shadow/50">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <div className="bg-success/10 text-success p-2 rounded-lg ring-1 ring-success/15">
