@@ -1,4 +1,7 @@
-// v1.1.0 — Sarvam Voice Agent API tools (HTTPS tool endpoint).
+// v1.2.0 — Sarvam Voice Agent API tools (HTTPS tool endpoint).
+// v1.2.0: accurate ai_tool_logs status (business-rule failures log as "error"),
+//         and book_callback never drops a callback — falls back to the primary
+//         branch and files a high-priority staff task for an unresolved caller.
 //
 // Registered in Sarvam → Build → Tools as HTTPS tools. Authenticated with the
 // shared tool token stored in the integration config and sent by Sarvam as the
@@ -67,6 +70,18 @@ Deno.serve(async (req) => {
         .from("branches")
         .select("id")
         .ilike("name", branchName)
+        .limit(1)
+        .maybeSingle();
+      return (data as { id?: string } | null)?.id ?? null;
+    };
+
+    /** Primary branch, used as a last-resort fallback so callbacks are never lost. */
+    const resolvePrimaryBranch = async (): Promise<string | null> => {
+      const { data } = await sb
+        .from("branches")
+        .select("id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
       return (data as { id?: string } | null)?.id ?? null;
@@ -195,7 +210,8 @@ Deno.serve(async (req) => {
       const member = await resolveMember();
       const when = typeof args.callback_datetime === "string" ? args.callback_datetime : null;
       const note = typeof args.note === "string" ? args.note.slice(0, 500) : "";
-      const target = member?.branch_id ?? (await resolveBranchByName());
+      const resolved = member?.branch_id ?? (await resolveBranchByName());
+      const target = resolved ?? (await resolvePrimaryBranch());
       if (!target) {
         result = { booked: false, message: "No branch could be resolved, callback not booked." };
       } else {
@@ -204,19 +220,33 @@ Deno.serve(async (req) => {
         const who = (member?.full_name as string | null) ??
           (typeof args.member_name === "string" ? args.member_name : null);
         const identity = [who, member?.member_code ?? (memberCode || null)].filter(Boolean).join(" · ");
+        const unresolved = !resolved || !member;
+        const details = [
+          identity ? `Member: ${identity}.` : "",
+          phone ? `Phone ${phone}.` : "",
+          branchName ? `Branch stated: ${branchName}.` : "",
+          when ? `Requested time: ${when}.` : "",
+          note ? `Note: ${note}` : "",
+        ].filter(Boolean).join(" ");
         const { error } = await sb.from("tasks").insert({
           branch_id: target,
-          title: "Voice AI: callback requested by member",
-          description: `Requested during a Sarvam Voice AI call.${identity ? ` Member: ${identity}.` : ""}${
-            phone ? ` Phone ${phone}.` : ""
-          }${note ? ` Note: ${note}` : ""}`,
+          title: unresolved
+            ? "Voice AI: callback requested (unresolved caller)"
+            : "Voice AI: callback requested by member",
+          description: `Requested during a Sarvam Voice AI call.${details ? ` ${details}` : ""}${
+            unresolved ? " Caller could not be matched automatically — please verify and follow up." : ""
+          }`,
           priority: "high",
           due_date: (Number.isNaN(due.getTime()) ? new Date() : due).toISOString().slice(0, 10),
           linked_entity_type: member ? "member" : null,
           linked_entity_id: member?.id ?? null,
         });
         if (error) throw new Error(error.message);
-        result = { booked: true, message: "Callback noted for the team." };
+        result = {
+          booked: true,
+          unresolved_caller: unresolved,
+          message: "Callback noted for the team.",
+        };
       }
     } else if (tool === "mark_do_not_contact") {
       const member = await resolveMember();
@@ -247,6 +277,10 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: `Unknown tool: ${tool}` }, 400);
     }
 
+    // A 200 response is not automatically a success: business-rule failures
+    // (nothing booked, nobody found, opt-out not applied) must log as errors.
+    const failed = result.booked === false || result.done === false || result.found === false ||
+      typeof result.error === "string";
     await sb.from("ai_tool_logs").insert({
       tool_name: tool,
       platform: "sarvam_voice",
@@ -254,7 +288,8 @@ Deno.serve(async (req) => {
       branch_id: branchId,
       arguments: args,
       result,
-      status: "success",
+      status: failed ? "error" : "success",
+      error_message: failed ? redact(String(result.message ?? result.error ?? "Tool returned no result")) : null,
       execution_time_ms: Date.now() - started,
     });
 
