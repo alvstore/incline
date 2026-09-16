@@ -838,7 +838,10 @@ export function PurchaseMembershipDrawer({
                     ? 'Schedule & Collect Payment'
                     : isMemberMode
                       ? 'Pay Now'
-                      : 'Complete Purchase'}
+                      : activeMembership
+                        ? 'Complete Renewal'
+                        : 'Complete Purchase'}
+
             </Button>
           </div>
         </div>
