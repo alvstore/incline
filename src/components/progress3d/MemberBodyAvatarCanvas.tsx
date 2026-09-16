@@ -51,13 +51,15 @@ export function MemberBodyAvatarCanvas({
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-muted via-muted to-primary shadow-xl shadow-primary/20">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
-        <div className="flex items-center gap-2">
-          <Badge className="border-0 bg-card/15 text-primary-foreground">
+        <div className="flex min-w-0 items-center gap-2">
+          <Badge className="shrink-0 border-0 bg-card/15 text-primary-foreground">
             <Sparkles className="mr-1 h-3 w-3" /> {label}
           </Badge>
           {scan?.posture?.test_time && (
-            <span className="text-[11px] text-muted-foreground">
-              {new Date(scan.posture.test_time).toLocaleString()}
+            <span className="truncate text-[11px] text-primary-foreground/70">
+              {new Date(scan.posture.test_time).toLocaleDateString('en-IN', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              })}
             </span>
           )}
         </div>
