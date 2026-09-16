@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -286,11 +287,14 @@ export default function VoiceAIPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Voice AI</h1>
-            <p className="text-sm text-muted-foreground">Incline Member Care · retention calling operations</p>
+            <p className="text-sm text-muted-foreground">Incline Member Care · absence retention and renewal calling</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge className={`rounded-full ${readiness.className}`}>{readiness.label}</Badge>
             {paused && <Badge className="rounded-full bg-amber-100 text-amber-700">PAUSED</Badge>}
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to="/renewal-center">Renewal Center</Link>
+            </Button>
             {canControl && (
               <>
                 <Button

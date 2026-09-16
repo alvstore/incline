@@ -16854,6 +16854,20 @@ export type Database = {
         }
         Returns: Json
       }
+      renewal_case_voice_calls: {
+        Args: { _case_id: string }
+        Returns: {
+          call_id: string
+          call_summary: string
+          callback_datetime: string
+          disposition: string
+          duration_seconds: number
+          ended_at: string
+          next_step_agreed: string
+          started_at: string
+          status: string
+        }[]
+      }
       renewal_cases_report: { Args: never; Returns: Json }
       renewal_center_queue: {
         Args: {
@@ -16928,6 +16942,10 @@ export type Database = {
       }
       renewal_funnel: {
         Args: { _branch_id?: string; _days?: number }
+        Returns: Json
+      }
+      renewal_link_voice_call: {
+        Args: { _attempt_id: string; _case_id: string }
         Returns: Json
       }
       renewal_mark_contacted: {
