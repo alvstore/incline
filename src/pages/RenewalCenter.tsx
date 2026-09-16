@@ -137,7 +137,18 @@ export default function RenewalCenter() {
             <Card key={row.case_id} className="rounded-2xl shadow-lg shadow-primary/5 transition-all hover:shadow-xl hover:shadow-primary/10"><CardContent className="grid gap-4 p-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] md:items-center">
               <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-bold">{row.member_name}</p><Badge variant="secondary">{row.member_code}</Badge><Badge variant={row.stage === 'renewed' ? 'default' : row.days_to_expiry < 0 ? 'destructive' : 'outline'}>{row.stage.split('_').join(' ')}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{row.plan_name ?? 'Membership'} · {row.masked_phone ?? 'No phone'}</p></div>
               <div className="text-sm"><p className="font-semibold">{row.days_to_expiry < 0 ? `${Math.abs(row.days_to_expiry)} days lapsed` : row.days_to_expiry === 0 ? 'Expires today' : `${row.days_to_expiry} days remaining`}</p><p className="text-muted-foreground">Next: {dateTime(row.next_action_at)}</p><p className="text-xs text-muted-foreground">{row.claimed_name ? `Owned by ${row.claimed_name}` : 'Unassigned'} · {row.attempts_count} contacts</p></div>
-              <Button variant="outline" onClick={() => setSelected(row)}>Manage</Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={!voiceLive || voiceCall.isPending}
+                  title={voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet'}
+                  onClick={() => callNow(row)}
+                >
+                  {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
+                </Button>
+                <Button variant="outline" onClick={() => setSelected(row)}>Manage</Button>
+              </div>
             </CardContent></Card>
           ))}<p className="text-center text-xs text-muted-foreground">Showing {rows.length} of {total} cases</p></div>}
       </div>
