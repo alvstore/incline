@@ -91,6 +91,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
   
   const [diag, setDiag] = useState<DiagnoseCheck[] | null>(null);
   const [diagRunning, setDiagRunning] = useState(false);
+  const [locations, setLocations] = useState<GbpLocationItem[]>([]);
+  const [activationUrl, setActivationUrl] = useState<string | null>(null);
 
   const { data: row, isLoading } = useQuery<Row>({
     queryKey: ['gbp-settings', branchId],
