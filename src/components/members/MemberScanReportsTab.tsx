@@ -63,6 +63,49 @@ export function MemberScanReportsTab({ memberId }: Props) {
 
   const [open, setOpen] = useState<HowbodyReportRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTarget, setUploadTarget] = useState<HowbodyReportRow | null>(null);
+
+  function pickOriginal(r: HowbodyReportRow) {
+    setUploadTarget(r);
+    fileInputRef.current?.click();
+  }
+
+  async function onOriginalPicked(file?: File | null) {
+    const target = uploadTarget;
+    if (!file || !target) return;
+    if (file.type !== 'application/pdf') {
+      toast.error('Please choose the PDF exported from the HOWBODY scanner.');
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('That PDF is larger than 15 MB.');
+      return;
+    }
+    try {
+      setBusy(`upload-${target.data_key}`);
+      const buffer = await file.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      const { data, error } = await supabase.functions.invoke('upload-scan-original-pdf', {
+        body: { report_id: target.id, kind: target.type, file_base64: btoa(binary) },
+      });
+      if (error) throw error;
+      const err = (data as { error?: string })?.error;
+      if (err) throw new Error(err);
+      toast.success('Official HOWBODY report saved — it will be used for viewing and sending.');
+      refetch();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not save the report');
+    } finally {
+      setBusy(null);
+      setUploadTarget(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
 
   async function resolvePdfUrl(r: HowbodyReportRow): Promise<string> {
     if (r.pdf_url && r.pdf_source !== 'howbody_original') return r.pdf_url;
