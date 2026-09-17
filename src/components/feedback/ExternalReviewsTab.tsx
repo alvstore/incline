@@ -614,13 +614,24 @@ export default function ExternalReviewsTab() {
 
                   {/* Reply CTA */}
                   {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && !openReply[r.id] && (
-                    <Button
-                      className="h-11 cursor-pointer rounded-xl"
-                      onClick={() => setOpenReply((o) => ({ ...o, [r.id]: true }))}
-                    >
-                      <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
-                      Reply to customer
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        className="h-11 cursor-pointer rounded-xl"
+                        onClick={() => setOpenReply((o) => ({ ...o, [r.id]: true }))}
+                      >
+                        <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
+                        Reply to customer
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-11 cursor-pointer rounded-xl"
+                        onClick={() => markReplied.mutate({ id: r.id, text: (r.google_reply_text ?? r.reply_text ?? '').trim() })}
+                        disabled={markReplied.isPending}
+                      >
+                        <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
+                        Already replied on Google
+                      </Button>
+                    </div>
                   )}
 
                   {/* Reply box */}
