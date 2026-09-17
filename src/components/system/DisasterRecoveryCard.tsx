@@ -51,15 +51,6 @@ const formatBytes = (n: number) => {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 };
 
-const PHASES: Array<{ pct: number; label: string }> = [
-  { pct: 5, label: "Connecting to fallback database…" },
-  { pct: 15, label: "Dumping schema…" },
-  { pct: 30, label: "Mirroring auth users…" },
-  { pct: 55, label: "Mirroring rows…" },
-  { pct: 75, label: "Copying storage files…" },
-  { pct: 92, label: "Finalising…" },
-];
-
 export function DisasterRecoveryCard() {
   const { hasAnyRole } = useAuth();
   const [lastReport, setLastReport] = useState<SyncReport | null>(null);
@@ -75,21 +66,9 @@ export function DisasterRecoveryCard() {
     }
   };
 
-  const startTicker = () => {
-    stopTicker();
-    let i = 0;
-    setProgress(PHASES[0].pct);
-    setPhaseLabel(PHASES[0].label);
-    intervalRef.current = window.setInterval(() => {
-      i = Math.min(i + 1, PHASES.length - 1);
-      setProgress(PHASES[i].pct);
-      setPhaseLabel(PHASES[i].label);
-    }, 1400);
-  };
-
   useEffect(() => () => stopTicker(), []);
 
-  const invokeReplicate = async (mode: "all" | "verify") => {
+  const invokeReplicate = async (mode: "schema" | "auth" | "rows" | "storage" | "verify") => {
     const { data, error } = await supabase.functions.invoke("dr-replicate", {
       body: { mode },
     });
@@ -97,10 +76,43 @@ export function DisasterRecoveryCard() {
     return data as SyncReport;
   };
 
+  /**
+   * Each pass runs as its own invocation — a single "all" run exceeded the
+   * edge worker limits (abnormal termination) and never finished.
+   */
+  const SYNC_PASSES: Array<{ mode: "schema" | "auth" | "rows" | "storage"; label: string; pct: number }> = [
+    { mode: "schema", label: "Dumping schema…", pct: 15 },
+    { mode: "auth", label: "Mirroring auth users…", pct: 40 },
+    { mode: "rows", label: "Mirroring rows…", pct: 70 },
+    { mode: "storage", label: "Copying storage files…", pct: 95 },
+  ];
+
   const sync = useMutation({
-    mutationFn: async () => {
-      startTicker();
-      return invokeReplicate("all");
+    mutationFn: async (): Promise<SyncReport> => {
+      stopTicker();
+      const merged: SyncReport = {
+        ok: true,
+        mode: "all",
+        startedAt: new Date().toISOString(),
+        mirrored: {},
+        errors: [],
+      };
+      for (const pass of SYNC_PASSES) {
+        setProgress(pass.pct);
+        setPhaseLabel(pass.label);
+        try {
+          const report = await invokeReplicate(pass.mode);
+          merged.version = report.version ?? merged.version;
+          merged.mirrored = { ...merged.mirrored, ...report.mirrored };
+          merged.errors.push(...(report.errors ?? []));
+          if (!report.ok) merged.ok = false;
+        } catch (e) {
+          merged.ok = false;
+          merged.errors.push(`${pass.mode}: ${(e as Error).message}`);
+        }
+      }
+      merged.finishedAt = new Date().toISOString();
+      return merged;
     },
     onSuccess: (report) => {
       stopTicker();

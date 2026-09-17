@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -42,6 +42,15 @@ export function MapTemplateDrawer({
   const { effectiveBranchId } = useBranchContext();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(currentTemplateId ?? null);
+
+  // Drawer stays mounted across events — re-sync the selection each time it
+  // opens so a previous event's pick is never carried over.
+  useEffect(() => {
+    if (open) {
+      setSelected(currentTemplateId ?? null);
+      setSearch('');
+    }
+  }, [open, event, currentTemplateId]);
 
   const { data: templates, isLoading, isError } = useQuery({
     queryKey: ['mappable-templates', channel],
@@ -199,6 +208,11 @@ export function MapTemplateDrawer({
                     {t.trigger_event && (
                       <Badge className="bg-slate-100 text-slate-600 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
                         {t.trigger_event}
+                      </Badge>
+                    )}
+                    {currentTemplateId === t.id && (
+                      <Badge className="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
+                        Currently mapped
                       </Badge>
                     )}
                     {t.is_active === false && (
