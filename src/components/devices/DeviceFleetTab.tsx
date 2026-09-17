@@ -198,6 +198,10 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
         </Card>
       )}
 
+      <GateWatchdogCard branchId={branchId} />
+
+
+
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-64 rounded-2xl" />
