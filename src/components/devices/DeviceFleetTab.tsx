@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMipsFleet } from "./useMipsFleet";
 import MIPSDeviceCard from "./MIPSDeviceCard";
+import GateWatchdogCard from "./GateWatchdogCard";
 
 interface DeviceFleetTabProps {
   branchId?: string;
