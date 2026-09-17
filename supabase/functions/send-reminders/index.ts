@@ -393,7 +393,9 @@ Deno.serve(async (req) => {
         type: "warning", category: "payment", action_url: "/my-invoices",
       });
 
-      const channel = (reminder.channel as Channel) || getChannel(reminder.branch_id, "payment_due");
+      const paymentChain = getChannelChain(reminder.branch_id, "payment_due");
+      let channel = (reminder.channel as Channel) || paymentChain[0];
+
 
       // Resolve the template for THIS channel. The WhatsApp template body is
       // only meaningful to Meta (positional {{1}} slots) — reusing it as the
