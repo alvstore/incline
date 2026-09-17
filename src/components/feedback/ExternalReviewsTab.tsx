@@ -205,6 +205,25 @@ export default function ExternalReviewsTab() {
     onError: (e: any) => toast.error(e?.message ?? 'Fetch failed'),
   });
 
+  // Pulls owner replies that were posted on Google Maps / the GBP app so the
+  // pending count reflects reality instead of only replies sent from here.
+  const syncReplies = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'sync_replies', branch_id: branchId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as any;
+    },
+    onSuccess: (d) => {
+      const n = Number(d?.replies_synced ?? 0);
+      toast.success(n > 0 ? `${n} reply${n === 1 ? '' : 's'} found on Google and marked replied` : 'No new replies found on Google');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not sync replies from Google'),
+  });
+
   const reclassify = useMutation({
     mutationFn: async (id: string) => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
@@ -437,6 +456,17 @@ export default function ExternalReviewsTab() {
           Fetch now
         </Button>
         <Button
+          variant="outline"
+          size="sm"
+          onClick={() => syncReplies.mutate()}
+          disabled={syncReplies.isPending}
+          className="cursor-pointer"
+          aria-label="Sync replies already posted on Google"
+        >
+          <CheckCircle2 className={`h-4 w-4 mr-1.5 ${syncReplies.isPending ? 'animate-pulse' : ''}`} />
+          Sync replies
+        </Button>
+        <Button
           variant="ghost"
           size="sm"
           onClick={() => diagnose.mutate()}
@@ -584,13 +614,24 @@ export default function ExternalReviewsTab() {
 
                   {/* Reply CTA */}
                   {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && !openReply[r.id] && (
-                    <Button
-                      className="h-11 cursor-pointer rounded-xl"
-                      onClick={() => setOpenReply((o) => ({ ...o, [r.id]: true }))}
-                    >
-                      <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
-                      Reply to customer
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        className="h-11 cursor-pointer rounded-xl"
+                        onClick={() => setOpenReply((o) => ({ ...o, [r.id]: true }))}
+                      >
+                        <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
+                        Reply to customer
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-11 cursor-pointer rounded-xl"
+                        onClick={() => markReplied.mutate({ id: r.id, text: (r.google_reply_text ?? r.reply_text ?? '').trim() })}
+                        disabled={markReplied.isPending}
+                      >
+                        <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
+                        Already replied on Google
+                      </Button>
+                    </div>
                   )}
 
                   {/* Reply box */}
@@ -715,8 +756,12 @@ export default function ExternalReviewsTab() {
                     <div className="rounded-xl bg-success/10 p-3 text-sm">
                       <p className="text-xs font-semibold text-success uppercase tracking-wider mb-1 flex items-center gap-1">
                         <ExternalLink className="h-3 w-3" />
-                        {r.reply_mode === 'manual_google' ? 'Replied manually on Google' : 'Replied on Google'}
-                        {r.replied_at ? ` · ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
+                        {r.reply_mode === 'manual_google'
+                          ? 'Replied manually on Google'
+                          : r.reply_mode === 'google_owner'
+                            ? 'Replied on Google'
+                            : 'Replied from Incline'}
+                        {r.replied_at ? ` · ${format(new Date(r.replied_at), "dd MMM yyyy, h:mm a")}` : ''}
                       </p>
                       <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text ?? r.reply_text}</p>
                     </div>
