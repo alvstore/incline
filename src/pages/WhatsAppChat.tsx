@@ -43,7 +43,7 @@ import {
   MessageSquare, Send, Search, Phone, User,
   CheckCheck, Check, Clock, Paperclip, Smile, MoreVertical, Sparkles, Loader2, Plus, AlertTriangle, Bot, UserPlus, Image, FileText,
   Trash2, Ban, Eye, CircleDot, AlertCircle, Instagram, Facebook, Users, PanelRightOpen, PanelRightClose, BookUser, RefreshCw, AtSign,
-  Play, Layers, ExternalLink, MessageCircle,
+  Play, Layers, ExternalLink, MessageCircle, ChevronLeft,
 } from 'lucide-react';
 
 // Platform icon helper
@@ -962,11 +962,11 @@ export default function WhatsAppChatPage() {
 
   return (
     <AppLayout>
-      <div className="h-[calc(100vh-5rem)] p-4">
-        <div className="h-full rounded-2xl border border-border/50 shadow-xl overflow-hidden flex bg-card">
+      <div className="h-[calc(100dvh-5rem)] p-0 md:p-4">
+        <div className="h-full rounded-none md:rounded-2xl border-0 md:border md:border-border/50 shadow-none md:shadow-xl overflow-hidden flex bg-card">
 
           {/* ── Sidebar ──────────────────────────────────────────────────── */}
-          <div className="w-[340px] border-r border-border/50 flex flex-col bg-card">
+          <div className={`w-full md:w-[340px] min-w-0 shrink-0 md:border-r border-border/50 flex-col bg-card ${selectedContact ? 'hidden md:flex' : 'flex'}`}>
             {/* Sidebar Header */}
             <div className="p-4 border-b border-border/30">
               <div className="flex items-center justify-between mb-3">
@@ -1027,7 +1027,7 @@ export default function WhatsAppChatPage() {
                 ))}
               </div>
               {/* Platform filter badges — always visible */}
-              <div className="flex gap-1 mt-1.5">
+              <div className="flex gap-1 mt-1.5 overflow-x-auto no-scrollbar -mx-1 px-1">
                 {[
                   { key: 'whatsapp' as ChatFilter, icon: <MessageSquare className="h-3 w-3" />, label: 'WhatsApp', color: 'text-success', activeBg: 'bg-success/15 text-success dark:text-success ring-1 ring-success/30' },
                   { key: 'instagram' as ChatFilter, icon: <Instagram className="h-3 w-3" />, label: 'Instagram', color: 'text-destructive', activeBg: 'bg-destructive/15 text-destructive dark:text-destructive ring-1 ring-destructive/30' },
@@ -1036,7 +1036,7 @@ export default function WhatsAppChatPage() {
                   <button
                     key={tab.key}
                     onClick={() => setChatFilter(prev => prev === tab.key ? 'all' : tab.key)}
-                    className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-all ${
+                    className={`flex items-center gap-1 shrink-0 text-xs font-medium px-2.5 py-1 rounded-lg transition-all ${
                       chatFilter === tab.key
                         ? tab.activeBg
                         : 'text-muted-foreground hover:bg-muted/80'
@@ -1050,7 +1050,7 @@ export default function WhatsAppChatPage() {
             </div>
 
             {/* Contact List */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 w-full [&>div>div]:!block [&>div>div]:min-w-0">
               {filteredContacts.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground">
                   <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-30" />
@@ -1135,7 +1135,7 @@ export default function WhatsAppChatPage() {
                           {formatContactTime(contact.last_message_time)}
                         </span>
                       </div>
-                      <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5 leading-snug">{contact.last_message}</p>
+                      <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5 leading-snug break-all">{contact.last_message}</p>
                     </div>
 
                     {contact.unread_count > 0 && (
@@ -1150,18 +1150,27 @@ export default function WhatsAppChatPage() {
           </div>
 
           {/* ── Chat Area ────────────────────────────────────────────────── */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className={`flex-1 flex-col overflow-hidden ${selectedContact ? 'flex' : 'hidden md:flex'}`}>
             {selectedContact ? (
               <>
                 {/* Chat Header */}
-                <div className={`px-5 py-3 border-b flex items-center justify-between bg-card flex-shrink-0 ${
+                <div className={`px-3 md:px-5 py-3 border-b flex items-center justify-between gap-2 bg-card flex-shrink-0 ${
                   selectedContact.platform === 'instagram' 
                     ? 'border-b-destructive/30' 
                     : selectedContact.platform === 'messenger'
                     ? 'border-b-info/30'
                     : 'border-b-border/30'
                 }`}>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Back to conversations"
+                      className="md:hidden h-9 w-9 shrink-0 rounded-xl cursor-pointer"
+                      onClick={() => setSelectedContact(null)}
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
                     <div className="relative">
                       <Avatar className="h-10 w-10">
                         {selectedContact.contact_avatar_url && (
@@ -1186,9 +1195,9 @@ export default function WhatsAppChatPage() {
                         </span>
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="font-semibold text-foreground text-sm break-words [overflow-wrap:anywhere]">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm truncate">
                           {displayLabel(selectedContact)}
                         </h3>
                         {(() => {
@@ -1220,7 +1229,7 @@ export default function WhatsAppChatPage() {
                         })()}
 
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0 truncate">
                         {(() => {
                           const plat = selectedContact.platform;
                           const ph = selectedContact.phone_number;
@@ -1300,17 +1309,17 @@ export default function WhatsAppChatPage() {
                             <button
                               type="button"
                               aria-label="AI pause control"
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer hover:opacity-90 transition ${pillTone}`}
+                              className={`flex items-center gap-1.5 md:gap-2 shrink-0 px-2 md:px-3 py-1.5 rounded-lg cursor-pointer hover:opacity-90 transition ${pillTone}`}
                             >
                               {effectivelyPaused ? (
                                 <AlertTriangle className={`h-3.5 w-3.5 ${iconTone}`} />
                               ) : (
                                 <Bot className={`h-3.5 w-3.5 ${iconTone}`} />
                               )}
-                              <span className={`text-xs ${labelTone}`}>
+                              <span className={`text-xs whitespace-nowrap ${labelTone}`}>
                                 {effectivelyPaused
                                   ? (countdown ? `AI paused · ${countdown}` : 'AI paused')
-                                  : 'AI Bot On'}
+                                  : <><span className="hidden md:inline">AI Bot </span>On</>}
                               </span>
                             </button>
                           </PopoverTrigger>
@@ -1650,7 +1659,7 @@ export default function WhatsAppChatPage() {
                 </div>
 
                 {/* Message Input */}
-                <div className="px-4 py-3 border-t border-border/30 bg-card flex-shrink-0">
+                <div className="px-3 md:px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/30 bg-card flex-shrink-0">
                   {/* Whisper Mode Banner */}
                   {whisperMode && (
                     <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/20 text-xs text-warning dark:text-warning">
@@ -1691,7 +1700,8 @@ export default function WhatsAppChatPage() {
                       )}
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+                    <div className="flex items-center gap-1 md:gap-2 order-2 md:order-1">
                     <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -1738,6 +1748,8 @@ export default function WhatsAppChatPage() {
                     >
                       <Eye className="h-5 w-5" />
                     </Button>
+                    </div>
+                    <div className="flex items-center gap-2 w-full md:w-auto md:flex-1 order-1 md:order-2">
                     <Input
                       placeholder={isBranchUnselected ? 'Select a branch to send messages…' : whisperMode ? 'Write an internal note…' : 'Type a message or / for templates…'}
                       value={newMessage}
@@ -1778,6 +1790,7 @@ export default function WhatsAppChatPage() {
                     >
                       <Send className="h-4 w-4" />
                     </Button>
+                    </div>
                   </div>
                 </div>
               </>

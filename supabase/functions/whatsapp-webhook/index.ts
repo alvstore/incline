@@ -1,3 +1,8 @@
+// v7.2.0 — Coexistence support: echoes of messages typed by staff in the
+//          WhatsApp Business phone app are stored as outbound bubbles
+//          (source_type='phone_app'), late wamids are back-filled onto the
+//          matching CRM row instead of creating a duplicate, and a human reply
+//          from the phone pauses the AI on that chat for 30 minutes.
 // v7.1.0 — WHATSAPP_CONTEXT_RESOLVER_V2 feature flag (default OFF, allowlist
 //          rollout) + context.id-only correlation option.
 // v7.0.0 — Conversation Context & Message Provenance layer: persists Meta
@@ -325,6 +330,36 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
 
     if (existing) continue;
 
+    // v7.2.0 — Coexistence. Outbound echoes come back for BOTH messages we sent
+    // through the Cloud API and messages staff typed in the WhatsApp Business
+    // phone app on the same number. If a CRM row for this send already exists
+    // but its wamid hasn't landed yet (send handler still finishing), back-fill
+    // the id onto that row instead of creating a second bubble.
+    if (direction === "outbound") {
+      const echoBody = extractMessageContent(message);
+      const since = new Date(Date.now() - 5 * 60_000).toISOString();
+      const { data: pendingRow } = await supabase
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("branch_id", branchId)
+        .eq("phone_number", remotePhone)
+        .eq("direction", "outbound")
+        .is("whatsapp_message_id", null)
+        .eq("content", echoBody)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingRow?.id) {
+        await supabase
+          .from("whatsapp_messages")
+          .update({ whatsapp_message_id: message.id, status: "sent" })
+          .eq("id", pendingRow.id);
+        continue;
+      }
+    }
+
     // Download inbound media (PDF/image/video/audio) from Meta to our storage.
     // Meta only stores raw IDs and gives 5-min signed URLs; we persist a copy
     // and store the storage path in media_url + metadata in media_meta.
@@ -346,7 +381,8 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
       direction: direction,
       status: direction === "inbound" ? "received" : "sent",
       whatsapp_message_id: message.id,
-      source_type: direction === "inbound" ? "inbound" : undefined,
+      // No matching CRM row => a human typed this in the WhatsApp Business app.
+      source_type: direction === "inbound" ? "inbound" : "phone_app",
       reply_to_message_id: replyToMessageId,
     };
 
@@ -365,7 +401,24 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
           },
           { onConflict: "branch_id,phone_number" },
         );
+      } else {
+        // A staff member answered from the phone app — stand the AI down on
+        // this thread for 30 minutes so it never talks over a human.
+        try {
+          await supabase.from("whatsapp_chat_settings").upsert(
+            {
+              branch_id: branchId,
+              phone_number: remotePhone,
+              is_unread: false,
+              bot_paused_until: new Date(Date.now() + 30 * 60_000).toISOString(),
+            },
+            { onConflict: "branch_id,phone_number" },
+          );
+        } catch (pauseErr) {
+          console.warn("[whatsapp-webhook] phone-app pause failed:", pauseErr);
+        }
       }
+
 
       // Persist contact display name across the thread (and backfill the
       // lead row if one exists). WhatsApp Cloud API does not expose a

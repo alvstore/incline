@@ -27,6 +27,7 @@ import { HandlesTab } from '@/components/settings/ai/HandlesTab';
 import { PlumbingTab } from '@/components/settings/ai/PlumbingTab';
 import { AITrainingTab } from '@/components/settings/ai/AITrainingTab';
 import { AgentFlowCanvas } from '@/components/settings/ai/AgentFlowCanvas';
+import { AgentFlowBuilder } from '@/components/settings/ai/flow/AgentFlowBuilder';
 
 type ToolDef = {
   name: string;
@@ -206,7 +207,8 @@ function AIAgentTabs() {
         <DashboardTab />
       </TabsContent>
 
-      <TabsContent value="flow">
+      <TabsContent value="flow" className="space-y-6">
+        <AgentFlowBuilder />
         <AgentFlowCanvas />
       </TabsContent>
 

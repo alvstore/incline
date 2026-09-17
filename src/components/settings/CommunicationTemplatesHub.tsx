@@ -11,6 +11,7 @@ import { TemplateCoverageMatrix } from './TemplateCoverageMatrix';
 
 // AI Agent settings live in their own settings entry; not duplicated here.
 import { WhatsAppRoutingSettings } from './WhatsAppRoutingSettings';
+import { WhatsAppCoexistenceCard } from './WhatsAppCoexistenceCard';
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
 
 type Channel = 'whatsapp' | 'sms' | 'email';
@@ -240,9 +241,12 @@ export function CommunicationTemplatesHub() {
             )}
 
             {section === 'routing' && (
-              <Card className="rounded-2xl shadow-lg shadow-primary/5 border-0">
-                <CardContent className="pt-6"><WhatsAppRoutingSettings /></CardContent>
-              </Card>
+              <div className="space-y-6">
+                <WhatsAppCoexistenceCard />
+                <Card className="rounded-2xl shadow-lg shadow-primary/5 border-0">
+                  <CardContent className="pt-6"><WhatsAppRoutingSettings /></CardContent>
+                </Card>
+              </div>
             )}
           </div>
         </div>

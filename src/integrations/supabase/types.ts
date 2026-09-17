@@ -278,6 +278,106 @@ export type Database = {
           },
         ]
       }
+      agent_flow_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          flow_id: string
+          graph: Json
+          id: string
+          note: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          flow_id: string
+          graph: Json
+          id?: string
+          note?: string | null
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          flow_id?: string
+          graph?: Json
+          id?: string
+          note?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_flow_versions_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "agent_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_flows: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          graph: Json
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          published_at: string | null
+          published_by: string | null
+          published_graph: Json | null
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          graph?: Json
+          id?: string
+          is_active?: boolean
+          key: string
+          name: string
+          published_at?: string | null
+          published_by?: string | null
+          published_graph?: Json | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          graph?: Json
+          id?: string
+          is_active?: boolean
+          key?: string
+          name?: string
+          published_at?: string | null
+          published_by?: string | null
+          published_graph?: Json | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_flows_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_call_logs: {
         Row: {
           branch_id: string | null
