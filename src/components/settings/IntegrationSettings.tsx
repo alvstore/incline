@@ -280,44 +280,37 @@ export function IntegrationSettings() {
                           </Badge>
                         </div>
 
-                        {webhook && (
-                          <div className="mt-4 space-y-1.5 rounded-xl bg-primary/5 p-3">
-                            <div className="flex items-center gap-1.5">
-                              <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
-                              <span className="text-xs font-semibold">{webhook.label}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
-                                {branchFilter ? webhook.url : 'Select a branch to generate this URL'}
-                              </code>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="cursor-pointer shrink-0"
-                                aria-label={`Copy ${provider.name} webhook URL`}
-                                onClick={() => {
-                                  if (!branchFilter) {
-                                    toast.error('Select a branch before copying the webhook URL');
-                                    return;
-                                  }
-                                  navigator.clipboard.writeText(webhook.url);
-                                  toast.success(`${provider.name} webhook URL copied`);
-                                }}
-                              >
-                                <Copy className="h-3.5 w-3.5" aria-hidden />
-                              </Button>
-                            </div>
-                          </div>
-                        )}
+                        <div className="mt-4 flex items-center gap-2">
+                          <Button
+                            className="flex-1 cursor-pointer"
+                            variant={config?.is_active ? 'outline' : 'default'}
+                            onClick={() => openConfig('payment_gateway', provider.id)}
+                          >
+                            <Settings className="h-4 w-4 mr-2" />
+                            {config ? 'Configure' : 'Setup'}
+                          </Button>
+                          {webhook && config?.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="cursor-pointer shrink-0 text-muted-foreground"
+                              aria-label={`Copy ${provider.name} webhook URL`}
+                              title="Copy payment webhook URL"
+                              onClick={() => {
+                                if (!branchFilter) {
+                                  toast.error('Select a branch before copying the webhook URL');
+                                  return;
+                                }
+                                navigator.clipboard.writeText(webhook.url);
+                                toast.success(`${provider.name} webhook URL copied`);
+                              }}
+                            >
+                              <Webhook className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                              Webhook
+                            </Button>
+                          )}
+                        </div>
 
-                        <Button 
-                          className="w-full mt-4 cursor-pointer" 
-                          variant={config?.is_active ? 'outline' : 'default'}
-                          onClick={() => openConfig('payment_gateway', provider.id)}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          {config ? 'Configure' : 'Setup'}
-                        </Button>
                       </CardContent>
                     </Card>
                   );
