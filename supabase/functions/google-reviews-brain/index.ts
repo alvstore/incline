@@ -383,6 +383,118 @@ function friendlyGoogleError(status: number, body: string): string {
   return `Google returned HTTP ${status}.`;
 }
 
+/** Pull the Google Cloud "enable this API" link out of a SERVICE_DISABLED error body. */
+function extractActivationUrl(body: string): string | null {
+  const m = (body || "").match(/https:\/\/console\.developers\.google\.com\/apis\/api\/[^"'\s\\]+/);
+  return m ? m[0] : null;
+}
+
+// ─── Business Profile discovery (v1 APIs — v4 has no accounts/locations list) ──
+// Accounts  : mybusinessaccountmanagement.googleapis.com/v1/accounts
+// Locations : mybusinessbusinessinformation.googleapis.com/v1/accounts/{id}/locations
+// Reviews   : mybusiness.googleapis.com/v4/accounts/{id}/locations/{id}/reviews
+type GbpLocation = {
+  account_id: string;
+  account_name: string;
+  location_id: string;
+  title: string;
+  place_id: string | null;
+  address: string | null;
+  maps_uri: string | null;
+};
+
+async function discoverGbpLocations(branch_id: string): Promise<
+  { ok: true; locations: GbpLocation[] } | { ok: false; reason: string; activation_url?: string; status?: number }
+> {
+  const cfg = await getGoogleConfig(branch_id);
+  if (!cfg) return { ok: false, reason: "Google Business integration not configured for this branch." };
+  if (!cfg.refresh_token) return { ok: false, reason: "Connect the Google account first." };
+  const token = await refreshAccessToken(branch_id, cfg);
+  if (!token) return { ok: false, reason: "Could not refresh the Google access token. Reconnect the account." };
+
+  const accRes = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts?pageSize=20", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!accRes.ok) {
+    const txt = await accRes.text();
+    return {
+      ok: false,
+      status: accRes.status,
+      reason: friendlyGoogleError(accRes.status, txt),
+      activation_url: extractActivationUrl(txt) ?? undefined,
+    };
+  }
+  const accounts = ((await accRes.json())?.accounts ?? []) as Array<{ name: string; accountName?: string }>;
+  const out: GbpLocation[] = [];
+  for (const acc of accounts) {
+    const accountId = String(acc.name ?? "").split("/")[1];
+    if (!accountId) continue;
+    const locRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/accounts/${accountId}/locations` +
+        `?readMask=name,title,storefrontAddress,metadata&pageSize=100`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!locRes.ok) {
+      const txt = await locRes.text();
+      // Keep going across accounts, but surface activation problems immediately.
+      const activation = extractActivationUrl(txt);
+      if (activation) {
+        return { ok: false, status: locRes.status, reason: friendlyGoogleError(locRes.status, txt), activation_url: activation };
+      }
+      continue;
+    }
+    const locations = ((await locRes.json())?.locations ?? []) as Array<Record<string, any>>;
+    for (const l of locations) {
+      out.push({
+        account_id: accountId,
+        account_name: acc.accountName ?? accountId,
+        location_id: String(l.name ?? "").split("/")[1] ?? "",
+        title: l.title ?? "Untitled listing",
+        place_id: l.metadata?.placeId ?? null,
+        address: Array.isArray(l.storefrontAddress?.addressLines)
+          ? [...l.storefrontAddress.addressLines, l.storefrontAddress?.locality].filter(Boolean).join(", ")
+          : null,
+        maps_uri: l.metadata?.mapsUri ?? null,
+      });
+    }
+  }
+  return { ok: true, locations: out };
+}
+
+/** Save the chosen Business Profile listing against the branch (enables reply posting). */
+async function linkGbpLocation(branch_id: string, account_id: string, location_id: string, title?: string) {
+  await patchGoogleConfig(branch_id, {
+    account_id,
+    location_id,
+    ...(title ? { gbp_location_title: title } : {}),
+    gbp_linked_at: new Date().toISOString(),
+  });
+  return { ok: true, account_id, location_id, title: title ?? null };
+}
+
+/** Find the listing whose Google place id matches the branch's linked place and link it. */
+async function autolinkGbpLocation(branch_id: string) {
+  const cfg = await getGoogleConfig(branch_id);
+  if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch." }, 200);
+  const found = await discoverGbpLocations(branch_id);
+  if (!found.ok) return json(found, 200);
+  if (!found.locations.length) {
+    return json({ ok: false, reason: "The connected Google account manages no business listings." }, 200);
+  }
+  const byPlace = cfg.place_id ? found.locations.find((l) => l.place_id === cfg.place_id) : undefined;
+  const byName = !byPlace && cfg.place_name
+    ? found.locations.find((l) => l.title.toLowerCase().includes(String(cfg.place_name).toLowerCase().split(" ")[0]))
+    : undefined;
+  const match = byPlace ?? byName;
+  if (!match) {
+    return json({ ok: false, reason: "No listing matched this branch's Google place.", locations: found.locations }, 200);
+  }
+  const linked = await linkGbpLocation(branch_id, match.account_id, match.location_id, match.title);
+  return json({ ...linked, matched_on: byPlace ? "place_id" : "name", locations: found.locations });
+}
+
+
+
 
 function extractPlaceIdFromLink(link?: string | null): string | null {
   if (!link) return null;
