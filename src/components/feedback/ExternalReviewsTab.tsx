@@ -217,6 +217,7 @@ export default function ExternalReviewsTab() {
     onError: (e: any) => toast.error(e?.message ?? 'Failed'),
   });
 
+  const [replyingId, setReplyingId] = useState<string | null>(null);
   const sendReply = useMutation({
     mutationFn: async ({ id, text }: { id: string; text: string }) => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
@@ -224,10 +225,26 @@ export default function ExternalReviewsTab() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+      return { id, text };
     },
-    onSuccess: () => { toast.success('Reply posted to Google'); refetch(); },
-    onError: (e: any) => toast.error(e?.message ?? 'Reply failed'),
+    onMutate: ({ id }) => setReplyingId(id),
+    onSettled: () => setReplyingId(null),
+    onSuccess: ({ id, text }) => {
+      // Optimistic flip so the card reads "Replied" with no refresh.
+      qc.setQueriesData({ queryKey: ['gri'] }, (old: any) =>
+        Array.isArray(old)
+          ? old.map((row: InboundRow) =>
+              row.id === id
+                ? { ...row, reply_status: 'sent', reply_mode: 'api', reply_text: text, google_reply_text: text, replied_at: new Date().toISOString() }
+                : row,
+            )
+          : old,
+      );
+      setOpenReply((o) => ({ ...o, [id]: false }));
+      toast.success('Reply posted successfully');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Failed to post reply. Please try again.'),
   });
 
   const saveDraft = useMutation({
