@@ -752,11 +752,13 @@ async function fetchReviewsForBranch(branch_id: string) {
   const body = await res.json();
   const reviews = (body.reviews ?? []) as any[];
   let inserted = 0;
+  let repliesSynced = 0;
   const newIds: string[] = [];
   for (const r of reviews) {
     const ratingMap: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
     const reviewName = r.name ?? `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${r.reviewId}`;
-    const row = {
+    const ownerReply = String(r.reviewReply?.comment ?? "").trim();
+    const row: Record<string, unknown> = {
       branch_id,
       google_review_id: r.reviewId ?? r.name,
       author_name: r.reviewer?.displayName ?? null,
@@ -771,6 +773,16 @@ async function fetchReviewsForBranch(branch_id: string) {
       gbp_review_name: reviewName,
       raw: r,
     };
+    // v7 — a reply that already exists on Google (posted from Maps, the GBP app
+    // or by another manager) closes the row here, with Google's own timestamp.
+    if (ownerReply) {
+      row.reply_status = "sent";
+      row.reply_mode = "google_owner";
+      row.reply_text = ownerReply;
+      row.replied_at = r.reviewReply?.updateTime ?? new Date().toISOString();
+      row.draft_reply = null;
+      repliesSynced++;
+    }
     const { data: up, error } = await sb
       .from("google_reviews_inbound")
       .upsert(row, { onConflict: "google_review_id", ignoreDuplicates: false })
@@ -780,7 +792,7 @@ async function fetchReviewsForBranch(branch_id: string) {
       console.error("upsert error", error);
       continue;
     }
-    if (up) await promotePlacesDuplicate(branch_id, up.id, row);
+    if (up) await promotePlacesDuplicate(branch_id, up.id, row as any);
     if (up && (up.ai_classification === "pending" || !up.ai_classification)) {
       newIds.push(up.id);
       inserted++;
@@ -790,7 +802,13 @@ async function fetchReviewsForBranch(branch_id: string) {
   for (const id of newIds.slice(0, 10)) {
     try { await classifyOne(id); } catch (e) { console.error("classify err", id, e); }
   }
-  return { branch_id, fetched: reviews.length, classified: newIds.length, source: "business_profile" };
+  return {
+    branch_id,
+    fetched: reviews.length,
+    classified: newIds.length,
+    replies_synced: repliesSynced,
+    source: "business_profile",
+  };
 }
 
 /**
