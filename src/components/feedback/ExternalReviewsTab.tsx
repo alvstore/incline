@@ -160,11 +160,19 @@ export default function ExternalReviewsTab() {
   const stats = useMemo(() => {
     const cutoff = subDays(new Date(), 7).getTime();
     const recent = rows.filter(r => r.posted_at && new Date(r.posted_at).getTime() >= cutoff);
-    const avg = recent.length ? (recent.reduce((s, r) => s + (r.rating ?? 0), 0) / recent.length).toFixed(1) : '0';
+    const rated = rows.filter(r => r.rating != null);
+    const localAvg = rated.length ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length : 0;
     const fakes = rows.filter(r => r.ai_classification === 'suspected_fake' || r.ai_classification === 'spam').length;
     const pending = rows.filter(r => r.reply_status === 'draft' || r.reply_status === 'approved').length;
-    return { week: recent.length, avg, fakes, pending };
+    const replied = rows.filter(r => r.reply_status === 'sent').length;
+    return { week: recent.length, localAvg, fakes, pending, replied, total: rows.length };
   }, [rows]);
+
+  // Google's own aggregate (persisted by the reviews brain) beats a local mean.
+  const googleRating = (integration?.config as any)?.place_rating;
+  const googleCount = (integration?.config as any)?.place_rating_count;
+  const avgRating = googleRating != null ? Number(googleRating) : stats.localAvg;
+  const totalReviews = googleCount != null ? Number(googleCount) : stats.total;
 
   const [diagnosis, setDiagnosis] = useState<any>(null);
   const diagnose = useMutation({
