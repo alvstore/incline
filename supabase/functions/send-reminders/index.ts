@@ -504,7 +504,7 @@ Deno.serve(async (req) => {
       if (legacyExpirySuppressed(branch.id)) continue;
       if (!isReminderEnabled(branch.id, "membership_expiry")) continue;
 
-      const channel = getChannel(branch.id, "membership_expiry");
+      const channelChain = getChannelChain(branch.id, "membership_expiry");
       const daysBeforeArr = getDaysBefore(branch.id, "membership_expiry");
 
       for (const daysOut of daysBeforeArr) {
@@ -529,7 +529,8 @@ Deno.serve(async (req) => {
             message, type: "warning", category: "membership", action_url: "/my-membership",
           });
 
-          const delivery = await deliver(channel, {
+          const delivery = await deliverChain(channelChain, {
+
             branchId: ms.branch_id,
             memberId: ms.member_id,
             phone: member.profiles?.phone,
