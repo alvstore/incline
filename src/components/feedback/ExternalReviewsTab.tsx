@@ -304,7 +304,7 @@ export default function ExternalReviewsTab() {
     onSuccess: () => refetch(),
   });
 
-  const ratingColor = (r: number | null) => (r ?? 0) >= 4 ? 'text-success' : (r ?? 0) >= 3 ? 'text-warning' : 'text-destructive';
+  
 
   if (!branchId) {
     return <Card className="rounded-2xl"><CardContent className="py-8 text-center text-muted-foreground">Select a branch to view external reviews.</CardContent></Card>;
