@@ -87,6 +87,7 @@ export default function ExternalReviewsTab() {
   const [ratingFilter, setRatingFilter] = useState('all');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [connectOpen, setConnectOpen] = useState(false);
+  const [openReply, setOpenReply] = useState<Record<string, boolean>>({});
   const branchName = (branches ?? []).find((b: any) => b.id === branchId)?.name ?? 'this branch';
 
   // Branch Google integration health
