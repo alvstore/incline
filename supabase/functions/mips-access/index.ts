@@ -654,7 +654,12 @@ async function sweepExpired(supabase: any) {
         row.branch_id,
       );
       if (result.success) {
-        restored.push(row.member_code || row.member_id);
+        if ((result as any).skipped) {
+          skippedNoop++;
+        } else {
+          restored.push(row.member_code || row.member_id);
+          await sleep(GATE_PACING_MS);
+        }
       } else {
         errors.push(`${row.member_code || row.member_id}: ${result.error}`);
       }
@@ -663,7 +668,7 @@ async function sweepExpired(supabase: any) {
     }
   }
 
-  return { revoked, restored, errors };
+  return { revoked, restored, errors, skipped_noop: skippedNoop };
 }
 
 const PERMANENT_END = "2099-12-31 23:59:59";
