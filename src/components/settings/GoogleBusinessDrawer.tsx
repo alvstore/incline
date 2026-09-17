@@ -39,6 +39,17 @@ interface DiagnoseCheck {
   lane: 'places' | 'business_profile';
   label: string;
   hint?: string;
+  action_url?: string;
+  action_label?: string;
+}
+
+interface GbpLocationItem {
+  account_id: string;
+  account_name: string;
+  location_id: string;
+  title: string;
+  place_id: string | null;
+  address: string | null;
 }
 
 type Row = {
