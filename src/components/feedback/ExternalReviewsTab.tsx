@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatCard } from '@/components/ui/stat-card';
-import { Star, RefreshCw, Send, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, ExternalLink, Loader2, Stethoscope, CheckCircle2, XCircle, Copy } from 'lucide-react';
+import { Star, RefreshCw, Send, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, ExternalLink, Loader2, Stethoscope, CheckCircle2, XCircle, Copy, Clock3 } from 'lucide-react';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -59,6 +59,26 @@ interface InboundRow {
 
 }
 
+function StarRow({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }) {
+  const cls = size === 'lg' ? 'h-5 w-5' : 'h-4 w-4';
+  return (
+    <span className="flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`${cls} ${i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`}
+          aria-hidden
+        />
+      ))}
+    </span>
+  );
+}
+
+function initialsOf(name?: string | null) {
+  const parts = (name ?? 'Anonymous').trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'A';
+}
+
 export default function ExternalReviewsTab() {
   const { effectiveBranchId: branchId = '', branches } = useBranchContext();
   const qc = useQueryClient();
@@ -67,6 +87,7 @@ export default function ExternalReviewsTab() {
   const [ratingFilter, setRatingFilter] = useState('all');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [connectOpen, setConnectOpen] = useState(false);
+  const [openReply, setOpenReply] = useState<Record<string, boolean>>({});
   const branchName = (branches ?? []).find((b: any) => b.id === branchId)?.name ?? 'this branch';
 
   // Branch Google integration health
@@ -139,11 +160,19 @@ export default function ExternalReviewsTab() {
   const stats = useMemo(() => {
     const cutoff = subDays(new Date(), 7).getTime();
     const recent = rows.filter(r => r.posted_at && new Date(r.posted_at).getTime() >= cutoff);
-    const avg = recent.length ? (recent.reduce((s, r) => s + (r.rating ?? 0), 0) / recent.length).toFixed(1) : '0';
+    const rated = rows.filter(r => r.rating != null);
+    const localAvg = rated.length ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length : 0;
     const fakes = rows.filter(r => r.ai_classification === 'suspected_fake' || r.ai_classification === 'spam').length;
     const pending = rows.filter(r => r.reply_status === 'draft' || r.reply_status === 'approved').length;
-    return { week: recent.length, avg, fakes, pending };
+    const replied = rows.filter(r => r.reply_status === 'sent').length;
+    return { week: recent.length, localAvg, fakes, pending, replied, total: rows.length };
   }, [rows]);
+
+  // Google's own aggregate (persisted by the reviews brain) beats a local mean.
+  const googleRating = (integration?.config as any)?.place_rating;
+  const googleCount = (integration?.config as any)?.place_rating_count;
+  const avgRating = googleRating != null ? Number(googleRating) : stats.localAvg;
+  const totalReviews = googleCount != null ? Number(googleCount) : stats.total;
 
   const [diagnosis, setDiagnosis] = useState<any>(null);
   const diagnose = useMutation({
@@ -188,6 +217,7 @@ export default function ExternalReviewsTab() {
     onError: (e: any) => toast.error(e?.message ?? 'Failed'),
   });
 
+  const [replyingId, setReplyingId] = useState<string | null>(null);
   const sendReply = useMutation({
     mutationFn: async ({ id, text }: { id: string; text: string }) => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
@@ -195,10 +225,26 @@ export default function ExternalReviewsTab() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+      return { id, text };
     },
-    onSuccess: () => { toast.success('Reply posted to Google'); refetch(); },
-    onError: (e: any) => toast.error(e?.message ?? 'Reply failed'),
+    onMutate: ({ id }) => setReplyingId(id),
+    onSettled: () => setReplyingId(null),
+    onSuccess: ({ id, text }) => {
+      // Optimistic flip so the card reads "Replied" with no refresh.
+      qc.setQueriesData({ queryKey: ['gri'] }, (old: any) =>
+        Array.isArray(old)
+          ? old.map((row: InboundRow) =>
+              row.id === id
+                ? { ...row, reply_status: 'sent', reply_mode: 'api', reply_text: text, google_reply_text: text, replied_at: new Date().toISOString() }
+                : row,
+            )
+          : old,
+      );
+      setOpenReply((o) => ({ ...o, [id]: false }));
+      toast.success('Reply posted successfully');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Failed to post reply. Please try again.'),
   });
 
   const saveDraft = useMutation({
@@ -258,7 +304,7 @@ export default function ExternalReviewsTab() {
     onSuccess: () => refetch(),
   });
 
-  const ratingColor = (r: number | null) => (r ?? 0) >= 4 ? 'text-success' : (r ?? 0) >= 3 ? 'text-warning' : 'text-destructive';
+  
 
   if (!branchId) {
     return <Card className="rounded-2xl"><CardContent className="py-8 text-center text-muted-foreground">Select a branch to view external reviews.</CardContent></Card>;
@@ -296,12 +342,71 @@ export default function ExternalReviewsTab() {
         onFetch={() => fetchNow.mutate()}
       />
 
-      {/* KPIs */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <StatCard title="Inbound this week" value={stats.week} icon={MessageSquare} />
-        <StatCard title="Avg incoming rating" value={stats.avg} icon={Star} variant={Number(stats.avg) >= 4 ? 'success' : Number(stats.avg) >= 3 ? 'warning' : 'destructive'} />
-        <StatCard title="Suspected fakes" value={stats.fakes} icon={ShieldAlert} variant={stats.fakes > 0 ? 'destructive' : 'default'} />
-        <StatCard title="Replies pending" value={stats.pending} icon={Send} variant={stats.pending > 0 ? 'warning' : 'default'} />
+      {/* Summary */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Average rating — hero */}
+        <Card className="rounded-2xl border-0 bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/30">
+          <CardContent className="p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Average rating</p>
+            <div className="mt-2 flex items-end gap-2">
+              <span className="text-3xl font-bold leading-none">{avgRating ? avgRating.toFixed(1) : '—'}</span>
+              <span className="pb-0.5 text-xs text-white/70">out of 5</span>
+            </div>
+            <div className="mt-3 flex items-center gap-0.5" aria-label={`${avgRating.toFixed(1)} out of 5 stars`}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Star key={i} className={`h-4 w-4 ${i <= Math.round(avgRating) ? 'fill-amber-300 text-amber-300' : 'text-white/30'}`} aria-hidden />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total reviews */}
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total reviews</p>
+              <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><MessageSquare className="h-4 w-4" aria-hidden /></span>
+            </div>
+            <p className="mt-2 text-3xl font-bold leading-none text-foreground">{totalReviews}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{stats.week} new in the last 7 days</p>
+          </CardContent>
+        </Card>
+
+        {/* Pending replies — action card */}
+        <Card
+          className={`rounded-2xl border-0 shadow-lg transition-all duration-200 hover:shadow-xl ${
+            stats.pending > 0 ? 'bg-amber-50 shadow-amber-200/60 hover:shadow-amber-300/50' : 'shadow-slate-200/50 hover:shadow-emerald-500/10'
+          }`}
+        >
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <p className={`text-xs font-semibold uppercase tracking-wider ${stats.pending > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>
+                Pending replies
+              </p>
+              <span className={`rounded-full p-2 ${stats.pending > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'}`}>
+                {stats.pending > 0 ? <Clock3 className="h-4 w-4" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
+              </span>
+            </div>
+            <p className={`mt-2 text-3xl font-bold leading-none ${stats.pending > 0 ? 'text-amber-900' : 'text-foreground'}`}>{stats.pending}</p>
+            <p className={`mt-2 text-xs ${stats.pending > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>
+              {stats.pending > 0 ? 'Waiting on a reply from your team' : `All caught up · ${stats.replied} replied`}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Flagged */}
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flagged by AI</p>
+              <span className={`rounded-full p-2 ${stats.fakes > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                <ShieldAlert className="h-4 w-4" aria-hidden />
+              </span>
+            </div>
+            <p className="mt-2 text-3xl font-bold leading-none text-foreground">{stats.fakes}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Suspected fake or spam reviews</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -378,7 +483,24 @@ export default function ExternalReviewsTab() {
 
       {/* Reviews list */}
       {isLoading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+        <div className="space-y-4">
+          {[0, 1, 2].map((i) => (
+            <Card key={i} className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+              <CardContent className="space-y-4 p-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-11 w-11 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-36 rounded" />
+                    <Skeleton className="h-3 w-24 rounded" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-3/4 rounded" />
+                <Skeleton className="h-10 w-40 rounded-xl" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : rows.length === 0 ? (
         <Card className="rounded-2xl"><CardContent className="py-12 text-center text-muted-foreground">
           <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -397,23 +519,39 @@ export default function ExternalReviewsTab() {
             const isDrafting = draftingId === r.id && draftWithAI.isPending;
             const Icon = cb.icon;
             return (
-              <Card key={r.id} className="rounded-2xl shadow-lg shadow-slate-200/50">
+              <Card key={r.id} className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-foreground">{r.author_name ?? 'Anonymous'}</p>
-                        <div className={`flex items-center gap-0.5 ${ratingColor(r.rating)}`}>
-                          {[...Array(5)].map((_, i) => <Star key={i} className={`h-4 w-4 ${i < (r.rating ?? 0) ? 'fill-current' : 'text-muted'}`} />)}
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-sm font-bold text-indigo-600"
+                        aria-hidden
+                      >
+                        {initialsOf(r.author_name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">{r.author_name ?? 'Anonymous'}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <StarRow rating={r.rating ?? 0} />
+                          <span className="text-xs text-muted-foreground">
+                            {r.relative_time ?? (r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy, HH:mm') : '—')}
+                          </span>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy, HH:mm') : '—'}
-                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {r.reply_status === 'sent' ? (
+                        <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                          <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden />Replied
+                        </Badge>
+                      ) : r.reply_status === 'dismissed' ? (
+                        <Badge className={rb.cls}>{rb.label}</Badge>
+                      ) : (
+                        <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                          <Clock3 className="mr-1 h-3 w-3" aria-hidden />Needs reply
+                        </Badge>
+                      )}
                       <Badge className={cb.cls}><Icon className="h-3 w-3 mr-1" />{cb.label}</Badge>
-                      <Badge className={rb.cls}>{rb.label}</Badge>
                       {r.source === 'places' && (
                         <Badge className="bg-slate-100 text-slate-600">Places · read-only</Badge>
                       )}
@@ -444,8 +582,19 @@ export default function ExternalReviewsTab() {
                     </div>
                   )}
 
+                  {/* Reply CTA */}
+                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && !openReply[r.id] && (
+                    <Button
+                      className="h-11 cursor-pointer rounded-xl"
+                      onClick={() => setOpenReply((o) => ({ ...o, [r.id]: true }))}
+                    >
+                      <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
+                      Reply to customer
+                    </Button>
+                  )}
+
                   {/* Reply box */}
-                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (
+                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && openReply[r.id] && (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Draft reply (editable)</p>
@@ -498,12 +647,12 @@ export default function ExternalReviewsTab() {
                           <Button
                             size="sm"
                             onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
-                            disabled={!draftValue.trim() || sendReply.isPending}
+                            disabled={!draftValue.trim() || (sendReply.isPending && replyingId === r.id)}
                           >
-                            {sendReply.isPending
-                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5" />
-                              : <Send className="h-3.5 w-3.5 mr-1.5" />}
-                            Post reply to Google
+                            {sendReply.isPending && replyingId === r.id
+                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden />
+                              : <Send className="h-3.5 w-3.5 mr-1.5" aria-hidden />}
+                            Post reply
                           </Button>
                         ) : (
                           <>
@@ -543,6 +692,14 @@ export default function ExternalReviewsTab() {
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => updateRow.mutate({ id: r.id, patch: { reply_status: 'dismissed' } })}>
                           Dismiss
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="cursor-pointer"
+                          onClick={() => setOpenReply((o) => ({ ...o, [r.id]: false }))}
+                        >
+                          Cancel
                         </Button>
                       </div>
                       {!canReply && (
