@@ -408,7 +408,7 @@ Deno.serve(async (req) => {
       if (channel === "whatsapp") {
         tplQuery = tplQuery.eq("meta_template_status", "APPROVED");
       }
-      const { data: tpl } = await tplQuery
+      let { data: tpl } = await tplQuery
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -430,7 +430,7 @@ Deno.serve(async (req) => {
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (altTpl) { (tpl as any) = altTpl; }
+          if (altTpl) { tpl = altTpl; }
         }
       }
 
