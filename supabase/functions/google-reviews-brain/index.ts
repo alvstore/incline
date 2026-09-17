@@ -33,6 +33,7 @@ type Action =
   | "list_accounts"
   | "list_locations"
   | "fetch_reviews"
+  | "sync_replies"
   | "fetch_reviews_places"
   | "search_places"
   | "diagnose"
