@@ -483,7 +483,24 @@ export default function ExternalReviewsTab() {
 
       {/* Reviews list */}
       {isLoading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+        <div className="space-y-4">
+          {[0, 1, 2].map((i) => (
+            <Card key={i} className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+              <CardContent className="space-y-4 p-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-11 w-11 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-36 rounded" />
+                    <Skeleton className="h-3 w-24 rounded" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-3/4 rounded" />
+                <Skeleton className="h-10 w-40 rounded-xl" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : rows.length === 0 ? (
         <Card className="rounded-2xl"><CardContent className="py-12 text-center text-muted-foreground">
           <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-40" />
