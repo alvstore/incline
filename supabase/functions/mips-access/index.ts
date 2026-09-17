@@ -539,6 +539,13 @@ async function sweepExpired(supabase: any) {
 
   const restored: string[] = [];
 
+  // v2.14.0 — pace real writes. Back-to-back persionIssue calls are what the
+  // terminals choke on; a no-op (already revoked) costs the gate nothing and
+  // needs no pause.
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const GATE_PACING_MS = 1500;
+  let skippedNoop = 0;
+
   const safeRevoke = async (
     m: any,
     reason: string,
@@ -547,7 +554,12 @@ async function sweepExpired(supabase: any) {
     try {
       const result = await applyMemberAction(supabase, m.id, "revoke", reason, m.branch_id, code);
       if (result.success) {
-        revoked.push(m.member_code || m.id);
+        if ((result as any).skipped) {
+          skippedNoop++;
+        } else {
+          revoked.push(m.member_code || m.id);
+          await sleep(GATE_PACING_MS);
+        }
       } else {
         errors.push(`${m.member_code || m.id}: ${result.error}`);
       }
