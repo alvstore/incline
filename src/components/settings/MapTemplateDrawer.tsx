@@ -43,6 +43,15 @@ export function MapTemplateDrawer({
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(currentTemplateId ?? null);
 
+  // Drawer stays mounted across events — re-sync the selection each time it
+  // opens so a previous event's pick is never carried over.
+  useEffect(() => {
+    if (open) {
+      setSelected(currentTemplateId ?? null);
+      setSearch('');
+    }
+  }, [open, event, currentTemplateId]);
+
   const { data: templates, isLoading, isError } = useQuery({
     queryKey: ['mappable-templates', channel],
     queryFn: async (): Promise<TemplateRow[]> => {
