@@ -519,23 +519,39 @@ export default function ExternalReviewsTab() {
             const isDrafting = draftingId === r.id && draftWithAI.isPending;
             const Icon = cb.icon;
             return (
-              <Card key={r.id} className="rounded-2xl shadow-lg shadow-slate-200/50">
+              <Card key={r.id} className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-foreground">{r.author_name ?? 'Anonymous'}</p>
-                        <div className={`flex items-center gap-0.5 ${ratingColor(r.rating)}`}>
-                          {[...Array(5)].map((_, i) => <Star key={i} className={`h-4 w-4 ${i < (r.rating ?? 0) ? 'fill-current' : 'text-muted'}`} />)}
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-sm font-bold text-indigo-600"
+                        aria-hidden
+                      >
+                        {initialsOf(r.author_name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">{r.author_name ?? 'Anonymous'}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <StarRow rating={r.rating ?? 0} />
+                          <span className="text-xs text-muted-foreground">
+                            {r.relative_time ?? (r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy, HH:mm') : '—')}
+                          </span>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy, HH:mm') : '—'}
-                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {r.reply_status === 'sent' ? (
+                        <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                          <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden />Replied
+                        </Badge>
+                      ) : r.reply_status === 'dismissed' ? (
+                        <Badge className={rb.cls}>{rb.label}</Badge>
+                      ) : (
+                        <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                          <Clock3 className="mr-1 h-3 w-3" aria-hidden />Needs reply
+                        </Badge>
+                      )}
                       <Badge className={cb.cls}><Icon className="h-3 w-3 mr-1" />{cb.label}</Badge>
-                      <Badge className={rb.cls}>{rb.label}</Badge>
                       {r.source === 'places' && (
                         <Badge className="bg-slate-100 text-slate-600">Places · read-only</Badge>
                       )}
