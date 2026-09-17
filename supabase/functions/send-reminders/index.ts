@@ -478,6 +478,29 @@ Deno.serve(async (req) => {
         deliveryStatus = "failed"; deliveryErr = (e as Error).message;
       }
 
+      // Provider refused on the primary channel — walk the rest of the chain
+      // so a dues reminder is never lost.
+      if (deliveryStatus === "failed") {
+        const rest = paymentChain.filter((c) => c !== channel && c !== "notification");
+        if (rest.length) {
+          const alt = await deliverChain(rest, {
+            branchId: reminder.branch_id,
+            memberId: reminder.member_id,
+            phone: member.profiles?.phone,
+            email: member.profiles?.email,
+            subject,
+            message: fallbackMsg,
+          });
+          if (alt.status === "sent") {
+            deliveryStatus = "sent";
+            deliveryErr = `primary ${channel} failed (${deliveryErr}); delivered on ${alt.channel}`;
+            channel = alt.channel;
+          }
+        }
+      }
+
+
+
 
       await adminClient
         .from("payment_reminders")
