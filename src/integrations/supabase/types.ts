@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_device_health_events: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          details: Json
+          detected_at: string
+          device_id: string | null
+          device_name: string | null
+          dispatches_before: number | null
+          event_type: string
+          id: string
+          offline_seconds: number | null
+          serial_number: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          details?: Json
+          detected_at?: string
+          device_id?: string | null
+          device_name?: string | null
+          dispatches_before?: number | null
+          event_type: string
+          id?: string
+          offline_seconds?: number | null
+          serial_number?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          details?: Json
+          detected_at?: string
+          device_id?: string | null
+          device_name?: string | null
+          dispatches_before?: number | null
+          event_type?: string
+          id?: string
+          offline_seconds?: number | null
+          serial_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_device_health_events_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "access_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       access_devices: {
         Row: {
           branch_id: string
@@ -27,7 +77,9 @@ export type Database = {
           ip_address: unknown
           is_online: boolean | null
           last_heartbeat: string | null
+          last_offline_at: string | null
           last_reconcile_at: string | null
+          last_restart_at: string | null
           last_sync: string | null
           mac_address: string | null
           mips_device_id: number | null
@@ -35,6 +87,7 @@ export type Database = {
           public_ip: string | null
           relay_delay: number | null
           relay_mode: number | null
+          restart_count: number
           serial_number: string | null
           updated_at: string | null
         }
@@ -50,7 +103,9 @@ export type Database = {
           ip_address: unknown
           is_online?: boolean | null
           last_heartbeat?: string | null
+          last_offline_at?: string | null
           last_reconcile_at?: string | null
+          last_restart_at?: string | null
           last_sync?: string | null
           mac_address?: string | null
           mips_device_id?: number | null
@@ -58,6 +113,7 @@ export type Database = {
           public_ip?: string | null
           relay_delay?: number | null
           relay_mode?: number | null
+          restart_count?: number
           serial_number?: string | null
           updated_at?: string | null
         }
@@ -73,7 +129,9 @@ export type Database = {
           ip_address?: unknown
           is_online?: boolean | null
           last_heartbeat?: string | null
+          last_offline_at?: string | null
           last_reconcile_at?: string | null
+          last_restart_at?: string | null
           last_sync?: string | null
           mac_address?: string | null
           mips_device_id?: number | null
@@ -81,6 +139,7 @@ export type Database = {
           public_ip?: string | null
           relay_delay?: number | null
           relay_mode?: number | null
+          restart_count?: number
           serial_number?: string | null
           updated_at?: string | null
         }
