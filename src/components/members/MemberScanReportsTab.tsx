@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,8 @@ import {
   Ban,
   Mail,
   MessageCircle,
+  Upload,
+  FileCheck2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -61,6 +63,49 @@ export function MemberScanReportsTab({ memberId }: Props) {
 
   const [open, setOpen] = useState<HowbodyReportRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTarget, setUploadTarget] = useState<HowbodyReportRow | null>(null);
+
+  function pickOriginal(r: HowbodyReportRow) {
+    setUploadTarget(r);
+    fileInputRef.current?.click();
+  }
+
+  async function onOriginalPicked(file?: File | null) {
+    const target = uploadTarget;
+    if (!file || !target) return;
+    if (file.type !== 'application/pdf') {
+      toast.error('Please choose the PDF exported from the HOWBODY scanner.');
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('That PDF is larger than 15 MB.');
+      return;
+    }
+    try {
+      setBusy(`upload-${target.data_key}`);
+      const buffer = await file.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      const { data, error } = await supabase.functions.invoke('upload-scan-original-pdf', {
+        body: { report_id: target.id, kind: target.type, file_base64: btoa(binary) },
+      });
+      if (error) throw error;
+      const err = (data as { error?: string })?.error;
+      if (err) throw new Error(err);
+      toast.success('Official HOWBODY report saved — it will be used for viewing and sending.');
+      refetch();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not save the report');
+    } finally {
+      setBusy(null);
+      setUploadTarget(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
 
   async function resolvePdfUrl(r: HowbodyReportRow): Promise<string> {
     if (r.pdf_url && r.pdf_source !== 'howbody_original') return r.pdf_url;
@@ -116,6 +161,13 @@ export function MemberScanReportsTab({ memberId }: Props) {
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => onOriginalPicked(e.target.files?.[0])}
+      />
       {quota && (
         <Card className="rounded-2xl border-border/60 shadow-md shadow-primary/5">
           <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
@@ -260,6 +312,24 @@ export function MemberScanReportsTab({ memberId }: Props) {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
+                      {canResend && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => pickOriginal(r)}
+                          disabled={rowBusy}
+                          aria-label="Upload the official HOWBODY PDF for this scan"
+                          title="Upload official HOWBODY PDF"
+                        >
+                          {busy === `upload-${r.data_key}` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : r.pdf_source === 'howbody_original' ? (
+                            <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -281,9 +351,18 @@ function QuotaBlock({
 }: {
   icon: typeof Scan;
   label: string;
-  q?: { plan_limit: number; used_this_month: number; addon_remaining: number; allowed: boolean };
+  q?: {
+    plan_limit: number;
+    used_this_month: number;
+    gift_remaining?: number;
+    addon_remaining: number;
+    allowed: boolean;
+  };
 }) {
   if (!q) return null;
+  const extras: string[] = [];
+  if ((q.gift_remaining ?? 0) > 0) extras.push(`+${q.gift_remaining} complimentary`);
+  if (q.addon_remaining > 0) extras.push(`+${q.addon_remaining} add-on`);
   return (
     <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
       <div className="rounded-full bg-primary/10 p-2 text-primary">
@@ -293,7 +372,7 @@ function QuotaBlock({
         <p className="text-xs font-medium leading-tight">{label}</p>
         <p className="text-xs leading-tight text-muted-foreground">
           {q.plan_limit > 0 ? `${q.used_this_month}/${q.plan_limit} this month` : 'Not in plan'}
-          {q.addon_remaining > 0 ? ` · +${q.addon_remaining} add-on` : ''}
+          {extras.length ? ` · ${extras.join(' · ')}` : ''}
         </p>
       </div>
       <Badge variant={q.allowed ? 'secondary' : 'destructive'} className="ml-auto rounded-full text-[10px]">
