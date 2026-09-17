@@ -587,7 +587,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                 : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />}
                               <div className="min-w-0">
                                 <p className="text-sm text-slate-800">{c.label}</p>
-                                {c.hint && <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>}
+                                {(!c.ok || c.key === 'location') && c.hint && (
+                                  <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>
+                                )}
                                 {!c.ok && c.action_url && (
                                   <a
                                     href={c.action_url}
