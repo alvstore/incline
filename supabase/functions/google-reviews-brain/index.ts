@@ -1567,25 +1567,46 @@ Deno.serve(async (req) => {
           label: "Google account connected",
           hint: "Click Connect Google and grant access to your Business Profile.",
         });
+        // Self-heal: if the account is connected but no listing is linked yet,
+        // try to match it automatically against the branch's Google place.
+        let linkedCfg = cfg;
+        let autolinked = false;
+        if (cfg?.refresh_token && !(cfg.account_id && cfg.location_id)) {
+          const auto = await autolinkGbpLocation(body.branch_id);
+          const autoJson = await auto.clone().json().catch(() => ({}));
+          if (autoJson?.ok) {
+            autolinked = true;
+            linkedCfg = await getGoogleConfig(body.branch_id);
+          }
+        }
         checks.push({
           key: "location",
           lane: "business_profile",
-          ok: !!(cfg?.account_id && cfg?.location_id),
+          ok: !!(linkedCfg?.account_id && linkedCfg?.location_id),
           label: "Business location selected",
-          hint: "Only needed to post replies via the API. Reading reviews already works through Places.",
+          hint: linkedCfg?.account_id && linkedCfg?.location_id
+            ? (autolinked ? "Linked automatically to your Google listing." : undefined)
+            : "Use “Link my Google listing” to match this branch to a listing on the connected Google account.",
         });
-        let gbp: { ok: boolean; status?: number; error?: string } = { ok: false };
-        if (cfg?.account_id && cfg?.location_id) {
-          const token = await refreshAccessToken(body.branch_id, cfg);
+        let gbp: { ok: boolean; status?: number; error?: string; activation_url?: string } = { ok: false };
+        if (linkedCfg?.account_id && linkedCfg?.location_id) {
+          const token = await refreshAccessToken(body.branch_id, linkedCfg);
           if (!token) gbp = { ok: false, error: "Could not refresh the Google access token. Reconnect the account." };
           else {
             const r = await fetch(
-              `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=1`,
+              `https://mybusiness.googleapis.com/v4/accounts/${linkedCfg.account_id}/locations/${linkedCfg.location_id}/reviews?pageSize=1`,
               { headers: { Authorization: `Bearer ${token}` } },
             );
-            gbp = r.ok
-              ? { ok: true, status: r.status }
-              : { ok: false, status: r.status, error: friendlyGoogleError(r.status, await r.text()) };
+            if (r.ok) gbp = { ok: true, status: r.status };
+            else {
+              const txt = await r.text();
+              gbp = {
+                ok: false,
+                status: r.status,
+                error: friendlyGoogleError(r.status, txt),
+                activation_url: extractActivationUrl(txt) ?? undefined,
+              };
+            }
           }
         }
         checks.push({
@@ -1594,11 +1615,22 @@ Deno.serve(async (req) => {
           ok: gbp.ok,
           label: "Business Profile reviews API reachable",
           hint: gbp.error,
+          action_url: gbp.activation_url,
+          action_label: gbp.activation_url ? "Enable the API in Google Cloud" : undefined,
         });
 
         const placesOk = checks.filter((c) => c.lane === "places").every((c) => c.ok);
         const gbpOk = checks.filter((c) => c.lane === "business_profile").every((c) => c.ok);
-        return json({ ok: placesOk || gbpOk, places_ok: placesOk, gbp_ok: gbpOk, checks, gbp, places });
+        return json({
+          ok: placesOk || gbpOk,
+          places_ok: placesOk,
+          gbp_ok: gbpOk,
+          autolinked,
+          activation_url: gbp.activation_url ?? null,
+          checks,
+          gbp,
+          places,
+        });
       }
 
       case "mark_replied_externally": {
