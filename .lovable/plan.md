@@ -125,13 +125,18 @@ matches today's behaviour, so publishing on day one changes nothing.
   server-side and role-gated — the graph can only narrow, never widen it.
 - Chat screen responsiveness handled with existing breakpoints plus the mobile
   hook; no new layout library.
-- No change to webhooks, campaign tracking, or the communication dispatcher.
+- Coexistence: the WhatsApp webhook gains handling for message-echo events
+  (store as outbound, mark `sent_from_phone`, dedupe on provider message id via
+  the existing unique index) and a one-time history-sync request right after
+  linking. Auto-reply suppression keys off a recent human reply on the thread.
+  Send paths, campaign tracking and the communication dispatcher are untouched.
 
 ---
 
 ## Build order
 
-1. Outbound storage verification + coexistence explainer.
+1. Coexistence support: echo handling, dedupe, history import, status panel, and
+   outbound storage verification — then the onboarding run with you.
 2. Mobile chat rebuild, verified in a browser at three widths.
 3. Flow schema, canvas editor, node settings drawers, validation, publish.
 4. Interpreter wiring with the default flow, then live verification on a test
