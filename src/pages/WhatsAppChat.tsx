@@ -1748,6 +1748,8 @@ export default function WhatsAppChatPage() {
                     >
                       <Eye className="h-5 w-5" />
                     </Button>
+                    </div>
+                    <div className="flex items-center gap-2 w-full md:w-auto md:flex-1 order-1 md:order-2">
                     <Input
                       placeholder={isBranchUnselected ? 'Select a branch to send messages…' : whisperMode ? 'Write an internal note…' : 'Type a message or / for templates…'}
                       value={newMessage}
