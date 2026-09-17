@@ -1,4 +1,4 @@
-// renewal-engine-tick v1.0.0 — Phase 2 renewal orchestrator.
+// renewal-engine-tick v1.1.0 — Phase 2 renewal orchestrator.
 // Passive until renewal_engine_config.enabled = true (global row default false).
 // - single-flight lease (renewal_engine_acquire_lease)
 // - bounded batch per run + per-day cap
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: configs } = await admin
-      .from("renewal_engine_config").select("branch_id, enabled, daily_cap");
+      .from("renewal_engine_config").select("branch_id, enabled, daily_cap, voice_auto_call_enabled, voice_stage_offsets");
     const anyEnabled = (configs || []).some((c) => c.enabled);
     if (!anyEnabled) return json({ success: true, skipped: "engine_disabled", sent: 0 });
 
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     });
     if (!leased) return json({ success: true, skipped: "already_running" });
 
-    let sent = 0, failed = 0, skipped = 0;
+    let sent = 0, failed = 0, skipped = 0, voiceCalls = 0;
     let pause = false, pauseReason: string | null = null;
     let lastError: string | null = null;
 
@@ -158,11 +158,49 @@ Deno.serve(async (req) => {
         else { failed++; lastError = detail; }
       }
 
+      // Optional voice escalation: only for branches that switched it on, and
+      // only on the configured day offsets. The single Ananya agent places the
+      // call; cooldown + call windows stay owned by sarvam-voice.
+      for (const c of cases) {
+        const cfg = (configs || []).find((x: Record<string, unknown>) => x.branch_id === c.branch_id)
+          ?? (configs || []).find((x: Record<string, unknown>) => x.branch_id === null);
+        const voiceOn = Boolean((cfg as Record<string, unknown> | undefined)?.voice_auto_call_enabled);
+        const offsets = ((cfg as Record<string, unknown> | undefined)?.voice_stage_offsets as number[] | null) ?? [-3, 0];
+        // stage offsets are stored expiry-relative (negative = before expiry)
+        if (!voiceOn || !c.phone) continue;
+        if (!offsets.includes(-c.days_to_expiry)) continue;
+
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/sarvam-voice`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({
+              action: "place_call",
+              confirmed: true,
+              member_id: c.member_id,
+              reason: "member_renewal",
+              cooldown_days: 3,
+            }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (body?.call_record_id) {
+            await admin.rpc("renewal_link_voice_call", {
+              _case_id: c.case_id,
+              _attempt_id: body.call_record_id,
+            });
+            voiceCalls++;
+          }
+        } catch (e) {
+          await captureEdgeError("renewal-engine-tick", e, { severity: "warning" });
+        }
+      }
+
       // Circuit breaker: an all-failure batch means the channel is broken.
       if (cases.length >= 5 && failed === cases.length) {
         pause = true;
         pauseReason = `All ${failed} dispatches failed: ${lastError ?? "unknown error"}`;
       }
+
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);
       await admin.rpc("renewal_engine_release_lease", { _status: "error", _error: lastError, _sent: sent });
@@ -178,7 +216,7 @@ Deno.serve(async (req) => {
       _pause_reason: pauseReason,
     });
 
-    return json({ success: true, sent, failed, skipped, paused: pause, paused_reason: pauseReason });
+    return json({ success: true, sent, failed, skipped, voice_calls: voiceCalls, paused: pause, paused_reason: pauseReason });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await captureEdgeError("renewal-engine-tick", e, { severity: "error" });

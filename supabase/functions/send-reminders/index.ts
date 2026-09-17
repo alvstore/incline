@@ -1,4 +1,4 @@
-// send-reminders v2.4.0 — channel-correct template resolution + local variable substitution; skips membership-expiry reminders for branches handed over to the Renewal Engine.
+// send-reminders v2.5.0 — 7/5/3 cadence + multi-channel fallback chain (whatsapp → sms → email), channel-correct template resolution; skips membership-expiry reminders for branches handed over to the Renewal Engine.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
@@ -113,14 +113,32 @@ Deno.serve(async (req) => {
     }
     function getDaysBefore(branchId: string, type: string): number[] {
       const cfg = getConfig(branchId, type);
-      if (!cfg || !cfg.days_before) return [7, 3, 1];
+      if (!cfg || !cfg.days_before) return [7, 5, 3];
       return cfg.days_before;
     }
+    const VALID_CHANNELS: Channel[] = ["whatsapp", "sms", "email", "notification"];
     function getChannel(branchId: string, type: string): Channel {
       const cfg = getConfig(branchId, type);
       const ch = (cfg?.channel || "notification") as Channel;
-      return (["whatsapp", "sms", "email", "notification"] as Channel[]).includes(ch) ? ch : "notification";
+      return VALID_CHANNELS.includes(ch) ? ch : "notification";
     }
+    /**
+     * Ordered channel chain for a reminder type: the configured primary channel
+     * first, then every configured fallback. Nothing is ever missed — if
+     * WhatsApp is blocked/unapproved we still reach the member on SMS or email.
+     */
+    function getChannelChain(branchId: string, type: string): Channel[] {
+      const cfg = getConfig(branchId, type);
+      const primary = getChannel(branchId, type);
+      const fallbacks = Array.isArray(cfg?.fallback_channels) ? cfg.fallback_channels : [];
+      const chain: Channel[] = [primary];
+      for (const raw of fallbacks) {
+        const ch = String(raw) as Channel;
+        if (VALID_CHANNELS.includes(ch) && !chain.includes(ch)) chain.push(ch);
+      }
+      return chain;
+    }
+
 
     /**
      * Attempt real outbound delivery via the matching provider edge function.
@@ -208,6 +226,34 @@ Deno.serve(async (req) => {
         return { status: "failed", error: err?.message || String(err), channel };
       }
     }
+
+    /**
+     * Walk the configured channel chain and stop at the first channel that the
+     * provider actually confirmed. Returns the last attempt when none worked so
+     * the caller can log an honest failure.
+     */
+    async function deliverChain(
+      channels: Channel[],
+      params: {
+        branchId: string;
+        memberId?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        subject: string;
+        message: string;
+      },
+    ): Promise<DeliveryResult> {
+      let last: DeliveryResult = { status: "skipped", error: "no channel configured", channel: "notification" };
+      for (const ch of channels) {
+        if (ch === "notification") continue; // in-app row is always created separately
+        const res = await deliver(ch, params);
+        if (res.status === "sent") return res;
+        last = res;
+      }
+      return last;
+    }
+
+
 
     function logComm(
       result: DeliveryResult,
@@ -347,7 +393,9 @@ Deno.serve(async (req) => {
         type: "warning", category: "payment", action_url: "/my-invoices",
       });
 
-      const channel = (reminder.channel as Channel) || getChannel(reminder.branch_id, "payment_due");
+      const paymentChain = getChannelChain(reminder.branch_id, "payment_due");
+      let channel = (reminder.channel as Channel) || paymentChain[0];
+
 
       // Resolve the template for THIS channel. The WhatsApp template body is
       // only meaningful to Meta (positional {{1}} slots) — reusing it as the
@@ -360,12 +408,32 @@ Deno.serve(async (req) => {
       if (channel === "whatsapp") {
         tplQuery = tplQuery.eq("meta_template_status", "APPROVED");
       }
-      const { data: tpl } = await tplQuery
+      let { data: tpl } = await tplQuery
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      const whatsappApproved = channel === "whatsapp" ? tpl : null;
+      let whatsappApproved = channel === "whatsapp" ? tpl : null;
+
+      // No approved WhatsApp template? Never silently drop the reminder —
+      // fall straight to the next configured channel (SMS → email).
+      if (channel === "whatsapp" && !whatsappApproved) {
+        const next = paymentChain.find((c) => c !== "whatsapp" && c !== "notification");
+        if (next) {
+          channel = next;
+          whatsappApproved = null;
+          const { data: altTpl } = await adminClient
+            .from("templates")
+            .select("id, content, subject")
+            .eq("type", channel)
+            .eq("trigger_event", triggerEvent)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (altTpl) { tpl = altTpl; }
+        }
+      }
+
 
 
       const subject = "Payment Reminder";
@@ -409,6 +477,29 @@ Deno.serve(async (req) => {
       } catch (e) {
         deliveryStatus = "failed"; deliveryErr = (e as Error).message;
       }
+
+      // Provider refused on the primary channel — walk the rest of the chain
+      // so a dues reminder is never lost.
+      if (deliveryStatus === "failed") {
+        const rest = paymentChain.filter((c) => c !== channel && c !== "notification");
+        if (rest.length) {
+          const alt = await deliverChain(rest, {
+            branchId: reminder.branch_id,
+            memberId: reminder.member_id,
+            phone: member.profiles?.phone,
+            email: member.profiles?.email,
+            subject,
+            message: fallbackMsg,
+          });
+          if (alt.status === "sent") {
+            deliveryStatus = "sent";
+            deliveryErr = `primary ${channel} failed (${deliveryErr}); delivered on ${alt.channel}`;
+            channel = alt.channel;
+          }
+        }
+      }
+
+
 
 
       await adminClient
@@ -458,7 +549,7 @@ Deno.serve(async (req) => {
       if (legacyExpirySuppressed(branch.id)) continue;
       if (!isReminderEnabled(branch.id, "membership_expiry")) continue;
 
-      const channel = getChannel(branch.id, "membership_expiry");
+      const channelChain = getChannelChain(branch.id, "membership_expiry");
       const daysBeforeArr = getDaysBefore(branch.id, "membership_expiry");
 
       for (const daysOut of daysBeforeArr) {
@@ -483,7 +574,8 @@ Deno.serve(async (req) => {
             message, type: "warning", category: "membership", action_url: "/my-membership",
           });
 
-          const delivery = await deliver(channel, {
+          const delivery = await deliverChain(channelChain, {
+
             branchId: ms.branch_id,
             memberId: ms.member_id,
             phone: member.profiles?.phone,

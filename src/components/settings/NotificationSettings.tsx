@@ -4,7 +4,9 @@ import {
   AdminRecipientsCard,
   type LeadNotificationCardsHandle,
 } from '@/components/settings/LeadNotificationSettings';
+import { ReminderCadenceCard } from '@/components/settings/ReminderCadenceCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -90,6 +92,10 @@ export function NotificationSettings() {
         <h2 className="text-lg font-semibold">Notification Settings</h2>
         <p className="text-sm text-muted-foreground">Configure email and system notifications</p>
       </div>
+
+      <ReminderCadenceCard />
+
+
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
