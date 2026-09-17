@@ -21,13 +21,15 @@ import {
   CreditCard, MessageSquare, Mail, Phone,
   Settings, CheckCircle, XCircle, Save, Globe, Webhook, Copy, ExternalLink,
   RefreshCw, ChevronDown, ChevronRight, Clock, PauseCircle, Send,
-  Instagram, Facebook, Search, Radio, PhoneCall,
+  Instagram, Facebook, Search, Radio, PhoneCall, Smartphone, Users, History,
 } from 'lucide-react';
 import SarvamVoiceCard from './SarvamVoiceCard';
 import GoogleBusinessDrawer from './GoogleBusinessDrawer';
 import GoogleListingCard from './GoogleListingCard';
 import { RcsHub } from './rcs/RcsHub';
 import { WhatsAppMarketingApiToggle } from './WhatsAppMarketingApiToggle';
+import { WhatsAppCoexistenceCard } from './WhatsAppCoexistenceCard';
+
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
