@@ -59,6 +59,26 @@ interface InboundRow {
 
 }
 
+function StarRow({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }) {
+  const cls = size === 'lg' ? 'h-5 w-5' : 'h-4 w-4';
+  return (
+    <span className="flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`${cls} ${i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`}
+          aria-hidden
+        />
+      ))}
+    </span>
+  );
+}
+
+function initialsOf(name?: string | null) {
+  const parts = (name ?? 'Anonymous').trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'A';
+}
+
 export default function ExternalReviewsTab() {
   const { effectiveBranchId: branchId = '', branches } = useBranchContext();
   const qc = useQueryClient();
