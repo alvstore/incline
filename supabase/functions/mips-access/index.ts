@@ -309,6 +309,38 @@ async function applyMemberAction(
     newValidTimeEnd = REVOKED_DATE;
   }
 
+  // v2.14.0 — IDEMPOTENCY GUARD. The 30-minute sweep kept re-revoking people who
+  // were ALREADY revoked on the server. Every repeat sent another PUT plus a
+  // persionIssue to both gates, and that burst is what pushed the Android
+  // terminals into a face-template rebuild / low-memory reboot loop. If MIPS
+  // already reports the exact validity we are about to write, there is nothing
+  // to send — just reconcile the CRM row and return.
+  const sameDay = (a: unknown, b: unknown) =>
+    String(a || "").trim().slice(0, 10) === String(b || "").trim().slice(0, 10);
+  if (sameDay(existing.validTimeEnd, newValidTimeEnd)) {
+    console.log(
+      `[MIPS-ACCESS] No-op for ${personSn}: server already at validTimeEnd=${existing.validTimeEnd} — skipping PUT + device dispatch`,
+    );
+    await supabase
+      .from("members")
+      .update({
+        hardware_access_status: action === "revoke" ? "revoked" : "active",
+        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
+      })
+      .eq("id", member_id);
+    await supabase
+      .from("hardware_access_events")
+      .update({ requires_sync: false })
+      .eq("member_id", member_id)
+      .eq("requires_sync", true);
+    return {
+      success: true,
+      action,
+      skipped: "already_in_desired_state",
+      message: `Hardware access already ${action}d on the gate — nothing re-sent`,
+    };
+  }
+
   const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
   const updatedPerson = stripPhotoPayload({
     ...(detail || existing),
