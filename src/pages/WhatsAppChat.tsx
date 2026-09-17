@@ -1229,7 +1229,7 @@ export default function WhatsAppChatPage() {
                         })()}
 
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0 truncate">
                         {(() => {
                           const plat = selectedContact.platform;
                           const ph = selectedContact.phone_number;
