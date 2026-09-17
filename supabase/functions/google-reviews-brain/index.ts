@@ -1526,7 +1526,7 @@ Deno.serve(async (req) => {
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         const cfg = await getGoogleConfig(body.branch_id);
         const placesKey = await resolvePlacesKey(body.branch_id);
-        const checks: Array<{ key: string; ok: boolean; lane: "places" | "business_profile"; label: string; hint?: string }> = [];
+        const checks: Array<{ key: string; ok: boolean; lane: "places" | "business_profile"; label: string; hint?: string; action_url?: string; action_label?: string }> = [];
 
         // ── Lane A: Places (works without Google approval) ──
         checks.push({
