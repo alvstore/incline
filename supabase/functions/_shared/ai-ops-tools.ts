@@ -66,10 +66,43 @@ export function getOpsToolDefinitions(role: StaffRole | undefined): any[] {
     ),
   ];
 
-  if (!isFinancialRole(role)) return base.slice(1); // no revenue summary for non-financial roles
+  // Trainer / personal tools — available to every internal role. A trainer may
+  // only look at members linked to them; owner / admin / manager bypass that.
+  const personal = [
+    tool(
+      "list_my_assigned_members",
+      "The members assigned to the trainer asking — assigned clients plus their personal-training clients. Returns name, member code, phone, plan, membership expiry and PT sessions left.",
+      { limit: ["number", "Max rows, default 25."] },
+    ),
+    tool(
+      "get_my_attendance",
+      "The caller's own staff attendance — shift date, check-in time, check-out time, hours worked and late minutes (IST).",
+      { days: ["number", "How many days back to include. Default 7 (use 1 for today)."] },
+    ),
+    tool(
+      "get_member_attendance",
+      "Gym visit history (check-in and check-out times) for one member the caller is allowed to see. Use find_member or list_my_assigned_members first to get the name or code.",
+      { member: ["string", "Member name, member code or phone."], limit: ["number", "Max visits, default 10."] },
+      ["member"],
+    ),
+    tool(
+      "get_member_fitness_plan",
+      "The active workout and diet plans assigned to one member the caller is allowed to see — plan name, type, validity dates and whether a PDF exists.",
+      { member: ["string", "Member name, member code or phone."] },
+      ["member"],
+    ),
+    tool(
+      "list_my_sessions_today",
+      "The caller's personal-training sessions on a given day (defaults to today, IST) — member name, time, duration and status.",
+      { date: ["string", "YYYY-MM-DD in IST. Defaults to today."] },
+    ),
+  ];
+
+  if (!isFinancialRole(role)) return [...base.slice(1), ...personal]; // no revenue summary for non-financial roles
 
   return [
     ...base,
+    ...personal,
     tool(
       "list_outstanding_dues",
       "Open invoices with money still to collect — member name, invoice number, total, paid, pending amount, invoice date and due date.",
