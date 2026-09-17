@@ -647,12 +647,12 @@ export default function ExternalReviewsTab() {
                           <Button
                             size="sm"
                             onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
-                            disabled={!draftValue.trim() || sendReply.isPending}
+                            disabled={!draftValue.trim() || (sendReply.isPending && replyingId === r.id)}
                           >
-                            {sendReply.isPending
-                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5" />
-                              : <Send className="h-3.5 w-3.5 mr-1.5" />}
-                            Post reply to Google
+                            {sendReply.isPending && replyingId === r.id
+                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden />
+                              : <Send className="h-3.5 w-3.5 mr-1.5" aria-hidden />}
+                            Post reply
                           </Button>
                         ) : (
                           <>
