@@ -126,6 +126,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
     setResults([]);
     setSearchText('');
     setDiag(null);
+    setLocations([]);
+    setActivationUrl(null);
   }, [row, open]);
 
   const cfg = (row?.config ?? {}) as Record<string, any>;
