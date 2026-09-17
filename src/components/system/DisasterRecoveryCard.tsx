@@ -51,15 +51,6 @@ const formatBytes = (n: number) => {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 };
 
-const PHASES: Array<{ pct: number; label: string }> = [
-  { pct: 5, label: "Connecting to fallback database…" },
-  { pct: 15, label: "Dumping schema…" },
-  { pct: 30, label: "Mirroring auth users…" },
-  { pct: 55, label: "Mirroring rows…" },
-  { pct: 75, label: "Copying storage files…" },
-  { pct: 92, label: "Finalising…" },
-];
-
 export function DisasterRecoveryCard() {
   const { hasAnyRole } = useAuth();
   const [lastReport, setLastReport] = useState<SyncReport | null>(null);
@@ -73,18 +64,6 @@ export function DisasterRecoveryCard() {
       window.clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-  };
-
-  const startTicker = () => {
-    stopTicker();
-    let i = 0;
-    setProgress(PHASES[0].pct);
-    setPhaseLabel(PHASES[0].label);
-    intervalRef.current = window.setInterval(() => {
-      i = Math.min(i + 1, PHASES.length - 1);
-      setProgress(PHASES[i].pct);
-      setPhaseLabel(PHASES[i].label);
-    }, 1400);
   };
 
   useEffect(() => () => stopTicker(), []);

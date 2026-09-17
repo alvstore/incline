@@ -210,6 +210,11 @@ export function MapTemplateDrawer({
                         {t.trigger_event}
                       </Badge>
                     )}
+                    {currentTemplateId === t.id && (
+                      <Badge className="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
+                        Currently mapped
+                      </Badge>
+                    )}
                     {t.is_active === false && (
                       <Badge className="bg-amber-100 text-amber-700 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
                         Inactive — will be switched on
