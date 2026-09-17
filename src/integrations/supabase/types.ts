@@ -11368,6 +11368,7 @@ export type Database = {
           channel: string
           created_at: string
           days_before: number[] | null
+          fallback_channels: string[]
           id: string
           is_enabled: boolean
           reminder_type: string
@@ -11379,6 +11380,7 @@ export type Database = {
           channel?: string
           created_at?: string
           days_before?: number[] | null
+          fallback_channels?: string[]
           id?: string
           is_enabled?: boolean
           reminder_type: string
@@ -11390,6 +11392,7 @@ export type Database = {
           channel?: string
           created_at?: string
           days_before?: number[] | null
+          fallback_channels?: string[]
           id?: string
           is_enabled?: boolean
           reminder_type?: string
@@ -11578,7 +11581,9 @@ export type Database = {
           stage_offsets: number[]
           suppress_legacy_expiry_reminders: boolean
           updated_at: string
+          voice_auto_call_enabled: boolean
           voice_escalate_after: number
+          voice_stage_offsets: number[]
         }
         Insert: {
           branch_id?: string | null
@@ -11592,7 +11597,9 @@ export type Database = {
           stage_offsets?: number[]
           suppress_legacy_expiry_reminders?: boolean
           updated_at?: string
+          voice_auto_call_enabled?: boolean
           voice_escalate_after?: number
+          voice_stage_offsets?: number[]
         }
         Update: {
           branch_id?: string | null
@@ -11606,7 +11613,9 @@ export type Database = {
           stage_offsets?: number[]
           suppress_legacy_expiry_reminders?: boolean
           updated_at?: string
+          voice_auto_call_enabled?: boolean
           voice_escalate_after?: number
+          voice_stage_offsets?: number[]
         }
         Relationships: [
           {
