@@ -245,3 +245,9 @@ export function useBranchContext() {
   }
   return context;
 }
+
+/**
+ * Backward-compatible alias. Older modules imported `useBranch` from this file;
+ * keeping the export prevents a hard ES-module SyntaxError on /settings.
+ */
+export const useBranch = useBranchContext;

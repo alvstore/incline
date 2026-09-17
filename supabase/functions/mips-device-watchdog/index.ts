@@ -170,18 +170,23 @@ Deno.serve(async (req) => {
             restarts++;
             patch.last_restart_at = nowIso;
             patch.restart_count = Number(dev.restart_count || 0) + 1;
-            await supabase.rpc("log_error_event", {
-              p_source: "mips_watchdog",
-              p_severity: "warning",
-              p_message: `Gate "${dev.device_name || dev.serial_number}" restarted (down ${downSec}s, ${count ?? 0} dispatches before)`,
-              p_context: {
-                device_id: dev.id,
-                serial_number: dev.serial_number,
-                branch_id: dev.branch_id,
-                offline_seconds: downSec,
-                dispatches_before: count ?? 0,
-              },
-            }).catch(() => {});
+            try {
+              // NOTE: supabase.rpc() returns a PostgrestBuilder (thenable, no .catch)
+              await supabase.rpc("log_error_event", {
+                p_source: "mips_watchdog",
+                p_severity: "warning",
+                p_message: `Gate "${dev.device_name || dev.serial_number}" restarted (down ${downSec}s, ${count ?? 0} dispatches before)`,
+                p_context: {
+                  device_id: dev.id,
+                  serial_number: dev.serial_number,
+                  branch_id: dev.branch_id,
+                  offline_seconds: downSec,
+                  dispatches_before: count ?? 0,
+                },
+              });
+            } catch (logErr) {
+              console.warn("[mips-device-watchdog] log_error_event failed", logErr);
+            }
           }
         }
 
