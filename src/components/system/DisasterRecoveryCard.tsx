@@ -89,7 +89,7 @@ export function DisasterRecoveryCard() {
 
   useEffect(() => () => stopTicker(), []);
 
-  const invokeReplicate = async (mode: "all" | "verify") => {
+  const invokeReplicate = async (mode: "schema" | "auth" | "rows" | "storage" | "verify") => {
     const { data, error } = await supabase.functions.invoke("dr-replicate", {
       body: { mode },
     });
@@ -97,10 +97,43 @@ export function DisasterRecoveryCard() {
     return data as SyncReport;
   };
 
+  /**
+   * Each pass runs as its own invocation — a single "all" run exceeded the
+   * edge worker limits (abnormal termination) and never finished.
+   */
+  const SYNC_PASSES: Array<{ mode: "schema" | "auth" | "rows" | "storage"; label: string; pct: number }> = [
+    { mode: "schema", label: "Dumping schema…", pct: 15 },
+    { mode: "auth", label: "Mirroring auth users…", pct: 40 },
+    { mode: "rows", label: "Mirroring rows…", pct: 70 },
+    { mode: "storage", label: "Copying storage files…", pct: 95 },
+  ];
+
   const sync = useMutation({
-    mutationFn: async () => {
-      startTicker();
-      return invokeReplicate("all");
+    mutationFn: async (): Promise<SyncReport> => {
+      stopTicker();
+      const merged: SyncReport = {
+        ok: true,
+        mode: "all",
+        startedAt: new Date().toISOString(),
+        mirrored: {},
+        errors: [],
+      };
+      for (const pass of SYNC_PASSES) {
+        setProgress(pass.pct);
+        setPhaseLabel(pass.label);
+        try {
+          const report = await invokeReplicate(pass.mode);
+          merged.version = report.version ?? merged.version;
+          merged.mirrored = { ...merged.mirrored, ...report.mirrored };
+          merged.errors.push(...(report.errors ?? []));
+          if (!report.ok) merged.ok = false;
+        } catch (e) {
+          merged.ok = false;
+          merged.errors.push(`${pass.mode}: ${(e as Error).message}`);
+        }
+      }
+      merged.finishedAt = new Date().toISOString();
+      return merged;
     },
     onSuccess: (report) => {
       stopTicker();
