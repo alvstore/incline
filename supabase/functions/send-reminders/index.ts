@@ -113,14 +113,32 @@ Deno.serve(async (req) => {
     }
     function getDaysBefore(branchId: string, type: string): number[] {
       const cfg = getConfig(branchId, type);
-      if (!cfg || !cfg.days_before) return [7, 3, 1];
+      if (!cfg || !cfg.days_before) return [7, 5, 3];
       return cfg.days_before;
     }
+    const VALID_CHANNELS: Channel[] = ["whatsapp", "sms", "email", "notification"];
     function getChannel(branchId: string, type: string): Channel {
       const cfg = getConfig(branchId, type);
       const ch = (cfg?.channel || "notification") as Channel;
-      return (["whatsapp", "sms", "email", "notification"] as Channel[]).includes(ch) ? ch : "notification";
+      return VALID_CHANNELS.includes(ch) ? ch : "notification";
     }
+    /**
+     * Ordered channel chain for a reminder type: the configured primary channel
+     * first, then every configured fallback. Nothing is ever missed — if
+     * WhatsApp is blocked/unapproved we still reach the member on SMS or email.
+     */
+    function getChannelChain(branchId: string, type: string): Channel[] {
+      const cfg = getConfig(branchId, type);
+      const primary = getChannel(branchId, type);
+      const fallbacks = Array.isArray(cfg?.fallback_channels) ? cfg.fallback_channels : [];
+      const chain: Channel[] = [primary];
+      for (const raw of fallbacks) {
+        const ch = String(raw) as Channel;
+        if (VALID_CHANNELS.includes(ch) && !chain.includes(ch)) chain.push(ch);
+      }
+      return chain;
+    }
+
 
     /**
      * Attempt real outbound delivery via the matching provider edge function.
