@@ -1,4 +1,4 @@
-// renewal-engine-tick v1.0.0 — Phase 2 renewal orchestrator.
+// renewal-engine-tick v1.1.0 — Phase 2 renewal orchestrator.
 // Passive until renewal_engine_config.enabled = true (global row default false).
 // - single-flight lease (renewal_engine_acquire_lease)
 // - bounded batch per run + per-day cap
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: configs } = await admin
-      .from("renewal_engine_config").select("branch_id, enabled, daily_cap");
+      .from("renewal_engine_config").select("branch_id, enabled, daily_cap, voice_auto_call_enabled, voice_stage_offsets");
     const anyEnabled = (configs || []).some((c) => c.enabled);
     if (!anyEnabled) return json({ success: true, skipped: "engine_disabled", sent: 0 });
 
@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
       _pause_reason: pauseReason,
     });
 
-    return json({ success: true, sent, failed, skipped, paused: pause, paused_reason: pauseReason });
+    return json({ success: true, sent, failed, skipped, voice_calls: voiceCalls, paused: pause, paused_reason: pauseReason });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await captureEdgeError("renewal-engine-tick", e, { severity: "error" });
