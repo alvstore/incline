@@ -877,6 +877,11 @@ export async function runStaffAgent(state: AgentRunState): Promise<AgentResult> 
       : `3. ${staffName} is NOT authorised for revenue or dues. If asked, say financial figures are limited to owners, admins and managers.`,
     `4. Member personal data shared here is confidential and only for internal use.`,
     `5. Keep replies short and scannable for WhatsApp. Use compact lines like "• Name (CODE) — ₹1,200 due, invoice 12 Sep, due 20 Sep". Max ~10 rows, then say how many more remain.`,
+    memberCtx.trainerId
+      ? `6. ${staffName} is a trainer. They can see their OWN attendance (get_my_attendance), their assigned members (list_my_assigned_members), those members' gym visit times (get_member_attendance) and workout/diet plans (get_member_fitness_plan), and their PT sessions (list_my_sessions_today). If a tool replies that a member is not assigned to them, say exactly that — never work around it.`
+      : financial
+        ? `6. You may look up any member or trainer.`
+        : `6. You may look up members, but personal or financial details stay limited to what the tools return.`,
   ].join("\n");
 
   const tools = getOpsToolDefinitions(role);
@@ -910,7 +915,9 @@ export async function runStaffAgent(state: AgentRunState): Promise<AgentResult> 
       const started = Date.now();
       const result = await executeOpsToolCall(supabase, tc.function.name, parsedArgs, {
         role,
-        branchId: ctx.branchId,
+        branchId: memberCtx.staffBranchId || ctx.branchId,
+        trainerId: memberCtx.trainerId ?? null,
+        staffUserId: memberCtx.staffUserId ?? null,
       });
       try {
         await supabase.from("ai_tool_logs").insert({
@@ -2511,6 +2518,9 @@ interface MemberResolveResult {
   isStaff?: boolean;
   staffName?: string;
   staffRole?: string;
+  staffUserId?: string;
+  trainerId?: string;
+  staffBranchId?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
@@ -2579,6 +2589,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
           isStaff: true,
           staffName,
           staffRole,
+          staffUserId: directoryProfile.id,
+          trainerId: (trainerRow as any)?.id ?? undefined,
+          staffBranchId: (trainerRow as any)?.branch_id ?? (employeeRow as any)?.branch_id ?? undefined,
           contextPrompt:
             `[Internal team] ${staffName} — ${staffRole} at Incline. ` +
             `This is a COLLEAGUE, not a lead or a prospect. Never ask for their name, ` +
