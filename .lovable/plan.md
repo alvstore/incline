@@ -1,32 +1,48 @@
-# Chat inbox, mobile chat UI, and a real Visual Flow Builder
+# Coexistence, chat inbox, mobile chat UI, and a real Visual Flow Builder
 
-Three pieces of work plus one answer about WhatsApp coexistence.
+Four pieces of work.
 
 ---
 
-## 1. Messages we send don't appear in Meta's own inbox
+## 1. Messages we send don't appear in Meta's own inbox — adopt coexistence
 
-This is a platform behaviour, not a data bug. Messages we send from the CRM are
-stored correctly on our side (they are written to the chat thread and to the
-communication record). They do not appear in the WhatsApp Business phone app or
-in Meta Business Suite because the number is connected through the Cloud API:
-Cloud API conversations and app conversations are separate surfaces unless the
-number is onboarded in **coexistence** mode.
+Cause: the number is connected through the Cloud API only. Cloud API
+conversations and WhatsApp Business app conversations are separate surfaces, so
+CRM sends are stored correctly on our side but never appear on the phone app or
+in Meta Business Suite. The fix is to run the number in **coexistence** mode, so
+the team can chat from the phone while the CRM and automations keep running on
+the same number.
 
-What will be done here:
+Adopting coexistence, without breaking anything that works today:
 
-- A short "Where your messages live" explainer card on the chat screen and in
-  the WhatsApp settings area, stating plainly that the CRM is the system of
-  record and Meta's inbox will not mirror CRM sends unless coexistence is
-  enabled.
+- **Onboarding:** the number is re-linked through the provider's coexistence
+  onboarding (select coexistence, scan the code from the WhatsApp Business app,
+  approve the link). The existing number, templates, campaigns, automations and
+  history stay in place — this is a link, not a migration, and the account is
+  never deleted.
+- **Two-way visibility once linked:**
+  - Messages staff send from the phone app arrive as echo events on the webhook
+    and are stored as outbound bubbles in our chat thread, attributed to "sent
+    from phone" so they are distinguishable from CRM sends.
+  - Messages sent from the CRM appear in the phone app conversation.
+- **History import:** a one-time pull of recent phone-app conversations into the
+  CRM thread, deduplicated against messages we already hold. This is only
+  available in a short window right after linking, so it runs as part of the
+  onboarding step.
+- **Safety:** echoes are de-duplicated against the messages we already sent, so
+  no double bubbles; the AI assistant never auto-replies to a conversation a
+  human just answered from the phone; do-not-contact and paused-chat rules still
+  apply.
+- **Status panel:** a WhatsApp settings card showing whether the number is in
+  coexistence mode, when it was linked, whether history import ran, and clear
+  step-by-step instructions plus troubleshooting for the common "number already
+  connected" error.
 - A verification pass confirming every outbound path (manual reply, automated
-  reminder, campaign, AI reply) writes a thread bubble, so nothing is missing on
-  our side. Anything found missing gets fixed.
+  reminder, campaign, AI reply) writes a thread bubble on our side. Anything
+  found missing gets fixed.
 
-Enabling coexistence itself is a change made with the provider that owns the
-number connection, not something that can be switched on from inside the app.
-Once it is enabled, the phone app and the CRM share the same conversation and no
-code change is needed here.
+Note: the onboarding itself needs a few minutes of your hands-on time in the
+provider flow and on the phone. Everything else is built and ready before that.
 
 ---
 
