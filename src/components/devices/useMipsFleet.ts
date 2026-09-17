@@ -225,12 +225,12 @@ export function useMipsFleet(branchId?: string) {
     const awaiting = rows.filter((r) => r.state === "pending" || r.state === "missing");
     const rejected = rows.filter((r) => r.state === "rejected");
 
-    // Split the gap into buckets that always sum back to `behind`, so the
-    // banner can never claim more missing people than it can explain.
-    const gap = behind ?? 0;
-    const gapWaiting = Math.min(awaiting.length, gap);
-    const gapRejected = Math.min(rejected.length, gap - gapWaiting);
-    const gapUnaccounted = Math.max(gap - gapWaiting - gapRejected, 0);
+    // Only report people we can actually name from the sync ledger. The raw
+    // counter delta includes archived/legacy server records the gates never
+    // need, so inventing an "unaccounted" bucket produced fake numbers.
+    const gapWaiting = awaiting.length;
+    const gapRejected = rejected.length;
+    const gapUnaccounted = 0;
 
     return {
       deviceId,
@@ -249,11 +249,12 @@ export function useMipsFleet(branchId?: string) {
       gapWaiting,
       gapRejected,
       gapUnaccounted,
-      gapActionable: gapWaiting + gapUnaccounted,
+      gapActionable: gapWaiting,
     };
   });
 
-  const laggingGates = gates.filter((g) => (g.behind ?? 0) > 0);
+  // A gate is only "lagging" when the ledger names someone it is still missing.
+  const laggingGates = gates.filter((g) => g.gapWaiting + g.gapRejected > 0);
   const worstBehind = laggingGates.reduce((m, g) => Math.max(m, g.behind ?? 0), 0);
   const laggingDevices = devices.filter((d) =>
     laggingGates.some((g) => g.deviceId === d.id),

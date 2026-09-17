@@ -269,13 +269,12 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                     own and the gate's counter moved.
                   </p>
 
-                  {(behind ?? 0) > 0 && (
+                  {gate.gapWaiting + gate.gapRejected > 0 && (
                     <p className="mb-2 rounded-lg bg-background p-2 text-[10px] leading-relaxed text-muted-foreground">
-                      The {behind} missing {behind === 1 ? "photo breaks" : "photos break"} down as{" "}
-                      <strong>{gate.gapWaiting} waiting to be sent</strong>,{" "}
-                      <strong>{gate.gapRejected} needing a clearer photo</strong> and{" "}
-                      <strong>{gate.gapUnaccounted} we cannot yet trace to a person</strong> — these always add
-                      up to {behind}. Re-syncing only helps the first and last groups.
+                      Named people this gate is still missing:{" "}
+                      <strong>{gate.gapWaiting} waiting to be sent</strong> and{" "}
+                      <strong>{gate.gapRejected} needing a clearer photo</strong>. Re-syncing only helps the
+                      first group. Older records on the server that no gate needs are not counted here.
                     </p>
                   )}
 
