@@ -205,6 +205,25 @@ export default function ExternalReviewsTab() {
     onError: (e: any) => toast.error(e?.message ?? 'Fetch failed'),
   });
 
+  // Pulls owner replies that were posted on Google Maps / the GBP app so the
+  // pending count reflects reality instead of only replies sent from here.
+  const syncReplies = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'sync_replies', branch_id: branchId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as any;
+    },
+    onSuccess: (d) => {
+      const n = Number(d?.replies_synced ?? 0);
+      toast.success(n > 0 ? `${n} reply${n === 1 ? '' : 's'} found on Google and marked replied` : 'No new replies found on Google');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not sync replies from Google'),
+  });
+
   const reclassify = useMutation({
     mutationFn: async (id: string) => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
