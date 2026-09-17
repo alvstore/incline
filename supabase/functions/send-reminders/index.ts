@@ -227,6 +227,34 @@ Deno.serve(async (req) => {
       }
     }
 
+    /**
+     * Walk the configured channel chain and stop at the first channel that the
+     * provider actually confirmed. Returns the last attempt when none worked so
+     * the caller can log an honest failure.
+     */
+    async function deliverChain(
+      channels: Channel[],
+      params: {
+        branchId: string;
+        memberId?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        subject: string;
+        message: string;
+      },
+    ): Promise<DeliveryResult> {
+      let last: DeliveryResult = { status: "skipped", error: "no channel configured", channel: "notification" };
+      for (const ch of channels) {
+        if (ch === "notification") continue; // in-app row is always created separately
+        const res = await deliver(ch, params);
+        if (res.status === "sent") return res;
+        last = res;
+      }
+      return last;
+    }
+
+
+
     function logComm(
       result: DeliveryResult,
       params: { branchId: string; memberId?: string | null; recipient: string; subject: string; message: string },
