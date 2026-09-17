@@ -66,7 +66,7 @@ export function WhatsAppCoexistenceCard() {
   });
 
   return (
-    <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
