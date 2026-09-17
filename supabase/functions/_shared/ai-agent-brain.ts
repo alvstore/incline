@@ -497,6 +497,8 @@ interface OrgAiConfig {
 
 // ─── Main entry point ──────────────────────────────────────────────────────────
 
+import { loadFlowRuntime } from "./agent-flow.ts";
+
 export async function runUnifiedAgent(
   supabase: ReturnType<typeof createClient>,
   supabaseUrl: string,
@@ -520,6 +522,13 @@ export async function runUnifiedAgent(
   const channelOn = aiConfig.channels?.[ctx.platform as 'whatsapp' | 'instagram' | 'messenger']?.enabled ?? true;
   if (!channelOn) {
     return skip(`channel_${ctx.platform}_disabled`);
+  }
+
+  // Published visual workflow (agent_flows). Purely additive: when no flow is
+  // published, or it is invalid, this returns today's behaviour unchanged.
+  const flow = await loadFlowRuntime(supabase, ctx.branchId);
+  if (flow.source === 'flow' && !flow.channels.has(ctx.platform)) {
+    return skip(`flow_channel_${ctx.platform}_disabled`);
   }
 
   // Load admin-trained dynamic memory rules (cached 60s). MUST happen before
@@ -826,6 +835,13 @@ export async function runUnifiedAgent(
     ? "member_agent"
     : memberCtx.isStaff ? "staff_agent" : "lead_agent";
   console.log(`[AI:${ctx.platform}] router → ${routeName} (sender=${ctx.senderId})`);
+
+  const audience = memberCtx.isMember && memberCtx.memberId
+    ? "member"
+    : memberCtx.isStaff ? "staff" : "lead";
+  if (flow.source === "flow" && !flow.audiences.has(audience)) {
+    return skip(`flow_audience_${audience}_disabled`);
+  }
 
   if (memberCtx.isMember && memberCtx.memberId) {
     return await runMemberAgent(state);
