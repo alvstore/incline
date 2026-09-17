@@ -1309,17 +1309,17 @@ export default function WhatsAppChatPage() {
                             <button
                               type="button"
                               aria-label="AI pause control"
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer hover:opacity-90 transition ${pillTone}`}
+                              className={`flex items-center gap-1.5 md:gap-2 shrink-0 px-2 md:px-3 py-1.5 rounded-lg cursor-pointer hover:opacity-90 transition ${pillTone}`}
                             >
                               {effectivelyPaused ? (
                                 <AlertTriangle className={`h-3.5 w-3.5 ${iconTone}`} />
                               ) : (
                                 <Bot className={`h-3.5 w-3.5 ${iconTone}`} />
                               )}
-                              <span className={`text-xs ${labelTone}`}>
+                              <span className={`text-xs whitespace-nowrap ${labelTone}`}>
                                 {effectivelyPaused
                                   ? (countdown ? `AI paused · ${countdown}` : 'AI paused')
-                                  : 'AI Bot On'}
+                                  : <><span className="hidden md:inline">AI Bot </span>On</>}
                               </span>
                             </button>
                           </PopoverTrigger>
