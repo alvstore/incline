@@ -582,8 +582,19 @@ export default function ExternalReviewsTab() {
                     </div>
                   )}
 
+                  {/* Reply CTA */}
+                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && !openReply[r.id] && (
+                    <Button
+                      className="h-11 cursor-pointer rounded-xl"
+                      onClick={() => setOpenReply((o) => ({ ...o, [r.id]: true }))}
+                    >
+                      <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
+                      Reply to customer
+                    </Button>
+                  )}
+
                   {/* Reply box */}
-                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (
+                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && openReply[r.id] && (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Draft reply (editable)</p>
