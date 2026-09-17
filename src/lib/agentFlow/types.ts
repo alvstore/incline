@@ -183,6 +183,8 @@ export function defaultFlowGraph(): FlowGraph {
       { id: 'e8', source: 'agent-lead', target: 'send' },
       { id: 'e9', source: 'tools-member', target: 'send' },
       { id: 'e10', source: 'tools-staff', target: 'send' },
+      { id: 'e13', source: 'agent-lead', target: 'handoff', label: 'asks for a person' },
+      { id: 'e14', source: 'agent-member', target: 'handoff', label: 'asks for a person' },
       { id: 'e11', source: 'handoff', target: 'end' },
       { id: 'e12', source: 'send', target: 'end' },
     ],
