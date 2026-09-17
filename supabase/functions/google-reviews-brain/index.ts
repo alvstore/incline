@@ -1499,8 +1499,19 @@ Deno.serve(async (req) => {
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         return await startGoogleOAuth(body.branch_id);
       case "list_accounts":
-      case "list_locations":
-        return json({ ok: false, reason: "Legacy Business Profile discovery was removed. Link the branch with “Find my listing” (Places API) instead." }, 200);
+      case "list_locations": {
+        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
+        return json(await discoverGbpLocations(body.branch_id), 200);
+      }
+      case "autolink_location": {
+        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
+        return await autolinkGbpLocation(body.branch_id);
+      }
+      case "select_location": {
+        if (!body.branch_id || !body.account_id || !body.location_id)
+          return json({ error: "branch_id, account_id and location_id required" }, 400);
+        return json(await linkGbpLocation(body.branch_id, body.account_id, body.location_id, body.title), 200);
+      }
       case "fetch_reviews":
         return await fetchReviews(body.branch_id);
       case "fetch_reviews_places":
