@@ -456,6 +456,17 @@ export default function ExternalReviewsTab() {
           Fetch now
         </Button>
         <Button
+          variant="outline"
+          size="sm"
+          onClick={() => syncReplies.mutate()}
+          disabled={syncReplies.isPending}
+          className="cursor-pointer"
+          aria-label="Sync replies already posted on Google"
+        >
+          <CheckCircle2 className={`h-4 w-4 mr-1.5 ${syncReplies.isPending ? 'animate-pulse' : ''}`} />
+          Sync replies
+        </Button>
+        <Button
           variant="ghost"
           size="sm"
           onClick={() => diagnose.mutate()}
