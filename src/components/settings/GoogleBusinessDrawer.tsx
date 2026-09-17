@@ -615,8 +615,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
 
                 <Separator />
                 <p className="text-xs leading-relaxed text-slate-500">
-                  Places API (New) returns at most 5 reviews and cannot post replies — that is a Google limit. Replying
-                  unlocks once Business Profile quota is approved in Step 2.
+                  Step 1 alone reads only the 5 most recent reviews and cannot post replies — that is a Google limit.
+                  Step 2 (Google account connected + listing linked) unlocks the full review history and replying
+                  straight from Feedback &amp; Reviews.
                 </p>
               </>
             )}
