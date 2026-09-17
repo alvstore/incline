@@ -39,6 +39,17 @@ interface DiagnoseCheck {
   lane: 'places' | 'business_profile';
   label: string;
   hint?: string;
+  action_url?: string;
+  action_label?: string;
+}
+
+interface GbpLocationItem {
+  account_id: string;
+  account_name: string;
+  location_id: string;
+  title: string;
+  place_id: string | null;
+  address: string | null;
 }
 
 type Row = {
@@ -80,6 +91,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
   
   const [diag, setDiag] = useState<DiagnoseCheck[] | null>(null);
   const [diagRunning, setDiagRunning] = useState(false);
+  const [locations, setLocations] = useState<GbpLocationItem[]>([]);
+  const [activationUrl, setActivationUrl] = useState<string | null>(null);
 
   const { data: row, isLoading } = useQuery<Row>({
     queryKey: ['gbp-settings', branchId],
@@ -113,6 +126,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
     setResults([]);
     setSearchText('');
     setDiag(null);
+    setLocations([]);
+    setActivationUrl(null);
   }, [row, open]);
 
   const cfg = (row?.config ?? {}) as Record<string, any>;
@@ -204,11 +219,54 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
     onError: (e: any) => toast.error(e?.message ?? 'Fetch failed'),
   });
 
+  /** Full history + reply lane (Business Profile API). */
+  const fetchFull = useMutation({
+    mutationFn: async () => invoke({ action: 'fetch_reviews', branch_id: branchId }),
+    onSuccess: (r: any) => {
+      const first = r?.results?.[0];
+      if (!r?.ok) toast.error(r?.reason ?? 'Full sync failed');
+      else toast.success(`Synced ${first?.fetched ?? 0} reviews from ${first?.source === 'business_profile' ? 'Business Profile' : 'Places'}`);
+      qc.invalidateQueries({ queryKey: ['gri'] });
+      qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-google-reviews'] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Full sync failed'),
+  });
+
+  /** Match this branch to a listing on the connected Google account. */
+  const autolink = useMutation({
+    mutationFn: async () => invoke({ action: 'autolink_location', branch_id: branchId }),
+    onSuccess: (r: any) => {
+      setLocations((r?.locations ?? []) as GbpLocationItem[]);
+      if (r?.activation_url) setActivationUrl(r.activation_url);
+      if (r?.ok) {
+        toast.success(`Linked to ${r.title ?? 'your Google listing'}`);
+        qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
+      } else {
+        toast.error(r?.reason ?? 'Could not link the listing automatically — pick it below.');
+      }
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Linking failed'),
+  });
+
+  const selectLocation = useMutation({
+    mutationFn: async (l: GbpLocationItem) =>
+      invoke({ action: 'select_location', branch_id: branchId, account_id: l.account_id, location_id: l.location_id, title: l.title }),
+    onSuccess: (_r, l) => {
+      toast.success(`Linked to ${l.title}`);
+      setLocations([]);
+      qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not link that listing'),
+  });
+
   const runDiagnose = async () => {
     setDiagRunning(true);
     try {
       const r = await invoke({ action: 'diagnose', branch_id: branchId });
       setDiag((r?.checks ?? []) as DiagnoseCheck[]);
+      setActivationUrl(r?.activation_url ?? null);
+      if (r?.autolinked) qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
     } catch (e: any) {
       toast.error(e?.message ?? 'Diagnostics failed');
     } finally {
@@ -412,15 +470,98 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     </div>
                   </div>
 
-                  <Button type="button" variant="outline" className="w-full cursor-pointer rounded-xl" onClick={connectGoogle}>
+                  <Button type="button" variant="outline" className="h-11 w-full cursor-pointer rounded-xl" onClick={connectGoogle}>
                     <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden />
                     {hasOAuth ? 'Re-connect Google' : 'Connect Google'}
                   </Button>
-                  <p className="text-xs leading-relaxed text-slate-500">
-                    Replying from inside the app unlocks only after Google approves Business Profile API quota for your
-                    Cloud project. Until then, use <strong>Copy &amp; open on Google</strong> on each review in
-                    Feedback &amp; Reviews.
-                  </p>
+
+                  {/* Listing link — required for posting replies */}
+                  {hasOAuth && (
+                    <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                      {hasLocation ? (
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 rounded-full bg-emerald-50 p-2 text-emerald-600">
+                            <CheckCircle2 className="h-4 w-4" aria-hidden />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {cfg.gbp_location_title ?? placeName ?? 'Google listing linked'}
+                            </p>
+                            <p className="font-mono text-[11px] text-slate-500">
+                              account {cfg.account_id} · location {cfg.location_id}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs leading-relaxed text-slate-600">
+                          Pick which Google listing this branch is, so replies post to the right place.
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          className="h-11 cursor-pointer rounded-xl"
+                          onClick={() => autolink.mutate()}
+                          disabled={autolink.isPending}
+                        >
+                          {autolink.isPending
+                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                            : <MapPin className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                          {hasLocation ? 'Re-link listing' : 'Link my Google listing'}
+                        </Button>
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          className="h-11 cursor-pointer rounded-xl"
+                          onClick={() => fetchFull.mutate()}
+                          disabled={fetchFull.isPending || !hasLocation}
+                        >
+                          {fetchFull.isPending
+                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                            : <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                          Sync full review history
+                        </Button>
+                      </div>
+
+                      {locations.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {locations.map((l) => (
+                            <li key={l.location_id}>
+                              <button
+                                type="button"
+                                onClick={() => selectLocation.mutate(l)}
+                                disabled={selectLocation.isPending}
+                                className="w-full cursor-pointer rounded-xl border border-slate-100 bg-white px-3 py-2 text-left transition-colors duration-150 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                <p className="truncate text-sm font-semibold text-slate-900">{l.title}</p>
+                                <p className="truncate text-xs text-slate-500">{l.address ?? l.account_name}</p>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {activationUrl && (
+                    <div className="space-y-2 rounded-xl bg-amber-50 p-3">
+                      <p className="text-xs font-semibold text-amber-800">One step left in Google Cloud</p>
+                      <p className="text-xs leading-relaxed text-amber-700">
+                        Google approved your access, but the Business Profile API is still switched off on your Cloud
+                        project. Turn it on, wait a minute, then run the checks again.
+                      </p>
+                      <Button
+                        asChild size="sm" variant="outline"
+                        className="h-11 cursor-pointer rounded-xl border-amber-300 bg-white"
+                      >
+                        <a href={activationUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                          Enable the API in Google Cloud
+                        </a>
+                      </Button>
+                    </div>
+                  )}
+
 
                 </section>
 
@@ -446,7 +587,20 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                 : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />}
                               <div className="min-w-0">
                                 <p className="text-sm text-slate-800">{c.label}</p>
-                                {!c.ok && c.hint && <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>}
+                                {(!c.ok || c.key === 'location') && c.hint && (
+                                  <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>
+                                )}
+                                {!c.ok && c.action_url && (
+                                  <a
+                                    href={c.action_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-lg text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  >
+                                    <ExternalLink className="h-3 w-3" aria-hidden />
+                                    {c.action_label ?? 'Fix in Google Cloud'}
+                                  </a>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -461,8 +615,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
 
                 <Separator />
                 <p className="text-xs leading-relaxed text-slate-500">
-                  Places API (New) returns at most 5 reviews and cannot post replies — that is a Google limit. Replying
-                  unlocks once Business Profile quota is approved in Step 2.
+                  Step 1 alone reads only the 5 most recent reviews and cannot post replies — that is a Google limit.
+                  Step 2 (Google account connected + listing linked) unlocks the full review history and replying
+                  straight from Feedback &amp; Reviews.
                 </p>
               </>
             )}
