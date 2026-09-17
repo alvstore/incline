@@ -219,11 +219,54 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
     onError: (e: any) => toast.error(e?.message ?? 'Fetch failed'),
   });
 
+  /** Full history + reply lane (Business Profile API). */
+  const fetchFull = useMutation({
+    mutationFn: async () => invoke({ action: 'fetch_reviews', branch_id: branchId }),
+    onSuccess: (r: any) => {
+      const first = r?.results?.[0];
+      if (!r?.ok) toast.error(r?.reason ?? 'Full sync failed');
+      else toast.success(`Synced ${first?.fetched ?? 0} reviews from ${first?.source === 'business_profile' ? 'Business Profile' : 'Places'}`);
+      qc.invalidateQueries({ queryKey: ['gri'] });
+      qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-google-reviews'] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Full sync failed'),
+  });
+
+  /** Match this branch to a listing on the connected Google account. */
+  const autolink = useMutation({
+    mutationFn: async () => invoke({ action: 'autolink_location', branch_id: branchId }),
+    onSuccess: (r: any) => {
+      setLocations((r?.locations ?? []) as GbpLocationItem[]);
+      if (r?.activation_url) setActivationUrl(r.activation_url);
+      if (r?.ok) {
+        toast.success(`Linked to ${r.title ?? 'your Google listing'}`);
+        qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
+      } else {
+        toast.error(r?.reason ?? 'Could not link the listing automatically — pick it below.');
+      }
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Linking failed'),
+  });
+
+  const selectLocation = useMutation({
+    mutationFn: async (l: GbpLocationItem) =>
+      invoke({ action: 'select_location', branch_id: branchId, account_id: l.account_id, location_id: l.location_id, title: l.title }),
+    onSuccess: (_r, l) => {
+      toast.success(`Linked to ${l.title}`);
+      setLocations([]);
+      qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not link that listing'),
+  });
+
   const runDiagnose = async () => {
     setDiagRunning(true);
     try {
       const r = await invoke({ action: 'diagnose', branch_id: branchId });
       setDiag((r?.checks ?? []) as DiagnoseCheck[]);
+      setActivationUrl(r?.activation_url ?? null);
+      if (r?.autolinked) qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] });
     } catch (e: any) {
       toast.error(e?.message ?? 'Diagnostics failed');
     } finally {
