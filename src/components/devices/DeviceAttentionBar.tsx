@@ -139,10 +139,9 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
                 const parts: string[] = [];
                 if (g.gapWaiting > 0) parts.push(`${g.gapWaiting} waiting to be sent`);
                 if (g.gapRejected > 0) parts.push(`${g.gapRejected} need a clearer photo`);
-                if (g.gapUnaccounted > 0) parts.push(`${g.gapUnaccounted} not yet traced to a person`);
                 return (
                   <span key={g.deviceId} className="block">
-                    {g.name}: {g.behind ?? 0} of {target} missing
+                    {g.name}: {g.gapWaiting + g.gapRejected} {g.gapWaiting + g.gapRejected === 1 ? "person" : "people"} missing
                     {parts.length > 0 ? ` — ${parts.join(", ")}` : ""}.
                   </span>
                 );

@@ -73,7 +73,10 @@ Deno.serve(async (req) => {
         error: sameMember
           ? "This scan session is already linked. Please scan the device QR again for a new session."
           : "This scan session belongs to another member. Please scan the device QR again.",
-      }, 409);
+        code: "session_already_linked",
+        // 200 on purpose: a re-submitted QR is normal user behaviour, not a
+        // server fault. Returning 409 polluted System Health with false errors.
+      }, 200);
     }
 
     // Load member + profile

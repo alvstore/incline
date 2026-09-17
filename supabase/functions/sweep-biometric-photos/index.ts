@@ -124,12 +124,16 @@ Deno.serve(async (req) => {
     }
 
     if (failures.length) {
-      await admin.rpc("log_error_event", {
-        p_source: "sweep-biometric-photos",
-        p_severity: "warning",
-        p_message: `Biometric sweep: ${repaired.length} repaired, ${failures.length} failed`,
-        p_context: { failures: failures.slice(0, 20) },
-      }).catch(() => {});
+      try {
+        await admin.rpc("log_error_event", {
+          p_source: "sweep-biometric-photos",
+          p_severity: "warning",
+          p_message: `Biometric sweep: ${repaired.length} repaired, ${failures.length} failed`,
+          p_context: { failures: failures.slice(0, 20) },
+        });
+      } catch (logErr) {
+        console.warn("[sweep-biometric-photos] log_error_event failed", logErr);
+      }
     }
 
     console.log(`[sweep-biometric-photos] repaired=${repaired.length} failed=${failures.length}`);
