@@ -196,6 +196,8 @@ type ActionResult = {
   observed_valid_time_end?: string | null;
   new_valid_time_end?: string;
   mips_person_id?: number;
+  /** Set when the gate already held the desired validity — nothing was sent. */
+  skipped?: string;
 };
 
 
