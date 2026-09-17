@@ -756,8 +756,12 @@ export default function ExternalReviewsTab() {
                     <div className="rounded-xl bg-success/10 p-3 text-sm">
                       <p className="text-xs font-semibold text-success uppercase tracking-wider mb-1 flex items-center gap-1">
                         <ExternalLink className="h-3 w-3" />
-                        {r.reply_mode === 'manual_google' ? 'Replied manually on Google' : 'Replied on Google'}
-                        {r.replied_at ? ` · ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
+                        {r.reply_mode === 'manual_google'
+                          ? 'Replied manually on Google'
+                          : r.reply_mode === 'google_owner'
+                            ? 'Replied on Google'
+                            : 'Replied from Incline'}
+                        {r.replied_at ? ` · ${format(new Date(r.replied_at), "dd MMM yyyy, h:mm a")}` : ''}
                       </p>
                       <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text ?? r.reply_text}</p>
                     </div>
