@@ -617,6 +617,53 @@ export function IntegrationSettings() {
             </CardContent>
           </Card>
 
+          {/* ─── WhatsApp Business App Coexistence (2026) ─── */}
+          <Card className="rounded-2xl border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Smartphone className="h-5 w-5 text-primary" />
+                Business App Coexistence
+                <Badge variant="secondary" className="ml-1 rounded-full px-2 py-0 text-[10px]">2026</Badge>
+              </CardTitle>
+              <CardDescription>
+                The same number works in the WhatsApp Business app and here at the same time — no new number, no account deletion.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl bg-background/70 p-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" aria-hidden />
+                  <h4 className="text-sm font-semibold">Dual access</h4>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your team replies from their phones while automations and the AI agent run here on the same number.
+                </p>
+              </div>
+              <div className="rounded-xl bg-background/70 p-4">
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-primary" aria-hidden />
+                  <h4 className="text-sm font-semibold">6 months of chat history</h4>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  On first link you can import up to six months of one-to-one chats and contacts into the inbox.
+                </p>
+              </div>
+              <div className="rounded-xl bg-background/70 p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-success" aria-hidden />
+                  <h4 className="text-sm font-semibold">Keep your number</h4>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Nothing is migrated or deleted — link through coexistence onboarding and scan the code on the phone.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <WhatsAppCoexistenceCard />
+
+
+
           {/* Marketing Messages API for WhatsApp (formerly MM Lite) — optional
               higher-delivery route for promotional templates. */}
           <WhatsAppMarketingApiToggle />
