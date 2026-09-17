@@ -130,13 +130,8 @@ export default defineConfig(() => ({
             id.includes('/clsx/')
           ) return 'ui-vendor';
 
-          // React core
-          if (
-            id.includes('/react/') ||
-            id.includes('/react-dom/') ||
-            id.includes('react-router-dom') ||
-            id.includes('react-helmet-async')
-          ) return 'react-vendor';
+          // React core is handled at the top of this function.
+
 
           return undefined;
         },
