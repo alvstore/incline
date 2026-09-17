@@ -1533,6 +1533,13 @@ Deno.serve(async (req) => {
       }
       case "fetch_reviews":
         return await fetchReviews(body.branch_id);
+      case "sync_replies": {
+        // Same pull as fetch_reviews, but the caller only cares how many rows
+        // were closed by a reply that already exists on Google.
+        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
+        const r = await fetchReviewsForBranch(body.branch_id);
+        return json({ ok: true, ...r });
+      }
       case "fetch_reviews_places":
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         return json(await fetchPlacesReviewsForBranch(body.branch_id));
