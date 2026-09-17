@@ -1195,9 +1195,9 @@ export default function WhatsAppChatPage() {
                         </span>
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="font-semibold text-foreground text-sm break-words [overflow-wrap:anywhere]">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm truncate">
                           {displayLabel(selectedContact)}
                         </h3>
                         {(() => {
