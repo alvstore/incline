@@ -546,6 +546,173 @@ export async function executeOpsToolCall(
         return { date: isoDate, count: rows.length, total_received: `₹${inr(total)}`, payments: rows };
       }
 
+      // ── trainer / personal ────────────────────────────────────────────────
+      case "list_my_assigned_members": {
+        if (!opts.trainerId && !unrestricted) return { error: "No trainer profile is linked to this number." };
+        if (!opts.trainerId) return { error: "This tool is for trainers. Use find_member or list_expiring_memberships instead." };
+        const limit = Math.min(Number(args.limit) || 25, 50);
+        const ids = [...(await trainerMemberIds(supabase, opts.trainerId))].slice(0, limit);
+        if (!ids.length) return { count: 0, members: [], note: "No members are currently assigned to you." };
+        const dir = await memberDirectory(supabase, ids);
+        const [{ data: memberships }, { data: pkgs }] = await Promise.all([
+          supabase.from("memberships").select("member_id, status, end_date, plan_id").in("member_id", ids)
+            .order("end_date", { ascending: false }),
+          supabase.from("member_pt_packages").select("member_id, sessions_remaining, expiry_date, status")
+            .in("member_id", ids).eq("trainer_id", opts.trainerId).eq("status", "active"),
+        ]);
+        const planIds = [...new Set((memberships ?? []).map((m: any) => m.plan_id).filter(Boolean))];
+        const planMap = new Map<string, string>();
+        if (planIds.length) {
+          const { data: plans } = await supabase.from("membership_plans").select("id, name").in("id", planIds);
+          for (const p of plans ?? []) planMap.set((p as any).id, (p as any).name);
+        }
+        const latest = new Map<string, any>();
+        for (const ms of memberships ?? []) if (!latest.has((ms as any).member_id)) latest.set((ms as any).member_id, ms);
+        const ptMap = new Map<string, any>();
+        for (const p of pkgs ?? []) ptMap.set((p as any).member_id, p);
+        const rows = ids.map((id) => {
+          const ms = latest.get(id);
+          const pt = ptMap.get(id);
+          return {
+            name: dir.get(id)?.name ?? "Member",
+            member_code: dir.get(id)?.code ?? "",
+            phone: dir.get(id)?.phone ?? null,
+            plan: ms?.plan_id ? planMap.get(ms.plan_id) ?? null : null,
+            membership_status: ms?.status ?? null,
+            expires_on: ms?.end_date ?? null,
+            pt_sessions_left: pt ? Number(pt.sessions_remaining || 0) : null,
+          };
+        });
+        return { count: rows.length, members: rows };
+      }
+
+      case "get_my_attendance": {
+        if (!opts.staffUserId) return { error: "Could not identify your staff record from this number." };
+        const days = Math.min(Math.max(Number(args.days) || 7, 1), 31);
+        const from = ymd(new Date(Date.now() + 5.5 * 3600 * 1000 - (days - 1) * 86400000));
+        const { data, error } = await supabase
+          .from("staff_attendance")
+          .select("shift_date, shift_type, check_in, check_out, total_hours, late_minutes, is_late")
+          .eq("user_id", opts.staffUserId)
+          .gte("shift_date", from)
+          .order("shift_date", { ascending: false })
+          .limit(40);
+        if (error) return { error: error.message };
+        const rows = (data ?? []).map((r: any) => ({
+          date: r.shift_date,
+          shift: r.shift_type ?? null,
+          check_in: istTime(r.check_in),
+          check_out: istTime(r.check_out),
+          hours: r.total_hours != null ? Number(r.total_hours) : null,
+          late_minutes: r.is_late ? Number(r.late_minutes || 0) : 0,
+        }));
+        return { from, days, count: rows.length, attendance: rows };
+      }
+
+      case "get_member_attendance": {
+        const m = await resolveMemberRef(supabase, args.member);
+        if (!m) return { error: `No member found matching "${args.member}".` };
+        if (!unrestricted) {
+          if (!opts.trainerId) return { error: "Member visit history is limited to their trainer and management." };
+          const ids = await trainerMemberIds(supabase, opts.trainerId);
+          if (!ids.has(m.id)) return { error: "That member is not assigned to you." };
+        }
+        const limit = Math.min(Number(args.limit) || 10, 30);
+        const dir = await memberDirectory(supabase, [m.id]);
+        const { data, error } = await supabase
+          .from("member_attendance")
+          .select("check_in, check_out, check_in_method")
+          .eq("member_id", m.id)
+          .order("check_in", { ascending: false })
+          .limit(limit);
+        if (error) return { error: error.message };
+        const visits = (data ?? []).map((v: any) => {
+          const inIso = new Date(new Date(v.check_in).getTime() + 5.5 * 3600 * 1000).toISOString();
+          const mins = v.check_out
+            ? Math.round((new Date(v.check_out).getTime() - new Date(v.check_in).getTime()) / 60000)
+            : null;
+          return {
+            date: inIso.slice(0, 10),
+            check_in: inIso.slice(11, 16),
+            check_out: istTime(v.check_out),
+            minutes: mins,
+            via: v.check_in_method ?? null,
+          };
+        });
+        return {
+          member: dir.get(m.id)?.name ?? "Member",
+          member_code: m.member_code,
+          count: visits.length,
+          visits,
+        };
+      }
+
+      case "get_member_fitness_plan": {
+        const m = await resolveMemberRef(supabase, args.member);
+        if (!m) return { error: `No member found matching "${args.member}".` };
+        if (!unrestricted) {
+          if (!opts.trainerId) return { error: "Member plans are limited to their trainer and management." };
+          const ids = await trainerMemberIds(supabase, opts.trainerId);
+          if (!ids.has(m.id)) return { error: "That member is not assigned to you." };
+        }
+        const dir = await memberDirectory(supabase, [m.id]);
+        const today = ymd(new Date(Date.now() + 5.5 * 3600 * 1000));
+        const { data, error } = await supabase
+          .from("member_fitness_plans")
+          .select("plan_type, plan_name, valid_from, valid_until, pdf_url, updated_at")
+          .eq("member_id", m.id)
+          .order("valid_from", { ascending: false })
+          .limit(10);
+        if (error) return { error: error.message };
+        const plans = (data ?? []).map((p: any) => ({
+          type: p.plan_type,
+          name: p.plan_name,
+          valid_from: p.valid_from,
+          valid_until: p.valid_until,
+          active: (!p.valid_from || p.valid_from <= today) && (!p.valid_until || p.valid_until >= today),
+          has_pdf: !!p.pdf_url,
+        }));
+        return {
+          member: dir.get(m.id)?.name ?? "Member",
+          member_code: m.member_code,
+          workout: plans.filter((p) => String(p.type).includes("workout")),
+          diet: plans.filter((p) => String(p.type).includes("diet")),
+          count: plans.length,
+        };
+      }
+
+      case "list_my_sessions_today": {
+        if (!opts.trainerId) return { error: "This tool is for trainers — no trainer profile is linked to this number." };
+        const { startUtc, endUtc, isoDate } = istDayBounds(args.date);
+        const { data, error } = await supabase
+          .from("pt_sessions")
+          .select("scheduled_at, duration_minutes, status, member_pt_package_id")
+          .eq("trainer_id", opts.trainerId)
+          .gte("scheduled_at", startUtc.toISOString())
+          .lt("scheduled_at", endUtc.toISOString())
+          .order("scheduled_at", { ascending: true });
+        if (error) return { error: error.message };
+        const pkgIds = [...new Set((data ?? []).map((s: any) => s.member_pt_package_id).filter(Boolean))];
+        const pkgMember = new Map<string, string>();
+        if (pkgIds.length) {
+          const { data: pkgs } = await supabase.from("member_pt_packages").select("id, member_id").in("id", pkgIds);
+          for (const p of pkgs ?? []) pkgMember.set((p as any).id, (p as any).member_id);
+        }
+        const dir = await memberDirectory(supabase, [...pkgMember.values()]);
+        const sessions = (data ?? []).map((s: any) => {
+          const memberId = pkgMember.get(s.member_pt_package_id);
+          return {
+            time: istTime(s.scheduled_at),
+            member: memberId ? dir.get(memberId)?.name ?? "Member" : "Member",
+            member_code: memberId ? dir.get(memberId)?.code ?? "" : "",
+            duration_minutes: s.duration_minutes,
+            status: s.status,
+          };
+        });
+        return { date: isoDate, count: sessions.length, sessions };
+      }
+
+
       default:
         return { error: `Unknown operations tool: ${toolName}` };
     }
