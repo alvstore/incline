@@ -9,7 +9,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useBranch } from '@/contexts/BranchContext';
+import { useBranchContext } from '@/contexts/BranchContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,7 +74,7 @@ function fromReactFlow(nodes: Node[], edges: Edge[]): FlowGraph {
 
 function BuilderInner() {
   const queryClient = useQueryClient();
-  const { selectedBranch } = useBranch();
+  const { selectedBranch } = useBranchContext();
   const { roles } = useAuth();
   const canEdit = can.manageSettings(roles ?? []);
   const branchId = selectedBranch === 'all' ? null : selectedBranch;
@@ -134,20 +134,20 @@ function BuilderInner() {
         key: FLOW_KEY,
         branch_id: branchId,
         name: 'Inbound assistant',
-        graph: graph as unknown as Record<string, unknown>,
+        graph: graph as never,
         status: 'draft',
       };
       if (flow?.id) {
         const { error } = await supabase.from('agent_flows').update(payload).eq('id', flow.id);
         if (error) throw error;
-        const { error: vErr } = await supabase.from('agent_flow_versions').insert({
-          flow_id: flow.id, version: (flow.version ?? 1) + 1, graph: payload.graph, note: note ?? null,
-        });
+        const { error: vErr } = await supabase.from('agent_flow_versions').insert([{
+          flow_id: flow.id, version: (flow.version ?? 1) + 1, graph: payload.graph as never, note: note ?? null,
+        }] as never);
         if (vErr) throw vErr;
         const { error: bump } = await supabase.from('agent_flows').update({ version: (flow.version ?? 1) + 1 }).eq('id', flow.id);
         if (bump) throw bump;
       } else {
-        const { error } = await supabase.from('agent_flows').insert(payload);
+        const { error } = await supabase.from('agent_flows').insert([payload] as never);
         if (error) throw error;
       }
     },
@@ -165,8 +165,8 @@ function BuilderInner() {
       const { error } = await supabase
         .from('agent_flows')
         .update({
-          published_graph: graph as unknown as Record<string, unknown>,
-          graph: graph as unknown as Record<string, unknown>,
+          published_graph: graph as never,
+          graph: graph as never,
           published_at: new Date().toISOString(),
           status: 'published',
           is_active: true,
