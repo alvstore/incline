@@ -59,6 +59,18 @@ export default defineConfig(() => ({
         manualChunks: (id) => {
           if (!id.includes('node_modules')) return undefined;
 
+          // React core FIRST — react, react-dom, the JSX runtime, the scheduler
+          // and the shim packages must all land in one chunk, otherwise a
+          // vendor chunk can boot with a partial React (createContext undefined).
+          if (
+            /node_modules\/(react|react-dom|scheduler|react-is|use-sync-external-store)\//.test(id) ||
+            id.includes('react-router-dom') ||
+            id.includes('react-router/') ||
+            id.includes('react-helmet-async')
+          ) return 'react-vendor';
+
+
+
           // 3D landing page (heaviest, IO-gated)
           if (
             id.includes('/three/') ||
