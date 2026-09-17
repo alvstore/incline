@@ -693,6 +693,14 @@ export default function ExternalReviewsTab() {
                         <Button size="sm" variant="ghost" onClick={() => updateRow.mutate({ id: r.id, patch: { reply_status: 'dismissed' } })}>
                           Dismiss
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="cursor-pointer"
+                          onClick={() => setOpenReply((o) => ({ ...o, [r.id]: false }))}
+                        >
+                          Cancel
+                        </Button>
                       </div>
                       {!canReply && (
                         <p className="text-xs leading-relaxed text-muted-foreground">
