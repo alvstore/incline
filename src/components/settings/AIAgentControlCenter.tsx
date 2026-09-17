@@ -206,7 +206,8 @@ function AIAgentTabs() {
         <DashboardTab />
       </TabsContent>
 
-      <TabsContent value="flow">
+      <TabsContent value="flow" className="space-y-6">
+        <AgentFlowBuilder />
         <AgentFlowCanvas />
       </TabsContent>
 
