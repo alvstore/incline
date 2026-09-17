@@ -2511,6 +2511,9 @@ interface MemberResolveResult {
   isStaff?: boolean;
   staffName?: string;
   staffRole?: string;
+  staffUserId?: string;
+  trainerId?: string;
+  staffBranchId?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
@@ -2579,6 +2582,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
           isStaff: true,
           staffName,
           staffRole,
+          staffUserId: directoryProfile.id,
+          trainerId: (trainerRow as any)?.id ?? undefined,
+          staffBranchId: (trainerRow as any)?.branch_id ?? (employeeRow as any)?.branch_id ?? undefined,
           contextPrompt:
             `[Internal team] ${staffName} — ${staffRole} at Incline. ` +
             `This is a COLLEAGUE, not a lead or a prospect. Never ask for their name, ` +
