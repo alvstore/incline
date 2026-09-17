@@ -281,9 +281,18 @@ function QuotaBlock({
 }: {
   icon: typeof Scan;
   label: string;
-  q?: { plan_limit: number; used_this_month: number; addon_remaining: number; allowed: boolean };
+  q?: {
+    plan_limit: number;
+    used_this_month: number;
+    gift_remaining?: number;
+    addon_remaining: number;
+    allowed: boolean;
+  };
 }) {
   if (!q) return null;
+  const extras: string[] = [];
+  if ((q.gift_remaining ?? 0) > 0) extras.push(`+${q.gift_remaining} complimentary`);
+  if (q.addon_remaining > 0) extras.push(`+${q.addon_remaining} add-on`);
   return (
     <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
       <div className="rounded-full bg-primary/10 p-2 text-primary">
@@ -293,7 +302,7 @@ function QuotaBlock({
         <p className="text-xs font-medium leading-tight">{label}</p>
         <p className="text-xs leading-tight text-muted-foreground">
           {q.plan_limit > 0 ? `${q.used_this_month}/${q.plan_limit} this month` : 'Not in plan'}
-          {q.addon_remaining > 0 ? ` · +${q.addon_remaining} add-on` : ''}
+          {extras.length ? ` · ${extras.join(' · ')}` : ''}
         </p>
       </div>
       <Badge variant={q.allowed ? 'secondary' : 'destructive'} className="ml-auto rounded-full text-[10px]">

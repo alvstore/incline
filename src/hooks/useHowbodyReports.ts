@@ -101,6 +101,7 @@ export interface ScanQuota {
   used_this_period: number;
   used_this_month: number;
   plan_remaining: number;
+  gift_remaining: number;
   addon_remaining: number;
   allowed: boolean;
   reason: string;
