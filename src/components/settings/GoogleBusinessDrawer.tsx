@@ -470,15 +470,98 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     </div>
                   </div>
 
-                  <Button type="button" variant="outline" className="w-full cursor-pointer rounded-xl" onClick={connectGoogle}>
+                  <Button type="button" variant="outline" className="h-11 w-full cursor-pointer rounded-xl" onClick={connectGoogle}>
                     <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden />
                     {hasOAuth ? 'Re-connect Google' : 'Connect Google'}
                   </Button>
-                  <p className="text-xs leading-relaxed text-slate-500">
-                    Replying from inside the app unlocks only after Google approves Business Profile API quota for your
-                    Cloud project. Until then, use <strong>Copy &amp; open on Google</strong> on each review in
-                    Feedback &amp; Reviews.
-                  </p>
+
+                  {/* Listing link — required for posting replies */}
+                  {hasOAuth && (
+                    <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                      {hasLocation ? (
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 rounded-full bg-emerald-50 p-2 text-emerald-600">
+                            <CheckCircle2 className="h-4 w-4" aria-hidden />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {cfg.gbp_location_title ?? placeName ?? 'Google listing linked'}
+                            </p>
+                            <p className="font-mono text-[11px] text-slate-500">
+                              account {cfg.account_id} · location {cfg.location_id}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs leading-relaxed text-slate-600">
+                          Pick which Google listing this branch is, so replies post to the right place.
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          className="h-11 cursor-pointer rounded-xl"
+                          onClick={() => autolink.mutate()}
+                          disabled={autolink.isPending}
+                        >
+                          {autolink.isPending
+                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                            : <MapPin className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                          {hasLocation ? 'Re-link listing' : 'Link my Google listing'}
+                        </Button>
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          className="h-11 cursor-pointer rounded-xl"
+                          onClick={() => fetchFull.mutate()}
+                          disabled={fetchFull.isPending || !hasLocation}
+                        >
+                          {fetchFull.isPending
+                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                            : <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                          Sync full review history
+                        </Button>
+                      </div>
+
+                      {locations.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {locations.map((l) => (
+                            <li key={l.location_id}>
+                              <button
+                                type="button"
+                                onClick={() => selectLocation.mutate(l)}
+                                disabled={selectLocation.isPending}
+                                className="w-full cursor-pointer rounded-xl border border-slate-100 bg-white px-3 py-2 text-left transition-colors duration-150 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                <p className="truncate text-sm font-semibold text-slate-900">{l.title}</p>
+                                <p className="truncate text-xs text-slate-500">{l.address ?? l.account_name}</p>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {activationUrl && (
+                    <div className="space-y-2 rounded-xl bg-amber-50 p-3">
+                      <p className="text-xs font-semibold text-amber-800">One step left in Google Cloud</p>
+                      <p className="text-xs leading-relaxed text-amber-700">
+                        Google approved your access, but the Business Profile API is still switched off on your Cloud
+                        project. Turn it on, wait a minute, then run the checks again.
+                      </p>
+                      <Button
+                        asChild size="sm" variant="outline"
+                        className="h-11 cursor-pointer rounded-xl border-amber-300 bg-white"
+                      >
+                        <a href={activationUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                          Enable the API in Google Cloud
+                        </a>
+                      </Button>
+                    </div>
+                  )}
+
 
                 </section>
 
