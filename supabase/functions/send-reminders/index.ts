@@ -413,7 +413,27 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      const whatsappApproved = channel === "whatsapp" ? tpl : null;
+      let whatsappApproved = channel === "whatsapp" ? tpl : null;
+
+      // No approved WhatsApp template? Never silently drop the reminder —
+      // fall straight to the next configured channel (SMS → email).
+      if (channel === "whatsapp" && !whatsappApproved) {
+        const next = paymentChain.find((c) => c !== "whatsapp" && c !== "notification");
+        if (next) {
+          channel = next;
+          whatsappApproved = null;
+          const { data: altTpl } = await adminClient
+            .from("templates")
+            .select("id, content, subject")
+            .eq("type", channel)
+            .eq("trigger_event", triggerEvent)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (altTpl) { (tpl as any) = altTpl; }
+        }
+      }
+
 
 
       const subject = "Payment Reminder";
