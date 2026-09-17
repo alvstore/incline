@@ -156,15 +156,60 @@ async function memberDirectory(supabase: any, memberIds: string[]) {
   return out;
 }
 
+const istTime = (iso: string | null | undefined) =>
+  iso ? new Date(new Date(iso).getTime() + 5.5 * 3600 * 1000).toISOString().slice(11, 16) : null;
+
+/** Member ids linked to a trainer: direct assignment + PT packages + PT sessions. */
+async function trainerMemberIds(supabase: any, trainerId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const [{ data: assigned }, { data: pkgs }] = await Promise.all([
+    supabase.from("members").select("id").eq("assigned_trainer_id", trainerId),
+    supabase.from("member_pt_packages").select("member_id").eq("trainer_id", trainerId),
+  ]);
+  for (const m of assigned ?? []) ids.add((m as any).id);
+  for (const p of pkgs ?? []) ids.add((p as any).member_id);
+  return ids;
+}
+
+/** Resolve a free-text member reference to a single member row. */
+async function resolveMemberRef(supabase: any, query: string) {
+  const q = String(query || "").trim();
+  if (!q) return null;
+  const digits = q.replace(/\D/g, "");
+  const { data: byCode } = await supabase
+    .from("members")
+    .select("id, member_code, user_id, branch_id, status")
+    .ilike("member_code", `%${q}%`)
+    .limit(1)
+    .maybeSingle();
+  if (byCode) return byCode as any;
+
+  let profileIds: string[] = [];
+  const profQ = supabase.from("profiles").select("id, full_name, phone").limit(10);
+  const { data: profs } = digits.length >= 8
+    ? await supabase.from("profiles").select("id, full_name, phone").ilike("phone", `%${digits.slice(-10)}%`).limit(10)
+    : await profQ.ilike("full_name", `%${q}%`);
+  profileIds = (profs ?? []).map((p: any) => p.id);
+  if (!profileIds.length) return null;
+  const { data: m } = await supabase
+    .from("members")
+    .select("id, member_code, user_id, branch_id, status")
+    .in("user_id", profileIds)
+    .limit(1)
+    .maybeSingle();
+  return (m as any) ?? null;
+}
+
 // ── executor ──────────────────────────────────────────────────────────────────
 
 export async function executeOpsToolCall(
   supabase: any,
   toolName: string,
   args: Record<string, any>,
-  opts: { role: StaffRole | undefined; branchId?: string | null },
+  opts: { role: StaffRole | undefined; branchId?: string | null; trainerId?: string | null; staffUserId?: string | null },
 ): Promise<Record<string, any>> {
   const financial = isFinancialRole(opts.role);
+  const unrestricted = financial; // owner / admin / manager see every member
 
   try {
     switch (toolName) {
