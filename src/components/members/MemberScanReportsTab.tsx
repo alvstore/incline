@@ -161,6 +161,13 @@ export function MemberScanReportsTab({ memberId }: Props) {
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => onOriginalPicked(e.target.files?.[0])}
+      />
       {quota && (
         <Card className="rounded-2xl border-border/60 shadow-md shadow-primary/5">
           <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
@@ -304,6 +311,24 @@ export function MemberScanReportsTab({ memberId }: Props) {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                      )}
+                      {canResend && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => pickOriginal(r)}
+                          disabled={rowBusy}
+                          aria-label="Upload the official HOWBODY PDF for this scan"
+                          title="Upload official HOWBODY PDF"
+                        >
+                          {busy === `upload-${r.data_key}` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : r.pdf_source === 'howbody_original' ? (
+                            <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
                       )}
                     </div>
                   </div>
