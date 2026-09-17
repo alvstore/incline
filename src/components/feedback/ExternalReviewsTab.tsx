@@ -342,12 +342,71 @@ export default function ExternalReviewsTab() {
         onFetch={() => fetchNow.mutate()}
       />
 
-      {/* KPIs */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <StatCard title="Inbound this week" value={stats.week} icon={MessageSquare} />
-        <StatCard title="Avg incoming rating" value={stats.avg} icon={Star} variant={Number(stats.avg) >= 4 ? 'success' : Number(stats.avg) >= 3 ? 'warning' : 'destructive'} />
-        <StatCard title="Suspected fakes" value={stats.fakes} icon={ShieldAlert} variant={stats.fakes > 0 ? 'destructive' : 'default'} />
-        <StatCard title="Replies pending" value={stats.pending} icon={Send} variant={stats.pending > 0 ? 'warning' : 'default'} />
+      {/* Summary */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Average rating — hero */}
+        <Card className="rounded-2xl border-0 bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/30">
+          <CardContent className="p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Average rating</p>
+            <div className="mt-2 flex items-end gap-2">
+              <span className="text-3xl font-bold leading-none">{avgRating ? avgRating.toFixed(1) : '—'}</span>
+              <span className="pb-0.5 text-xs text-white/70">out of 5</span>
+            </div>
+            <div className="mt-3 flex items-center gap-0.5" aria-label={`${avgRating.toFixed(1)} out of 5 stars`}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Star key={i} className={`h-4 w-4 ${i <= Math.round(avgRating) ? 'fill-amber-300 text-amber-300' : 'text-white/30'}`} aria-hidden />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total reviews */}
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total reviews</p>
+              <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><MessageSquare className="h-4 w-4" aria-hidden /></span>
+            </div>
+            <p className="mt-2 text-3xl font-bold leading-none text-foreground">{totalReviews}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{stats.week} new in the last 7 days</p>
+          </CardContent>
+        </Card>
+
+        {/* Pending replies — action card */}
+        <Card
+          className={`rounded-2xl border-0 shadow-lg transition-all duration-200 hover:shadow-xl ${
+            stats.pending > 0 ? 'bg-amber-50 shadow-amber-200/60 hover:shadow-amber-300/50' : 'shadow-slate-200/50 hover:shadow-emerald-500/10'
+          }`}
+        >
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <p className={`text-xs font-semibold uppercase tracking-wider ${stats.pending > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>
+                Pending replies
+              </p>
+              <span className={`rounded-full p-2 ${stats.pending > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'}`}>
+                {stats.pending > 0 ? <Clock3 className="h-4 w-4" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
+              </span>
+            </div>
+            <p className={`mt-2 text-3xl font-bold leading-none ${stats.pending > 0 ? 'text-amber-900' : 'text-foreground'}`}>{stats.pending}</p>
+            <p className={`mt-2 text-xs ${stats.pending > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>
+              {stats.pending > 0 ? 'Waiting on a reply from your team' : `All caught up · ${stats.replied} replied`}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Flagged */}
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flagged by AI</p>
+              <span className={`rounded-full p-2 ${stats.fakes > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                <ShieldAlert className="h-4 w-4" aria-hidden />
+              </span>
+            </div>
+            <p className="mt-2 text-3xl font-bold leading-none text-foreground">{stats.fakes}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Suspected fake or spam reviews</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
