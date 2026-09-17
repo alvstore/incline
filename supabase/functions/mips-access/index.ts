@@ -196,6 +196,8 @@ type ActionResult = {
   observed_valid_time_end?: string | null;
   new_valid_time_end?: string;
   mips_person_id?: number;
+  /** Set when the gate already held the desired validity — nothing was sent. */
+  skipped?: string;
 };
 
 
@@ -307,6 +309,38 @@ async function applyMemberAction(
   if (accessStatus && accessStatus.allowed === false) {
     console.warn(`Override: CRM requested ${action} but dues detected. Forcing revocation date.`);
     newValidTimeEnd = REVOKED_DATE;
+  }
+
+  // v2.14.0 — IDEMPOTENCY GUARD. The 30-minute sweep kept re-revoking people who
+  // were ALREADY revoked on the server. Every repeat sent another PUT plus a
+  // persionIssue to both gates, and that burst is what pushed the Android
+  // terminals into a face-template rebuild / low-memory reboot loop. If MIPS
+  // already reports the exact validity we are about to write, there is nothing
+  // to send — just reconcile the CRM row and return.
+  const sameDay = (a: unknown, b: unknown) =>
+    String(a || "").trim().slice(0, 10) === String(b || "").trim().slice(0, 10);
+  if (sameDay(existing.validTimeEnd, newValidTimeEnd)) {
+    console.log(
+      `[MIPS-ACCESS] No-op for ${personSn}: server already at validTimeEnd=${existing.validTimeEnd} — skipping PUT + device dispatch`,
+    );
+    await supabase
+      .from("members")
+      .update({
+        hardware_access_status: action === "revoke" ? "revoked" : "active",
+        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
+      })
+      .eq("id", member_id);
+    await supabase
+      .from("hardware_access_events")
+      .update({ requires_sync: false })
+      .eq("member_id", member_id)
+      .eq("requires_sync", true);
+    return {
+      success: true,
+      action,
+      skipped: "already_in_desired_state",
+      message: `Hardware access already ${action}d on the gate — nothing re-sent`,
+    };
   }
 
   const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
@@ -507,6 +541,13 @@ async function sweepExpired(supabase: any) {
 
   const restored: string[] = [];
 
+  // v2.14.0 — pace real writes. Back-to-back persionIssue calls are what the
+  // terminals choke on; a no-op (already revoked) costs the gate nothing and
+  // needs no pause.
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const GATE_PACING_MS = 1500;
+  let skippedNoop = 0;
+
   const safeRevoke = async (
     m: any,
     reason: string,
@@ -515,7 +556,12 @@ async function sweepExpired(supabase: any) {
     try {
       const result = await applyMemberAction(supabase, m.id, "revoke", reason, m.branch_id, code);
       if (result.success) {
-        revoked.push(m.member_code || m.id);
+        if ((result as any).skipped) {
+          skippedNoop++;
+        } else {
+          revoked.push(m.member_code || m.id);
+          await sleep(GATE_PACING_MS);
+        }
       } else {
         errors.push(`${m.member_code || m.id}: ${result.error}`);
       }
@@ -610,7 +656,12 @@ async function sweepExpired(supabase: any) {
         row.branch_id,
       );
       if (result.success) {
-        restored.push(row.member_code || row.member_id);
+        if ((result as any).skipped) {
+          skippedNoop++;
+        } else {
+          restored.push(row.member_code || row.member_id);
+          await sleep(GATE_PACING_MS);
+        }
       } else {
         errors.push(`${row.member_code || row.member_id}: ${result.error}`);
       }
@@ -619,7 +670,7 @@ async function sweepExpired(supabase: any) {
     }
   }
 
-  return { revoked, restored, errors };
+  return { revoked, restored, errors, skipped_noop: skippedNoop };
 }
 
 const PERMANENT_END = "2099-12-31 23:59:59";
