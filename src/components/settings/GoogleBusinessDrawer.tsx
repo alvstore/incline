@@ -587,7 +587,18 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                 : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />}
                               <div className="min-w-0">
                                 <p className="text-sm text-slate-800">{c.label}</p>
-                                {!c.ok && c.hint && <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>}
+                                {c.hint && <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>}
+                                {!c.ok && c.action_url && (
+                                  <a
+                                    href={c.action_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-lg text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  >
+                                    <ExternalLink className="h-3 w-3" aria-hidden />
+                                    {c.action_label ?? 'Fix in Google Cloud'}
+                                  </a>
+                                )}
                               </div>
                             </div>
                           ))}
