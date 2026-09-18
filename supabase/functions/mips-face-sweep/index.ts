@@ -96,14 +96,16 @@ interface DeviceCount {
   online: boolean;
 }
 
-async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceCount[]> {
-  const { text } = await mipsFetch(`${baseUrl}/through/device/list`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "TENANT-ID": "1" },
-  }, 10_000);
-  let j: any;
-  try { j = JSON.parse(text); } catch { j = {}; }
-  const rows: any[] = j?.rows || j?.data || [];
+// Reads the roster from the shared 120s device-list cache instead of polling
+// the heaviest MIPS endpoint on every sweep.
+async function readDeviceCounts(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  branchId: string | null,
+  baseUrl: string,
+  token: string,
+): Promise<DeviceCount[]> {
+  const rows = await getCachedMipsDevices(supabase, branchId, baseUrl, token);
   return rows
     .map((d) => ({
       id: Number(d.id ?? d.deviceId),
