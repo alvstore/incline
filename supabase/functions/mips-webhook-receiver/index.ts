@@ -814,29 +814,13 @@ Deno.serve(async (req) => {
           });
         }
 
-        // *** Real-time Block Signal ***
-        // Denied/unknown people get an explicit gate-shut command, in case the
-        // device's local validTimeEnd has not synced yet. Hard timeout so a
-        // hanging MIPS server can never keep this invocation alive.
-        if (result === "member_denied" || result === "staff_denied" || result === "not_found" || result === "stranger") {
-          const denyUrl = `${relayUrl}/api/command/deny`;
-          console.log(`[REAL-TIME BLOCK] Sending deny command to relay for ${personNo}: ${denyUrl}`);
-          try {
-            await fetch(denyUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                personSn: personNo,
-                reason: message,
-                timestamp: scanTime,
-                deviceKey: deviceKey,
-              }),
-              signal: AbortSignal.timeout(5000),
-            });
-          } catch (e) {
-            console.warn("[REAL-TIME BLOCK] Command failed:", e instanceof Error ? e.message : String(e));
-          }
-        }
+        // NOTE (v: deny-removal): we used to POST `${relayUrl}/api/command/deny`
+        // here. That endpoint does NOT exist in the deployed MIPS application —
+        // every denied scan produced a NoHandlerFoundException in the MIPS
+        // sys-error log while the access log still returned 200, so it looked
+        // like it worked. Denials are already enforced on the terminal itself
+        // via validity dates (validTimeEnd), which is the supported mechanism.
+
       } catch (relayErr) {
         console.warn("Relay lookup failed:", relayErr);
       }

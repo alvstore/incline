@@ -1,4 +1,4 @@
-// mips-device-watchdog v1.0.0
+// mips-device-watchdog v1.1.0
 //
 // WHY: the Android turnstiles reboot silently. Nothing in the CRM ever noticed —
 // `access_devices.is_online` was only refreshed when somebody pressed "Import
@@ -6,11 +6,12 @@
 // online → offline → online transitions, and writes an auditable restart trail
 // to `access_device_health_events`.
 //
-// A gate that drops and comes back within RESTART_WINDOW_SEC is a REBOOT, not a
-// network outage: the Android box goes down and the whole OS comes back in
-// 60-180s. We also count how many person dispatches hit that gate in the
-// minutes before it fell over, which is the evidence that links a reboot to a
-// face-template rebuild storm.
+// v1.1.0 — DAMPING. The MIPS server flags a device offline after a single
+// missed 60s heartbeat, so ordinary packet jitter produced fake "restart"
+// cards. We now ignore the server's onlineFlag on its own and require the
+// device's own last heartbeat to be older than STALE_HEARTBEAT_SEC (two whole
+// missed poll cycles) before calling a gate down. A gate must also have been
+// down for at least MIN_DOWN_SEC before a recovery counts as a reboot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -18,10 +19,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Heartbeat must be this stale before we believe a gate is really down. */
+const STALE_HEARTBEAT_SEC = 360;
+/** Shorter blips are jitter, never a reboot. */
+const MIN_DOWN_SEC = 120;
 /** Down and back within this window => the terminal rebooted. */
 const RESTART_WINDOW_SEC = 15 * 60;
 /** Dispatch traffic in this window before the drop is recorded as evidence. */
 const BLAME_WINDOW_MIN = 10;
+
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -102,7 +108,18 @@ Deno.serve(async (req) => {
         if (!r) continue;
         checked++;
 
-        const isOnline = r.onlineFlag === 1 || r.status === 1 || r.status === "1";
+        // MIPS flips onlineFlag off after ONE missed 60s heartbeat — far too
+        // twitchy. Trust the heartbeat clock instead: a gate is only down when
+        // the server has not heard from it for two whole poll cycles.
+        const flagOnline = r.onlineFlag === 1 || r.status === 1 || r.status === "1";
+        const rawBeat = r.lastActiveTime || r.last_active_time || r.lastHeartbeat;
+        const beatMs = rawBeat ? Date.parse(String(rawBeat).replace(" ", "T")) : NaN;
+        const beatAgeSec = Number.isFinite(beatMs)
+          ? Math.max(0, Math.round((Date.now() - beatMs) / 1000))
+          : null;
+        const heartbeatStale = beatAgeSec === null ? !flagOnline : beatAgeSec > STALE_HEARTBEAT_SEC;
+        const isOnline = flagOnline || !heartbeatStale;
+
         const was = dev.is_online === true;
         const patch: Record<string, unknown> = {
           is_online: isOnline,
@@ -130,7 +147,11 @@ Deno.serve(async (req) => {
             event_type: "offline",
             detected_at: nowIso,
             dispatches_before: count ?? 0,
-            details: { blame_window_min: BLAME_WINDOW_MIN, last_heartbeat: dev.last_heartbeat },
+            details: {
+              blame_window_min: BLAME_WINDOW_MIN,
+              last_heartbeat: dev.last_heartbeat,
+              heartbeat_age_sec: beatAgeSec,
+            },
           });
         } else if (!was && isOnline) {
           // ---- came back ----
@@ -138,7 +159,9 @@ Deno.serve(async (req) => {
           const downSec = dev.last_offline_at
             ? Math.max(0, Math.round((Date.now() - Date.parse(String(dev.last_offline_at))) / 1000))
             : null;
-          const looksLikeRestart = downSec !== null && downSec <= RESTART_WINDOW_SEC;
+          const looksLikeRestart =
+            downSec !== null && downSec >= MIN_DOWN_SEC && downSec <= RESTART_WINDOW_SEC;
+
 
           const since = new Date(
             Date.parse(String(dev.last_offline_at || nowIso)) - BLAME_WINDOW_MIN * 60_000,
@@ -162,7 +185,10 @@ Deno.serve(async (req) => {
               went_offline_at: dev.last_offline_at,
               classification: looksLikeRestart
                 ? "down and back within the reboot window — terminal restarted"
-                : "long outage — network or power, not a reboot",
+                : downSec !== null && downSec < MIN_DOWN_SEC
+                  ? "brief blip — network jitter, not a reboot"
+                  : "long outage — network or power, not a reboot",
+
             },
           });
 
