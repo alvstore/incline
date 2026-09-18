@@ -185,7 +185,10 @@ Deno.serve(async (req) => {
               went_offline_at: dev.last_offline_at,
               classification: looksLikeRestart
                 ? "down and back within the reboot window — terminal restarted"
-                : "long outage — network or power, not a reboot",
+                : downSec !== null && downSec < MIN_DOWN_SEC
+                  ? "brief blip — network jitter, not a reboot"
+                  : "long outage — network or power, not a reboot",
+
             },
           });
 
