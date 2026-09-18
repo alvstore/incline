@@ -1181,7 +1181,7 @@ Deno.serve(async (req) => {
             if (events.length === 0) return null;
             const { data: rows } = await supabase
               .from('templates')
-              .select('id, branch_id, header_type, meta_template_status, meta_template_name, content, variables, updated_at')
+              .select('id, branch_id, header_type, meta_template_status, meta_template_name, content, variables, updated_at, trigger_event')
               .in('trigger_event', events)
               .eq('type', 'whatsapp')
               .not('meta_template_name', 'is', null)
@@ -1212,7 +1212,16 @@ Deno.serve(async (req) => {
               const live = liveByName.get(r.meta_template_name);
               if (!live) return false;
               const keys = orderedTemplateKeys(r.content ?? input.payload.body, r.variables);
-              return requiredKeysMissing(keys, availableValues).length === 0;
+              // v1.40.0: a generic service-update template is always fillable —
+              // slot 1 = recipient name, slot 2 = the message body we already have.
+              if (String(r.trigger_event || '') === 'universal_utility') return keys.length <= 2;
+              // Values the renderer can recover from the already-composed body
+              // count as available — otherwise perfectly usable templates were
+              // rejected and the message died as no_template_for_closed_session.
+              const inferredVals = inferTemplateValues(
+                String(r.content ?? ''), String(input.payload.body ?? ''), keys,
+              );
+              return requiredKeysMissing(keys, { ...inferredVals, ...availableValues }).length === 0;
             });
             const score = (r: any) => {
               const live = liveByName.get(r.meta_template_name);
@@ -1223,7 +1232,9 @@ Deno.serve(async (req) => {
                 (r.branch_id ? 2 : 0) +
                 (wantsDoc && isDocument ? 8 : 0) +
                 (cat === 'MARKETING' ? -6 : 0) +
-                (cat === 'UTILITY' ? 3 : 0)
+                (cat === 'UTILITY' ? 3 : 0) +
+                // Generic service-update template is a last resort only.
+                (String(r.trigger_event || '') === 'universal_utility' ? -5 : 0)
               );
             };
             eligible.sort((a: any, b: any) =>
@@ -1231,7 +1242,20 @@ Deno.serve(async (req) => {
               String(b.updated_at || '').localeCompare(String(a.updated_at || '')) ||
               String(a.id).localeCompare(String(b.id)),
             );
-            return eligible[0] ?? null;
+            const chosen = eligible[0] ?? null;
+            if (chosen && String(chosen.trigger_event || '') === 'universal_utility') {
+              const keys = orderedTemplateKeys(chosen.content ?? '', chosen.variables);
+              const name = String(
+                (input.payload.variables as any)?.member_name ??
+                  (input.payload.variables as any)?.first_name ?? 'there',
+              ).trim() || 'there';
+              const bodyText = String(input.payload.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 900);
+              const filled: Record<string, string> = {};
+              if (keys[0]) filled[keys[0]] = name;
+              if (keys[1]) filled[keys[1]] = bodyText || 'Please check the Incline app for details.';
+              input.payload.variables = { ...(input.payload.variables ?? {}), ...filled };
+            }
+            return chosen;
           };
 
 

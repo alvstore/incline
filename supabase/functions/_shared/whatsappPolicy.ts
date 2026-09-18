@@ -29,6 +29,11 @@ export type MessageCategory = "marketing" | "utility" | "authentication" | "serv
 const UTILITY_CATEGORIES = new Set([
   "invoice", "payment_receipt", "payment_reminder", "membership", "booking",
   "class", "pt_session", "attendance", "transactional", "document", "report",
+  // v1.1.0 — operational app categories that only ever send UTILITY templates
+  // (schedule notices, membership/renewal reminders). categoryMismatch() still
+  // blocks the send if the resolved Meta template is actually MARKETING, so
+  // this cannot be used to relabel promotional traffic.
+  "class_notification", "membership_reminder",
 ]);
 const AUTH_CATEGORIES = new Set(["otp", "password_reset", "verification"]);
 const SERVICE_CATEGORIES = new Set(["service", "conversation", "support", "reply"]);
