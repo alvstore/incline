@@ -579,7 +579,19 @@ Deno.serve(async (req) => {
           }
         }
       }
-      counts = await readDeviceCounts(baseUrl, token).catch(() => counts);
+      // Post-push verification must see live counts; it also primes the cache.
+      counts = await getCachedMipsDevices(supabase, branchId, baseUrl, token, { forceRefresh: true })
+        .then((rows) => rows
+          .map((d: any) => ({
+            id: Number(d.id ?? d.deviceId),
+            name: d.deviceName || d.name || "",
+            sn: String(d.deviceKey || d.sn || d.serialNumber || ""),
+            persons: Number(d.personCount ?? d.personNum ?? 0),
+            faces: Number(d.photoCount ?? d.faceCount ?? d.faceNum ?? 0),
+            online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
+          }))
+          .filter((d: DeviceCount) => !isNaN(d.id)))
+        .catch(() => counts);
 
 
       const finalLedger = await readLedger(supabase, branchId);
