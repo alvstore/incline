@@ -13,6 +13,8 @@
 // missed poll cycles) before calling a gate down. A gate must also have been
 // down for at least MIN_DOWN_SEC before a recovery counts as a reboot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,26 +37,9 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-async function login(baseUrl: string, username: string, password: string) {
-  const res = await fetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  });
-  const body = await res.json();
-  const token = body.token || body.data?.token;
-  if (!token) throw new Error(`MIPS login failed: ${body.msg || res.status}`);
-  return token as string;
-}
-
-async function listDevices(baseUrl: string, token: string) {
-  const res = await fetch(`${baseUrl}/through/device/list`, {
-    headers: { Authorization: `Bearer ${token}`, "TENANT-ID": "1", Accept: "application/json" },
-  });
-  const body = await res.json();
-  const rows: any[] = body.rows || body.data || [];
-  return Array.isArray(rows) ? rows : [];
-}
+// Auth + device roster now come from the shared caches in `_shared/` so this
+// read-only worker no longer logs in or polls the heavy device-list endpoint
+// on every tick.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -81,7 +66,11 @@ Deno.serve(async (req) => {
       const baseUrl = String(conn.server_url).replace(/\/+$/, "");
       let token: string;
       try {
-        token = await login(baseUrl, conn.username, conn.password);
+        token = await getCachedMipsToken(supabase, conn.branch_id, {
+          baseUrl,
+          username: conn.username,
+          password: conn.password,
+        });
       } catch (e) {
         await supabase.from("access_device_health_events").insert({
           branch_id: conn.branch_id,
@@ -91,7 +80,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const remote = await listDevices(baseUrl, token);
+      const remote = await getCachedMipsDevices(supabase, conn.branch_id, baseUrl, token);
       const remoteBySn = new Map<string, any>();
       for (const d of remote) {
         const sn = d.deviceKey || d.sn || d.serialNumber;

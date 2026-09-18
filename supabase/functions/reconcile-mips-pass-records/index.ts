@@ -18,6 +18,7 @@ import {
   recordTransportFailure,
   recordSuccess,
 } from "../_shared/mipsHealth.ts";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
 
 type Role = "owner" | "admin" | "manager" | "staff" | "trainer" | "member";
 
@@ -72,9 +73,17 @@ const MAX_LIMIT = 200;
 const MAX_PAGES = 40;
 const ALLOWED_ROLES = new Set<Role>(["owner", "admin", "manager", "staff"]);
 
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
-let cachedBaseUrl = "";
+/** Service client used only by the shared MIPS token cache. */
+let cacheClient: ReturnType<typeof createClient> | null = null;
+function tokenCacheClient() {
+  if (!cacheClient) {
+    cacheClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+  }
+  return cacheClient;
+}
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -155,34 +164,14 @@ function mapEventType(record: MipsPassRecord): string {
   return "face_scan";
 }
 
-async function getRuoYiToken(baseUrl: string, username: string, password: string): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiry && cachedBaseUrl === `${baseUrl}:${username}`) return cachedToken;
-
-  const { text } = await mipsFetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  }, 12_000);
-  let json: Record<string, unknown>;
-  try {
-    json = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    throw new Error(`MIPS login returned non-JSON: ${text.slice(0, 240)}`);
-  }
-
-  const code = Number(json.code);
-  if (code !== 200 && code !== 0) {
-    throw new Error(`MIPS login failed: ${getString(json.msg) || text.slice(0, 240)}`);
-  }
-
-  const data = typeof json.data === "object" && json.data !== null ? json.data as Record<string, unknown> : {};
-  const token = getString(json.token ?? data.token);
-  if (!token) throw new Error("MIPS login returned no token");
-
-  cachedToken = token;
-  tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
-  cachedBaseUrl = `${baseUrl}:${username}`;
-  return token;
+// Shared, cross-worker token cache — no per-invocation /login against Tomcat.
+async function getRuoYiToken(
+  branchId: string | null,
+  baseUrl: string,
+  username: string,
+  password: string,
+): Promise<string> {
+  return await getCachedMipsToken(tokenCacheClient(), branchId, { baseUrl, username, password });
 }
 
 function extractRows(json: Record<string, unknown>): MipsPassRecord[] {
@@ -262,7 +251,7 @@ async function fetchPassPage(
  */
 async function fetchPassRecords(connection: MipsConnection, limit: number, pages = 1): Promise<MipsPassRecord[]> {
   const baseUrl = getBaseUrl(connection.server_url);
-  const token = await getRuoYiToken(baseUrl, connection.username, connection.password);
+  const token = await getRuoYiToken(connection.branch_id ?? null, baseUrl, connection.username, connection.password);
 
   const errors: string[] = [];
   let transportFailures = 0;

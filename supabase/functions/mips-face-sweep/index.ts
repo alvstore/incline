@@ -39,6 +39,8 @@ import {
   recordSuccess,
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 import {
   type LedgerDevice,
   type LedgerPerson,
@@ -74,18 +76,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function login(baseUrl: string, username: string, password: string): Promise<string> {
-  const { text } = await mipsFetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  }, 10_000);
-  let j: any;
-  try { j = JSON.parse(text); } catch { throw new MipsTransportError(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
-  const token = j.token || j.data?.token;
-  if (!token) throw new Error(`MIPS login failed: ${j.msg || text.slice(0, 200)}`);
-  return token;
-}
+// Login now goes through the shared token cache (`_shared/mipsTokenCache.ts`).
 
 interface DeviceCount {
   id: number;
@@ -96,14 +87,16 @@ interface DeviceCount {
   online: boolean;
 }
 
-async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceCount[]> {
-  const { text } = await mipsFetch(`${baseUrl}/through/device/list`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "TENANT-ID": "1" },
-  }, 10_000);
-  let j: any;
-  try { j = JSON.parse(text); } catch { j = {}; }
-  const rows: any[] = j?.rows || j?.data || [];
+// Reads the roster from the shared 120s device-list cache instead of polling
+// the heaviest MIPS endpoint on every sweep.
+async function readDeviceCounts(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  branchId: string | null,
+  baseUrl: string,
+  token: string,
+): Promise<DeviceCount[]> {
+  const rows = await getCachedMipsDevices(supabase, branchId, baseUrl, token);
   return rows
     .map((d) => ({
       id: Number(d.id ?? d.deviceId),
@@ -415,8 +408,8 @@ Deno.serve(async (req) => {
       let token: string;
       let counts: DeviceCount[];
       try {
-        token = await login(baseUrl, username, password);
-        counts = await readDeviceCounts(baseUrl, token);
+        token = await getCachedMipsToken(supabase, branchId, { baseUrl, username, password });
+        counts = await readDeviceCounts(supabase, branchId, baseUrl, token);
         await recordSuccess(supabase, branchId);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -575,7 +568,19 @@ Deno.serve(async (req) => {
           }
         }
       }
-      counts = await readDeviceCounts(baseUrl, token).catch(() => counts);
+      // Post-push verification must see live counts; it also primes the cache.
+      counts = await getCachedMipsDevices(supabase, branchId, baseUrl, token, { forceRefresh: true })
+        .then((rows) => rows
+          .map((d: any) => ({
+            id: Number(d.id ?? d.deviceId),
+            name: d.deviceName || d.name || "",
+            sn: String(d.deviceKey || d.sn || d.serialNumber || ""),
+            persons: Number(d.personCount ?? d.personNum ?? 0),
+            faces: Number(d.photoCount ?? d.faceCount ?? d.faceNum ?? 0),
+            online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
+          }))
+          .filter((d: DeviceCount) => !isNaN(d.id)))
+        .catch(() => counts);
 
 
       const finalLedger = await readLedger(supabase, branchId);

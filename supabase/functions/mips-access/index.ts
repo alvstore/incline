@@ -18,6 +18,8 @@
 //         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,39 +29,27 @@ const corsHeaders = {
 
 const REVOKED_DATE = "2000-01-01 00:00:00";
 
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
-let cachedCredentialKey = "";
-
 function getBaseUrl(overrideUrl?: string): string {
   let url = String(overrideUrl || Deno.env.get("MIPS_SERVER_URL") || "").trim().replace(/\/+$/, "");
   if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
   return url;
 }
 
-async function getRuoYiToken(baseUrl?: string, username?: string, password?: string): Promise<string> {
+// Auth comes from the shared cross-worker token cache so the Tomcat server is
+// not asked for a new session on every invocation.
+// deno-lint-ignore no-explicit-any
+async function getRuoYiToken(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  branchId: string | null,
+  baseUrl?: string,
+  username?: string,
+  password?: string,
+): Promise<string> {
   const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  const cacheKey = `${url}\u0000${user}\u0000${pass}`;
-  if (cachedToken && Date.now() < tokenExpiry && cachedCredentialKey === cacheKey) return cachedToken;
-  const res = await fetch(`${url}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username: user, password: pass }),
-  });
-  const json = await res.json();
-  if (json.code !== 200 && json.code !== 0) {
-    cachedToken = null;
-    tokenExpiry = 0;
-    cachedCredentialKey = "";
-    throw new Error(`Login failed: ${json.msg}`);
-  }
-  cachedToken = json.token || json.data?.token;
-  if (!cachedToken) throw new Error("No token in login response");
-  tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
-  cachedCredentialKey = cacheKey;
-  return cachedToken!;
+  return await getCachedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
 }
 
 function authHeaders(token: string): Record<string, string> {

@@ -20,6 +20,8 @@ import {
   dispatchPerson,
   releaseDispatchSlot,
 } from "../_shared/mipsDispatch.ts";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,19 +36,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function login(baseUrl: string, username: string, password: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  });
-  const text = await res.text();
-  let j: any;
-  try { j = JSON.parse(text); } catch { throw new Error(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
-  const token = j.token || j.data?.token;
-  if (!token) throw new Error(`MIPS login failed: ${j.msg || text.slice(0, 200)}`);
-  return token;
-}
+// Login now goes through the shared token cache (`_shared/mipsTokenCache.ts`).
 
 const authHeaders = (token: string) => ({
   "Content-Type": "application/json",
@@ -108,11 +98,10 @@ Deno.serve(async (req) => {
     }
     if (!serverUrl) return json({ error: "No MIPS server configured" }, 400);
     const baseUrl = serverUrl.replace(/\/+$/, "");
-    const token = await login(baseUrl, username, password);
+    const token = await getCachedMipsToken(supabase, branch_id ?? null, { baseUrl, username, password });
 
-    // 1. Device inventory from the MIPS server
-    const devJson = await getJson(`${baseUrl}/through/device/list`, token);
-    const devRows: any[] = devJson?.rows || devJson?.data || [];
+    // 1. Device inventory — shared 120s cache, so parallel workers hit MIPS once.
+    const devRows: any[] = await getCachedMipsDevices(supabase, branch_id ?? null, baseUrl, token);
     const devices = devRows.map((d) => ({
       id: Number(d.id ?? d.deviceId),
       sn: String(d.deviceKey || d.sn || d.serialNumber || ""),
@@ -207,8 +196,10 @@ Deno.serve(async (req) => {
 
       // Give the terminal time to pull and enrol the face template.
       await new Promise((r) => setTimeout(r, 8000));
-      const afterJson = await getJson(`${baseUrl}/through/device/list`, token);
-      const afterRows: any[] = afterJson?.rows || afterJson?.data || [];
+      // Verification read after a dispatch must be live; it also primes the cache.
+      const afterRows: any[] = await getCachedMipsDevices(
+        supabase, branch_id ?? null, baseUrl, token, { forceRefresh: true },
+      );
       const after = afterRows.map((d) => ({
         id: Number(d.id ?? d.deviceId),
         name: d.deviceName || d.name || "",
