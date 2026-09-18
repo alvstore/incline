@@ -163,34 +163,14 @@ function mapEventType(record: MipsPassRecord): string {
   return "face_scan";
 }
 
-async function getRuoYiToken(baseUrl: string, username: string, password: string): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiry && cachedBaseUrl === `${baseUrl}:${username}`) return cachedToken;
-
-  const { text } = await mipsFetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  }, 12_000);
-  let json: Record<string, unknown>;
-  try {
-    json = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    throw new Error(`MIPS login returned non-JSON: ${text.slice(0, 240)}`);
-  }
-
-  const code = Number(json.code);
-  if (code !== 200 && code !== 0) {
-    throw new Error(`MIPS login failed: ${getString(json.msg) || text.slice(0, 240)}`);
-  }
-
-  const data = typeof json.data === "object" && json.data !== null ? json.data as Record<string, unknown> : {};
-  const token = getString(json.token ?? data.token);
-  if (!token) throw new Error("MIPS login returned no token");
-
-  cachedToken = token;
-  tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
-  cachedBaseUrl = `${baseUrl}:${username}`;
-  return token;
+// Shared, cross-worker token cache — no per-invocation /login against Tomcat.
+async function getRuoYiToken(
+  branchId: string | null,
+  baseUrl: string,
+  username: string,
+  password: string,
+): Promise<string> {
+  return await getCachedMipsToken(tokenCacheClient(), branchId, { baseUrl, username, password });
 }
 
 function extractRows(json: Record<string, unknown>): MipsPassRecord[] {
