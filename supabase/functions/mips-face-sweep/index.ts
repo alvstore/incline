@@ -419,8 +419,8 @@ Deno.serve(async (req) => {
       let token: string;
       let counts: DeviceCount[];
       try {
-        token = await login(baseUrl, username, password);
-        counts = await readDeviceCounts(baseUrl, token);
+        token = await getCachedMipsToken(supabase, branchId, { baseUrl, username, password });
+        counts = await readDeviceCounts(supabase, branchId, baseUrl, token);
         await recordSuccess(supabase, branchId);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
