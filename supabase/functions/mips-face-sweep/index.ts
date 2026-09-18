@@ -76,18 +76,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function login(baseUrl: string, username: string, password: string): Promise<string> {
-  const { text } = await mipsFetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  }, 10_000);
-  let j: any;
-  try { j = JSON.parse(text); } catch { throw new MipsTransportError(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
-  const token = j.token || j.data?.token;
-  if (!token) throw new Error(`MIPS login failed: ${j.msg || text.slice(0, 200)}`);
-  return token;
-}
+// Login now goes through the shared token cache (`_shared/mipsTokenCache.ts`).
 
 interface DeviceCount {
   id: number;
