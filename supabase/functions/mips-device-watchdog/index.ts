@@ -108,7 +108,18 @@ Deno.serve(async (req) => {
         if (!r) continue;
         checked++;
 
-        const isOnline = r.onlineFlag === 1 || r.status === 1 || r.status === "1";
+        // MIPS flips onlineFlag off after ONE missed 60s heartbeat — far too
+        // twitchy. Trust the heartbeat clock instead: a gate is only down when
+        // the server has not heard from it for two whole poll cycles.
+        const flagOnline = r.onlineFlag === 1 || r.status === 1 || r.status === "1";
+        const rawBeat = r.lastActiveTime || r.last_active_time || r.lastHeartbeat;
+        const beatMs = rawBeat ? Date.parse(String(rawBeat).replace(" ", "T")) : NaN;
+        const beatAgeSec = Number.isFinite(beatMs)
+          ? Math.max(0, Math.round((Date.now() - beatMs) / 1000))
+          : null;
+        const heartbeatStale = beatAgeSec === null ? !flagOnline : beatAgeSec > STALE_HEARTBEAT_SEC;
+        const isOnline = flagOnline || !heartbeatStale;
+
         const was = dev.is_online === true;
         const patch: Record<string, unknown> = {
           is_online: isOnline,
@@ -136,7 +147,11 @@ Deno.serve(async (req) => {
             event_type: "offline",
             detected_at: nowIso,
             dispatches_before: count ?? 0,
-            details: { blame_window_min: BLAME_WINDOW_MIN, last_heartbeat: dev.last_heartbeat },
+            details: {
+              blame_window_min: BLAME_WINDOW_MIN,
+              last_heartbeat: dev.last_heartbeat,
+              heartbeat_age_sec: beatAgeSec,
+            },
           });
         } else if (!was && isOnline) {
           // ---- came back ----
@@ -144,7 +159,9 @@ Deno.serve(async (req) => {
           const downSec = dev.last_offline_at
             ? Math.max(0, Math.round((Date.now() - Date.parse(String(dev.last_offline_at))) / 1000))
             : null;
-          const looksLikeRestart = downSec !== null && downSec <= RESTART_WINDOW_SEC;
+          const looksLikeRestart =
+            downSec !== null && downSec >= MIN_DOWN_SEC && downSec <= RESTART_WINDOW_SEC;
+
 
           const since = new Date(
             Date.parse(String(dev.last_offline_at || nowIso)) - BLAME_WINDOW_MIN * 60_000,
