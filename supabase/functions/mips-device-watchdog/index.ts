@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const remote = await listDevices(baseUrl, token);
+      const remote = await getCachedMipsDevices(supabase, conn.branch_id, baseUrl, token);
       const remoteBySn = new Map<string, any>();
       for (const d of remote) {
         const sn = d.deviceKey || d.sn || d.serialNumber;
