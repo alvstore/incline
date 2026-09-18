@@ -72,9 +72,17 @@ const MAX_LIMIT = 200;
 const MAX_PAGES = 40;
 const ALLOWED_ROLES = new Set<Role>(["owner", "admin", "manager", "staff"]);
 
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
-let cachedBaseUrl = "";
+/** Service client used only by the shared MIPS token cache. */
+let cacheClient: ReturnType<typeof createClient> | null = null;
+function tokenCacheClient() {
+  if (!cacheClient) {
+    cacheClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+  }
+  return cacheClient;
+}
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
