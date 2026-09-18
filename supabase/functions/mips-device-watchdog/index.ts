@@ -66,7 +66,11 @@ Deno.serve(async (req) => {
       const baseUrl = String(conn.server_url).replace(/\/+$/, "");
       let token: string;
       try {
-        token = await login(baseUrl, conn.username, conn.password);
+        token = await getCachedMipsToken(supabase, conn.branch_id, {
+          baseUrl,
+          username: conn.username,
+          password: conn.password,
+        });
       } catch (e) {
         await supabase.from("access_device_health_events").insert({
           branch_id: conn.branch_id,
