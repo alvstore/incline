@@ -98,11 +98,10 @@ Deno.serve(async (req) => {
     }
     if (!serverUrl) return json({ error: "No MIPS server configured" }, 400);
     const baseUrl = serverUrl.replace(/\/+$/, "");
-    const token = await login(baseUrl, username, password);
+    const token = await getCachedMipsToken(supabase, branch_id ?? null, { baseUrl, username, password });
 
-    // 1. Device inventory from the MIPS server
-    const devJson = await getJson(`${baseUrl}/through/device/list`, token);
-    const devRows: any[] = devJson?.rows || devJson?.data || [];
+    // 1. Device inventory — shared 120s cache, so parallel workers hit MIPS once.
+    const devRows: any[] = await getCachedMipsDevices(supabase, branch_id ?? null, baseUrl, token);
     const devices = devRows.map((d) => ({
       id: Number(d.id ?? d.deviceId),
       sn: String(d.deviceKey || d.sn || d.serialNumber || ""),
