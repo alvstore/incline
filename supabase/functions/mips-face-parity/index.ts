@@ -196,8 +196,10 @@ Deno.serve(async (req) => {
 
       // Give the terminal time to pull and enrol the face template.
       await new Promise((r) => setTimeout(r, 8000));
-      const afterJson = await getJson(`${baseUrl}/through/device/list`, token);
-      const afterRows: any[] = afterJson?.rows || afterJson?.data || [];
+      // Verification read after a dispatch must be live; it also primes the cache.
+      const afterRows: any[] = await getCachedMipsDevices(
+        supabase, branch_id ?? null, baseUrl, token, { forceRefresh: true },
+      );
       const after = afterRows.map((d) => ({
         id: Number(d.id ?? d.deviceId),
         name: d.deviceName || d.name || "",
