@@ -1,3 +1,4 @@
+// v2.9.0 — Adds `delete_meta` (removes a template from the Meta catalog by name).
 // v2.8.0 — System-worker auth and idempotent approved-template event reconciliation.
 // v2.7.0 — Paginated full-catalog reconciliation; imported Meta rows carry live
 //          variable/header metadata and remain inactive until event-mapped.
@@ -1093,6 +1094,54 @@ serve(async (req) => {
       }
     }
 
+    // ── ACTION: delete_meta ──
+    // Deletes a template from the Meta catalog by name and clears local rows.
+    // Body: { names: string[] } or { name: string }
+    if (action === "delete_meta") {
+      const names: string[] = Array.isArray(body.names) ? body.names : body.name ? [body.name] : [];
+      if (names.length === 0) {
+        return new Response(JSON.stringify({ error: "Missing name/names[]" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const results: Array<Record<string, unknown>> = [];
+      for (const rawName of names) {
+        const tplName = String(rawName).trim();
+        const url = appendProof(
+          `${META_API_BASE}/${wabaId}/message_templates?name=${encodeURIComponent(tplName)}`,
+          proof,
+        );
+        let ok = false;
+        let detail: unknown = null;
+        try {
+          const res = await fetch(url, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const data = await res.json().catch(() => ({}));
+          ok = res.ok && data?.error == null;
+          detail = ok ? null : data?.error ?? { status: res.status };
+          if (!ok) console.error(`[delete_meta] ${tplName} failed:`, JSON.stringify(data));
+        } catch (e) {
+          detail = { message: (e as Error).message };
+        }
+
+        if (ok) {
+          await supabase.from("whatsapp_templates").delete().eq("waba_id", wabaId).eq("name", tplName);
+          await supabase.from("templates").update({
+            meta_template_name: null,
+            meta_template_status: null,
+            meta_rejection_reason: null,
+            is_active: false,
+          }).eq("meta_template_name", tplName);
+        }
+        results.push({ name: tplName, deleted: ok, error: detail });
+      }
+
+      return new Response(JSON.stringify({ success: results.every((r) => r.deleted), results }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ── ACTION: bulk_delete_local ──
     // Deletes local cached rows only; Meta-side deletion must be done in Business Manager.
     if (action === "bulk_delete_local") {
@@ -1111,7 +1160,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: `Unknown action: ${action}. Valid: list | create | edit | get_status | bulk_delete_local | sync_ig_icebreakers | sync_messenger_quick_replies` }),
+      JSON.stringify({ error: `Unknown action: ${action}. Valid: list | create | edit | get_status | delete_meta | bulk_delete_local | sync_ig_icebreakers | sync_messenger_quick_replies` }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {

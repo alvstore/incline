@@ -52,6 +52,8 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'class_booked', label: 'Class Booking Confirmation', category: 'booking', description: 'Member booked a class', channels: ALL },
   { event: 'class_reminder_24h', label: 'Class Reminder (24h)', category: 'booking', description: 'Day-before class reminder', channels: ALL },
   { event: 'class_schedule_weekly', label: 'Weekly Class Schedule', category: 'booking', description: 'Weekly class roster broadcast', channels: ALL },
+  { event: 'class_announcement', label: 'Class Details / Announcement', category: 'booking', description: 'Informational class details — utility (class, date, time, venue)', channels: ALL },
+  { event: 'class_schedule_change', label: 'Class Changed or Cancelled', category: 'booking', description: 'Class time change or cancellation notice — utility', channels: ALL },
   { event: 'facility_booked', label: 'Facility Slot Confirmed', category: 'booking', description: 'Sauna / pool / ice bath booking', channels: ALL },
   { event: 'facility_cancelled', label: 'Facility Slot Cancelled', category: 'booking', description: 'Facility booking cancelled', channels: ALL },
   { event: 'facility_reminder', label: 'Facility Slot Reminder', category: 'booking', description: 'Reminder before a steam / sauna / ice bath / pool slot. Vars: {{member_name}} {{facility_name}} {{booking_date}} {{booking_time}}.', channels: ALL },
