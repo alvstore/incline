@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, RefreshCw, Monitor, Activity, Upload, Settings2, ScanFace } from "lucide-react";
+import { Plus, RefreshCw, Monitor, Activity, Upload, Settings2, ScanFace, HeartPulse } from "lucide-react";
 import { toast } from "sonner";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,6 +15,8 @@ import DeviceHealthStrip from "@/components/devices/DeviceHealthStrip";
 import DeviceAttentionBar from "@/components/devices/DeviceAttentionBar";
 import FaceEnrolmentPanel from "@/components/devices/FaceEnrolmentPanel";
 import MipsServerStatusBanner from "@/components/devices/MipsServerStatusBanner";
+import GateWatchdogCard from "@/components/devices/GateWatchdogCard";
+import GateErrorLogCard from "@/components/devices/GateErrorLogCard";
 
 import DeviceSetupSheet from "@/components/devices/DeviceSetupSheet";
 
@@ -94,6 +96,9 @@ const DeviceManagement = () => {
             <TabsTrigger value="faces" className="gap-1.5 rounded-lg">
               <ScanFace className="h-4 w-4" /> Face Sync
             </TabsTrigger>
+            <TabsTrigger value="watchdog" className="gap-1.5 rounded-lg">
+              <HeartPulse className="h-4 w-4" /> Restart Watchdog
+            </TabsTrigger>
             <TabsTrigger value="live-feed" className="gap-1.5 rounded-lg">
               <Activity className="h-4 w-4" /> Live Feed
             </TabsTrigger>
@@ -109,6 +114,11 @@ const DeviceManagement = () => {
 
           <TabsContent value="faces">
             <FaceEnrolmentPanel branchId={branchFilter || undefined} />
+          </TabsContent>
+
+          <TabsContent value="watchdog" className="space-y-4">
+            <GateWatchdogCard branchId={branchFilter || undefined} />
+            <GateErrorLogCard branchId={branchFilter || undefined} />
           </TabsContent>
 
           <TabsContent value="live-feed">
