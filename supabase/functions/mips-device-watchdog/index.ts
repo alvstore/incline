@@ -1,4 +1,4 @@
-// mips-device-watchdog v1.0.0
+// mips-device-watchdog v1.1.0
 //
 // WHY: the Android turnstiles reboot silently. Nothing in the CRM ever noticed —
 // `access_devices.is_online` was only refreshed when somebody pressed "Import
@@ -6,11 +6,12 @@
 // online → offline → online transitions, and writes an auditable restart trail
 // to `access_device_health_events`.
 //
-// A gate that drops and comes back within RESTART_WINDOW_SEC is a REBOOT, not a
-// network outage: the Android box goes down and the whole OS comes back in
-// 60-180s. We also count how many person dispatches hit that gate in the
-// minutes before it fell over, which is the evidence that links a reboot to a
-// face-template rebuild storm.
+// v1.1.0 — DAMPING. The MIPS server flags a device offline after a single
+// missed 60s heartbeat, so ordinary packet jitter produced fake "restart"
+// cards. We now ignore the server's onlineFlag on its own and require the
+// device's own last heartbeat to be older than STALE_HEARTBEAT_SEC (two whole
+// missed poll cycles) before calling a gate down. A gate must also have been
+// down for at least MIN_DOWN_SEC before a recovery counts as a reboot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -18,10 +19,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Heartbeat must be this stale before we believe a gate is really down. */
+const STALE_HEARTBEAT_SEC = 360;
+/** Shorter blips are jitter, never a reboot. */
+const MIN_DOWN_SEC = 120;
 /** Down and back within this window => the terminal rebooted. */
 const RESTART_WINDOW_SEC = 15 * 60;
 /** Dispatch traffic in this window before the drop is recorded as evidence. */
 const BLAME_WINDOW_MIN = 10;
+
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
