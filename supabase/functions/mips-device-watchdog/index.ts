@@ -37,26 +37,9 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-async function login(baseUrl: string, username: string, password: string) {
-  const res = await fetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  });
-  const body = await res.json();
-  const token = body.token || body.data?.token;
-  if (!token) throw new Error(`MIPS login failed: ${body.msg || res.status}`);
-  return token as string;
-}
-
-async function listDevices(baseUrl: string, token: string) {
-  const res = await fetch(`${baseUrl}/through/device/list`, {
-    headers: { Authorization: `Bearer ${token}`, "TENANT-ID": "1", Accept: "application/json" },
-  });
-  const body = await res.json();
-  const rows: any[] = body.rows || body.data || [];
-  return Array.isArray(rows) ? rows : [];
-}
+// Auth + device roster now come from the shared caches in `_shared/` so this
+// read-only worker no longer logs in or polls the heavy device-list endpoint
+// on every tick.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
