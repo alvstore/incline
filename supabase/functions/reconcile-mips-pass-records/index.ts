@@ -18,6 +18,7 @@ import {
   recordTransportFailure,
   recordSuccess,
 } from "../_shared/mipsHealth.ts";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
 
 type Role = "owner" | "admin" | "manager" | "staff" | "trainer" | "member";
 
@@ -250,7 +251,7 @@ async function fetchPassPage(
  */
 async function fetchPassRecords(connection: MipsConnection, limit: number, pages = 1): Promise<MipsPassRecord[]> {
   const baseUrl = getBaseUrl(connection.server_url);
-  const token = await getRuoYiToken(baseUrl, connection.username, connection.password);
+  const token = await getRuoYiToken(connection.branch_id ?? null, baseUrl, connection.username, connection.password);
 
   const errors: string[] = [];
   let transportFailures = 0;
