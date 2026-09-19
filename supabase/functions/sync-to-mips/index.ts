@@ -44,6 +44,8 @@ import {
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
 import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 
 
@@ -74,9 +76,6 @@ const BIOMETRIC_BUCKET = "member-photos";
 const AVATAR_PATH_PREFIX = "avatars/";
 
 
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
-let cachedCredentialKey = "";
 
 /**
  * Prefer the private biometric bucket path (real face capture) over any
