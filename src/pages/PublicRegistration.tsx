@@ -241,7 +241,7 @@ export default function PublicRegistration() {
             signature_data_url: signatureUrl,
           },
         });
-        if (error) throw error;
+        if (error) throw new Error(await extractFunctionError(error));
         if (data?.error) throw new Error(data.error);
         return data as {
           access_token: string;
