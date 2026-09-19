@@ -468,14 +468,8 @@ async function dispatchToDevices(
   // but never mapped in access_devices).
   let serverBySerial = new Map<string, { id: number; online: boolean }>();
   try {
-    const res = await fetch(`${baseUrl}/through/device/list`, {
-      method: "GET",
-      headers: authHeaders(token),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const text = await res.text();
-    const json = JSON.parse(text);
-    const rows = json?.rows || json?.data;
+    // Writer path: fetch live and re-prime the shared cache read-only workers use.
+    const rows = await getCachedMipsDevices(supabase, branchId ?? null, baseUrl, token, { forceRefresh: true });
     if (Array.isArray(rows)) {
       for (const d of rows) {
         const sn = String(d.deviceKey || d.sn || d.serialNumber || "").trim();
