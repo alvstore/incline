@@ -171,7 +171,8 @@ Deno.serve(async (req) => {
     } else {
       // Create new auth user
       // Fixed default password for all new members — must_set_password forces a change on first login.
-      const tempPassword = suppliedPassword || 'Incline@123'
+      // Must not be a breached/common password: the auth service rejects those (HIBP check).
+      const tempPassword = suppliedPassword || 'Incline@Fit2026'
       createdTempPassword = tempPassword
 
       const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
