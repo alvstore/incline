@@ -3,6 +3,8 @@
 // if already set by an admin. Called by MIPSDevicesTab "Import all" button.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,22 +47,11 @@ Deno.serve(async (req) => {
     }
     const baseUrl = serverUrl.replace(/\/+$/, "");
 
-    // Login
-    const loginRes = await fetch(`${baseUrl}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-      body: JSON.stringify({ username, password }),
-    });
-    const loginJson = await loginRes.json();
-    const token = loginJson.token || loginJson.data?.token;
-    if (!token) return json({ error: `MIPS login failed: ${loginJson.msg}` }, 502);
+    // Auth via the shared token cache (no per-invocation /login against Tomcat)
+    const token = await getCachedMipsToken(supabase, branchId ?? null, { baseUrl, username, password });
 
-    // List devices
-    const listRes = await fetch(`${baseUrl}/through/device/list`, {
-      headers: { "Authorization": `Bearer ${token}`, "TENANT-ID": "1", "Accept": "application/json" },
-    });
-    const listJson = await listRes.json();
-    const rows: any[] = listJson.rows || listJson.data || [];
+    // List devices live (this worker is a writer — it re-primes the shared cache)
+    const rows: any[] = await getCachedMipsDevices(supabase, branchId ?? null, baseUrl, token, { forceRefresh: true });
     if (!Array.isArray(rows)) return json({ error: "MIPS returned no device list" }, 502);
 
     // Callback URLs (record upload / heartbeat / person registration) are wiped
