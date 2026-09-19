@@ -251,7 +251,7 @@ async function applyMemberAction(
   }
 
   const baseUrl = getBaseUrl(mipsBaseUrl);
-  const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+  const token = await getRuoYiToken(supabase, effectiveBranchId ?? null, mipsBaseUrl, mipsUsername, mipsPassword);
 
   const existing = await lookupPerson(baseUrl, token, personSn);
   if (!existing) {
