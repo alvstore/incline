@@ -109,8 +109,10 @@ export function RecordBenefitUsageDrawer({
     b.benefit_type_id === selectedBenefitValue || b.benefit_type === selectedBenefitValue
   ) as any;
 
+  const purchasedLeft = (b: any) => b?.purchasedRemaining ?? b?.creditRemaining ?? 0;
+
   const totalAvailable = (b: any) =>
-    (b?.remaining ?? 0) + (b?.compRemaining ?? 0) + (b?.creditRemaining ?? 0);
+    (b?.remaining ?? 0) + (b?.compRemaining ?? 0) + purchasedLeft(b);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -191,7 +193,11 @@ export function RecordBenefitUsageDrawer({
                               {!benefit.isUnlimited && (
                                 <span className="text-xs text-muted-foreground">
                                   {totalAvailable(benefit)} left
-                                  {benefit.compRemaining > 0 ? ' (gift)' : ''}
+                                  {benefit.compRemaining > 0
+                                    ? ' (gift)'
+                                    : purchasedLeft(benefit) > 0
+                                      ? ' (add-on)'
+                                      : ''}
                                 </span>
                               )}
                             </div>
@@ -215,6 +221,12 @@ export function RecordBenefitUsageDrawer({
                     <div className="mt-1 flex justify-between">
                       <span className="text-muted-foreground">Complimentary gift sessions:</span>
                       <span className="font-medium">{selectedBalance.compRemaining}</span>
+                    </div>
+                  )}
+                  {purchasedLeft(selectedBalance) > 0 && (
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-muted-foreground">Purchased add-on sessions:</span>
+                      <span className="font-medium">{purchasedLeft(selectedBalance)}</span>
                     </div>
                   )}
                   <div className="mt-1 flex justify-between border-t pt-1">
