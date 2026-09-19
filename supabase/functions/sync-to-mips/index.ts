@@ -804,7 +804,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = getBaseUrl(mipsBaseUrl);
-    const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+    const token = await getRuoYiToken(supabase, ctxBranchId ?? null, mipsBaseUrl, mipsUsername, mipsPassword);
 
 
     // ── Verify-only mode ──
