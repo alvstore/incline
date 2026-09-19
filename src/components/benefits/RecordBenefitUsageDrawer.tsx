@@ -219,6 +219,12 @@ export function RecordBenefitUsageDrawer({
                       <span className="font-medium">{selectedBalance.compRemaining}</span>
                     </div>
                   )}
+                  {purchasedLeft(selectedBalance) > 0 && (
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-muted-foreground">Purchased add-on sessions:</span>
+                      <span className="font-medium">{purchasedLeft(selectedBalance)}</span>
+                    </div>
+                  )}
                   <div className="mt-1 flex justify-between border-t pt-1">
                     <span className="text-muted-foreground">Total available:</span>
                     <span className="font-medium text-primary">{totalAvailable(selectedBalance)}</span>
