@@ -121,37 +121,21 @@ function formatDate(dateStr: string | null, fallback: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-async function getRuoYiToken(baseUrl?: string, username?: string, password?: string): Promise<string> {
+// Auth is served from the shared cross-worker token cache (22h TTL) so the
+// MIPS Tomcat server no longer sees a login per worker invocation.
+async function getRuoYiToken(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  branchId: string | null,
+  baseUrl?: string,
+  username?: string,
+  password?: string,
+): Promise<string> {
   // Always normalize — a branch connection may store a bare `HOST:9000`.
   const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  const cacheKey = `${url}\u0000${user}\u0000${pass}`;
-  
-  if (cachedToken && Date.now() < tokenExpiry && cachedCredentialKey === cacheKey) return cachedToken;
-  const res = await fetch(`${url}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username: user, password: pass }),
-    // Bounded: a booting MIPS server must never hang the invocation.
-    signal: AbortSignal.timeout(10_000),
-  });
-  const text = await res.text();
-  let json: any;
-  try { json = JSON.parse(text); } catch {
-    throw new Error(`RuoYi login non-JSON: ${text.substring(0, 300)}`);
-  }
-  if (json.code !== 200 && json.code !== 0) {
-    cachedToken = null;
-    tokenExpiry = 0;
-    cachedCredentialKey = "";
-    throw new Error(`RuoYi login failed: ${json.msg || JSON.stringify(json)}`);
-  }
-  cachedToken = json.token || json.data?.token;
-  if (!cachedToken) throw new Error("No token in login response");
-  tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
-  cachedCredentialKey = cacheKey;
-  return cachedToken!;
+  return await getCachedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
 }
 
 function authHeaders(token: string): Record<string, string> {
