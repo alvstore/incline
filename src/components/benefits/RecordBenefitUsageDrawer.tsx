@@ -193,7 +193,11 @@ export function RecordBenefitUsageDrawer({
                               {!benefit.isUnlimited && (
                                 <span className="text-xs text-muted-foreground">
                                   {totalAvailable(benefit)} left
-                                  {benefit.compRemaining > 0 ? ' (gift)' : ''}
+                                  {benefit.compRemaining > 0
+                                    ? ' (gift)'
+                                    : purchasedLeft(benefit) > 0
+                                      ? ' (add-on)'
+                                      : ''}
                                 </span>
                               )}
                             </div>
