@@ -514,8 +514,17 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     user_metadata: { full_name: reg.full_name, source: "self_register" },
   });
   if (authErr || !authRes?.user) {
+    const msg = String(authErr?.message || "");
+    // Already-registered email/phone is a user-input problem, not a server fault.
+    if (/already been registered|already registered|already exists|duplicate/i.test(msg)) {
+      return json(409, {
+        error: "account_exists",
+        detail:
+          "An account already exists with this email or phone number. Please sign in, or use 'Forgot password' to regain access.",
+      });
+    }
     await captureEdgeError("register-member", authErr, { route: "create_user" });
-    return json(500, { error: "user_creation_failed", detail: authErr?.message });
+    return json(500, { error: "user_creation_failed", detail: msg });
   }
   const userId = authRes.user.id;
 
