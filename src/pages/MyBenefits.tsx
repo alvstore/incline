@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useMemberData } from '@/hooks/useMemberData';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Heart, AlertCircle, Calendar, Clock, Droplets, Sparkles, Gift, Plus } from 'lucide-react';
+import { Heart, AlertCircle, Calendar, Clock, Droplets, Sparkles, Gift, Plus, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -94,6 +95,28 @@ export default function MyBenefits() {
   });
 
   const isLoading = memberLoading || creditsLoading;
+
+  const queryClient = useQueryClient();
+  const cancelBooking = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { data, error } = await supabase.rpc('cancel_facility_slot', {
+        p_booking_id: bookingId,
+        p_reason: 'Cancelled by member',
+      });
+      if (error) throw error;
+      const result = data as { success: boolean; error?: string };
+      if (!result.success) throw new Error(result.error || 'Cancellation failed');
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Booking cancelled', { description: 'Your session has been returned to your balance.' });
+      queryClient.invalidateQueries({ queryKey: ['my-benefit-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-benefit-credits'] });
+      queryClient.invalidateQueries({ queryKey: ['my-benefit-bookings-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to cancel booking'),
+  });
 
   if (isLoading) {
     return (
@@ -276,9 +299,26 @@ export default function MyBenefits() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>
-                        {booking.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>
+                          {booking.status}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label="Cancel booking"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-full"
+                          disabled={cancelBooking.isPending}
+                          onClick={() => cancelBooking.mutate(booking.id)}
+                        >
+                          {cancelBooking.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <XCircle className="h-4 w-4 mr-1" />
+                          )}
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

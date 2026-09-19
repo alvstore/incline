@@ -113,12 +113,29 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
         new Set((data || []).map((c: any) => c.trainer_id).filter(Boolean)),
       ) as string[];
 
-      const [{ data: bookings }, { data: waitlist }, { data: trainers }] = await Promise.all([
+      // trainers_directory exposes no full_name — resolve names via profiles
+      const trainerNameMap: Record<string, string> = {};
+      if (trainerIds.length) {
+        const { data: trainerRows } = await (supabase as any)
+          .from('trainers_directory')
+          .select('id, user_id')
+          .in('id', trainerIds);
+        const userIds = (trainerRows || []).map((t: any) => t.user_id).filter(Boolean) as string[];
+        if (userIds.length) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', userIds);
+          (trainerRows || []).forEach((t: any) => {
+            const p = (profiles || []).find((pr) => pr.id === t.user_id);
+            if (p?.full_name) trainerNameMap[t.id] = p.full_name;
+          });
+        }
+      }
+
+      const [{ data: bookings }, { data: waitlist }] = await Promise.all([
         supabase.from('class_bookings').select('class_id').in('class_id', classIds).eq('status', 'booked'),
         supabase.from('class_waitlist').select('class_id').in('class_id', classIds),
-        trainerIds.length
-          ? supabase.from('trainers_directory').select('id, full_name').in('id', trainerIds)
-          : Promise.resolve({ data: [] as any[] } as any),
       ]);
 
       const countMap: Record<string, number> = {};
@@ -134,7 +151,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
         ...c,
         trainer_name:
           c.external_trainer_name ||
-          (trainers || []).find((t: any) => t.id === c.trainer_id)?.full_name ||
+          (c.trainer_id ? trainerNameMap[c.trainer_id] : null) ||
           null,
         booked_count: countMap[c.id] || 0,
         waitlist_count: waitMap[c.id] || 0,
