@@ -111,9 +111,7 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
 
   if (deviceIds.length === 0) {
     try {
-      const res = await fetch(`${baseUrl}/through/device/list`, { method: "GET", headers: authHeaders(token) });
-      const json = await res.json();
-      const rows = json?.rows || json?.data;
+      const rows = await getCachedMipsDevices(supabase, branchId ?? null, baseUrl, token);
       if (Array.isArray(rows)) {
         deviceIds = rows.filter((d: any) => d.onlineFlag === 1 || d.status === 1).map((d: any) => d.id).filter((id: any) => !isNaN(Number(id)));
       }
@@ -253,7 +251,7 @@ async function applyMemberAction(
   }
 
   const baseUrl = getBaseUrl(mipsBaseUrl);
-  const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+  const token = await getRuoYiToken(supabase, effectiveBranchId ?? null, mipsBaseUrl, mipsUsername, mipsPassword);
 
   const existing = await lookupPerson(baseUrl, token, personSn);
   if (!existing) {
@@ -721,7 +719,7 @@ async function applyStaffAction(
   }
 
   const baseUrl = getBaseUrl(mipsBaseUrl);
-  const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+  const token = await getRuoYiToken(supabase, effectiveBranchId ?? null, mipsBaseUrl, mipsUsername, mipsPassword);
 
   const existing = await lookupPerson(baseUrl, token, personSn);
   if (!existing) {
