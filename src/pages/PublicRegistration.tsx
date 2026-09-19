@@ -87,10 +87,30 @@ const OTP_ERROR_COPY: Record<string, string> = {
   otp_not_found: "We couldn't find an active code. Tap Resend to get a new one.",
   too_many_attempts: "Too many wrong attempts. Tap Resend to get a new code.",
   already_member: "This number is already registered. Please log in instead.",
+  account_exists: "An account already exists with this email or phone. Please log in, or use “Forgot password”.",
+  user_creation_failed: "We couldn't create your account just now. Please try again in a moment.",
   rate_limited: "Too many requests. Please try again in 10 minutes.",
 };
 const friendlyOtpError = (raw: string) =>
   OTP_ERROR_COPY[raw] || raw.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
+/**
+ * Edge functions signal business errors with a non-2xx status, which
+ * supabase-js surfaces as a generic "non-2xx status code" error. Pull the real
+ * error key out of the response body so the member sees a useful message.
+ */
+async function extractFunctionError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.clone().json();
+      if (body?.error) return String(body.error);
+    } catch {
+      /* body was not JSON — fall through to the generic message */
+    }
+  }
+  return (error as Error)?.message || "registration_failed";
+}
 
 export default function PublicRegistration() {
   const nav = useNavigate();
