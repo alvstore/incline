@@ -256,6 +256,7 @@ export async function fetchBenefitUsageHistory(
     .from('benefit_usage')
     .select(`
       *,
+      benefit_types:benefit_type_id(id, name, code),
       profiles:benefit_usage_recorded_by_profiles_fkey(full_name)
     `)
     .eq('membership_id', membershipId)
