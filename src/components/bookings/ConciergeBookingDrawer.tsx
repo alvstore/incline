@@ -151,7 +151,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
         ...c,
         trainer_name:
           c.external_trainer_name ||
-          (trainers || []).find((t: any) => t.id === c.trainer_id)?.full_name ||
+          (c.trainer_id ? trainerNameMap[c.trainer_id] : null) ||
           null,
         booked_count: countMap[c.id] || 0,
         waitlist_count: waitMap[c.id] || 0,
