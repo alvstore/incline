@@ -303,7 +303,8 @@ Deno.serve(async (req) => {
       )
     }
     // Fixed default password for all staff/trainer/manager users — they must change it on first login.
-    const tempPassword = suppliedPassword || 'Incline@123'
+    // Must not be a breached/common password: the auth service rejects those (HIBP check).
+    const tempPassword = suppliedPassword || 'Incline@Fit2026'
     console.log('Creating user with email:', email)
 
     // Create the user with email confirmed (they'll set password on first login)

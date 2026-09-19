@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Copy, Check, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const DEFAULT_TEMP_PASSWORD = 'Incline@123';
+// NOTE: must not be a breached/common password — auth rejects those (HIBP check).
+export const DEFAULT_TEMP_PASSWORD = 'Incline@Fit2026';
 
 /**
  * @deprecated Kept for backwards compatibility. New users get the fixed
- * default password `Incline@123` and must change it on first login.
+ * default password `Incline@Fit2026` and must change it on first login.
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function generateTempPassword(): string {
@@ -20,7 +21,7 @@ interface DefaultPasswordCardProps {
 
 /**
  * Static info card shown on all "Create User" drawers.
- * The system uses a fixed default password (`Incline@123`) for every new
+ * The system uses a fixed default password (`Incline@Fit2026`) for every new
  * member / trainer / staff / manager. They are forced to change it on first
  * login via the `must_set_password` flag.
  */
