@@ -109,8 +109,10 @@ export function RecordBenefitUsageDrawer({
     b.benefit_type_id === selectedBenefitValue || b.benefit_type === selectedBenefitValue
   ) as any;
 
+  const purchasedLeft = (b: any) => b?.purchasedRemaining ?? b?.creditRemaining ?? 0;
+
   const totalAvailable = (b: any) =>
-    (b?.remaining ?? 0) + (b?.compRemaining ?? 0) + (b?.creditRemaining ?? 0);
+    (b?.remaining ?? 0) + (b?.compRemaining ?? 0) + purchasedLeft(b);
 
   async function onSubmit(values: FormValues) {
     try {
