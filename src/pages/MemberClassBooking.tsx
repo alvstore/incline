@@ -118,7 +118,7 @@ export default function MemberClassBooking() {
   const { member, activeMembership, ptPackages, isLoading: memberLoading } = useMemberData();
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [showMyBookings, setShowMyBookings] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
+  const [selectedDate, setSelectedDate] = useState<Date>(istToday());
   const [timeBucket, setTimeBucket] = useState<'all' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('all');
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [upsellPackageId, setUpsellPackageId] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export default function MemberClassBooking() {
     setUpsellOpen(true);
   };
 
-  const today = startOfDay(new Date());
+  const today = istToday();
   const endDate = addDays(today, 13); // 2 weeks
   const todayStr = format(today, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
@@ -523,7 +523,7 @@ export default function MemberClassBooking() {
       items.push({
         id: slot.id,
         type: 'recovery',
-        datetime: new Date(`${slot.slot_date}T${slot.start_time}`),
+        datetime: new Date(`${slot.slot_date}T${slot.start_time}+05:30`),
         title: facilityName,
         subtitle: `${durationMinutes} min`,
         duration: durationMinutes,
@@ -558,7 +558,7 @@ export default function MemberClassBooking() {
 
   // ─── Filter to selected day + active filter ───
   const dayItems = useMemo(() => {
-    let items = agendaItems.filter(i => format(i.datetime, 'yyyy-MM-dd') === selectedDateStr);
+    let items = agendaItems.filter(i => istDateKey(i.datetime) === selectedDateStr);
     if (activeFilter === 'recovery') items = items.filter(i => i.type === 'recovery');
     else if (activeFilter === 'classes') items = items.filter(i => i.type === 'class');
     else if (activeFilter === 'pt') items = items.filter(i => i.type === 'pt');
@@ -575,7 +575,7 @@ export default function MemberClassBooking() {
       Night: [],       // >= 21:00
     };
     dayItems.forEach(it => {
-      const h = it.datetime.getHours();
+      const h = istHour(it.datetime);
       if (h < 12) buckets.Morning.push(it);
       else if (h < 17) buckets.Afternoon.push(it);
       else if (h < 21) buckets.Evening.push(it);
@@ -593,7 +593,7 @@ export default function MemberClassBooking() {
   const countsByDay = useMemo(() => {
     const m: Record<string, number> = {};
     agendaItems.forEach(it => {
-      const k = format(it.datetime, 'yyyy-MM-dd');
+      const k = istDateKey(it.datetime);
       m[k] = (m[k] || 0) + 1;
     });
     return m;
@@ -940,8 +940,8 @@ function AgendaCard({
         <div className="flex items-center gap-4">
           {/* Time Column */}
           <div className="w-16 shrink-0 text-center">
-            <p className="text-sm font-bold">{format(item.datetime, 'h:mm')}</p>
-            <p className="text-xs text-muted-foreground">{format(item.datetime, 'a')}</p>
+            <p className="text-sm font-bold">{istClock(item.datetime).time}</p>
+            <p className="text-xs text-muted-foreground">{istClock(item.datetime).suffix}</p>
           </div>
 
           {/* Divider */}
@@ -995,7 +995,7 @@ function AgendaCard({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to cancel your booking for <strong>{item.title}</strong> at {format(item.datetime, 'h:mm a')}? This action cannot be undone.
+                      Are you sure you want to cancel your booking for <strong>{item.title}</strong> at {istTimeLabel(item.datetime)}? This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -1097,7 +1097,7 @@ function RecoveryTimeGrid({
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           {ordered.map(slot => {
             const isFull = slot.spotsLeft !== undefined && slot.spotsLeft <= 0;
-            const label = format(slot.datetime, 'h:mm a');
+            const label = istTimeLabel(slot.datetime);
 
             if (slot.isBooked) {
               return (
