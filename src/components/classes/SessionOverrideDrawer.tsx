@@ -156,8 +156,8 @@ export function SessionOverrideDrawer({ open, onOpenChange, session, branchId, o
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
           <SheetHeader className="border-b px-6 py-5 text-left">
             <div className="flex items-start gap-3">
-              {session.banner_url || session.class_type?.image_url ? (
-                <img src={session.banner_url ?? session.class_type?.image_url ?? ''} alt="" className="h-14 w-14 rounded-xl object-cover" />
+              {session.banner_url || session.parent?.image_url ? (
+                <img src={session.banner_url ?? session.parent?.image_url ?? ''} alt="" className="h-14 w-14 rounded-xl object-cover" />
               ) : null}
               <div className="min-w-0 flex-1">
                 <SheetTitle className="truncate">{session.name}</SheetTitle>

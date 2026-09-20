@@ -156,7 +156,7 @@ export function MasterClassCalendar({ branchId, onOpenRoster }: Props) {
                                 )}
                               >
                                 <div className="flex items-start justify-between gap-1">
-                                  <p className={cn('truncate text-sm font-semibold text-foreground', cancelled && 'line-through')}>{s.class_type?.name ?? s.name}</p>
+                                  <p className={cn('truncate text-sm font-semibold text-foreground', cancelled && 'line-through')}>{s.parent?.name ?? s.name}</p>
                                   {s.is_overridden && !cancelled && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" title="Hand-edited" />}
                                 </div>
                                 <p className="text-xs text-muted-foreground">{istTimeKey(s.scheduled_at)} · {s.duration_minutes} min</p>
