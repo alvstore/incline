@@ -551,11 +551,11 @@ export default function ClassesPage() {
                         <div className="flex items-center gap-4 text-sm">
                           <div className="flex items-center gap-2">
                             <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                            <span>{format(new Date(cls.scheduled_at), "MMM d, yyyy")}</span>
+                            <span>{formatISTDate(cls.scheduled_at)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span>{format(new Date(cls.scheduled_at), "h:mm a")}</span>
+                            <span>{formatISTTime(cls.scheduled_at)}</span>
                           </div>
                         </div>
 
