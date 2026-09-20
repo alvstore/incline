@@ -109,8 +109,9 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
           <div onClick={(e) => e.stopPropagation()}>
             <Select value={task.status} onValueChange={(v) => onStatus(task.id, v as TaskStatus)}>
               <SelectTrigger
+                aria-label="Change task status"
                 className={cn(
-                  'h-7 w-auto min-w-[110px] rounded-full border-0 text-xs font-semibold focus:ring-2 focus:ring-ring',
+                  'h-8 w-auto min-w-[118px] rounded-full border-0 text-xs font-semibold focus:ring-2 focus:ring-ring',
                   STATUS_PILL[task.status],
                 )}
               >
@@ -124,7 +125,8 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
             </Select>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
