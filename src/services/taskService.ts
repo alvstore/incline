@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { notifyTaskAssignee } from '@/lib/tasks/taskNotify';
+import { isTaskOpen, isTaskOverdue } from '@/lib/tasks/taskStatus';
 
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
@@ -210,16 +211,18 @@ export async function deleteTask(id: string) {
 export async function getTaskStats(branchId?: string) {
   const tasks = await fetchTasks(branchId);
   const now = new Date();
-  const overdueTasks = tasks.filter(
-    (t) => t.due_date && new Date(t.due_date) < now && t.status !== 'completed' && t.status !== 'cancelled'
-  );
+  const openTasks = tasks.filter(isTaskOpen);
   return {
     total: tasks.length,
     pending: tasks.filter((t) => t.status === 'pending').length,
     inProgress: tasks.filter((t) => t.status === 'in_progress').length,
     completed: tasks.filter((t) => t.status === 'completed').length,
-    overdue: overdueTasks.length,
-    highPriority: tasks.filter((t) => t.priority === 'high' || t.priority === 'urgent').length,
+    cancelled: tasks.filter((t) => t.status === 'cancelled').length,
+    open: openTasks.length,
+    overdue: tasks.filter((t) => isTaskOverdue(t, now)).length,
+    // High priority only counts work that is still actionable — a cancelled
+    // urgent task is not something anyone needs to chase.
+    highPriority: openTasks.filter((t) => t.priority === 'high' || t.priority === 'urgent').length,
   };
 }
 
