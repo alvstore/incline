@@ -7,11 +7,33 @@ export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 export type AudienceKind = 'members' | 'members_and_staff' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
 export type StaffRole = 'owner' | 'admin' | 'manager' | 'staff' | 'trainer';
 
+/** Member segments supported by resolve_campaign_audience_v2 / member_matches_segment. */
+export type MemberSegmentStatus =
+  | 'all'
+  | 'active'
+  | 'expired'
+  | 'recent_expired'
+  | 'inactive_30'
+  | 'inactive_60'
+  | 'frozen'
+  | 'pending_dues';
+
+export const MEMBER_SEGMENTS: { id: MemberSegmentStatus; label: string; desc: string }[] = [
+  { id: 'all', label: 'All members', desc: 'Everyone on the branch roster' },
+  { id: 'active', label: 'Active members', desc: 'Live membership, not expired' },
+  { id: 'expired', label: 'Expired members', desc: 'Membership end date has passed' },
+  { id: 'recent_expired', label: 'Recently expired (30 days)', desc: 'Lapsed in the last 30 days, not renewed' },
+  { id: 'inactive_30', label: 'Inactive · no visit in 30 days', desc: 'No gate check-in for 30 days' },
+  { id: 'inactive_60', label: 'Inactive · no visit in 60 days', desc: 'No gate check-in for 60 days' },
+  { id: 'frozen', label: 'Frozen / paused', desc: 'Membership currently on freeze' },
+  { id: 'pending_dues', label: 'Pending dues', desc: 'At least one invoice still unpaid' },
+];
+
 export interface AudienceFilter {
   audience_kind?: AudienceKind;
   segment_id?: string | null;
   // members
-  member_status?: 'active' | 'expired' | 'all';
+  member_status?: MemberSegmentStatus;
   goal?: string | null;
   // contacts
   source_types?: Array<'member' | 'lead' | 'manual' | 'ai'>;
