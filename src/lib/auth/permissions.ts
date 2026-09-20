@@ -27,7 +27,8 @@ export type Capability =
   | 'book_facility'
   | 'delete_task'
   | 'rcs_admin'
-  | 'rcs_wallet_view';
+  | 'rcs_wallet_view'
+  | 'manage_class_schedule';
 
 const MATRIX: Record<Capability, AppRole[]> = {
   view_financials:     ['owner', 'admin', 'manager'],
@@ -47,6 +48,8 @@ const MATRIX: Record<Capability, AppRole[]> = {
   delete_task:         ['owner', 'admin', 'manager'],
   rcs_admin:           ['owner', 'admin'],
   rcs_wallet_view:     ['owner', 'admin'],
+  // Class types + recurring schedule rules (mirrors RLS on class_types / class_templates)
+  manage_class_schedule: ['owner', 'admin', 'manager'],
 };
 
 /** Accepts `['owner']` OR `[{ role: 'owner' }]` (AuthContext shape) — normalizing
