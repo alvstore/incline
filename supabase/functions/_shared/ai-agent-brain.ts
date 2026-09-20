@@ -2308,6 +2308,41 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   return `Got it — noting your interest. ${tourCtaLine()}`;
 }
 
+// v7.1.0 — Native-app hallucination guard. Incline has NO mobile app; the
+// member experience is the web portal at https://theincline.in/auth. The model
+// occasionally invents App Store / Play Store links. Strip them and rewrite any
+// "download the app" phrasing to the canonical web login.
+const MEMBER_PORTAL_URL = "https://theincline.in/auth";
+const APP_STORE_URL_RE =
+  /https?:\/\/(?:www\.)?(?:apps\.apple\.com|itunes\.apple\.com|play\.google\.com|appstore\.com)\/\S*/gi;
+const APP_DOWNLOAD_PHRASE_RE =
+  /\b(?:download|install|get)\s+(?:the\s+)?(?:incline\s+)?app\b[^.!?\n]*/gi;
+const APP_STORE_MENTION_RE =
+  /\b(?:app\s*store|play\s*store|google\s*play|android\s+app|ios\s+app)\b/gi;
+
+function correctAppStoreLinks(replyText: string): string {
+  if (!replyText) return replyText;
+  let out = String(replyText);
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(out.trim())) return replyText;
+  const hit =
+    APP_STORE_URL_RE.test(out) || APP_DOWNLOAD_PHRASE_RE.test(out) || APP_STORE_MENTION_RE.test(out);
+  APP_STORE_URL_RE.lastIndex = 0;
+  APP_DOWNLOAD_PHRASE_RE.lastIndex = 0;
+  APP_STORE_MENTION_RE.lastIndex = 0;
+  if (!hit) return replyText;
+
+  out = out.replace(APP_STORE_URL_RE, MEMBER_PORTAL_URL);
+  out = out.replace(APP_DOWNLOAD_PHRASE_RE, `log in at ${MEMBER_PORTAL_URL}`);
+  out = out.replace(APP_STORE_MENTION_RE, "member portal");
+  // Collapse repeated portal URLs and tidy whitespace.
+  out = out
+    .replace(new RegExp(`(?:${MEMBER_PORTAL_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*){2,}`, "g"), `${MEMBER_PORTAL_URL} `)
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  console.warn("[AI:guards] rewrote native-app/store reference to the web member portal");
+  return out;
+}
+
 // Outbound commercial leak guard. Detection lives in pricingPolicy.ts
 // (PRICING_LEAK_RE) so there is exactly one definition of "commercial leak".
 const PRICING_MENTION_RE = PRICING_LEAK_RE;
