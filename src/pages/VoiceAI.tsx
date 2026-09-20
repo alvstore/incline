@@ -359,15 +359,23 @@ export default function VoiceAIPage() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="history" className="cursor-pointer">Call history</TabsTrigger>
-            <TabsTrigger value="queue" className="cursor-pointer">Today's queue</TabsTrigger>
-            <TabsTrigger value="skipped" className="cursor-pointer">Skipped</TabsTrigger>
-            <TabsTrigger value="callbacks" className="cursor-pointer">Callbacks</TabsTrigger>
-
-            <TabsTrigger value="complaints" className="cursor-pointer">Complaints</TabsTrigger>
-            <TabsTrigger value="dnd" className="cursor-pointer">DND</TabsTrigger>
-            {canSeeAnalytics && <TabsTrigger value="analytics" className="cursor-pointer">Analytics</TabsTrigger>}
+          <TabsList className="flex w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/60 p-1">
+            {([
+              { v: 'queue', label: "Today's queue", count: null },
+              { v: 'history', label: 'Call history', count: null },
+              { v: 'callbacks', label: 'Callbacks', count: today.callbacks ?? 0 },
+              { v: 'complaints', label: 'Complaints', count: today.complaints ?? 0 },
+              { v: 'skipped', label: 'Skipped', count: null },
+              { v: 'dnd', label: 'DND', count: today.dnd_requests ?? 0 },
+              ...(canSeeAnalytics ? [{ v: 'analytics', label: 'Analytics', count: null }] : []),
+            ] as Array<{ v: string; label: string; count: number | null }>).map((t) => (
+              <TabsTrigger key={t.v} value={t.v} className="cursor-pointer gap-1.5 rounded-lg">
+                {t.label}
+                {!!t.count && (
+                  <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">{t.count}</span>
+                )}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* History */}
