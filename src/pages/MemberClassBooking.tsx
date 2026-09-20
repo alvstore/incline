@@ -215,7 +215,10 @@ export default function MemberClassBooking() {
     retry: 2,
   });
 
-  // ─── Fetch Classes (7 days) ───
+  // ─── Fetch Classes (14 days) ───
+  // Sessions carry a live `booked_count` maintained by the database, so the
+  // "spots left" figure is exact even though members can only read their own
+  // bookings. Generated sessions also link to their parent class (poster, category).
   const { data: classes = [], isLoading: classesLoading } = useQuery({
     queryKey: ['agenda-classes', member?.branch_id, todayStr],
     enabled: !!member,
@@ -224,24 +227,27 @@ export default function MemberClassBooking() {
       const dayEnd = addDays(endDate, 1).toISOString();
       const { data, error } = await supabase
         .from('classes')
-        .select('*, trainer:trainers(id, user_id), bookings:class_bookings(id, member_id, status)')
+        .select('*, parent:class_types!classes_class_type_id_fkey(id, name, image_url, category), trainer:trainers(id, user_id)')
         .eq('branch_id', member!.branch_id)
         .eq('is_active', true)
+        .is('cancelled_at', null)
         .gte('scheduled_at', dayStart)
         .lt('scheduled_at', dayEnd)
         .order('scheduled_at', { ascending: true });
       if (error) throw error;
-      // Fetch trainer profiles
-      const result = await Promise.all(
-        (data || []).map(async (cls: any) => {
-          if (cls.trainer?.user_id) {
-            const { data: p } = await supabase.from('profiles').select('full_name').eq('id', cls.trainer.user_id).maybeSingle();
-            return { ...cls, trainer: { ...cls.trainer, profiles: p } };
-          }
-          return cls;
-        })
-      );
-      return result;
+      const rows = (data || []) as any[];
+      // Resolve trainer names in one round-trip instead of one query per class.
+      const userIds = [...new Set(rows.map((c) => c.trainer?.user_id).filter(Boolean))] as string[];
+      const nameByUser: Record<string, string | null> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', userIds);
+        (profiles || []).forEach((p) => { nameByUser[p.id] = p.full_name; });
+      }
+      return rows.map((cls) => (
+        cls.trainer?.user_id
+          ? { ...cls, trainer: { ...cls.trainer, profiles: { full_name: nameByUser[cls.trainer.user_id] ?? null } } }
+          : cls
+      ));
     },
   });
 
@@ -442,21 +448,21 @@ export default function MemberClassBooking() {
 
     // Classes
     classes.forEach((cls: any) => {
-      const bookedCount = cls.bookings?.filter((b: any) => b.status === 'booked').length || 0;
+      const bookedCount = Number(cls.booked_count ?? 0);
       const isBooked = !!classBookingMap[cls.id];
       items.push({
         id: cls.id,
         type: 'class',
         datetime: new Date(cls.scheduled_at),
-        title: cls.name,
+        title: cls.parent?.name || cls.name,
         subtitle: [
           `${cls.duration_minutes} min`,
           cls.trainer?.profiles?.full_name || cls.external_trainer_name || '',
           cls.venue || '',
         ].filter(Boolean).join(' • '),
-        banner: cls.banner_url || null,
+        banner: cls.banner_url || cls.parent?.image_url || null,
         duration: cls.duration_minutes || 60,
-        spotsLeft: cls.capacity - bookedCount,
+        spotsLeft: Math.max(0, Number(cls.capacity ?? 0) - bookedCount),
         capacity: cls.capacity,
         isBooked,
         bookingId: classBookingMap[cls.id],
