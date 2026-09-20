@@ -118,58 +118,61 @@ export default function TasksPage() {
     onError: () => toast.error('Failed to assign task'),
   });
 
-  // Apply quick filter + search
-  const visibleTasks = useMemo(() => {
-    const now = new Date();
-    const q = search.trim().toLowerCase();
-    return tasks.filter((t: any) => {
-      if (q && !(`${t.title} ${t.description || ''}`.toLowerCase().includes(q))) return false;
-      switch (filter) {
+  // Quick-filter predicates — the single definition used for BOTH the pill
+  // counts and the list that renders, so a badge can never promise rows the
+  // view then refuses to show.
+  const matchesFilter = useCallback(
+    (t: any, key: QuickFilter) => {
+      switch (key) {
         case 'mine':
-          return t.assigned_to === user?.id;
+          return t.assigned_to === user?.id && isTaskOpen(t);
         case 'today':
-          return t.due_date && isToday(new Date(t.due_date));
+          return isTaskDueToday(t) && isTaskOpen(t);
         case 'overdue':
-          return (
-            t.due_date &&
-            isPast(new Date(t.due_date)) &&
-            !isToday(new Date(t.due_date)) &&
-            t.status !== 'completed' &&
-            t.status !== 'cancelled'
-          );
+          return isTaskOverdue(t);
         case 'high':
-          return t.priority === 'high' || t.priority === 'urgent';
+          return (t.priority === 'high' || t.priority === 'urgent') && isTaskOpen(t);
         case 'unassigned':
-          return !t.assigned_to;
+          return !t.assigned_to && isTaskOpen(t);
         default:
           return true;
       }
+    },
+    [user?.id],
+  );
+
+  const visibleTasks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return tasks.filter((t: any) => {
+      if (q && !(`${t.title} ${t.description || ''}`.toLowerCase().includes(q))) return false;
+      return matchesFilter(t, filter);
     });
-  }, [tasks, filter, search, user?.id]);
+  }, [tasks, filter, search, matchesFilter]);
 
   const linkedMembers = useLinkedMembers(tasks);
 
-
   const myOpenCount = useMemo(
-    () => tasks.filter((t: any) => t.assigned_to === user?.id && t.status !== 'completed' && t.status !== 'cancelled').length,
+    () => tasks.filter((t: any) => t.assigned_to === user?.id && isTaskOpen(t)).length,
     [tasks, user?.id],
   );
 
-  const filterCounts = useMemo(() => {
-    const now = new Date();
-    return {
+  const filterCounts = useMemo(
+    () => ({
       all: tasks.length,
-      mine: tasks.filter((t: any) => t.assigned_to === user?.id).length,
-      today: tasks.filter((t: any) => t.due_date && isToday(new Date(t.due_date))).length,
-      overdue: stats?.overdue || 0,
-      high: stats?.highPriority || 0,
-      unassigned: tasks.filter((t: any) => !t.assigned_to).length,
-    };
-  }, [tasks, user?.id, stats]);
+      mine: tasks.filter((t: any) => matchesFilter(t, 'mine')).length,
+      today: tasks.filter((t: any) => matchesFilter(t, 'today')).length,
+      overdue: tasks.filter((t: any) => matchesFilter(t, 'overdue')).length,
+      high: tasks.filter((t: any) => matchesFilter(t, 'high')).length,
+      unassigned: tasks.filter((t: any) => matchesFilter(t, 'unassigned')).length,
+    }),
+    [tasks, matchesFilter],
+  );
 
-  const subtitle = `${stats?.total || 0} total · ${stats?.pending || 0 + (stats?.inProgress || 0)} open · ${
-    stats?.overdue || 0
-  } overdue · ${filterCounts.today} due today`;
+  const openCount = (stats?.pending || 0) + (stats?.inProgress || 0);
+
+  const subtitle = `${stats?.total || 0} total · ${openCount} open · ${filterCounts.overdue} overdue · ${
+    filterCounts.today
+  } due today`;
 
   const filterLabel =
     ({
