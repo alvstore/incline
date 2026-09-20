@@ -178,6 +178,7 @@ export function useRenewalVoiceCall() {
         queryClient.invalidateQueries({ queryKey: ['renewal-funnel'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-case-voice-calls'] }),
         queryClient.invalidateQueries({ queryKey: ['voice-calls'] }),
+        queryClient.invalidateQueries({ queryKey: ['renewal-queue-counts'] }),
       ]);
     },
   });
