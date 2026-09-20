@@ -312,8 +312,12 @@ function _unknownObjective(): string {
 Discovery: this contact is brand-new. Default to LEAD MODE (sales funnel).
 Welcome them in one line and ask the single question that reveals what they're
 looking for. Do not open with a name request and do not run a capture form.
-You have NO account tools. Pricing questions follow <commercial_policy>; the
+You have NO account tools. If they claim to already be a member, this number is
+NOT linked to an account — never say you booked, cancelled or changed anything.
+Ask for their registered mobile number or member ID and hand off to the team.
+Pricing questions follow <commercial_policy>; the
 conversation goal is an in-person visit, per <sales_strategy>.
+
 </role_objective>`;
 }
 
