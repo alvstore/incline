@@ -1,4 +1,5 @@
-// notify-class-session v1.0.0
+// notify-class-session v1.0.1
+// v1.0.1: member deep-link → /book (member booking route); dispatcher provenance fields.
 // Tells booked members when a class session is cancelled or changed (trainer /
 // time / venue). Everything goes through the canonical `dispatch-communication`
 // funnel — WhatsApp, SMS, Email and in-app — so channel toggles, member
@@ -211,7 +212,7 @@ Deno.serve(async (req) => {
             message: text,
             type: event === "session_cancelled" ? "warning" : "info",
             category: "booking",
-            action_url: "/classes",
+            action_url: "/book?type=classes",
           });
           results.push({ member_id: m.id, channel: "in_app", success: true });
         } catch (e) {
@@ -232,13 +233,14 @@ Deno.serve(async (req) => {
               branch_id: cls.branch_id,
               channel,
               category: "transactional",
-              trigger_event: "class_schedule_change",
               recipient,
               member_id: m.id,
               user_id: m.user_id,
               payload: { subject, body: text, variables: vars, use_branded_template: channel === "email" },
               dedupe_key: dedupeKey,
-              metadata: { source: "notify-class-session", event, class_id: classId, actor_id: actorId },
+              force: true,
+              source_caller: `notify-class-session:${event}`,
+              source_type: "transactional",
             },
           });
           results.push({ member_id: m.id, channel, success: !error, status: (data as { status?: string } | null)?.status, error: error?.message });

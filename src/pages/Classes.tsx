@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, isPast, isFuture, isToday, differenceInMinutes, addMinutes, isAfter, isBefore, startOfDay } from "date-fns";
+import { isPast, isFuture, isToday, differenceInMinutes, addMinutes, isAfter, isBefore, startOfDay } from "date-fns";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { ClassWithDetails } from "@/services/classService";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { LivePill } from "@/components/ui/live-pill";
+import { formatIST, formatISTDate, formatISTTime } from "@/lib/utils/datetime";
 
 type TimeFilter = "upcoming" | "past" | "all";
 
@@ -550,11 +551,11 @@ export default function ClassesPage() {
                         <div className="flex items-center gap-4 text-sm">
                           <div className="flex items-center gap-2">
                             <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                            <span>{format(new Date(cls.scheduled_at), "MMM d, yyyy")}</span>
+                            <span>{formatISTDate(cls.scheduled_at)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span>{format(new Date(cls.scheduled_at), "h:mm a")}</span>
+                            <span>{formatISTTime(cls.scheduled_at)}</span>
                           </div>
                         </div>
 
@@ -624,7 +625,7 @@ export default function ClassesPage() {
                     <div>
                       <CardTitle>{selectedClassData.name} - Attendance</CardTitle>
                       <CardDescription>
-                        {format(new Date(selectedClassData.scheduled_at), "PPP p")}
+                        {formatIST(selectedClassData.scheduled_at, { dateStyle: 'long', timeStyle: 'short' })}
                         {getTrainerName(selectedClassData.trainer_id) && (
                           <span className="ml-2">• Trainer: {getTrainerName(selectedClassData.trainer_id)}</span>
                         )}
@@ -743,7 +744,7 @@ export default function ClassesPage() {
               Class Attendees
             </SheetTitle>
             <SheetDescription>
-              {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.name} — {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.scheduled_at && format(new Date(filteredClasses.find(c => c.id === rosterClassId)!.scheduled_at), 'PPP p')}
+              {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.name} — {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.scheduled_at && formatIST(filteredClasses.find(c => c.id === rosterClassId)!.scheduled_at, { dateStyle: 'long', timeStyle: 'short' })}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-3">
