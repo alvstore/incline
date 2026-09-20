@@ -60,6 +60,10 @@ const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'update_member_contact', label: 'Update Contact', description: 'Update member email or phone (verified)', icon: UserCog, risk: 'write' },
       { name: 'request_freeze', label: 'Freeze Membership', description: 'Submit a freeze request for approval', icon: Snowflake, risk: 'write' },
       { name: 'request_resume', label: 'Resume Membership', description: 'Resume from freeze before scheduled end date', icon: RotateCcw, risk: 'write' },
+      { name: 'initiate_membership_renewal', label: 'Start Renewal', description: 'Begin a membership renewal request for the member', icon: RefreshCw, risk: 'write' },
+      { name: 'purchase_addon_intent', label: 'Add-on Interest', description: 'Record intent to purchase an add-on (sauna, PT, etc.)', icon: ShoppingBag, risk: 'write' },
+      { name: 'get_my_fitness_plans', label: 'Fitness Plans', description: 'Assigned diet and workout plans for the member', icon: ClipboardList, risk: 'read' },
+
     ],
   },
   {
