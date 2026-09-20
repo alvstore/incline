@@ -88,6 +88,7 @@ export const can = {
   deleteTask:        (r?: RoleLike[]) => hasCapability(r, 'delete_task'),
   rcsAdmin:          (r?: RoleLike[]) => hasCapability(r, 'rcs_admin'),
   rcsWalletView:     (r?: RoleLike[]) => hasCapability(r, 'rcs_wallet_view'),
+  manageClassSchedule: (r?: RoleLike[]) => hasCapability(r, 'manage_class_schedule'),
 };
 
 /**
