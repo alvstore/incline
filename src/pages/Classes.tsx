@@ -335,7 +335,8 @@ export default function ClassesPage() {
           </Card>
         </div>
 
-        {/* Time Filter Tabs + Filters */}
+        {/* Time Filter Tabs + Filters (session list only) */}
+        {activeTab === "schedule" && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4">
@@ -409,12 +410,23 @@ export default function ClassesPage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        <Tabs defaultValue="schedule" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="schedule">Schedule ({filteredClasses.length})</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="h-auto flex-wrap">
+            <TabsTrigger value="schedule" className="cursor-pointer"><CalendarDays className="mr-1.5 h-4 w-4" />Sessions ({filteredClasses.length})</TabsTrigger>
+            <TabsTrigger value="calendar" className="cursor-pointer"><CalendarRange className="mr-1.5 h-4 w-4" />Master calendar</TabsTrigger>
+            <TabsTrigger value="rules" className="cursor-pointer"><Layers className="mr-1.5 h-4 w-4" />Classes & rules</TabsTrigger>
+            <TabsTrigger value="attendance" className="cursor-pointer"><ClipboardList className="mr-1.5 h-4 w-4" />Attendance</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="calendar" className="space-y-4">
+            <MasterClassCalendar branchId={branchId} onOpenRoster={(id) => setRosterClassId(id)} />
+          </TabsContent>
+
+          <TabsContent value="rules" className="space-y-4">
+            <ClassTypesPanel branchId={branchId} canManage={canManageRules} />
+          </TabsContent>
 
           <TabsContent value="schedule" className="space-y-4">
             {isLoading ? (
