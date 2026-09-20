@@ -58,6 +58,13 @@ function shouldDrop(msg: string): boolean {
   if (msg.includes('Failed to fetch dynamically imported module')) return true;
   // Browser extension noise.
   if (msg.includes('ResizeObserver loop') || msg.includes('Non-Error promise rejection captured')) return true;
+  // Opaque cross-origin errors. The browser masks anything thrown by a script
+  // served from another origin (extensions, payment widgets, analytics) down to
+  // the literal string "Script error." at 0:0 — no file, no stack, nothing
+  // actionable. errorReporter.ts already drops these; this logger must match or
+  // error_logs fills with untraceable noise (e.g. the /my-invoices entries).
+  if (/^script error\.?$/i.test(msg.trim())) return true;
+  if (msg.includes('chrome-extension://') || msg.includes('moz-extension://')) return true;
   // AbortController cancellations (e.g., Supabase JS abort on route unmount).
   if (msg.includes('signal is aborted') || msg.includes('AbortError') || msg.includes('The user aborted a request')) return true;
   return false;
