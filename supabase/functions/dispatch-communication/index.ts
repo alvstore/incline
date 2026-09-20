@@ -1252,7 +1252,7 @@ Deno.serve(async (req) => {
               const bodyText = String(input.payload.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 900);
               const filled: Record<string, string> = {};
               if (keys[0]) filled[keys[0]] = name;
-              if (keys[1]) filled[keys[1]] = bodyText || 'Please check the Incline app for details.';
+              if (keys[1]) filled[keys[1]] = bodyText || 'Please check your Incline member portal at https://theincline.in/auth for details.';
               input.payload.variables = { ...(input.payload.variables ?? {}), ...filled };
             }
             return chosen;
