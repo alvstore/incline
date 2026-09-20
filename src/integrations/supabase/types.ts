@@ -16490,6 +16490,10 @@ export type Database = {
         Args: { _at: string; _branch_id: string; _member_id: string }
         Returns: Json
       }
+      member_matches_segment: {
+        Args: { p_member_id: string; p_status: string }
+        Returns: boolean
+      }
       members_blocked_for_dues: {
         Args: never
         Returns: {
