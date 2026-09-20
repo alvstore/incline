@@ -625,7 +625,7 @@ export default function ClassesPage() {
                     <div>
                       <CardTitle>{selectedClassData.name} - Attendance</CardTitle>
                       <CardDescription>
-                        {format(new Date(selectedClassData.scheduled_at), "PPP p")}
+                        {formatIST(selectedClassData.scheduled_at, { dateStyle: 'long', timeStyle: 'short' })}
                         {getTrainerName(selectedClassData.trainer_id) && (
                           <span className="ml-2">• Trainer: {getTrainerName(selectedClassData.trainer_id)}</span>
                         )}
