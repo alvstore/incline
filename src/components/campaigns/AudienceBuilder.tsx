@@ -209,16 +209,19 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
       {kind === 'members' && (
         <div className="space-y-4">
           <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Membership status</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Member segment</Label>
             <Select
               value={filter.member_status || filter.status || 'all'}
-              onValueChange={(v) => setFilter({ ...filter, member_status: v as any, status: v as any })}
+              onValueChange={(v) => setFilter({ ...filter, member_status: v as any, status: undefined })}
             >
               <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All members</SelectItem>
-                <SelectItem value="active">Active members</SelectItem>
-                <SelectItem value="expired">Expired members</SelectItem>
+              <SelectContent className="max-h-72">
+                {MEMBER_SEGMENTS.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="font-medium">{s.label}</span>
+                    <span className="block text-[11px] text-muted-foreground">{s.desc}</span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -236,8 +239,8 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
           <div className="rounded-xl border border-dashed bg-muted/30 p-3 flex gap-2 text-[11px] text-muted-foreground">
             <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning" />
             <span>
-              Looking to win back members who haven&apos;t visited in a while?
-              Use the <Link to="/automations" className="underline text-primary">Smart Retention Nudge Engine</Link> — it runs automatically based on absence cooldowns.
+              For always-on win-backs, the <Link to="/automations" className="underline text-primary">Smart Retention Nudge Engine</Link> runs
+              on absence cooldowns — use the inactive segments here for one-off pushes.
             </span>
           </div>
         </div>
