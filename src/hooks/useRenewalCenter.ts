@@ -88,6 +88,7 @@ export function useRenewalAction() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['renewal-center'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-funnel'] }),
+        queryClient.invalidateQueries({ queryKey: ['renewal-queue-counts'] }),
       ]);
     },
   });
