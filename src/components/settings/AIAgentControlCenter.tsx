@@ -78,6 +78,9 @@ const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'book_facility_slot', label: 'Book Slot', description: 'Book a facility slot for the member', icon: CalendarPlus, risk: 'write' },
       { name: 'cancel_facility_booking', label: 'Cancel Booking', description: 'Cancel an existing facility booking', icon: CalendarX, risk: 'write' },
       { name: 'list_my_bookings', label: 'My Bookings', description: 'Upcoming bookings for the member', icon: ClipboardList, risk: 'read' },
+      { name: 'book_class', label: 'Book Group Class', description: 'Book a group class (Pilates, Yoga, Zumba) for the member', icon: CalendarPlus, risk: 'write' },
+      { name: 'cancel_class_booking', label: 'Cancel Group Class', description: 'Cancel an existing group class booking', icon: CalendarX, risk: 'write' },
+
     ],
   },
   {
