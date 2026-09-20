@@ -60,6 +60,10 @@ const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'update_member_contact', label: 'Update Contact', description: 'Update member email or phone (verified)', icon: UserCog, risk: 'write' },
       { name: 'request_freeze', label: 'Freeze Membership', description: 'Submit a freeze request for approval', icon: Snowflake, risk: 'write' },
       { name: 'request_resume', label: 'Resume Membership', description: 'Resume from freeze before scheduled end date', icon: RotateCcw, risk: 'write' },
+      { name: 'initiate_membership_renewal', label: 'Start Renewal', description: 'Begin a membership renewal request for the member', icon: RefreshCw, risk: 'write' },
+      { name: 'purchase_addon_intent', label: 'Add-on Interest', description: 'Record intent to purchase an add-on (sauna, PT, etc.)', icon: ShoppingBag, risk: 'write' },
+      { name: 'get_my_fitness_plans', label: 'Fitness Plans', description: 'Assigned diet and workout plans for the member', icon: ClipboardList, risk: 'read' },
+
     ],
   },
   {
@@ -74,6 +78,9 @@ const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'book_facility_slot', label: 'Book Slot', description: 'Book a facility slot for the member', icon: CalendarPlus, risk: 'write' },
       { name: 'cancel_facility_booking', label: 'Cancel Booking', description: 'Cancel an existing facility booking', icon: CalendarX, risk: 'write' },
       { name: 'list_my_bookings', label: 'My Bookings', description: 'Upcoming bookings for the member', icon: ClipboardList, risk: 'read' },
+      { name: 'book_class', label: 'Book Group Class', description: 'Book a group class (Pilates, Yoga, Zumba) for the member', icon: CalendarPlus, risk: 'write' },
+      { name: 'cancel_class_booking', label: 'Cancel Group Class', description: 'Cancel an existing group class booking', icon: CalendarX, risk: 'write' },
+
     ],
   },
   {
@@ -127,6 +134,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     tools: [
       { name: 'get_branch_info', label: 'Branch Info', description: 'Address, phone, opening hours and amenities', icon: MapPin, risk: 'read' },
       { name: 'get_class_schedule', label: 'Class Schedule', description: 'Group class timings by day or trainer', icon: CalendarDays, risk: 'read' },
+      { name: 'list_branch_services', label: 'Branch Services', description: 'Facilities and services available at the branch', icon: Sparkles, risk: 'read' },
     ],
   },
   {
@@ -137,6 +145,9 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     accent: 'bg-destructive/10 text-destructive ring-destructive/15',
     tools: [
       { name: 'transfer_to_human', label: 'Transfer to Human', description: 'Hand off conversation to gym staff', icon: MessageSquare, risk: 'escalation' },
+      { name: 'escalate_request', label: 'Raise Request', description: 'Create a tracked request/ticket for the staff team', icon: ClipboardList, risk: 'escalation' },
+      { name: 'get_request_status', label: 'Request Status', description: 'Check the status of a raised request', icon: Search, risk: 'read' },
+
     ],
   },
 ];
