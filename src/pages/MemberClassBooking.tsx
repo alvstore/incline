@@ -21,8 +21,32 @@ import {
 import { format, addDays, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
+import { istDateKey, istTimeKey } from '@/lib/classes/schedule';
 
 type FilterType = 'all' | 'recovery' | 'classes' | 'pt';
+
+/** The gym runs on India time — never render a session in the device's timezone. */
+const IST_TIME = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true,
+});
+/** "7:00 am" → { time: "7:00", suffix: "AM" } */
+function istClock(d: Date): { time: string; suffix: string } {
+  const parts = IST_TIME.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return { time: `${get('hour')}:${get('minute')}`, suffix: (get('dayPeriod') || '').toUpperCase().replace(/\./g, '') };
+}
+function istTimeLabel(d: Date): string {
+  const { time, suffix } = istClock(d);
+  return `${time} ${suffix}`;
+}
+function istHour(d: Date): number {
+  return Number(istTimeKey(d.toISOString()).slice(0, 2));
+}
+/** Today in India, as a local Date used only for the date strip. */
+function istToday(): Date {
+  const [y, m, d] = istDateKey(new Date()).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 
 interface AddOnPackage {
   id: string;
