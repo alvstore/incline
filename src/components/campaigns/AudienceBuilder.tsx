@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   resolveAudienceMemberIds,
   getAudienceBreakdown,
+  MEMBER_SEGMENTS,
   type AudienceFilter,
   type AudienceBreakdown,
   type AudienceKind,
