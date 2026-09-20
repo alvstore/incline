@@ -293,7 +293,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
 
 
 
-  // ── RCS (Telinfy) template selection + per-variable mapping ──
+  // ── RCS template selection + per-variable mapping ──
   const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
   const [rcsVarMap, setRcsVarMap] = useState<Record<string, string>>({});
 
@@ -320,7 +320,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
           ?.map((m: string) => m.replace(/[{}\s]/g, '')) || [],
       ),
     );
-    // Prefer declared variables (Telinfy panel), fall back to body-scan.
+    // Prefer declared variables (provider panel), fall back to body-scan.
     return declared.length ? declared.map(String) : (fromBody as string[]);
   })();
 
@@ -790,7 +790,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         ...filledVariables(),
       };
 
-      // For RCS, template_name is packed into variables (Telinfy lcustomParam).
+      // For RCS, template_name is packed into the variables payload.
       const rcsVars = channel === 'rcs' && selectedRcsTemplate
         ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient({
             source_type: 'test', source_ref_id: 'test', full_name: testName, first_name: firstName,
@@ -1169,7 +1169,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         toast.error('Email: subject is required'); return;
       }
       if (ch === 'rcs' && !rcsTemplateId) {
-        toast.error('Pick an RCS template — Telinfy RCS is template-only'); return;
+        toast.error('Pick an approved RCS template — RCS is template-only'); return;
       }
       if (ch === 'whatsapp' && (coldCount > 0 || isCsv)) {
         // Evaluate against the WhatsApp draft, not whichever channel tab is open.
@@ -1515,20 +1515,20 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
             )}
 
 
-            {/* ── RCS (Telinfy) template selection + variable mapping ── */}
+            {/* ── RCS template selection + variable mapping ── */}
             {channel === 'rcs' && (
               <div className="rounded-2xl border-2 border-violet-500/25 bg-violet-500/5 p-3 space-y-3">
                 <div className="flex items-center gap-2">
                   <Radio className="h-4 w-4 text-violet-600" />
-                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS (Telinfy) — template required</Label>
+                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS — approved template required</Label>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Telinfy RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.
+                  RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.
                   Recipients on non-RCS devices automatically fall back to SMS.
                 </p>
                 {rcsTemplates.length === 0 ? (
                   <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
-                    No RCS templates synced yet. Go to <strong>Settings → RCS Hub → Templates</strong> to sync from Telinfy.
+                    No RCS templates synced yet. Go to <strong>Settings → RCS Hub → Templates</strong> to sync them.
                   </div>
                 ) : (
                   <>
