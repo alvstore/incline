@@ -15,7 +15,6 @@ import type { ClassSession, ClassShift } from '@/types/classEngine';
 
 interface Props {
   branchId: string;
-  canManage: boolean;
   onOpenRoster?: (classId: string) => void;
 }
 
@@ -31,7 +30,7 @@ function istMidnightISO(key: string): string {
  * Master calendar — a 7-day board of every generated session. Staff click a
  * session to swap the trainer, move the time, or cancel just that slot.
  */
-export function MasterClassCalendar({ branchId, canManage, onOpenRoster }: Props) {
+export function MasterClassCalendar({ branchId, onOpenRoster }: Props) {
   const todayKey = useMemo(() => istDateKey(new Date()), []);
   const [weekStart, setWeekStart] = useState(todayKey);
   const [includeCancelled, setIncludeCancelled] = useState(false);
@@ -193,7 +192,6 @@ export function MasterClassCalendar({ branchId, canManage, onOpenRoster }: Props
         branchId={branchId}
         onOpenRoster={onOpenRoster}
       />
-      {!canManage && active && null}
     </div>
   );
 }
