@@ -1349,31 +1349,42 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               ))}
             </div>
 
-            {(campaignType === 'promotion' || campaignType === 'lead_reengagement') && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <span className="text-lg leading-none mt-0.5">⚠️</span>
-                  <div className="text-[12px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                    <p className="font-semibold mb-1">About WhatsApp Marketing pacing (error 131049)</p>
-                    <p>
-                      Meta throttles MARKETING templates per recipient based on their engagement history — this happens on <b>every</b> WhatsApp API (Cloud, On-Prem, Marketing Messages Lite). Swapping APIs does not bypass it.
-                      To actually reach paced users, enable the automatic fallback below.
-                    </p>
-                  </div>
+            <div className="rounded-2xl bg-card ring-1 ring-border shadow-sm p-4 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <span className="rounded-full bg-primary/10 text-primary p-2 shrink-0">
+                  <Radio className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Omni delivery route</p>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed">
+                    If WhatsApp is blocked for a recipient (Meta pacing 131049 / 130472), the same message is re-sent over
+                    <b> RCS</b>, and RCS automatically drops to <b>SMS</b> on non-RCS handsets. Email, when selected, always goes out in parallel.
+                  </p>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="checkbox"
-                    checked={fallbackOnPacing}
-                    onChange={(e) => setFallbackOnPacing(e.target.checked)}
-                    className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                  />
-                  <span className="text-amber-900 dark:text-amber-200">
-                    Auto-fallback to <b>RCS / SMS</b> when Meta paces a recipient (131049 / 130472)
-                  </span>
-                </label>
               </div>
-            )}
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                {['WhatsApp', 'RCS', 'SMS'].map((c, i) => (
+                  <span key={c} className="flex items-center gap-1.5">
+                    {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${fallbackOnPacing || i === 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground line-through'}`}>{c}</span>
+                  </span>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={fallbackOnPacing}
+                  onChange={(e) => setFallbackOnPacing(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                />
+                <span className="text-foreground">Keep the omni route on for this campaign</span>
+              </label>
+              {(campaignType === 'promotion' || campaignType === 'lead_reengagement') && (
+                <p className="text-[11px] text-warning-foreground bg-warning/10 rounded-lg p-2">
+                  Marketing templates are paced by Meta per recipient on every WhatsApp API — the omni route is the only reliable way to reach paced members.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
