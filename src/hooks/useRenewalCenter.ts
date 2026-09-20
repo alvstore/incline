@@ -88,7 +88,28 @@ export function useRenewalAction() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['renewal-center'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-funnel'] }),
+        queryClient.invalidateQueries({ queryKey: ['renewal-queue-counts'] }),
       ]);
+    },
+  });
+}
+
+export type RenewalQueueCounts = Partial<Record<RenewalQueue, number>>;
+
+/**
+ * Per-tab case counts so the queue tabs can show where the work actually is.
+ * Same branch/capability scoping as the queue itself.
+ */
+export function useRenewalQueueCounts(branchId: string | undefined) {
+  return useQuery({
+    queryKey: ['renewal-queue-counts', branchId ?? 'all'],
+    queryFn: async (): Promise<RenewalQueueCounts> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc('renewal_queue_counts', {
+        _branch_id: branchId ?? undefined,
+      });
+      if (error) throw error;
+      return (data ?? {}) as RenewalQueueCounts;
     },
   });
 }
@@ -103,6 +124,7 @@ export interface RenewalVoiceCall {
   call_summary: string | null;
   next_step_agreed: string | null;
   callback_datetime: string | null;
+  error_message: string | null;
 }
 
 /** Voice AI calls already placed for one renewal case (sanitized, no transcript). */
@@ -156,6 +178,7 @@ export function useRenewalVoiceCall() {
         queryClient.invalidateQueries({ queryKey: ['renewal-funnel'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-case-voice-calls'] }),
         queryClient.invalidateQueries({ queryKey: ['voice-calls'] }),
+        queryClient.invalidateQueries({ queryKey: ['renewal-queue-counts'] }),
       ]);
     },
   });

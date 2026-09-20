@@ -17031,6 +17031,7 @@ export type Database = {
           disposition: string
           duration_seconds: number
           ended_at: string
+          error_message: string
           next_step_agreed: string
           started_at: string
           status: string
@@ -17131,6 +17132,7 @@ export type Database = {
         Args: { _membership_id: string }
         Returns: string
       }
+      renewal_queue_counts: { Args: { _branch_id?: string }; Returns: Json }
       request_booking_reschedule: {
         Args: {
           p_blame?: string
