@@ -1933,6 +1933,7 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
   // The lead-funnel guards (name ladder, pricing/tour funnel, lead capture)
   // deliberately do NOT run here.
   replyText = correctSocialHandles(replyText);
+  replyText = correctAppStoreLinks(replyText);
   replyText = ensureMapsLink(replyText);
   replyText = blockConsecutiveDuplicate(replyText, history);
 
