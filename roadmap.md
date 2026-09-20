@@ -52,3 +52,14 @@ Status: survey started (file sizes + policy reference map collected). No code ch
 - [x] Link renewal cases to Voice AI outcomes while keeping the engine disabled.
 - [x] Replace the legacy Follow-Up renewals action with the Renewal Center.
 - [x] Verify RLS, app build, report deliveries, completed sessions, and no duplicate credit usage.
+
+# Multi-Slot Recurring Class Engine (Parent-Child) — 2026-09-20
+- [ ] DB: class_types (parent) + class_templates (rules) + session columns on `classes` (template_id, session_date, shift_type, booked_count, cancel meta), unique (template_id, session_date)
+- [ ] DB: generate_class_sessions() (30-day horizon, ON CONFLICT DO NOTHING) + template/type propagation triggers + booked_count trigger
+- [ ] DB: cancel_class_session / override_class_session / reinstate_class_session / delete_class_template RPCs; harden book_class + cancel_class_booking (dup-key upsert, authz, benefit release)
+- [ ] Automation Brain rule `generate_class_sessions` (daily 03:00 IST)
+- [ ] Edge fn `notify-class-session` → dispatch-communication (session cancelled / trainer or time changed) on enabled channels
+- [ ] Admin: Class Manager (types + AM/PM rules) + Master Calendar with per-session override/cancel — src/pages/admin/ClassManager.tsx
+- [ ] Member: /classes timetable grouped Morning → Afternoon → Evening with Slots left / Class Full — src/pages/public/Classes.tsx
+- [ ] Announce flow: class type / session → Campaign wizard prefill on enabled channels
+- [ ] Verify: build, Playwright admin rule → generated sessions → member booking → cancel notice
