@@ -14,7 +14,7 @@ import {
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PRIORITY_DOT } from './taskTokens';
+import { PRIORITY_DOT, STATUS_DOT } from './taskTokens';
 
 interface Props {
   tasks: any[];
@@ -87,16 +87,29 @@ export function TaskCalendarView({ tasks, onOpen }: Props) {
                 {format(d, 'd')}
               </div>
               <div className="space-y-1">
-                {list.slice(0, 3).map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => onOpen(t)}
-                    className="w-full flex items-center gap-1 rounded bg-card px-1.5 py-1 text-left text-[10px] font-medium text-foreground ring-1 ring-border hover:ring-primary/40 hover:bg-primary/10 transition-colors"
-                  >
-                    <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', PRIORITY_DOT[t.priority])} />
-                    <span className="truncate">{t.title}</span>
-                  </button>
-                ))}
+                {list.slice(0, 3).map((t) => {
+                  const closed = t.status === 'completed' || t.status === 'cancelled';
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => onOpen(t)}
+                      title={`${t.title} · ${String(t.status).replace('_', ' ')}`}
+                      className={cn(
+                        'w-full flex items-center gap-1 rounded bg-card px-1.5 py-1 text-left text-[10px] font-medium text-foreground ring-1 ring-border transition-colors',
+                        'hover:ring-primary/40 hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-ring',
+                        closed && 'opacity-60',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'h-1.5 w-1.5 rounded-full flex-shrink-0',
+                          closed ? STATUS_DOT[t.status] : PRIORITY_DOT[t.priority],
+                        )}
+                      />
+                      <span className={cn('truncate', closed && 'line-through text-muted-foreground')}>{t.title}</span>
+                    </button>
+                  );
+                })}
                 {list.length > 3 && (
                   <div className="text-[10px] text-muted-foreground px-1">+{list.length - 3} more</div>
                 )}
