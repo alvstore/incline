@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchTasks, updateTaskStatus, getTaskStats, assignTask, type TaskStatus } from '@/services/taskService';
 import { supabase } from '@/integrations/supabase/client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AddTaskDrawer } from '@/components/tasks/AddTaskDrawer';
 import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer';
@@ -16,7 +16,7 @@ import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskCalendarView } from '@/components/tasks/TaskCalendarView';
 import { TaskPrintSheet, PrintTasksButton } from '@/components/tasks/TaskPrintSheet';
 import { useLinkedMembers } from '@/hooks/useLinkedMembers';
-import { isPast, isToday } from 'date-fns';
+import { isTaskDueToday, isTaskOpen, isTaskOverdue } from '@/lib/tasks/taskStatus';
 
 export default function TasksPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
