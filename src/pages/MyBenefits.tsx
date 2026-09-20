@@ -111,6 +111,7 @@ export default function MyBenefits() {
   const queryClient = useQueryClient();
   const cancelBooking = useMutation({
     mutationFn: async (bookingId: string) => {
+      setCancellingId(bookingId);
       const { data, error } = await supabase.rpc('cancel_facility_slot', {
         p_booking_id: bookingId,
         p_reason: 'Cancelled by member',
@@ -128,6 +129,7 @@ export default function MyBenefits() {
       queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
     },
     onError: (e: any) => toast.error(e.message || 'Failed to cancel booking'),
+    onSettled: () => setCancellingId(null),
   });
 
   if (isLoading) {
