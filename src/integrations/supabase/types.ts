@@ -2547,6 +2547,179 @@ export type Database = {
           },
         ]
       }
+      class_templates: {
+        Row: {
+          branch_id: string
+          capacity: number
+          class_type_id: string
+          created_at: string
+          created_by: string | null
+          duration_minutes: number
+          external_trainer_name: string | null
+          generate_days_ahead: number
+          id: string
+          is_active: boolean
+          label: string | null
+          recurring_days: number[]
+          shift_type: Database["public"]["Enums"]["class_shift_type"]
+          start_time: string
+          trainer_id: string | null
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+          venue: string | null
+        }
+        Insert: {
+          branch_id: string
+          capacity?: number
+          class_type_id: string
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number
+          external_trainer_name?: string | null
+          generate_days_ahead?: number
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          recurring_days: number[]
+          shift_type?: Database["public"]["Enums"]["class_shift_type"]
+          start_time: string
+          trainer_id?: string | null
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+          venue?: string | null
+        }
+        Update: {
+          branch_id?: string
+          capacity?: number
+          class_type_id?: string
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number
+          external_trainer_name?: string | null
+          generate_days_ahead?: number
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          recurring_days?: number[]
+          shift_type?: Database["public"]["Enums"]["class_shift_type"]
+          start_time?: string
+          trainer_id?: string | null
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_templates_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_templates_class_type_id_fkey"
+            columns: ["class_type_id"]
+            isOneToOne: false
+            referencedRelation: "class_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_templates_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_templates_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_types: {
+        Row: {
+          benefit_type_id: string | null
+          branch_id: string
+          category: string
+          created_at: string
+          created_by: string | null
+          default_venue: string | null
+          description: string | null
+          gst_rate: number
+          id: string
+          image_url: string | null
+          is_active: boolean
+          is_gst_inclusive: boolean
+          is_paid: boolean
+          name: string
+          price: number
+          requires_benefit: boolean
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          benefit_type_id?: string | null
+          branch_id: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          default_venue?: string | null
+          description?: string | null
+          gst_rate?: number
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          is_gst_inclusive?: boolean
+          is_paid?: boolean
+          name: string
+          price?: number
+          requires_benefit?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          benefit_type_id?: string | null
+          branch_id?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          default_venue?: string | null
+          description?: string | null
+          gst_rate?: number
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          is_gst_inclusive?: boolean
+          is_paid?: boolean
+          name?: string
+          price?: number
+          requires_benefit?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_types_benefit_type_id_fkey"
+            columns: ["benefit_type_id"]
+            isOneToOne: false
+            referencedRelation: "benefit_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_types_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_waitlist: {
         Row: {
           added_at: string
@@ -2596,9 +2769,15 @@ export type Database = {
         Row: {
           banner_url: string | null
           benefit_type_id: string | null
+          booked_count: number
           branch_id: string
+          cancellation_notified_at: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           capacity: number
           class_type: string | null
+          class_type_id: string | null
           created_at: string
           description: string | null
           duration_minutes: number | null
@@ -2607,6 +2786,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_gst_inclusive: boolean
+          is_overridden: boolean
           is_paid: boolean
           is_recurring: boolean | null
           name: string
@@ -2614,6 +2794,9 @@ export type Database = {
           recurrence_rule: string | null
           requires_benefit: boolean
           scheduled_at: string
+          session_date: string | null
+          shift_type: Database["public"]["Enums"]["class_shift_type"] | null
+          template_id: string | null
           trainer_id: string | null
           updated_at: string
           venue: string | null
@@ -2621,9 +2804,15 @@ export type Database = {
         Insert: {
           banner_url?: string | null
           benefit_type_id?: string | null
+          booked_count?: number
           branch_id: string
+          cancellation_notified_at?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           capacity: number
           class_type?: string | null
+          class_type_id?: string | null
           created_at?: string
           description?: string | null
           duration_minutes?: number | null
@@ -2632,6 +2821,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_gst_inclusive?: boolean
+          is_overridden?: boolean
           is_paid?: boolean
           is_recurring?: boolean | null
           name: string
@@ -2639,6 +2829,9 @@ export type Database = {
           recurrence_rule?: string | null
           requires_benefit?: boolean
           scheduled_at: string
+          session_date?: string | null
+          shift_type?: Database["public"]["Enums"]["class_shift_type"] | null
+          template_id?: string | null
           trainer_id?: string | null
           updated_at?: string
           venue?: string | null
@@ -2646,9 +2839,15 @@ export type Database = {
         Update: {
           banner_url?: string | null
           benefit_type_id?: string | null
+          booked_count?: number
           branch_id?: string
+          cancellation_notified_at?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           capacity?: number
           class_type?: string | null
+          class_type_id?: string | null
           created_at?: string
           description?: string | null
           duration_minutes?: number | null
@@ -2657,6 +2856,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_gst_inclusive?: boolean
+          is_overridden?: boolean
           is_paid?: boolean
           is_recurring?: boolean | null
           name?: string
@@ -2664,6 +2864,9 @@ export type Database = {
           recurrence_rule?: string | null
           requires_benefit?: boolean
           scheduled_at?: string
+          session_date?: string | null
+          shift_type?: Database["public"]["Enums"]["class_shift_type"] | null
+          template_id?: string | null
           trainer_id?: string | null
           updated_at?: string
           venue?: string | null
@@ -2681,6 +2884,20 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classes_class_type_id_fkey"
+            columns: ["class_type_id"]
+            isOneToOne: false
+            referencedRelation: "class_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "class_templates"
             referencedColumns: ["id"]
           },
           {
@@ -15090,9 +15307,17 @@ export type Database = {
         }
         Returns: Json
       }
+      _refresh_class_booked_count: {
+        Args: { p_class_id: string }
+        Returns: undefined
+      }
       _release_benefit_for_booking: {
         Args: { p_booking_id: string }
         Returns: Json
+      }
+      _release_class_benefit_usage: {
+        Args: { p_booking_id: string }
+        Returns: number
       }
       _resolve_audit_target_name: {
         Args: { p_row: Json; p_table: string }
@@ -15391,6 +15616,10 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_manage_class_session: {
+        Args: { p_branch_id: string }
+        Returns: boolean
+      }
       can_manage_member_lifecycle: {
         Args: { _member_id: string; _user_id: string }
         Returns: boolean
@@ -15436,6 +15665,10 @@ export type Database = {
       }
       cancel_class_booking: {
         Args: { _booking_id: string; _reason?: string }
+        Returns: Json
+      }
+      cancel_class_session: {
+        Args: { p_class_id: string; p_reason?: string }
         Returns: Json
       }
       cancel_facility_slot: {
@@ -15539,6 +15772,10 @@ export type Database = {
           p_reward_id: string
         }
         Returns: Json
+      }
+      class_shift_for_time: {
+        Args: { p_time: string }
+        Returns: Database["public"]["Enums"]["class_shift_type"]
       }
       cleanup_old_notifications: { Args: never; Returns: Json }
       clear_do_not_contact: {
@@ -15777,6 +16014,10 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_class_template: {
+        Args: { p_reason?: string; p_template_id: string }
+        Returns: Json
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -15870,6 +16111,10 @@ export type Database = {
           p_membership_id: string
           p_reason: string
         }
+        Returns: Json
+      }
+      generate_class_sessions: {
+        Args: { p_days_ahead?: number; p_template_id?: string }
         Returns: Json
       }
       generate_employee_code: { Args: { p_branch_id: string }; Returns: string }
@@ -16596,6 +16841,19 @@ export type Database = {
         Returns: Json
       }
       online_convenience_pct: { Args: { _branch_id: string }; Returns: number }
+      override_class_session: {
+        Args: {
+          p_capacity?: number
+          p_class_id: string
+          p_clear_trainer?: boolean
+          p_duration_minutes?: number
+          p_external_trainer_name?: string
+          p_start_time?: string
+          p_trainer_id?: string
+          p_venue?: string
+        }
+        Returns: Json
+      }
       payroll_adjust_item: {
         Args: { p_item_id: string; p_patch: Json; p_reason: string }
         Returns: undefined
@@ -16979,6 +17237,7 @@ export type Database = {
         Returns: Json
       }
       refresh_campaign_stats: { Args: { p_campaign_id: string }; Returns: Json }
+      reinstate_class_session: { Args: { p_class_id: string }; Returns: Json }
       release_coupon: {
         Args: { p_reason?: string; p_redemption_id: string }
         Returns: Json
@@ -17969,6 +18228,7 @@ export type Database = {
         | "cancelled"
         | "no_show"
         | "waitlisted"
+      class_shift_type: "morning" | "afternoon" | "evening"
       contract_status: "draft" | "active" | "completed" | "terminated"
       equipment_status:
         | "operational"
@@ -18273,6 +18533,7 @@ export const Constants = {
         "no_show",
         "waitlisted",
       ],
+      class_shift_type: ["morning", "afternoon", "evening"],
       contract_status: ["draft", "active", "completed", "terminated"],
       equipment_status: [
         "operational",
