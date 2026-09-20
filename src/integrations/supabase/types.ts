@@ -17031,6 +17031,7 @@ export type Database = {
           disposition: string
           duration_seconds: number
           ended_at: string
+          error_message: string
           next_step_agreed: string
           started_at: string
           status: string
