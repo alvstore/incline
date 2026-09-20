@@ -1351,13 +1351,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                   key={t.id}
                   type="button"
                   onClick={() => setCampaignType(t.id)}
-                  className={`text-left rounded-2xl p-4 border-2 transition-all ${
+                  className={`text-left rounded-2xl p-4 border-2 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary ${
                     campaignType === t.id
-                      ? `border-${t.color}-500 bg-${t.color}-50 dark:bg-${t.color}-500/10 shadow-md`
+                      ? 'border-primary bg-primary/10 shadow-md'
                       : 'border-border bg-card hover:border-muted-foreground/40'
                   }`}
                 >
-                  <div className="text-2xl mb-1">{t.emoji}</div>
+                  <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full ${campaignType === t.id ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                    <t.Icon className="h-5 w-5" />
+                  </div>
                   <p className="font-semibold text-sm text-foreground">{t.label}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                 </button>
