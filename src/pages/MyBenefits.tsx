@@ -33,6 +33,7 @@ export default function MyBenefits() {
   const { profile } = useAuth();
   const { member, activeMembership, isLoading: memberLoading } = useMemberData();
   const [addOnOpen, setAddOnOpen] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useRealtimeInvalidate({
     channel: 'my-benefits-credits',
