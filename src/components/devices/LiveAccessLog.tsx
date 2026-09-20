@@ -55,7 +55,7 @@ type ReconcileResult = {
 type FilterKey = "inside" | "all" | "members" | "team" | "denied" | "unmatched";
 
 const kindBadge: Record<PersonSession["kind"], { label: string; className: string }> = {
-  member: { label: "Member", className: "bg-indigo-100 text-indigo-700" },
+  member: { label: "Member", className: "bg-primary/10 text-primary" },
   trainer: { label: "Trainer", className: "bg-violet-100 text-violet-700" },
   staff: { label: "Staff", className: "bg-sky-100 text-sky-700" },
   denied: { label: "Denied", className: "bg-red-100 text-red-700" },
@@ -338,7 +338,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                   ? "bg-emerald-100 text-emerald-700"
                   : rtStatus === "error"
                     ? "bg-red-100 text-red-700"
-                    : "bg-slate-100 text-slate-600",
+                    : "bg-muted text-muted-foreground",
               )}
               title={`Realtime: ${rtStatus}`}
             >
@@ -353,7 +353,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                mipsError ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700",
+                mipsError ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary",
               )}
               title={
                 mipsError
@@ -523,7 +523,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                                 "inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-medium",
                                 punch.result === "member_denied" || punch.result === "stranger" || punch.result === "not_found"
                                   ? "bg-red-50 text-red-700"
-                                  : "bg-background text-slate-600 dark:text-foreground",
+                                  : "bg-background text-muted-foreground dark:text-foreground",
                               )}
                             >
                               <Clock className="h-2.5 w-2.5" />

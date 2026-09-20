@@ -30,7 +30,7 @@ const EVENT_META: Record<
   },
   offline: { label: "Went offline", badge: "bg-amber-100 text-amber-700", icon: PlugZap },
   recovered: { label: "Back online", badge: "bg-emerald-100 text-emerald-700", icon: ShieldCheck },
-  watchdog_error: { label: "Watchdog error", badge: "bg-slate-100 text-slate-600", icon: Activity },
+  watchdog_error: { label: "Watchdog error", badge: "bg-muted text-muted-foreground", icon: Activity },
 };
 
 const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
@@ -117,7 +117,7 @@ const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
         ) : (events || []).length === 0 ? (
           <div className="rounded-xl bg-emerald-50/60 p-6 text-center">
             <ShieldCheck className="mx-auto mb-2 h-6 w-6 text-emerald-600" />
-            <p className="text-sm font-semibold text-slate-900">No gate drops recorded</p>
+            <p className="text-sm font-semibold text-foreground">No gate drops recorded</p>
             <p className="text-xs text-muted-foreground">
               Every offline moment and reboot will appear here the moment it happens.
             </p>
@@ -129,14 +129,14 @@ const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
             return (
               <div
                 key={e.id}
-                className="flex items-start gap-3 rounded-xl bg-slate-50 p-3 transition-colors duration-150 hover:bg-slate-100"
+                className="flex items-start gap-3 rounded-xl bg-muted/50 p-3 transition-colors duration-150 hover:bg-muted"
               >
-                <span className="mt-0.5 rounded-full bg-white p-1.5 text-slate-600 shadow-sm">
+                <span className="mt-0.5 rounded-full bg-card p-1.5 text-muted-foreground shadow-sm">
                   <Icon className="h-3.5 w-3.5" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-semibold text-slate-900">
+                    <span className="truncate text-sm font-semibold text-foreground">
                       {e.device_name || e.serial_number || "Gate"}
                     </span>
                     <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.badge}`}>

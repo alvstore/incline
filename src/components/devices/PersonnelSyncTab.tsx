@@ -426,7 +426,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     return (
       <div
         key={`${person.type}-${person.id}`}
-        className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-muted/40"
+        className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-150 hover:bg-muted/50 dark:hover:bg-muted/40"
       >
         <Avatar className="h-9 w-9 shrink-0">
           {person.avatarUrl ? <AvatarImage src={person.avatarUrl} alt={person.name} /> : null}
@@ -457,7 +457,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             <span className="text-primary">→ {strippedCode}</span>
             {person.mipsPersonId && <span className="text-primary/60">MIPS#{person.mipsPersonId}</span>}
             {person.alsoKnownAs && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-sans text-[10px] font-medium text-slate-600">
+              <span className="rounded-full bg-muted px-2 py-0.5 font-sans text-[10px] font-medium text-muted-foreground">
                 also on file as {person.alsoKnownAs}
               </span>
             )}
@@ -473,11 +473,11 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           ) : isFailed ? (
             <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Failed</span>
           ) : (
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">Not on server</span>
+            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Not on server</span>
           )}
 
           {!person.hasPhoto && (
-            <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-muted dark:text-muted-foreground">
+            <span className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground dark:bg-muted dark:text-muted-foreground">
               <Image className="h-3 w-3" /> No photo
             </span>
           )}

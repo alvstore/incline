@@ -42,20 +42,20 @@ const PAGE_SIZE = 25;
 const ALL = '__all__';
 
 const SKIP_REASON_LOOK: Record<string, { label: string; className: string }> = {
-  no_phone: { label: 'No phone number', className: 'bg-slate-100 text-slate-600' },
+  no_phone: { label: 'No phone number', className: 'bg-muted text-muted-foreground' },
   do_not_contact: { label: 'Do not contact', className: 'bg-red-100 text-red-700' },
   member_paused: { label: 'Member paused', className: 'bg-blue-100 text-blue-700' },
-  no_visit_history: { label: 'Never visited', className: 'bg-slate-100 text-slate-600' },
+  no_visit_history: { label: 'Never visited', className: 'bg-muted text-muted-foreground' },
   recently_contacted: { label: 'Recently contacted', className: 'bg-amber-100 text-amber-700' },
   cooldown: { label: 'In cooldown', className: 'bg-amber-100 text-amber-700' },
   recent_visit: { label: 'Visited recently', className: 'bg-emerald-100 text-emerald-700' },
 };
 
 function skipLook(reason?: string | null) {
-  if (!reason) return { label: '—', className: 'bg-slate-100 text-slate-600' };
+  if (!reason) return { label: '—', className: 'bg-muted text-muted-foreground' };
   return SKIP_REASON_LOOK[reason] ?? {
     label: reason.replace(/_/g, ' '),
-    className: 'bg-slate-100 text-slate-600',
+    className: 'bg-muted text-muted-foreground',
   };
 }
 
@@ -85,7 +85,7 @@ function Kpi({ label, value, sub, icon: Icon, tone = 'indigo' }: {
     emerald: 'bg-emerald-50 text-emerald-600',
     amber: 'bg-amber-50 text-amber-600',
     red: 'bg-red-50 text-red-600',
-    slate: 'bg-slate-100 text-slate-600',
+    slate: 'bg-muted text-muted-foreground',
   };
   return (
     <Card className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">

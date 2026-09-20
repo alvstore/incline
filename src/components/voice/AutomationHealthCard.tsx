@@ -34,7 +34,7 @@ export function AutomationHealthCard() {
   const failing = run?.status === 'failed' || (run?.error_count ?? 0) > 0;
 
   const state = paused
-    ? { label: 'Paused', className: 'bg-slate-100 text-slate-600', Icon: PauseCircle }
+    ? { label: 'Paused', className: 'bg-muted text-muted-foreground', Icon: PauseCircle }
     : failing
       ? { label: 'Needs attention', className: 'bg-red-100 text-red-700', Icon: AlertTriangle }
       : { label: 'Running', className: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle2 };
@@ -84,7 +84,7 @@ export function AutomationHealthCard() {
             </div>
 
             {reason && (
-              <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                 Nothing was called on the last check: {reason}.
               </p>
             )}
@@ -92,7 +92,7 @@ export function AutomationHealthCard() {
               <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">{run.last_error}</p>
             )}
             {paused && (
-              <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                 Automatic calling is switched off. Turn it back on from Settings to resume.
               </p>
             )}

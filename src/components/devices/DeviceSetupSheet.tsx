@@ -204,14 +204,14 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
             )}
             <UrlField
               step={2}
-              stepClass="bg-indigo-100 text-indigo-700"
+              stepClass="bg-primary/10 text-primary"
               title="Register Person Data Upload URL"
               hint="Captured registration photos from the device"
               url={recognitionUrl}
             />
             <UrlField
               step={3}
-              stepClass="bg-slate-100 text-slate-600"
+              stepClass="bg-muted text-muted-foreground"
               title="Device Heartbeat Upload URL"
               hint="Keep the device default — not required for attendance"
               url="http://212.38.94.228:9000/api/callback/heartbeat"
