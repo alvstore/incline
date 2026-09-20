@@ -17,11 +17,23 @@ import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
 import { CombinedCreditsSummary } from '@/components/benefits/CombinedCreditsSummary';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function MyBenefits() {
   const { profile } = useAuth();
   const { member, activeMembership, isLoading: memberLoading } = useMemberData();
   const [addOnOpen, setAddOnOpen] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useRealtimeInvalidate({
     channel: 'my-benefits-credits',
@@ -99,6 +111,7 @@ export default function MyBenefits() {
   const queryClient = useQueryClient();
   const cancelBooking = useMutation({
     mutationFn: async (bookingId: string) => {
+      setCancellingId(bookingId);
       const { data, error } = await supabase.rpc('cancel_facility_slot', {
         p_booking_id: bookingId,
         p_reason: 'Cancelled by member',
@@ -116,6 +129,7 @@ export default function MyBenefits() {
       queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
     },
     onError: (e: any) => toast.error(e.message || 'Failed to cancel booking'),
+    onSettled: () => setCancellingId(null),
   });
 
   if (isLoading) {
@@ -303,21 +317,45 @@ export default function MyBenefits() {
                         <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>
                           {booking.status}
                         </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label="Cancel booking"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-full"
-                          disabled={cancelBooking.isPending}
-                          onClick={() => cancelBooking.mutate(booking.id)}
-                        >
-                          {cancelBooking.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <XCircle className="h-4 w-4 mr-1" />
-                          )}
-                          Cancel
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label="Cancel booking"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-full cursor-pointer"
+                              disabled={cancellingId === booking.id}
+                            >
+                              {cancellingId === booking.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              ) : (
+                                <XCircle className="h-4 w-4 mr-1" />
+                              )}
+                              Cancel
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Cancel this session?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {resolveBenefitMeta(booking.slot?.benefit_type).label}
+                                {booking.slot?.slot_date
+                                  ? ` on ${format(new Date(booking.slot.slot_date), 'EEE, dd MMM')} at ${booking.slot?.start_time}`
+                                  : ''}
+                                . Your session goes back to your balance, but the slot may be taken by someone else.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Keep booking</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={() => cancelBooking.mutate(booking.id)}
+                              >
+                                Yes, cancel
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   </CardContent>

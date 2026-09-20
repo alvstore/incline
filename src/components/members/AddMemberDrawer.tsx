@@ -123,7 +123,19 @@ export function AddMemberDrawer({ open, onOpenChange, branchId }: AddMemberDrawe
         },
       });
 
-      if (fnError) throw fnError;
+      if (fnError) {
+        // Read the JSON body so staff see the real reason (weak password, duplicate, ...)
+        let message = fnError.message || 'Could not add this member';
+        const ctx: any = (fnError as any).context;
+        try {
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.message) message = body.message;
+            else if (body?.error) message = body.error;
+          }
+        } catch { /* keep transport message */ }
+        throw new Error(message);
+      }
       if (result.error) {
         if (result.code === 'email_exists') {
           throw new Error('A member with this email already exists');

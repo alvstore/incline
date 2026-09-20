@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
       // Create new auth user
       // Fixed default password for all new members — must_set_password forces a change on first login.
       // Must not be a breached/common password: the auth service rejects those (HIBP check).
-      const tempPassword = suppliedPassword || 'Incline@Fit2026'
+      const tempPassword = suppliedPassword || 'Incline#Udaipur@2026'
       createdTempPassword = tempPassword
 
       const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -184,6 +184,16 @@ Deno.serve(async (req) => {
 
       if (createError) {
         console.error('Auth create error:', createError)
+        const m = (createError.message || '').toLowerCase()
+        if (m.includes('weak') || m.includes('easy to guess') || m.includes('pwned')) {
+          return new Response(
+            JSON.stringify({
+              error: 'weak_password',
+              message: 'The login password was rejected as too easy to guess. Enter a stronger password for this member and try again.',
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
         throw createError
       }
 
