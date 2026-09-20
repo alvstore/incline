@@ -744,7 +744,7 @@ export default function ClassesPage() {
               Class Attendees
             </SheetTitle>
             <SheetDescription>
-              {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.name} — {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.scheduled_at && format(new Date(filteredClasses.find(c => c.id === rosterClassId)!.scheduled_at), 'PPP p')}
+              {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.name} — {rosterClassId && filteredClasses.find(c => c.id === rosterClassId)?.scheduled_at && formatIST(filteredClasses.find(c => c.id === rosterClassId)!.scheduled_at, { dateStyle: 'long', timeStyle: 'short' })}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-3">
