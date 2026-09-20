@@ -31,12 +31,18 @@ import { LivePill } from "@/components/ui/live-pill";
 
 type TimeFilter = "upcoming" | "past" | "all";
 
+type PageTab = "schedule" | "calendar" | "rules" | "attendance";
+const PAGE_TABS: PageTab[] = ["schedule", "calendar", "rules", "attendance"];
+
 export default function ClassesPage() {
-  const { profile } = useAuth();
+  const { profile, roles } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { effectiveBranchId: branchId = '' } = useBranchContext();
+  const canManageRules = can.manageClassSchedule(roles);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isTypeCreateOpen, setIsTypeCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [classToEdit, setClassToEdit] = useState<ClassWithDetails | null>(null);
   const [rosterClassId, setRosterClassId] = useState<string | null>(null);
@@ -52,10 +58,18 @@ export default function ClassesPage() {
   const markAttendance = useMarkAttendance();
   const cancelBooking = useCancelBooking();
 
+  const tabParam = searchParams.get("tab");
+  const activeTab: PageTab = PAGE_TABS.includes(tabParam as PageTab) ? (tabParam as PageTab) : "schedule";
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === "schedule") next.delete("tab"); else next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   useRealtimeInvalidate({
     channel: 'page-classes',
-    tables: ['classes', 'class_bookings', 'class_waitlist'],
-    invalidateKeys: [['classes'], ['class-bookings'], ['class-waitlist']],
+    tables: ['classes', 'class_bookings', 'class_waitlist', 'class_types', 'class_templates'],
+    invalidateKeys: [['classes'], ['class-bookings'], ['class-waitlist'], ['class-sessions'], ['class-types']],
   });
 
   const handleMarkAttendance = async (bookingId: string, attended: boolean) => {
