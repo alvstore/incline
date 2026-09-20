@@ -28,6 +28,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { ClassWithDetails } from "@/services/classService";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { LivePill } from "@/components/ui/live-pill";
+import { formatIST, formatISTDate, formatISTTime } from "@/lib/utils/datetime";
 
 type TimeFilter = "upcoming" | "past" | "all";
 
