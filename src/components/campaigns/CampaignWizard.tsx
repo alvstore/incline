@@ -1960,61 +1960,6 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               );
             })()}
 
-            {/* ─── Telinfy Bulk CSV Export (emergency fallback) ─────────────── */}
-            {(channel === 'rcs' || channel === 'whatsapp' || channel === 'sms') && (
-              <div className="rounded-2xl border border-dashed p-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold">Emergency bulk send</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Download this audience in Telinfy's CSV format (CountryCode, MSISDN, per-variable columns) for manual upload if the CRM pipeline is unavailable.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full h-8 px-3 text-xs gap-1.5 shrink-0"
-                  onClick={async () => {
-                    try {
-                      const { resolveCampaignAudience } = await import('@/services/campaignService');
-                      const recips = await resolveCampaignAudience(branchId, filter);
-                      const keys = channel === 'rcs' ? rcsVarKeys : ['full_name'];
-                      const { buildTelinfyCsv } = await import('./TelinfyBulkExport');
-                      const csv = buildTelinfyCsv({
-                        campaignName: name || 'campaign',
-                        recipients: recips as any,
-                        variableKeys: keys.length ? keys : ['full_name'],
-                        resolveVar: channel === 'rcs' && selectedRcsTemplate
-                          ? (r: any, k: string) => {
-                              const mapped = rcsVarMap[k] || '';
-                              const first = (r.full_name || '').trim().split(/\s+/)[0] || 'there';
-                              const full = r.full_name || 'there';
-                              return String(mapped)
-                                .replace(/\{\{\s*first_name\s*\}\}/gi, first)
-                                .replace(/\{\{\s*full_name\s*\}\}/gi, full)
-                                .replace(/\{\{\s*member_name\s*\}\}/gi, full)
-                                .replace(/\{\{\s*email\s*\}\}/gi, r.email || '');
-                            }
-                          : undefined,
-                      });
-                      const safe = (name || 'campaign').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
-                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `telinfy_${safe}_${new Date().toISOString().slice(0, 10)}.csv`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      toast.success(`Downloaded ${(recips as any[]).filter((r: any) => r.phone).length} rows`);
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Export failed');
-                    }
-                  }}
-                >
-                  <FileText className="h-3.5 w-3.5" /> Telinfy CSV
-                </Button>
-              </div>
-            )}
 
 
 
