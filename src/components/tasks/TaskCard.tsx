@@ -25,15 +25,17 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
     transition,
   };
 
+  const isClosed = task.status === 'completed' || task.status === 'cancelled';
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
         'group relative rounded-xl bg-card p-3.5 shadow-sm ring-1 ring-border',
-        'transition-all duration-200 hover:shadow-md hover:shadow-sm hover:ring-primary/30',
+        'transition-all duration-200 hover:shadow-md hover:ring-primary/30',
         isDragging && 'opacity-50 ring-primary shadow-xl',
-        task.status === 'completed' && 'opacity-75',
+        isClosed && 'opacity-70',
       )}
     >
       {draggable && (
