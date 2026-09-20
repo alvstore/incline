@@ -12,26 +12,37 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Plus, Users, Clock, CalendarDays, Check, X, UserX, Edit, Phone, User, Search, Filter, Dumbbell, Calendar, ClipboardList, Megaphone, MapPin } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Plus, Users, Clock, CalendarDays, Check, X, UserX, Edit, Phone, User, Search, Filter, Dumbbell, Calendar, ClipboardList, Megaphone, MapPin, Layers, CalendarRange, ChevronDown } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClasses, useClassBookings, useMarkAttendance, useCancelBooking } from "@/hooks/useClasses";
 import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useAuth } from "@/contexts/AuthContext";
+import { can } from "@/lib/auth/permissions";
 import { AddClassDrawer } from "@/components/classes/AddClassDrawer";
 import { EditClassDrawer } from "@/components/classes/EditClassDrawer";
+import { ClassTypesPanel } from "@/components/classes/ClassTypesPanel";
+import { MasterClassCalendar } from "@/components/classes/MasterClassCalendar";
+import { ClassTypeDrawer } from "@/components/classes/ClassTypeDrawer";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ClassWithDetails } from "@/services/classService";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { LivePill } from "@/components/ui/live-pill";
 
 type TimeFilter = "upcoming" | "past" | "all";
 
+type PageTab = "schedule" | "calendar" | "rules" | "attendance";
+const PAGE_TABS: PageTab[] = ["schedule", "calendar", "rules", "attendance"];
+
 export default function ClassesPage() {
-  const { profile } = useAuth();
+  const { profile, roles } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { effectiveBranchId: branchId = '' } = useBranchContext();
+  const canManageRules = can.manageClassSchedule(roles);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isTypeCreateOpen, setIsTypeCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [classToEdit, setClassToEdit] = useState<ClassWithDetails | null>(null);
   const [rosterClassId, setRosterClassId] = useState<string | null>(null);
@@ -47,10 +58,18 @@ export default function ClassesPage() {
   const markAttendance = useMarkAttendance();
   const cancelBooking = useCancelBooking();
 
+  const tabParam = searchParams.get("tab");
+  const activeTab: PageTab = PAGE_TABS.includes(tabParam as PageTab) ? (tabParam as PageTab) : "schedule";
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === "schedule") next.delete("tab"); else next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   useRealtimeInvalidate({
     channel: 'page-classes',
-    tables: ['classes', 'class_bookings', 'class_waitlist'],
-    invalidateKeys: [['classes'], ['class-bookings'], ['class-waitlist']],
+    tables: ['classes', 'class_bookings', 'class_waitlist', 'class_types', 'class_templates'],
+    invalidateKeys: [['classes'], ['class-bookings'], ['class-waitlist'], ['class-sessions'], ['class-types']],
   });
 
   const handleMarkAttendance = async (bookingId: string, attended: boolean) => {
@@ -213,30 +232,60 @@ export default function ClassesPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
               <LivePill />
             </div>
-            <p className="text-muted-foreground">Manage group classes and bookings</p>
+            <p className="text-muted-foreground">Recurring classes, the master calendar and attendance</p>
           </div>
-          <div className="flex items-center gap-4">
-            {/* Branch selector moved to global header */}
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Class
-            </Button>
+          <div className="flex items-center gap-2">
+            {canManageRules ? (
+              <>
+                <Button className="cursor-pointer" onClick={() => setIsTypeCreateOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New class
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="cursor-pointer" aria-label="More ways to add classes">
+                      More <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setIsCreateOpen(true)}>
+                      <CalendarDays className="mr-2 h-4 w-4" /> One-off session
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setActiveTab("rules")}>
+                      <Layers className="mr-2 h-4 w-4" /> Manage schedule rules
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Button className="cursor-pointer" onClick={() => setIsCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                One-off session
+              </Button>
+            )}
           </div>
         </div>
 
         <AddClassDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={branchId} />
+        <ClassTypeDrawer
+          open={isTypeCreateOpen}
+          onOpenChange={setIsTypeCreateOpen}
+          branchId={branchId}
+          onCreated={() => setActiveTab("rules")}
+        />
         <EditClassDrawer 
           open={isEditOpen} 
           onOpenChange={setIsEditOpen} 
           classData={classToEdit}
           branchId={branchId}
         />
+
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
@@ -286,7 +335,8 @@ export default function ClassesPage() {
           </Card>
         </div>
 
-        {/* Time Filter Tabs + Filters */}
+        {/* Time Filter Tabs + Filters (session list only) */}
+        {activeTab === "schedule" && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4">
@@ -360,12 +410,23 @@ export default function ClassesPage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        <Tabs defaultValue="schedule" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="schedule">Schedule ({filteredClasses.length})</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="h-auto flex-wrap">
+            <TabsTrigger value="schedule" className="cursor-pointer"><CalendarDays className="mr-1.5 h-4 w-4" />Sessions ({filteredClasses.length})</TabsTrigger>
+            <TabsTrigger value="calendar" className="cursor-pointer"><CalendarRange className="mr-1.5 h-4 w-4" />Master calendar</TabsTrigger>
+            <TabsTrigger value="rules" className="cursor-pointer"><Layers className="mr-1.5 h-4 w-4" />Classes & rules</TabsTrigger>
+            <TabsTrigger value="attendance" className="cursor-pointer"><ClipboardList className="mr-1.5 h-4 w-4" />Attendance</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="calendar" className="space-y-4">
+            <MasterClassCalendar branchId={branchId} onOpenRoster={(id) => setRosterClassId(id)} />
+          </TabsContent>
+
+          <TabsContent value="rules" className="space-y-4">
+            <ClassTypesPanel branchId={branchId} canManage={canManageRules} />
+          </TabsContent>
 
           <TabsContent value="schedule" className="space-y-4">
             {isLoading ? (

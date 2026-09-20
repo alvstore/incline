@@ -99,14 +99,11 @@ export function ClassTypeDrawer({ open, onOpenChange, branchId, classType, onCre
     setErrors({});
   }, [open, classType]);
 
-  const classBenefitTypes = useMemo(
-    () => benefitTypes.filter((bt) => {
-      const code = String(bt.code ?? '').toLowerCase();
-      return code.includes('class') || code === 'group_classes' || code.includes('yoga') || code.includes('crossfit') || !bt.is_bookable;
-    }),
-    [benefitTypes],
-  );
-  const benefitOptions = classBenefitTypes.length ? classBenefitTypes : benefitTypes;
+  // Class-style benefits (group classes, yoga, crossfit…) float to the top; everything else stays selectable.
+  const benefitOptions = useMemo(() => {
+    const isClassy = (code: string | null) => /class|yoga|crossfit|pilates|zumba|dance/i.test(code ?? '');
+    return [...benefitTypes].sort((a, b) => Number(isClassy(b.code)) - Number(isClassy(a.code)));
+  }, [benefitTypes]);
 
   const validate = (): boolean => {
     const next: Partial<Record<keyof FormState, string>> = {};

@@ -27,7 +27,8 @@ export interface ClassSessionTypeSummary {
 
 /** A bookable session (a `classes` row) enriched for display. */
 export interface ClassSession extends ClassSessionRow {
-  class_type: ClassSessionTypeSummary | null;
+  /** Parent class type (Pilates, Yoga…) — `class_type` itself is the legacy category text column. */
+  parent: ClassSessionTypeSummary | null;
   trainer_name: string | null;
 }
 

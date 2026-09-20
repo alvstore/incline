@@ -151,7 +151,7 @@ async function resolveTrainerNames(trainerIds: string[]): Promise<Record<string,
   return out;
 }
 
-type SessionQueryRow = ClassSessionRow & { class_type: ClassSessionTypeSummary | null };
+type SessionQueryRow = ClassSessionRow & { parent: ClassSessionTypeSummary | null };
 
 export interface FetchSessionsOptions {
   fromISO: string;
@@ -163,7 +163,7 @@ export interface FetchSessionsOptions {
 export async function fetchClassSessions(branchId: string, opts: FetchSessionsOptions): Promise<ClassSession[]> {
   let query = supabase
     .from('classes')
-    .select('*, class_type:class_types!classes_class_type_id_fkey(id, name, image_url, category)')
+    .select('*, parent:class_types!classes_class_type_id_fkey(id, name, image_url, category)')
     .eq('branch_id', branchId)
     .gte('scheduled_at', opts.fromISO)
     .lt('scheduled_at', opts.toISO)
