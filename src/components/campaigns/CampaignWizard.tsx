@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle, Radio, Check, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle, Radio, Check, CalendarDays, Gift, RefreshCw } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import DOMPurify from 'dompurify';
 import { uploadAttachment } from '@/utils/uploadAttachment';
@@ -195,11 +196,11 @@ async function describeInvokeError(error: any): Promise<string> {
 
 type CampaignType = 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
 
-const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: string; color: string }[] = [
-  { id: 'promotion', label: 'Promotion', desc: 'Offers, discounts, deals', emoji: '🎁', color: 'violet' },
-  { id: 'event', label: 'Event / Class', desc: 'Workshops, special classes', emoji: '📅', color: 'amber' },
-  { id: 'announcement', label: 'Announcement', desc: 'Updates, news, notices', emoji: '📢', color: 'blue' },
-  { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', emoji: '🔁', color: 'emerald' },
+const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; Icon: LucideIcon; color: string }[] = [
+  { id: 'promotion', label: 'Promotion', desc: 'Offers, discounts, deals', Icon: Gift, color: 'violet' },
+  { id: 'event', label: 'Event / Class', desc: 'Workshops, special classes', Icon: CalendarDays, color: 'amber' },
+  { id: 'announcement', label: 'Announcement', desc: 'Updates, news, notices', Icon: Megaphone, color: 'blue' },
+  { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', Icon: RefreshCw, color: 'emerald' },
 ];
 
 export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, prefillClassId }: Props) {
@@ -1350,13 +1351,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                   key={t.id}
                   type="button"
                   onClick={() => setCampaignType(t.id)}
-                  className={`text-left rounded-2xl p-4 border-2 transition-all ${
+                  className={`text-left rounded-2xl p-4 border-2 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary ${
                     campaignType === t.id
-                      ? `border-${t.color}-500 bg-${t.color}-50 dark:bg-${t.color}-500/10 shadow-md`
+                      ? 'border-primary bg-primary/10 shadow-md'
                       : 'border-border bg-card hover:border-muted-foreground/40'
                   }`}
                 >
-                  <div className="text-2xl mb-1">{t.emoji}</div>
+                  <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full ${campaignType === t.id ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                    <t.Icon className="h-5 w-5" />
+                  </div>
                   <p className="font-semibold text-sm text-foreground">{t.label}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                 </button>

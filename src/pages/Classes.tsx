@@ -148,7 +148,8 @@ export default function ClassesPage() {
       const endTime = addMinutes(scheduledAt, cls.duration_minutes || 60);
       
       if (timeFilter === "upcoming") {
-        return isAfter(endTime, now); // Not yet ended
+        // Cancelled sessions are not "upcoming" — they stay visible under All/Past
+        return isAfter(endTime, now) && cls.is_active; // Not yet ended
       } else if (timeFilter === "past") {
         return isBefore(endTime, now); // Already ended
       }
