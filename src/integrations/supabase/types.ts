@@ -17132,6 +17132,7 @@ export type Database = {
         Args: { _membership_id: string }
         Returns: string
       }
+      renewal_queue_counts: { Args: { _branch_id?: string }; Returns: Json }
       request_booking_reschedule: {
         Args: {
           p_blame?: string
