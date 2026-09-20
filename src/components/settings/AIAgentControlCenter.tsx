@@ -134,6 +134,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     tools: [
       { name: 'get_branch_info', label: 'Branch Info', description: 'Address, phone, opening hours and amenities', icon: MapPin, risk: 'read' },
       { name: 'get_class_schedule', label: 'Class Schedule', description: 'Group class timings by day or trainer', icon: CalendarDays, risk: 'read' },
+      { name: 'list_branch_services', label: 'Branch Services', description: 'Facilities and services available at the branch', icon: Sparkles, risk: 'read' },
     ],
   },
   {
@@ -144,6 +145,9 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     accent: 'bg-destructive/10 text-destructive ring-destructive/15',
     tools: [
       { name: 'transfer_to_human', label: 'Transfer to Human', description: 'Hand off conversation to gym staff', icon: MessageSquare, risk: 'escalation' },
+      { name: 'escalate_request', label: 'Raise Request', description: 'Create a tracked request/ticket for the staff team', icon: ClipboardList, risk: 'escalation' },
+      { name: 'get_request_status', label: 'Request Status', description: 'Check the status of a raised request', icon: Search, risk: 'read' },
+
     ],
   },
 ];
