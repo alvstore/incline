@@ -57,7 +57,7 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
             <h4
               className={cn(
                 'text-sm font-semibold text-foreground leading-snug',
-                task.status === 'completed' && 'line-through text-muted-foreground',
+                isClosed && 'line-through text-muted-foreground',
               )}
             >
               {task.title}
@@ -81,20 +81,20 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
 
         <div className="mt-3 flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-            <DueDatePill dueDate={task.due_date} completed={task.status === 'completed'} />
+            <DueDatePill dueDate={task.due_date} status={task.status} />
 
-            {task.due_time && !task.status.includes('completed') && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
+            {task.due_time && !isClosed && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-inset ring-border">
                 <Clock className="h-2.5 w-2.5" />
                 {task.due_time.substring(0, 5)}
               </span>
             )}
             {task.member_created && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">
+              <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning ring-1 ring-warning/30">
                 Member
               </span>
             )}
-            {task.priority && (task.priority === 'high' || task.priority === 'urgent') && (
+            {!isClosed && (task.priority === 'high' || task.priority === 'urgent') && (
               <span
                 className={cn(
                   'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
