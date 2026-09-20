@@ -4,7 +4,7 @@ import { Copy, Check, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 // NOTE: must not be a breached/common password — auth rejects those (HIBP check).
-export const DEFAULT_TEMP_PASSWORD = 'Incline@Fit2026';
+export const DEFAULT_TEMP_PASSWORD = 'Incline#Udaipur@2026';
 
 /**
  * @deprecated Kept for backwards compatibility. New users get the fixed

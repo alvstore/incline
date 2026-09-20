@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
     }
     // Fixed default password for all staff/trainer/manager users — they must change it on first login.
     // Must not be a breached/common password: the auth service rejects those (HIBP check).
-    const tempPassword = suppliedPassword || 'Incline@Fit2026'
+    const tempPassword = suppliedPassword || 'Incline#Udaipur@2026'
     console.log('Creating user with email:', email)
 
     // Create the user with email confirmed (they'll set password on first login)
@@ -317,6 +317,16 @@ Deno.serve(async (req) => {
 
     if (createError) {
       console.log('User creation error:', createError.message)
+      const wm = (createError.message || '').toLowerCase()
+      if (wm.includes('weak') || wm.includes('easy to guess') || wm.includes('pwned')) {
+        return new Response(
+          JSON.stringify({
+            error: 'weak_password',
+            message: 'The login password was rejected as too easy to guess. Enter a stronger password and try again.',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
       throw createError
     }
 
