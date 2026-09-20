@@ -195,11 +195,11 @@ async function describeInvokeError(error: any): Promise<string> {
 
 type CampaignType = 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
 
-const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: string; color: string }[] = [
-  { id: 'promotion', label: 'Promotion', desc: 'Offers, discounts, deals', emoji: '🎁', color: 'violet' },
-  { id: 'event', label: 'Event / Class', desc: 'Workshops, special classes', emoji: '📅', color: 'amber' },
-  { id: 'announcement', label: 'Announcement', desc: 'Updates, news, notices', emoji: '📢', color: 'blue' },
-  { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', emoji: '🔁', color: 'emerald' },
+const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; Icon: LucideIcon; color: string }[] = [
+  { id: 'promotion', label: 'Promotion', desc: 'Offers, discounts, deals', Icon: Gift, color: 'violet' },
+  { id: 'event', label: 'Event / Class', desc: 'Workshops, special classes', Icon: CalendarDays, color: 'amber' },
+  { id: 'announcement', label: 'Announcement', desc: 'Updates, news, notices', Icon: Megaphone, color: 'blue' },
+  { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', Icon: RefreshCw, color: 'emerald' },
 ];
 
 export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, prefillClassId }: Props) {
