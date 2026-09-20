@@ -500,18 +500,29 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
 
   // ─── Upcoming classes (Event / Class campaigns) ────────────────────────────
   const { data: upcomingClasses = [] } = useQuery({
-    queryKey: ['campaign-upcoming-classes', branchId],
+    queryKey: ['campaign-upcoming-classes', branchId, prefillClassId ?? null],
     queryFn: async () => {
+      const CLASS_COLS = 'id, name, class_type, scheduled_at, duration_minutes, capacity, trainer_id, is_active, banner_url, venue, external_trainer_name';
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, class_type, scheduled_at, duration_minutes, capacity, trainer_id, is_active, banner_url, venue, external_trainer_name')
+        .select(CLASS_COLS)
         .eq('branch_id', branchId)
         .eq('is_active', true)
         .gte('scheduled_at', new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
         .order('scheduled_at')
-        .limit(50);
+        .limit(200);
       if (error) throw error;
-      const rows = data || [];
+      let rows = data || [];
+      // Recurring rules can generate hundreds of sessions; make sure the one the
+      // user deep-linked from the Classes page is always present in the list.
+      if (prefillClassId && !rows.some((r: any) => r.id === prefillClassId)) {
+        const { data: pinned } = await supabase
+          .from('classes')
+          .select(CLASS_COLS)
+          .eq('id', prefillClassId)
+          .maybeSingle();
+        if (pinned) rows = [pinned, ...rows];
+      }
       const trainerIds = Array.from(new Set(rows.map((r: any) => r.trainer_id).filter(Boolean)));
       let trainerNames = new Map<string, string>();
       if (trainerIds.length) {
@@ -935,6 +946,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
     const d = new Date(primary.scheduled_at);
     const names = Array.from(new Set(picked.map((c: any) => c.name).filter(Boolean)));
     setEventName(names.join(' + '));
+    // Venue comes from the session itself (the rule's venue or the parent's
+    // default) so {{class_venue}} is never blank on generated sessions.
+    if (primary.venue) setEventVenue(primary.venue);
     setEventDate(Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10));
     setEventTime(
       Number.isNaN(d.getTime())
