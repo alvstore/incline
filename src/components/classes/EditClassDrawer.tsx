@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useUpdateClass } from '@/hooks/useClasses';
+import { useCancelClassSession } from '@/hooks/useClassTypes';
 import { useTrainers } from '@/hooks/useTrainers';
 import { useBenefitTypes } from '@/hooks/useBenefitTypes';
 import { format } from 'date-fns';
@@ -30,6 +31,7 @@ type ChargingMode = 'free' | 'benefit' | 'paid';
 
 export function EditClassDrawer({ open, onOpenChange, classData, branchId }: EditClassDrawerProps) {
   const updateClass = useUpdateClass();
+  const cancelSession = useCancelClassSession();
   const { data: trainers } = useTrainers(branchId);
   const { data: benefitTypes = [] } = useBenefitTypes(branchId);
 
@@ -95,6 +97,10 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
       return;
     }
 
+    // Sessions generated from a recurring rule are pinned once hand-edited so a
+    // later rule change never silently overwrites this one-off adjustment.
+    const isGenerated = !!(classData as { template_id?: string | null }).template_id;
+
     try {
       await updateClass.mutateAsync({
         classId: classData.id,
@@ -116,6 +122,7 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
           price: mode === 'paid' ? formData.price : 0,
           gst_rate: mode === 'paid' ? formData.gst_rate : 0,
           is_gst_inclusive: mode === 'paid' ? formData.is_gst_inclusive : true,
+          ...(isGenerated ? { is_overridden: true } : {}),
         } as any,
       });
       toast.success('Class updated successfully');
@@ -125,18 +132,21 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
     }
   };
 
+  // Atomic cancel: releases every booking + benefit credit, clears the waitlist
+  // and notifies booked members on their enabled channels.
   const handleCancelClass = async () => {
     if (!classData) return;
-    
     try {
-      await updateClass.mutateAsync({
-        classId: classData.id,
-        updates: { is_active: false },
+      const { result, notify } = await cancelSession.mutateAsync({ classId: classData.id });
+      const n = result.cancelled_bookings ?? 0;
+      toast.success('Class cancelled', {
+        description: n > 0
+          ? `${n} booking${n === 1 ? '' : 's'} released${notify?.sent ? ` · ${notify.sent} member${notify.sent === 1 ? '' : 's'} notified` : ''}.`
+          : 'No members were booked on this session.',
       });
-      toast.success('Class cancelled successfully');
       onOpenChange(false);
     } catch (error) {
-      toast.error('Failed to cancel class');
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel class');
     }
   };
 
@@ -389,10 +399,10 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
                 variant="destructive"
                 onClick={handleCancelClass}
                 className="w-full"
-                disabled={updateClass.isPending}
+                disabled={updateClass.isPending || cancelSession.isPending}
               >
                 <AlertTriangle className="h-4 w-4 mr-2" />
-                Cancel This Class
+                {cancelSession.isPending ? 'Cancelling…' : 'Cancel This Class'}
               </Button>
             )}
           </SheetFooter>
