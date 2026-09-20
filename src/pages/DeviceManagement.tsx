@@ -46,7 +46,7 @@ const DeviceManagement = () => {
       <div className="space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-foreground">Device Command Center</h1>
+            <h1 className="text-3xl font-bold text-foreground">Device Command Center</h1>
             <p className="text-sm text-muted-foreground">
               MIPS middleware · facial recognition &amp; access control
               {branchFilter && ` · ${branches.find((b) => b.id === branchFilter)?.name ?? ""}`}

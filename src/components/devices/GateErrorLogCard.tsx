@@ -26,7 +26,7 @@ const severityBadge = (severity: string | null) => {
     case "warning":
       return "bg-amber-100 text-amber-700";
     default:
-      return "bg-slate-100 text-slate-600";
+      return "bg-muted text-muted-foreground";
   }
 };
 
@@ -69,7 +69,7 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
             </p>
           </div>
         </div>
-        <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+        <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
           {(data || []).length} entr{(data || []).length === 1 ? "y" : "ies"}
         </Badge>
       </CardHeader>
@@ -83,13 +83,13 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
         ) : isError ? (
           <div className="rounded-xl bg-red-50/70 p-6 text-center">
             <AlertOctagon className="mx-auto mb-2 h-6 w-6 text-red-600" />
-            <p className="text-sm font-semibold text-slate-900">Could not load the error log</p>
+            <p className="text-sm font-semibold text-foreground">Could not load the error log</p>
             <p className="text-xs text-muted-foreground">Please refresh the page and try again.</p>
           </div>
         ) : (data || []).length === 0 ? (
           <div className="rounded-xl bg-emerald-50/60 p-6 text-center">
             <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-600" />
-            <p className="text-sm font-semibold text-slate-900">No gate-related errors</p>
+            <p className="text-sm font-semibold text-foreground">No gate-related errors</p>
             <p className="text-xs text-muted-foreground">
               Nothing failed around the gates in the last three days.
             </p>
@@ -98,13 +98,13 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
           (data || []).map((e) => (
             <div
               key={e.id}
-              className="rounded-xl bg-slate-50 p-3 transition-colors duration-150 hover:bg-slate-100"
+              className="rounded-xl bg-muted/50 p-3 transition-colors duration-150 hover:bg-muted"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${severityBadge(e.severity)}`}>
                   {e.severity || "error"}
                 </Badge>
-                <span className="text-xs font-semibold text-slate-700">
+                <span className="text-xs font-semibold text-foreground">
                   {e.function_name || e.source || "system"}
                 </span>
                 {(e.occurrence_count ?? 1) > 1 && (
@@ -117,7 +117,7 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
                   {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
                 </span>
               </div>
-              <p className="mt-1 break-words text-sm leading-relaxed text-slate-600">{e.error_message}</p>
+              <p className="mt-1 break-words text-sm leading-relaxed text-muted-foreground">{e.error_message}</p>
             </div>
           ))
         )}

@@ -42,20 +42,20 @@ const PAGE_SIZE = 25;
 const ALL = '__all__';
 
 const SKIP_REASON_LOOK: Record<string, { label: string; className: string }> = {
-  no_phone: { label: 'No phone number', className: 'bg-slate-100 text-slate-600' },
+  no_phone: { label: 'No phone number', className: 'bg-muted text-muted-foreground' },
   do_not_contact: { label: 'Do not contact', className: 'bg-red-100 text-red-700' },
   member_paused: { label: 'Member paused', className: 'bg-blue-100 text-blue-700' },
-  no_visit_history: { label: 'Never visited', className: 'bg-slate-100 text-slate-600' },
+  no_visit_history: { label: 'Never visited', className: 'bg-muted text-muted-foreground' },
   recently_contacted: { label: 'Recently contacted', className: 'bg-amber-100 text-amber-700' },
   cooldown: { label: 'In cooldown', className: 'bg-amber-100 text-amber-700' },
   recent_visit: { label: 'Visited recently', className: 'bg-emerald-100 text-emerald-700' },
 };
 
 function skipLook(reason?: string | null) {
-  if (!reason) return { label: '—', className: 'bg-slate-100 text-slate-600' };
+  if (!reason) return { label: '—', className: 'bg-muted text-muted-foreground' };
   return SKIP_REASON_LOOK[reason] ?? {
     label: reason.replace(/_/g, ' '),
-    className: 'bg-slate-100 text-slate-600',
+    className: 'bg-muted text-muted-foreground',
   };
 }
 
@@ -85,7 +85,7 @@ function Kpi({ label, value, sub, icon: Icon, tone = 'indigo' }: {
     emerald: 'bg-emerald-50 text-emerald-600',
     amber: 'bg-amber-50 text-amber-600',
     red: 'bg-red-50 text-red-600',
-    slate: 'bg-slate-100 text-slate-600',
+    slate: 'bg-muted text-muted-foreground',
   };
   return (
     <Card className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
@@ -359,15 +359,23 @@ export default function VoiceAIPage() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="history" className="cursor-pointer">Call history</TabsTrigger>
-            <TabsTrigger value="queue" className="cursor-pointer">Today's queue</TabsTrigger>
-            <TabsTrigger value="skipped" className="cursor-pointer">Skipped</TabsTrigger>
-            <TabsTrigger value="callbacks" className="cursor-pointer">Callbacks</TabsTrigger>
-
-            <TabsTrigger value="complaints" className="cursor-pointer">Complaints</TabsTrigger>
-            <TabsTrigger value="dnd" className="cursor-pointer">DND</TabsTrigger>
-            {canSeeAnalytics && <TabsTrigger value="analytics" className="cursor-pointer">Analytics</TabsTrigger>}
+          <TabsList className="flex w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/60 p-1">
+            {([
+              { v: 'queue', label: "Today's queue", count: null },
+              { v: 'history', label: 'Call history', count: null },
+              { v: 'callbacks', label: 'Callbacks', count: today.callbacks ?? 0 },
+              { v: 'complaints', label: 'Complaints', count: today.complaints ?? 0 },
+              { v: 'skipped', label: 'Skipped', count: null },
+              { v: 'dnd', label: 'DND', count: today.dnd_requests ?? 0 },
+              ...(canSeeAnalytics ? [{ v: 'analytics', label: 'Analytics', count: null }] : []),
+            ] as Array<{ v: string; label: string; count: number | null }>).map((t) => (
+              <TabsTrigger key={t.v} value={t.v} className="cursor-pointer gap-1.5 rounded-lg">
+                {t.label}
+                {!!t.count && (
+                  <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">{t.count}</span>
+                )}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* History */}

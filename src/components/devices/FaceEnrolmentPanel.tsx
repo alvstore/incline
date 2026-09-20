@@ -31,7 +31,7 @@ const stateBadge = (state: string) => {
     return <Badge className={`${base} bg-red-100 text-red-700 hover:bg-red-100`}>Retake needed</Badge>;
   }
   if (state === "unverified") {
-    return <Badge className={`${base} bg-slate-100 text-slate-600 hover:bg-slate-100`}>Unverified</Badge>;
+    return <Badge className={`${base} bg-muted text-muted-foreground hover:bg-muted`}>Unverified</Badge>;
   }
   if (state === "missing") {
     return <Badge className={`${base} bg-amber-100 text-amber-700 hover:bg-amber-100`}>Dropped</Badge>;
@@ -170,12 +170,12 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-bold">{gate.name}</p>
                     {faces === null ? (
-                      <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                      <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted">
                         <WifiOff className="mr-1 h-3 w-3" />
                         No live reading
                       </Badge>
                     ) : behind === null ? (
-                      <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                      <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted">
                         Can't compare yet
                       </Badge>
                     ) : behind === 0 ? (
@@ -245,7 +245,7 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                       <CheckCircle2 className="mr-1 h-3 w-3" />
                       {gate.verified} confirmed by name
                     </Badge>
-                    <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                    <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted">
                       <HelpCircle className="mr-1 h-3 w-3" />
                       {gate.unverified} counted but not named
                     </Badge>

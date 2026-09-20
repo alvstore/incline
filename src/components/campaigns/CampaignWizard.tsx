@@ -293,7 +293,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
 
 
 
-  // ── RCS (Telinfy) template selection + per-variable mapping ──
+  // ── RCS template selection + per-variable mapping ──
   const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
   const [rcsVarMap, setRcsVarMap] = useState<Record<string, string>>({});
 
@@ -320,7 +320,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
           ?.map((m: string) => m.replace(/[{}\s]/g, '')) || [],
       ),
     );
-    // Prefer declared variables (Telinfy panel), fall back to body-scan.
+    // Prefer declared variables (provider panel), fall back to body-scan.
     return declared.length ? declared.map(String) : (fromBody as string[]);
   })();
 
@@ -790,7 +790,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         ...filledVariables(),
       };
 
-      // For RCS, template_name is packed into variables (Telinfy lcustomParam).
+      // For RCS, template_name is packed into the variables payload.
       const rcsVars = channel === 'rcs' && selectedRcsTemplate
         ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient({
             source_type: 'test', source_ref_id: 'test', full_name: testName, first_name: firstName,
@@ -1169,7 +1169,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         toast.error('Email: subject is required'); return;
       }
       if (ch === 'rcs' && !rcsTemplateId) {
-        toast.error('Pick an RCS template — Telinfy RCS is template-only'); return;
+        toast.error('Pick an approved RCS template — RCS is template-only'); return;
       }
       if (ch === 'whatsapp' && (coldCount > 0 || isCsv)) {
         // Evaluate against the WhatsApp draft, not whichever channel tab is open.
@@ -1349,31 +1349,42 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               ))}
             </div>
 
-            {(campaignType === 'promotion' || campaignType === 'lead_reengagement') && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <span className="text-lg leading-none mt-0.5">⚠️</span>
-                  <div className="text-[12px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                    <p className="font-semibold mb-1">About WhatsApp Marketing pacing (error 131049)</p>
-                    <p>
-                      Meta throttles MARKETING templates per recipient based on their engagement history — this happens on <b>every</b> WhatsApp API (Cloud, On-Prem, Marketing Messages Lite). Swapping APIs does not bypass it.
-                      To actually reach paced users, enable the automatic fallback below.
-                    </p>
-                  </div>
+            <div className="rounded-2xl bg-card ring-1 ring-border shadow-sm p-4 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <span className="rounded-full bg-primary/10 text-primary p-2 shrink-0">
+                  <Radio className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Omni delivery route</p>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed">
+                    If WhatsApp is blocked for a recipient (Meta pacing 131049 / 130472), the same message is re-sent over
+                    <b> RCS</b>, and RCS automatically drops to <b>SMS</b> on non-RCS handsets. Email, when selected, always goes out in parallel.
+                  </p>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="checkbox"
-                    checked={fallbackOnPacing}
-                    onChange={(e) => setFallbackOnPacing(e.target.checked)}
-                    className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                  />
-                  <span className="text-amber-900 dark:text-amber-200">
-                    Auto-fallback to <b>RCS / SMS</b> when Meta paces a recipient (131049 / 130472)
-                  </span>
-                </label>
               </div>
-            )}
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                {['WhatsApp', 'RCS', 'SMS'].map((c, i) => (
+                  <span key={c} className="flex items-center gap-1.5">
+                    {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${fallbackOnPacing || i === 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground line-through'}`}>{c}</span>
+                  </span>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={fallbackOnPacing}
+                  onChange={(e) => setFallbackOnPacing(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+                />
+                <span className="text-foreground">Keep the omni route on for this campaign</span>
+              </label>
+              {(campaignType === 'promotion' || campaignType === 'lead_reengagement') && (
+                <p className="text-[11px] text-warning-foreground bg-warning/10 rounded-lg p-2">
+                  Marketing templates are paced by Meta per recipient on every WhatsApp API — the omni route is the only reliable way to reach paced members.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -1515,20 +1526,20 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
             )}
 
 
-            {/* ── RCS (Telinfy) template selection + variable mapping ── */}
+            {/* ── RCS template selection + variable mapping ── */}
             {channel === 'rcs' && (
               <div className="rounded-2xl border-2 border-violet-500/25 bg-violet-500/5 p-3 space-y-3">
                 <div className="flex items-center gap-2">
                   <Radio className="h-4 w-4 text-violet-600" />
-                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS (Telinfy) — template required</Label>
+                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS — approved template required</Label>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Telinfy RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.
+                  RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.
                   Recipients on non-RCS devices automatically fall back to SMS.
                 </p>
                 {rcsTemplates.length === 0 ? (
                   <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
-                    No RCS templates synced yet. Go to <strong>Settings → RCS Hub → Templates</strong> to sync from Telinfy.
+                    No RCS templates synced yet. Go to <strong>Settings → RCS Hub → Templates</strong> to sync them.
                   </div>
                 ) : (
                   <>
@@ -1960,61 +1971,6 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               );
             })()}
 
-            {/* ─── Telinfy Bulk CSV Export (emergency fallback) ─────────────── */}
-            {(channel === 'rcs' || channel === 'whatsapp' || channel === 'sms') && (
-              <div className="rounded-2xl border border-dashed p-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold">Emergency bulk send</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Download this audience in Telinfy's CSV format (CountryCode, MSISDN, per-variable columns) for manual upload if the CRM pipeline is unavailable.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full h-8 px-3 text-xs gap-1.5 shrink-0"
-                  onClick={async () => {
-                    try {
-                      const { resolveCampaignAudience } = await import('@/services/campaignService');
-                      const recips = await resolveCampaignAudience(branchId, filter);
-                      const keys = channel === 'rcs' ? rcsVarKeys : ['full_name'];
-                      const { buildTelinfyCsv } = await import('./TelinfyBulkExport');
-                      const csv = buildTelinfyCsv({
-                        campaignName: name || 'campaign',
-                        recipients: recips as any,
-                        variableKeys: keys.length ? keys : ['full_name'],
-                        resolveVar: channel === 'rcs' && selectedRcsTemplate
-                          ? (r: any, k: string) => {
-                              const mapped = rcsVarMap[k] || '';
-                              const first = (r.full_name || '').trim().split(/\s+/)[0] || 'there';
-                              const full = r.full_name || 'there';
-                              return String(mapped)
-                                .replace(/\{\{\s*first_name\s*\}\}/gi, first)
-                                .replace(/\{\{\s*full_name\s*\}\}/gi, full)
-                                .replace(/\{\{\s*member_name\s*\}\}/gi, full)
-                                .replace(/\{\{\s*email\s*\}\}/gi, r.email || '');
-                            }
-                          : undefined,
-                      });
-                      const safe = (name || 'campaign').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
-                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `telinfy_${safe}_${new Date().toISOString().slice(0, 10)}.csv`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      toast.success(`Downloaded ${(recips as any[]).filter((r: any) => r.phone).length} rows`);
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Export failed');
-                    }
-                  }}
-                >
-                  <FileText className="h-3.5 w-3.5" /> Telinfy CSV
-                </Button>
-              </div>
-            )}
 
 
 

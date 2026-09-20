@@ -7,11 +7,33 @@ export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 export type AudienceKind = 'members' | 'members_and_staff' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
 export type StaffRole = 'owner' | 'admin' | 'manager' | 'staff' | 'trainer';
 
+/** Member segments supported by resolve_campaign_audience_v2 / member_matches_segment. */
+export type MemberSegmentStatus =
+  | 'all'
+  | 'active'
+  | 'expired'
+  | 'recent_expired'
+  | 'inactive_30'
+  | 'inactive_60'
+  | 'frozen'
+  | 'pending_dues';
+
+export const MEMBER_SEGMENTS: { id: MemberSegmentStatus; label: string; desc: string }[] = [
+  { id: 'all', label: 'All members', desc: 'Everyone on the branch roster' },
+  { id: 'active', label: 'Active members', desc: 'Live membership, not expired' },
+  { id: 'expired', label: 'Expired members', desc: 'Membership end date has passed' },
+  { id: 'recent_expired', label: 'Recently expired (30 days)', desc: 'Lapsed in the last 30 days, not renewed' },
+  { id: 'inactive_30', label: 'Inactive · no visit in 30 days', desc: 'No gate check-in for 30 days' },
+  { id: 'inactive_60', label: 'Inactive · no visit in 60 days', desc: 'No gate check-in for 60 days' },
+  { id: 'frozen', label: 'Frozen / paused', desc: 'Membership currently on freeze' },
+  { id: 'pending_dues', label: 'Pending dues', desc: 'At least one invoice still unpaid' },
+];
+
 export interface AudienceFilter {
   audience_kind?: AudienceKind;
   segment_id?: string | null;
   // members
-  member_status?: 'active' | 'expired' | 'all';
+  member_status?: MemberSegmentStatus;
   goal?: string | null;
   // contacts
   source_types?: Array<'member' | 'lead' | 'manual' | 'ai'>;
@@ -164,26 +186,24 @@ export async function resolveAudienceMemberIds(
 ): Promise<{ memberIds: string[]; sample: Array<{ id: string; name: string }> }> {
   let memberIds: string[] = [];
 
-  // Status filter via memberships
-  if (filter.status === 'active') {
-    const today = new Date().toISOString().split('T')[0];
-    const { data } = await supabase
-      .from('memberships')
-      .select('member_id')
-      .eq('branch_id', branchId)
-      .eq('status', 'active')
-      .gte('end_date', today);
-    memberIds = [...new Set((data || []).map((m: any) => m.member_id))];
-  } else if (filter.status === 'expired') {
-    const today = new Date().toISOString().split('T')[0];
-    const { data } = await supabase
-      .from('memberships')
-      .select('member_id')
-      .eq('branch_id', branchId)
-      .lt('end_date', today);
-    memberIds = [...new Set((data || []).map((m: any) => m.member_id))];
+  // Segment filter — single source of truth is the DB resolver so the wizard
+  // count, the send list and recurring runs can never disagree.
+  const segment = (filter.member_status || filter.status || 'all') as MemberSegmentStatus;
+  if (segment !== 'all') {
+    const { data, error } = await supabase.rpc('resolve_campaign_audience_v2' as any, {
+      p_branch_id: branchId,
+      p_filter: { audience_kind: 'members', member_status: segment } as any,
+      p_window_hours: 24,
+    });
+    if (error) throw error;
+    memberIds = [
+      ...new Set(
+        ((data as any[]) || [])
+          .filter((r) => r.source_type === 'member' && r.source_ref_id)
+          .map((r) => r.source_ref_id as string),
+      ),
+    ];
   } else {
-    // 'all' or unset: pull every member in branch
     const { data } = await supabase
       .from('members')
       .select('id')
