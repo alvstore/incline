@@ -2327,7 +2327,7 @@ function sanitizeFoundersPhaseText(input: {
 
   // Non-Latin script scrubber — Gemini occasionally leaks CJK.
   const cjkStripped = text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff65-\uff9f]+/g, "").replace(/\s{2,}/g, " ").trim();
-  let out = cjkStripped || text;
+  let out = correctAppStoreLinks(cjkStripped || text);
 
   if (!leadCaptureEnabled) return out; // member mode — untouched
 
