@@ -232,30 +232,60 @@ export default function ClassesPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
               <LivePill />
             </div>
-            <p className="text-muted-foreground">Manage group classes and bookings</p>
+            <p className="text-muted-foreground">Recurring classes, the master calendar and attendance</p>
           </div>
-          <div className="flex items-center gap-4">
-            {/* Branch selector moved to global header */}
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Class
-            </Button>
+          <div className="flex items-center gap-2">
+            {canManageRules ? (
+              <>
+                <Button className="cursor-pointer" onClick={() => setIsTypeCreateOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New class
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="cursor-pointer" aria-label="More ways to add classes">
+                      More <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setIsCreateOpen(true)}>
+                      <CalendarDays className="mr-2 h-4 w-4" /> One-off session
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setActiveTab("rules")}>
+                      <Layers className="mr-2 h-4 w-4" /> Manage schedule rules
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Button className="cursor-pointer" onClick={() => setIsCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                One-off session
+              </Button>
+            )}
           </div>
         </div>
 
         <AddClassDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={branchId} />
+        <ClassTypeDrawer
+          open={isTypeCreateOpen}
+          onOpenChange={setIsTypeCreateOpen}
+          branchId={branchId}
+          onCreated={() => setActiveTab("rules")}
+        />
         <EditClassDrawer 
           open={isEditOpen} 
           onOpenChange={setIsEditOpen} 
           classData={classToEdit}
           branchId={branchId}
         />
+
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
