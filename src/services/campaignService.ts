@@ -186,26 +186,24 @@ export async function resolveAudienceMemberIds(
 ): Promise<{ memberIds: string[]; sample: Array<{ id: string; name: string }> }> {
   let memberIds: string[] = [];
 
-  // Status filter via memberships
-  if (filter.status === 'active') {
-    const today = new Date().toISOString().split('T')[0];
-    const { data } = await supabase
-      .from('memberships')
-      .select('member_id')
-      .eq('branch_id', branchId)
-      .eq('status', 'active')
-      .gte('end_date', today);
-    memberIds = [...new Set((data || []).map((m: any) => m.member_id))];
-  } else if (filter.status === 'expired') {
-    const today = new Date().toISOString().split('T')[0];
-    const { data } = await supabase
-      .from('memberships')
-      .select('member_id')
-      .eq('branch_id', branchId)
-      .lt('end_date', today);
-    memberIds = [...new Set((data || []).map((m: any) => m.member_id))];
+  // Segment filter — single source of truth is the DB resolver so the wizard
+  // count, the send list and recurring runs can never disagree.
+  const segment = (filter.member_status || filter.status || 'all') as MemberSegmentStatus;
+  if (segment !== 'all') {
+    const { data, error } = await supabase.rpc('resolve_campaign_audience_v2' as any, {
+      p_branch_id: branchId,
+      p_filter: { audience_kind: 'members', member_status: segment } as any,
+      p_window_hours: 24,
+    });
+    if (error) throw error;
+    memberIds = [
+      ...new Set(
+        ((data as any[]) || [])
+          .filter((r) => r.source_type === 'member' && r.source_ref_id)
+          .map((r) => r.source_ref_id as string),
+      ),
+    ];
   } else {
-    // 'all' or unset: pull every member in branch
     const { data } = await supabase
       .from('members')
       .select('id')
