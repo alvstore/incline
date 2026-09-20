@@ -26,6 +26,13 @@ export const PRIORITY_DOT: Record<string, string> = {
   urgent: 'bg-destructive',
 };
 
+export const STATUS_DOT: Record<string, string> = {
+  pending: 'bg-warning',
+  in_progress: 'bg-info',
+  completed: 'bg-success',
+  cancelled: 'bg-muted-foreground/40',
+};
+
 export const LANES: { id: 'pending' | 'in_progress' | 'completed' | 'cancelled'; label: string; accent: string }[] = [
   { id: 'pending', label: 'Pending', accent: 'from-warning to-warning' },
   { id: 'in_progress', label: 'In Progress', accent: 'from-primary to-primary' },
