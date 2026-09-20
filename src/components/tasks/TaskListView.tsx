@@ -49,24 +49,26 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
 
   return (
     <div className="space-y-2">
-      {tasks.map((task) => (
+      {tasks.map((task) => {
+        const isClosed = task.status === 'completed' || task.status === 'cancelled';
+        return (
         <div
           key={task.id}
           onClick={() => onOpen(task)}
           className={cn(
             'group flex items-center gap-3 rounded-xl bg-card p-3 sm:p-4 shadow-sm ring-1 ring-border cursor-pointer',
-            'transition-all duration-150 hover:shadow-md hover:shadow-sm hover:ring-primary/30',
-            task.status === 'completed' && 'opacity-70',
+            'transition-all duration-150 hover:shadow-md hover:ring-primary/30',
+            isClosed && 'opacity-70',
           )}
         >
-          <span className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', PRIORITY_DOT[task.priority])} />
+          <span className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', isClosed ? 'bg-muted-foreground/30' : PRIORITY_DOT[task.priority])} />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className={cn('text-sm font-semibold text-foreground truncate', task.status === 'completed' && 'line-through text-muted-foreground')}>
+              <h4 className={cn('text-sm font-semibold text-foreground truncate', isClosed && 'line-through text-muted-foreground')}>
                 {task.title}
               </h4>
-              {(task.priority === 'high' || task.priority === 'urgent') && (
+              {!isClosed && (task.priority === 'high' || task.priority === 'urgent') && (
                 <span className={cn('hidden sm:inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', PRIORITY_PILL[task.priority])}>
                   {task.priority}
                 </span>
@@ -76,17 +78,18 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
               <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>
             )}
             <div className="mt-1.5 flex items-center gap-2 sm:hidden">
-              <DueDatePill dueDate={task.due_date} completed={task.status === 'completed'} />
+              <DueDatePill dueDate={task.due_date} status={task.status} />
             </div>
           </div>
 
           <div className="hidden md:block">
-            <DueDatePill dueDate={task.due_date} completed={task.status === 'completed'} />
+            <DueDatePill dueDate={task.due_date} status={task.status} />
           </div>
 
           <div onClick={(e) => e.stopPropagation()} className="hidden md:block">
+            <label className="sr-only" htmlFor={`assignee-${task.id}`}>Assignee</label>
             <Select value={task.assigned_to || 'unassigned'} onValueChange={(v) => onAssign(task.id, v)}>
-              <SelectTrigger className="h-8 w-40 rounded-lg border-border text-xs">
+              <SelectTrigger id={`assignee-${task.id}`} className="h-8 w-40 rounded-lg border-border text-xs" aria-label="Change assignee">
                 <SelectValue placeholder="Assign…" />
               </SelectTrigger>
               <SelectContent>
