@@ -104,7 +104,7 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
                 <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${severityBadge(e.severity)}`}>
                   {e.severity || "error"}
                 </Badge>
-                <span className="text-xs font-semibold text-slate-700">
+                <span className="text-xs font-semibold text-foreground">
                   {e.function_name || e.source || "system"}
                 </span>
                 {(e.occurrence_count ?? 1) > 1 && (

@@ -326,7 +326,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
   ];
 
   return (
-    <Card className="rounded-2xl border-border/60 shadow-lg shadow-slate-200/40 dark:shadow-none">
+    <Card className="rounded-2xl border-border/60 shadow-lg shadow-muted/30 dark:shadow-none">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -345,7 +345,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
               <span
                 className={cn(
                   "h-1.5 w-1.5 rounded-full",
-                  rtStatus === "live" ? "bg-emerald-500 animate-pulse" : rtStatus === "error" ? "bg-red-500" : "bg-slate-400",
+                  rtStatus === "live" ? "bg-emerald-500 animate-pulse" : rtStatus === "error" ? "bg-red-500" : "bg-muted-foreground",
                 )}
               />
               {rtStatus === "live" ? "Live" : rtStatus === "error" ? "Offline" : "Connecting"}
