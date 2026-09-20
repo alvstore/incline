@@ -17,6 +17,17 @@ import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
 import { CombinedCreditsSummary } from '@/components/benefits/CombinedCreditsSummary';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function MyBenefits() {
   const { profile } = useAuth();
