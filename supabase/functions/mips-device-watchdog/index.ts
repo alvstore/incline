@@ -23,7 +23,7 @@
 // down for at least MIN_DOWN_SEC before a recovery counts as a reboot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
-import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
+import { getCachedMipsDevicesWithMeta } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -380,7 +380,8 @@ Deno.serve(async (req) => {
     }
 
     if (events.length) {
-      await supabase.from("access_device_health_events").insert(events);
+      const { error: insErr } = await supabase.from("access_device_health_events").insert(events);
+      if (insErr) console.error("[mips-device-watchdog] health event insert failed:", insErr.message, events.map((e) => e.event_type));
     }
 
     console.log(
