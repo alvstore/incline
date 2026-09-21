@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
         // reason the card read "Stable 24h" through a day of restarts.
         const beatMs = rawBeat ? parseMipsTime(String(rawBeat)) : NaN;
         const beatAgeSec = Number.isFinite(beatMs)
-          ? Math.max(0, Math.round((Date.now() - beatMs) / 1000))
+          ? Math.max(0, Math.round((rosterAtMs - beatMs) / 1000))
           : null;
         const heartbeatStale = beatAgeSec === null ? !flagOnline : beatAgeSec > STALE_HEARTBEAT_SEC;
         const isOnline = flagOnline || !heartbeatStale;
