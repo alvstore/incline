@@ -221,6 +221,88 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ---- v1.2.0 command-storm detection (independent of online state) ----
+        try {
+          const stormSince = new Date(Date.now() - STORM_WINDOW_MIN * 60_000).toISOString();
+          const { data: recent } = await supabase
+            .from("mips_sync_attempts")
+            .select("mips_person_id, entity_id, member_id, created_at")
+            .eq("device_id", dev.id)
+            .eq("operation", "device_dispatch")
+            .gte("created_at", stormSince)
+            .limit(500);
+          const rows = (recent || []) as Array<{ mips_person_id: number | null; entity_id: string | null; member_id: string | null }>;
+          if (rows.length) {
+            const perPerson = new Map<string, number>();
+            for (const r of rows) {
+              const key = String(r.mips_person_id ?? r.member_id ?? r.entity_id ?? "?");
+              perPerson.set(key, (perPerson.get(key) ?? 0) + 1);
+            }
+            let topKey = "";
+            let topCount = 0;
+            for (const [k, c] of perPerson) if (c > topCount) { topKey = k; topCount = c; }
+            const isStorm = rows.length >= STORM_TOTAL_THRESHOLD || topCount >= STORM_PER_PERSON_THRESHOLD;
+            if (isStorm) {
+              const dedupeSince = new Date(Date.now() - STORM_DEDUPE_MIN * 60_000).toISOString();
+              const { count: already } = await supabase
+                .from("access_device_health_events")
+                .select("id", { count: "exact", head: true })
+                .eq("device_id", dev.id)
+                .eq("event_type", "dispatch_storm")
+                .gte("detected_at", dedupeSince);
+              if (!already) {
+                storms++;
+                let topLabel = topKey;
+                if (/^\d+$/.test(topKey)) {
+                  const { data: who } = await supabase
+                    .from("members")
+                    .select("member_code, full_name")
+                    .eq("mips_person_id", Number(topKey))
+                    .maybeSingle();
+                  if (who) topLabel = `${who.full_name ?? ""} (${who.member_code})`.trim();
+                }
+                events.push({
+                  branch_id: dev.branch_id,
+                  device_id: dev.id,
+                  serial_number: dev.serial_number,
+                  device_name: dev.device_name,
+                  event_type: "dispatch_storm",
+                  detected_at: nowIso,
+                  dispatches_before: rows.length,
+                  details: {
+                    window_min: STORM_WINDOW_MIN,
+                    total_commands: rows.length,
+                    distinct_people: perPerson.size,
+                    top_person: topLabel,
+                    top_person_commands: topCount,
+                    classification: "gate is being re-issued the same people repeatedly — this is what makes the terminal app restart",
+                  },
+                });
+                try {
+                  await supabase.rpc("log_error_event", {
+                    p_source: "mips_watchdog",
+                    p_severity: "warning",
+                    p_message: `Gate "${dev.device_name || dev.serial_number}" command storm: ${rows.length} commands in ${STORM_WINDOW_MIN} min (top: ${topLabel} ×${topCount})`,
+                    p_context: {
+                      device_id: dev.id,
+                      serial_number: dev.serial_number,
+                      branch_id: dev.branch_id,
+                      total_commands: rows.length,
+                      top_person: topLabel,
+                      top_person_commands: topCount,
+                      window_min: STORM_WINDOW_MIN,
+                    },
+                  });
+                } catch (logErr) {
+                  console.warn("[mips-device-watchdog] storm log_error_event failed", logErr);
+                }
+              }
+            }
+          }
+        } catch (stormErr) {
+          console.warn("[mips-device-watchdog] storm detection failed (non-fatal)", stormErr);
+        }
+
         await supabase.from("access_devices").update(patch).eq("id", dev.id);
       }
     }
@@ -230,9 +312,9 @@ Deno.serve(async (req) => {
     }
 
     console.log(
-      `[mips-device-watchdog] checked=${checked} offline=${offline} recovered=${recovered} restarts=${restarts}`,
+      `[mips-device-watchdog] checked=${checked} offline=${offline} recovered=${recovered} restarts=${restarts} storms=${storms}`,
     );
-    return json({ success: true, checked, offline, recovered, restarts, events: events.length });
+    return json({ success: true, checked, offline, recovered, restarts, storms, events: events.length });
   } catch (e) {
     console.error("[mips-device-watchdog] fatal", e);
     return json({ success: false, error: e instanceof Error ? e.message : String(e) }, 500);
