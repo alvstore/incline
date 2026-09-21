@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
     let recovered = 0;
     let restarts = 0;
     let storms = 0;
+    let gaps = 0;
 
 
     for (const conn of connections || []) {
@@ -379,9 +380,9 @@ Deno.serve(async (req) => {
     }
 
     console.log(
-      `[mips-device-watchdog] checked=${checked} offline=${offline} recovered=${recovered} restarts=${restarts} storms=${storms}`,
+      `[mips-device-watchdog] checked=${checked} offline=${offline} recovered=${recovered} restarts=${restarts} storms=${storms} gaps=${gaps}`,
     );
-    return json({ success: true, checked, offline, recovered, restarts, storms, events: events.length });
+    return json({ success: true, checked, offline, recovered, restarts, storms, gaps, events: events.length });
   } catch (e) {
     console.error("[mips-device-watchdog] fatal", e);
     return json({ success: false, error: e instanceof Error ? e.message : String(e) }, 500);
