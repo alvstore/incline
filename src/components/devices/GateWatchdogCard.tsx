@@ -5,18 +5,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, AlertTriangle, PlugZap, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, HeartPulse, PlugZap, RefreshCw, ShieldCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+interface HealthEventDetails {
+  total_commands?: number;
+  distinct_people?: number;
+  top_person?: string;
+  top_person_commands?: number;
+  window_min?: number;
+  heartbeat_age_sec?: number;
+}
 
 interface HealthEvent {
   id: string;
   device_name: string | null;
   serial_number: string | null;
-  event_type: "offline" | "recovered" | "restart_suspected" | "watchdog_error";
+  event_type: "offline" | "recovered" | "restart_suspected" | "watchdog_error" | "dispatch_storm" | "heartbeat_gap";
   detected_at: string;
   offline_seconds: number | null;
   dispatches_before: number | null;
+  details: HealthEventDetails | null;
 }
 
 const EVENT_META: Record<
@@ -30,7 +40,21 @@ const EVENT_META: Record<
   },
   offline: { label: "Went offline", badge: "bg-amber-100 text-amber-700", icon: PlugZap },
   recovered: { label: "Back online", badge: "bg-emerald-100 text-emerald-700", icon: ShieldCheck },
+  dispatch_storm: { label: "Command storm", badge: "bg-violet-100 text-violet-700", icon: Zap },
+  heartbeat_gap: { label: "Missed heartbeats", badge: "bg-blue-100 text-blue-700", icon: HeartPulse },
   watchdog_error: { label: "Watchdog error", badge: "bg-muted text-muted-foreground", icon: Activity },
+};
+
+const describe = (e: HealthEvent): string | null => {
+  const d = e.details ?? {};
+  if (e.event_type === "dispatch_storm") {
+    const top = d.top_person ? ` — ${d.top_person} ×${d.top_person_commands ?? "?"}` : "";
+    return `${d.total_commands ?? e.dispatches_before ?? 0} gate commands in ${d.window_min ?? 10} min${top}`;
+  }
+  if (e.event_type === "heartbeat_gap") {
+    return `silent for ${Math.round((d.heartbeat_age_sec ?? e.offline_seconds ?? 0) / 60)} min at check time`;
+  }
+  return null;
 };
 
 const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
