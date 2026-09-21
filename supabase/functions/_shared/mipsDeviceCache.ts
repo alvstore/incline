@@ -78,24 +78,33 @@ export async function refreshMipsDeviceCache(
   }
 }
 
+export interface MipsDeviceSnapshot {
+  rows: MipsDeviceRow[];
+  /** Epoch ms when this roster was actually fetched from MIPS (cache age reference). */
+  fetchedAt: number;
+  fromCache: boolean;
+}
+
 /**
- * Returns the device roster, preferring a cache entry younger than 120s.
- * Pass `forceRefresh` from the writers (sync-to-mips, mips-import-devices).
+ * Returns the device roster plus WHEN it was fetched, preferring a cache entry
+ * younger than 120s. Readers that compare device-reported timestamps (heartbeat
+ * age) must measure against `fetchedAt`, not `Date.now()`, or a 2-minute-old
+ * cache looks like a 2-minute heartbeat gap.
  */
-export async function getCachedMipsDevices(
+export async function getCachedMipsDevicesWithMeta(
   supabase: Db,
   branchId: string | null,
   baseUrl: string,
   token: string,
   options: { forceRefresh?: boolean } = {},
-): Promise<MipsDeviceRow[]> {
+): Promise<MipsDeviceSnapshot> {
   const url = String(baseUrl || "").replace(/\/+$/, "");
   const key = scopeKey(branchId, url);
   const now = Date.now();
 
   if (!options.forceRefresh) {
     const hit = memo.get(key);
-    if (hit && now < hit.expiresAt) return hit.rows;
+    if (hit && now < hit.expiresAt) return { rows: hit.rows, fetchedAt: hit.expiresAt - TTL_MS, fromCache: true };
 
     try {
       const q = supabase.from("settings").select("value").eq("key", CACHE_KEY);
@@ -110,15 +119,32 @@ export async function getCachedMipsDevices(
         value.fetched_at &&
         now - Date.parse(value.fetched_at) < TTL_MS
       ) {
-        memo.set(key, { rows: value.rows, expiresAt: Date.parse(value.fetched_at) + TTL_MS });
-        return value.rows;
+        const fetchedAt = Date.parse(value.fetched_at);
+        memo.set(key, { rows: value.rows, expiresAt: fetchedAt + TTL_MS });
+        return { rows: value.rows, fetchedAt, fromCache: true };
       }
     } catch {
       // Fall through to a live fetch.
     }
   }
 
+  const fetchedAt = Date.now();
   const rows = await fetchMipsDevices(url, token);
   await refreshMipsDeviceCache(supabase, branchId, url, rows);
+  return { rows, fetchedAt, fromCache: false };
+}
+
+/**
+ * Returns the device roster, preferring a cache entry younger than 120s.
+ * Pass `forceRefresh` from the writers (sync-to-mips, mips-import-devices).
+ */
+export async function getCachedMipsDevices(
+  supabase: Db,
+  branchId: string | null,
+  baseUrl: string,
+  token: string,
+  options: { forceRefresh?: boolean } = {},
+): Promise<MipsDeviceRow[]> {
+  const { rows } = await getCachedMipsDevicesWithMeta(supabase, branchId, baseUrl, token, options);
   return rows;
 }
