@@ -66,7 +66,7 @@ const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
     queryFn: async (): Promise<HealthEvent[]> => {
       let q = supabase
         .from("access_device_health_events")
-        .select("id, device_name, serial_number, event_type, detected_at, offline_seconds, dispatches_before")
+        .select("id, device_name, serial_number, event_type, detected_at, offline_seconds, dispatches_before, details")
         .order("detected_at", { ascending: false })
         .limit(12);
       if (branchId) q = q.eq("branch_id", branchId);
@@ -77,17 +77,25 @@ const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
     refetchInterval: 60_000,
   });
 
-  const restarts24h = (events || []).filter(
-    (e) => e.event_type === "restart_suspected" && Date.now() - Date.parse(e.detected_at) < 864e5,
-  ).length;
+  const within24h = (e: HealthEvent) => Date.now() - Date.parse(e.detected_at) < 864e5;
+  const restarts24h = (events || []).filter((e) => e.event_type === "restart_suspected" && within24h(e)).length;
+  const storms24h = (events || []).filter((e) => e.event_type === "dispatch_storm" && within24h(e)).length;
+  const gaps24h = (events || []).filter((e) => e.event_type === "heartbeat_gap" && within24h(e)).length;
+  const unstable = restarts24h > 0 || storms24h > 0 || gaps24h > 0;
 
   const runNow = async () => {
     setRunning(true);
     try {
       const { data, error } = await supabase.functions.invoke("mips-device-watchdog", { body: {} });
       if (error) throw error;
-      const r = data as { checked?: number; restarts?: number };
-      toast.success(`Checked ${r?.checked ?? 0} gate(s) — ${r?.restarts ?? 0} restart(s) detected`);
+      const r = data as { checked?: number; restarts?: number; storms?: number; gaps?: number };
+      const extras = [
+        r?.storms ? `${r.storms} command storm(s)` : null,
+        r?.gaps ? `${r.gaps} missed-heartbeat window(s)` : null,
+      ].filter(Boolean);
+      toast.success(
+        `Checked ${r?.checked ?? 0} gate(s) — ${r?.restarts ?? 0} restart(s)${extras.length ? `, ${extras.join(", ")}` : ""}`,
+      );
       qc.invalidateQueries({ queryKey: ["gate-watchdog-events"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Watchdog check failed");
@@ -106,17 +114,30 @@ const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
           <div>
             <CardTitle className="text-base">Gate restart watchdog</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Checks every 5 minutes and records each time a gate drops or reboots.
+              Checks every 5 minutes: gate drops, reboots, missed heartbeats and command storms.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {storms24h > 0 && (
+            <Badge className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700">
+              {storms24h} storm(s) 24h
+            </Badge>
+          )}
           <Badge
             className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              restarts24h > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+              restarts24h > 0
+                ? "bg-red-100 text-red-700"
+                : unstable
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-emerald-100 text-emerald-700"
             }`}
           >
-            {restarts24h > 0 ? `${restarts24h} restart(s) in 24h` : "Stable 24h"}
+            {restarts24h > 0
+              ? `${restarts24h} restart(s) in 24h`
+              : gaps24h > 0
+                ? `${gaps24h} heartbeat gap(s) 24h`
+                : "Stable 24h"}
           </Badge>
           <Button
             variant="outline"
