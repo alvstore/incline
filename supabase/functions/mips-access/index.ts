@@ -1,3 +1,15 @@
+// v2.15.0 — STORM FIX (21 Sep 2026 gate restarts). Root cause: one purchase
+//          transaction fired up to 8 parallel invocations for the same member
+//          (4 hardware_access_events rows + membership + member webhooks), some
+//          carrying `revoke` for the transient "pending" state. They fought over
+//          validTimeEnd and every status flip re-fired the member webhook —
+//          31 gate jobs for one member in 4 min, terminal app restarted.
+//          Now: DB sends `evaluate` (coalesced, one per member per txn); the
+//          worker derives revoke/restore from committed state; a per-member
+//          lock folds concurrent calls into one re-check; CRM state writes go
+//          through an echo-suppressed RPC; a read-back "mismatch" that equals
+//          the freshly-derived target is convergence, not an error; every gate
+//          command is written to mips_sync_attempts.
 // v2.12.0 — validity-only enforcement: person updates never carry face/photo
 //          payloads (base64 image fields are stripped), so gates apply the new
 //          validTimeEnd without re-enrolling faces (which rebooted terminals).
@@ -989,6 +1001,7 @@ async function applyStaffAction(
       supabase,
       effectiveBranchId,
       newValidTimeEnd === REVOKED_DATE ? 2 : 1,
+      { entity_type: person_type, entity_id: person_id, branch_id: effectiveBranchId ?? null },
     );
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
@@ -1089,7 +1102,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const action = body?.action as "revoke" | "restore" | "evaluate" | "sweep_expired" | undefined;
+    const action = body?.action as
+      | "revoke"
+      | "restore"
+      | "evaluate"
+      | "sweep_expired"
+      | "revoke_staff"
+      | "restore_staff"
+      | undefined;
 
     if (!action) {
       return new Response(JSON.stringify({ error: "Missing action" }), {
