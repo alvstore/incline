@@ -1,10 +1,19 @@
-// mips-device-watchdog v1.1.0
+// mips-device-watchdog v1.2.0
 //
 // WHY: the Android turnstiles reboot silently. Nothing in the CRM ever noticed —
 // `access_devices.is_online` was only refreshed when somebody pressed "Import
 // devices". This worker polls the MIPS server device list, detects
 // online → offline → online transitions, and writes an auditable restart trail
 // to `access_device_health_events`.
+//
+// v1.2.0 — COMMAND-STORM DETECTION. The 21 Sep incident proved that a fast
+// terminal restart (60–120 s heartbeat gap) is invisible to a 5-minute poll with
+// a 6-minute staleness bar, so the card said "Stable 24h" while staff watched
+// gates reboot. The thing we CAN see from here is the cause: a burst of gate
+// commands for the same person. Every mips-access / sync-to-mips gate command
+// is now in `mips_sync_attempts`; this tick counts them per gate over the last
+// STORM_WINDOW_MIN minutes and records a `dispatch_storm` event when a gate is
+// being hammered — with the top person named, so the fix is one click away.
 //
 // v1.1.0 — DAMPING. The MIPS server flags a device offline after a single
 // missed 60s heartbeat, so ordinary packet jitter produced fake "restart"
@@ -29,6 +38,13 @@ const MIN_DOWN_SEC = 120;
 const RESTART_WINDOW_SEC = 15 * 60;
 /** Dispatch traffic in this window before the drop is recorded as evidence. */
 const BLAME_WINDOW_MIN = 10;
+/** Storm detection window and thresholds (per gate). */
+const STORM_WINDOW_MIN = 10;
+const STORM_TOTAL_THRESHOLD = 12;
+const STORM_PER_PERSON_THRESHOLD = 4;
+/** Don't re-record the same storm on every tick. */
+const STORM_DEDUPE_MIN = 15;
+
 
 
 const json = (body: unknown, status = 200) =>
