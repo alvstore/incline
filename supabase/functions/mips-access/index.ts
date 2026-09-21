@@ -98,14 +98,34 @@ async function fetchPersonDetail(baseUrl: string, token: string, personId: numbe
 //                the repeated native-bitmap decode is what exhausted device RAM)
 //   2 = Revoke → the gate only drops/expires the authorisation, no template work
 // Access denial never needs a template rebuild, so revokes must dispatch with 2.
-async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string, authType: 1 | 2 = 1): Promise<{ undelivered: number[] }> {
+interface DispatchLedger {
+  entity_type: "member" | "employee" | "trainer";
+  entity_id: string;
+  branch_id?: string | null;
+}
+
+async function dispatchToDevices(
+  baseUrl: string,
+  token: string,
+  personId: number,
+  supabase: any,
+  branchId?: string,
+  authType: 1 | 2 = 1,
+  ledger?: DispatchLedger,
+): Promise<{ undelivered: number[] }> {
   let deviceIds: number[] = [];
+  const deviceUuidByMipsId = new Map<number, string>();
   try {
-    let query = supabase.from("access_devices").select("mips_device_id").eq("is_online", true);
+    let query = supabase.from("access_devices").select("id, mips_device_id").eq("is_online", true);
     if (branchId) query = query.eq("branch_id", branchId);
     const { data: devices } = await query;
     if (devices?.length) {
-      deviceIds = devices.map((d: any) => d.mips_device_id).filter((id: any) => id && !isNaN(Number(id)));
+      for (const d of devices) {
+        if (d.mips_device_id && !isNaN(Number(d.mips_device_id))) {
+          deviceIds.push(Number(d.mips_device_id));
+          deviceUuidByMipsId.set(Number(d.mips_device_id), d.id);
+        }
+      }
     }
   } catch {}
 
@@ -121,6 +141,38 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
   if (deviceIds.length === 0) return { undelivered: [] as number[] };
 
   const undelivered: number[] = [];
+
+  // v2.15.0 — every gate command is written to mips_sync_attempts so the
+  // watchdog's "dispatches before the drop" evidence and the Personnel Sync
+  // ledger see access traffic, not just photo pushes.
+  const record = async (
+    deviceId: number,
+    status: "success" | "failed" | "deferred",
+    detail: { code?: number | null; httpStatus?: number; message?: string | null; latencyMs?: number },
+  ) => {
+    if (!ledger) return;
+    try {
+      await supabase.from("mips_sync_attempts").insert({
+        branch_id: ledger.branch_id ?? branchId ?? null,
+        member_id: ledger.entity_type === "member" ? ledger.entity_id : null,
+        device_id: deviceUuidByMipsId.get(deviceId) ?? null,
+        entity_type: ledger.entity_type,
+        entity_id: ledger.entity_id,
+        mips_person_id: personId,
+        operation: "device_dispatch",
+        status,
+        delivery_stage: status === "success" ? "device_accepted" : status === "failed" ? "failed" : "queued",
+        last_error: status === "success" ? null : (detail.message ?? null),
+        response_code: detail.httpStatus || detail.code || null,
+        latency_ms: detail.latencyMs ?? null,
+        response_payload: { source: "mips-access", auth_type: authType, code: detail.code ?? null, msg: detail.message ?? null },
+        completed_at: new Date().toISOString(),
+        attempt_no: 1,
+      });
+    } catch (e) {
+      console.warn("[mips-access] ledger write failed (non-fatal):", e);
+    }
+  };
 
   // Targeted per-gate push (v2.9.0). The old bulk `syncPerson` call discarded the
   // personId server-side and made every gate re-download the whole roster.
@@ -138,11 +190,17 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
       if (!slotHeld) {
         console.warn(`[mips-access] gate ${deviceId} stayed busy — dispatch not delivered`);
         undelivered.push(deviceId);
+        await record(deviceId, "deferred", { message: "gate throttle window exhausted" });
         continue;
       }
-      await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId], authType });
+      const outcome = await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId], authType });
+      await record(deviceId, outcome.ok ? "success" : "failed", outcome);
+      if (!outcome.ok) {
+        console.warn(`[mips-access] gate ${deviceId} rejected ${authType === 2 ? "revoke" : "issue"} for person ${personId}: ${outcome.message}`);
+      }
     } catch (e) {
       console.warn(`[mips-access] dispatch to device ${deviceId} failed:`, e);
+      await record(deviceId, "failed", { message: e instanceof Error ? e.message : String(e) });
     } finally {
       if (slotHeld) await releaseDispatchSlot(supabase, deviceId);
     }
