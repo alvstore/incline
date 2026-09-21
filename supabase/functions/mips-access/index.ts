@@ -542,7 +542,7 @@ async function sweepExpired(supabase: any) {
     code: "dues" | "expired" | "frozen" = "expired",
   ) => {
     try {
-      const result = await applyMemberAction(supabase, m.id, "revoke", reason, m.branch_id, code);
+      const result = await runMemberActionLocked(supabase, m.id, "revoke", reason, m.branch_id, code);
       if (result.success) {
         if ((result as any).skipped) {
           skippedNoop++;
@@ -636,7 +636,7 @@ async function sweepExpired(supabase: any) {
   }
   for (const row of restorable || []) {
     try {
-      const result = await applyMemberAction(
+      const result = await runMemberActionLocked(
         supabase,
         row.member_id,
         "restore",
