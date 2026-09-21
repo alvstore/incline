@@ -170,8 +170,12 @@ const GateWatchdogCard = ({ branchId }: { branchId?: string }) => {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {format(new Date(e.detected_at), "dd MMM, h:mm a")} ·{" "}
                     {formatDistanceToNow(new Date(e.detected_at), { addSuffix: true })}
-                    {e.offline_seconds != null && ` · down ${Math.round(e.offline_seconds / 60)} min`}
-                    {e.dispatches_before != null &&
+                    {describe(e) ? ` · ${describe(e)}` : null}
+                    {!describe(e) &&
+                      e.offline_seconds != null &&
+                      ` · down ${Math.round(e.offline_seconds / 60)} min`}
+                    {!describe(e) &&
+                      e.dispatches_before != null &&
                       e.dispatches_before > 0 &&
                       ` · ${e.dispatches_before} command(s) sent just before`}
                   </p>
