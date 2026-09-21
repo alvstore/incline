@@ -1001,6 +1001,7 @@ async function applyStaffAction(
       supabase,
       effectiveBranchId,
       newValidTimeEnd === REVOKED_DATE ? 2 : 1,
+      { entity_type: person_type, entity_id: person_id, branch_id: effectiveBranchId ?? null },
     );
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
