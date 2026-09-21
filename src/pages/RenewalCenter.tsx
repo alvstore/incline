@@ -56,16 +56,22 @@ const queues: Array<{ value: RenewalQueue; label: string }> = [
   { value: 'lost', label: 'Lost' },
 ];
 
-/** Human wording for what staff actually record after speaking to a member. */
+/**
+ * Human wording for what staff actually record after speaking to a member.
+ * Order matters: open outcomes first, closing outcomes last. `win_back` CLOSES
+ * the case and counts as a renewal, so it must never be labelled as a promise —
+ * a member who only promised to pay belongs on "Staff will follow up".
+ */
 const outcomes: Array<[string, string]> = [
   ['callback', 'Call back later'],
-  ['staff_followup', 'Staff will follow up'],
-  ['win_back', 'Promised to renew'],
+  ['staff_followup', 'Promised to renew — staff will follow up'],
+  ['win_back', 'Won back — renewed after lapse (closes case)'],
   ['not_interested', 'Not interested'],
   ['frozen', 'Wants to freeze'],
   ['cancelled', 'Cancelled'],
   ['churned', 'Left the gym'],
 ];
+
 
 const STAGE_LOOK: Record<string, { label: string; className: string }> = {
   eligible: { label: 'Not contacted', className: 'bg-muted text-muted-foreground' },
