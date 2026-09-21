@@ -870,7 +870,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const action = body?.action as "revoke" | "restore" | "sweep_expired" | undefined;
+    const action = body?.action as "revoke" | "restore" | "evaluate" | "sweep_expired" | undefined;
 
     if (!action) {
       return new Response(JSON.stringify({ error: "Missing action" }), {
@@ -916,7 +916,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action !== "revoke" && action !== "restore") {
+    if (action !== "revoke" && action !== "restore" && action !== "evaluate") {
       return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -936,7 +936,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const result = await applyMemberAction(supabase, member_id, action, reason, branch_id);
+    // v2.15.0 — every member path runs under the per-member lock. DB webhooks
+    // send `evaluate`; the worker derives revoke/restore from committed state.
+    const result = await runMemberActionLocked(supabase, member_id, action, reason, branch_id);
     const status = result.success ? 200 : result.error === "Member not found" ? 404 : 400;
     return new Response(JSON.stringify(result), {
       status,
