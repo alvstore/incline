@@ -42,8 +42,21 @@ const BLAME_WINDOW_MIN = 10;
 const STORM_WINDOW_MIN = 10;
 const STORM_TOTAL_THRESHOLD = 12;
 const STORM_PER_PERSON_THRESHOLD = 4;
-/** Don't re-record the same storm on every tick. */
+/** Don't re-record the same storm / gap on every tick. */
 const STORM_DEDUPE_MIN = 15;
+/** Heartbeat age at poll time that means the gate has missed ≥2 beats. */
+const GAP_MIN_SEC = 120;
+/** MIPS server JVM timezone — timestamps arrive as bare wall-clock strings. */
+const MIPS_TZ_OFFSET = "+05:30";
+
+/** Parse "YYYY-MM-DD HH:mm:ss" (IST, no offset) or any ISO string to epoch ms. */
+function parseMipsTime(raw: string): number {
+  const s = raw.trim();
+  if (/^\d+$/.test(s)) return Number(s) < 1e12 ? Number(s) * 1000 : Number(s);
+  const iso = s.replace(" ", "T");
+  const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso);
+  return Date.parse(hasOffset ? iso : `${iso}${MIPS_TZ_OFFSET}`);
+}
 
 
 
