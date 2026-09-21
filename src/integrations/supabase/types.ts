@@ -9390,6 +9390,44 @@ export type Database = {
         }
         Relationships: []
       }
+      mips_member_locks: {
+        Row: {
+          created_at: string
+          locked_by: string | null
+          locked_until: string | null
+          member_id: string
+          rerun_reason: string | null
+          rerun_requested: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          locked_by?: string | null
+          locked_until?: string | null
+          member_id: string
+          rerun_reason?: string | null
+          rerun_requested?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          locked_by?: string | null
+          locked_until?: string | null
+          member_id?: string
+          rerun_reason?: string | null
+          rerun_requested?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mips_member_locks_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mips_person_aliases: {
         Row: {
           created_at: string
@@ -16782,8 +16820,34 @@ export type Database = {
         }
         Returns: boolean
       }
+      mips_member_lock_acquire: {
+        Args: {
+          p_member_id: string
+          p_owner: string
+          p_reason?: string
+          p_ttl_seconds?: number
+        }
+        Returns: string
+      }
+      mips_member_lock_release: {
+        Args: {
+          p_keep_if_rerun?: boolean
+          p_member_id: string
+          p_owner: string
+        }
+        Returns: boolean
+      }
       mips_release_dispatch_slot: {
         Args: { p_mips_device_id: number }
+        Returns: undefined
+      }
+      mips_set_member_hardware_state: {
+        Args: {
+          p_clear_requires_sync?: boolean
+          p_member_id: string
+          p_reason?: string
+          p_status: string
+        }
         Returns: undefined
       }
       move_to_dlq: {

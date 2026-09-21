@@ -98,14 +98,34 @@ async function fetchPersonDetail(baseUrl: string, token: string, personId: numbe
 //                the repeated native-bitmap decode is what exhausted device RAM)
 //   2 = Revoke → the gate only drops/expires the authorisation, no template work
 // Access denial never needs a template rebuild, so revokes must dispatch with 2.
-async function dispatchToDevices(baseUrl: string, token: string, personId: number, supabase: any, branchId?: string, authType: 1 | 2 = 1): Promise<{ undelivered: number[] }> {
+interface DispatchLedger {
+  entity_type: "member" | "employee" | "trainer";
+  entity_id: string;
+  branch_id?: string | null;
+}
+
+async function dispatchToDevices(
+  baseUrl: string,
+  token: string,
+  personId: number,
+  supabase: any,
+  branchId?: string,
+  authType: 1 | 2 = 1,
+  ledger?: DispatchLedger,
+): Promise<{ undelivered: number[] }> {
   let deviceIds: number[] = [];
+  const deviceUuidByMipsId = new Map<number, string>();
   try {
-    let query = supabase.from("access_devices").select("mips_device_id").eq("is_online", true);
+    let query = supabase.from("access_devices").select("id, mips_device_id").eq("is_online", true);
     if (branchId) query = query.eq("branch_id", branchId);
     const { data: devices } = await query;
     if (devices?.length) {
-      deviceIds = devices.map((d: any) => d.mips_device_id).filter((id: any) => id && !isNaN(Number(id)));
+      for (const d of devices) {
+        if (d.mips_device_id && !isNaN(Number(d.mips_device_id))) {
+          deviceIds.push(Number(d.mips_device_id));
+          deviceUuidByMipsId.set(Number(d.mips_device_id), d.id);
+        }
+      }
     }
   } catch {}
 
@@ -121,6 +141,38 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
   if (deviceIds.length === 0) return { undelivered: [] as number[] };
 
   const undelivered: number[] = [];
+
+  // v2.15.0 — every gate command is written to mips_sync_attempts so the
+  // watchdog's "dispatches before the drop" evidence and the Personnel Sync
+  // ledger see access traffic, not just photo pushes.
+  const record = async (
+    deviceId: number,
+    status: "success" | "failed" | "deferred",
+    detail: { code?: number | null; httpStatus?: number; message?: string | null; latencyMs?: number },
+  ) => {
+    if (!ledger) return;
+    try {
+      await supabase.from("mips_sync_attempts").insert({
+        branch_id: ledger.branch_id ?? branchId ?? null,
+        member_id: ledger.entity_type === "member" ? ledger.entity_id : null,
+        device_id: deviceUuidByMipsId.get(deviceId) ?? null,
+        entity_type: ledger.entity_type,
+        entity_id: ledger.entity_id,
+        mips_person_id: personId,
+        operation: "device_dispatch",
+        status,
+        delivery_stage: status === "success" ? "device_accepted" : status === "failed" ? "failed" : "queued",
+        last_error: status === "success" ? null : (detail.message ?? null),
+        response_code: detail.httpStatus || detail.code || null,
+        latency_ms: detail.latencyMs ?? null,
+        response_payload: { source: "mips-access", auth_type: authType, code: detail.code ?? null, msg: detail.message ?? null },
+        completed_at: new Date().toISOString(),
+        attempt_no: 1,
+      });
+    } catch (e) {
+      console.warn("[mips-access] ledger write failed (non-fatal):", e);
+    }
+  };
 
   // Targeted per-gate push (v2.9.0). The old bulk `syncPerson` call discarded the
   // personId server-side and made every gate re-download the whole roster.
@@ -138,11 +190,17 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
       if (!slotHeld) {
         console.warn(`[mips-access] gate ${deviceId} stayed busy — dispatch not delivered`);
         undelivered.push(deviceId);
+        await record(deviceId, "deferred", { message: "gate throttle window exhausted" });
         continue;
       }
-      await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId], authType });
+      const outcome = await dispatchPerson({ baseUrl, headers: authHeaders(token), personId, deviceIds: [deviceId], authType });
+      await record(deviceId, outcome.ok ? "success" : "failed", outcome);
+      if (!outcome.ok) {
+        console.warn(`[mips-access] gate ${deviceId} rejected ${authType === 2 ? "revoke" : "issue"} for person ${personId}: ${outcome.message}`);
+      }
     } catch (e) {
       console.warn(`[mips-access] dispatch to device ${deviceId} failed:`, e);
+      await record(deviceId, "failed", { message: e instanceof Error ? e.message : String(e) });
     } finally {
       if (slotHeld) await releaseDispatchSlot(supabase, deviceId);
     }
@@ -189,15 +247,208 @@ type ActionResult = {
 };
 
 
-// Core per-member revoke/restore. Used directly by action=revoke/restore
-// and looped over by action=sweep_expired.
+type ReasonCode = "dues" | "expired" | "frozen" | "manual";
+
+// IST calendar date — membership start/end dates are IST business dates.
+function istToday(): string {
+  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// v2.15.0 — ECHO SUPPRESSION. The worker used to write members.hardware_access_status
+// directly, which fired fn_mips_person_webhook → another mips-access invocation →
+// another write → … The RPC sets a transaction-local flag the triggers honour.
+async function setMemberHardwareState(
+  supabase: any,
+  memberId: string,
+  status: string,
+  reason: string | null,
+): Promise<void> {
+  const { error } = await supabase.rpc("mips_set_member_hardware_state", {
+    p_member_id: memberId,
+    p_status: status,
+    p_reason: reason,
+    p_clear_requires_sync: true,
+  });
+  if (error) {
+    console.warn(`[mips-access] mips_set_member_hardware_state failed for ${memberId}:`, error.message);
+  }
+}
+
+/**
+ * v2.15.0 — Derive the action from COMMITTED CRM state. DB webhooks send
+ * `evaluate` so a transient "pending" membership row inside a purchase can never
+ * revoke a member who just paid, and so all coalesced callers agree on ONE target.
+ */
+async function deriveMemberAction(
+  supabase: any,
+  memberId: string,
+  branchId?: string | null,
+): Promise<{ action: "revoke" | "restore"; reasonCode: ReasonCode; reason: string }> {
+  const { data: m } = await supabase
+    .from("members")
+    .select("id, status, branch_id, hardware_access_enabled, hardware_access_status")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!m) return { action: "revoke", reasonCode: "manual", reason: "member not found" };
+
+  if (String(m.status) !== "active" || m.hardware_access_enabled === false) {
+    return { action: "revoke", reasonCode: "manual", reason: `member status ${m.status}` };
+  }
+
+  const today = istToday();
+  const { data: frozen } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("member_id", memberId)
+    .eq("status", "frozen")
+    .lte("start_date", today)
+    .limit(1)
+    .maybeSingle();
+  if (frozen) return { action: "revoke", reasonCode: "frozen", reason: "membership frozen" };
+
+  const { data: access } = await supabase.rpc("member_access_status", {
+    _member_id: memberId,
+    _branch_id: branchId || m.branch_id || null,
+  });
+  if (access && access.allowed === false) {
+    return {
+      action: "revoke",
+      reasonCode: "dues",
+      reason: `dues Rs. ${access.outstanding_amount} overdue by ${access.days_overdue} day(s)`,
+    };
+  }
+
+  const { data: active } = await supabase
+    .from("memberships")
+    .select("id, end_date")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .lte("start_date", today)
+    .gte("end_date", today)
+    .order("end_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!active) return { action: "revoke", reasonCode: "expired", reason: "no active membership" };
+
+  return { action: "restore", reasonCode: "manual", reason: `active membership until ${active.end_date}` };
+}
+
+/** Desired validTimeEnd for the action, computed from committed CRM state. */
+async function computeDesiredValidity(
+  supabase: any,
+  memberId: string,
+  action: "revoke" | "restore",
+  branchId?: string | null,
+): Promise<{ validTimeEnd: string; error?: string }> {
+  if (action !== "restore") return { validTimeEnd: REVOKED_DATE };
+
+  const { data: access } = await supabase.rpc("member_access_status", {
+    _member_id: memberId,
+    _branch_id: branchId || null,
+  });
+  if (access && access.allowed === false) {
+    return {
+      validTimeEnd: REVOKED_DATE,
+      error: `Cannot restore access: dues Rs. ${access.outstanding_amount} overdue by ${access.days_overdue} day(s)`,
+    };
+  }
+
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("start_date, end_date")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .order("end_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!membership) {
+    return {
+      validTimeEnd: REVOKED_DATE,
+      error: "No active membership found. Cannot restore hardware access without a valid membership.",
+    };
+  }
+  return { validTimeEnd: formatDate(membership.end_date + "T23:59:59", REVOKED_DATE) };
+}
+
+/**
+ * v2.15.0 — PER-MEMBER LOCK WITH COALESCING. Parallel invocations for the same
+ * member (a purchase used to spawn up to eight) collapse into one worker; late
+ * arrivals mark `rerun_requested` and the holder re-derives the final state once.
+ */
+async function runMemberActionLocked(
+  supabase: any,
+  memberId: string,
+  requested: "revoke" | "restore" | "evaluate",
+  reason: string | undefined,
+  branchId: string | undefined,
+  reasonCode?: ReasonCode,
+): Promise<ActionResult> {
+  const owner = `mips-access:${crypto.randomUUID().slice(0, 8)}`;
+  const { data: lock, error: lockErr } = await supabase.rpc("mips_member_lock_acquire", {
+    p_member_id: memberId,
+    p_owner: owner,
+    p_ttl_seconds: 90,
+    p_reason: reason ?? null,
+  });
+  if (lockErr) {
+    // Access enforcement is safety-critical: proceed unlocked rather than drop it.
+    console.warn(`[mips-access] lock acquire failed for ${memberId} (continuing unlocked):`, lockErr.message);
+  } else if (lock === "busy") {
+    console.log(`[mips-access] ${memberId} already being reconciled — coalesced (${requested})`);
+    return {
+      success: true,
+      action: requested === "revoke" ? "revoke" : "restore",
+      skipped: "coalesced",
+      message: "Another worker is reconciling this member and will re-check the final state",
+    };
+  }
+
+  let last: ActionResult = { success: false, action: requested === "revoke" ? "revoke" : "restore", error: "not run" };
+  let released = false;
+  try {
+    for (let pass = 0; pass < 3; pass++) {
+      let action: "revoke" | "restore" = requested === "revoke" ? "revoke" : "restore";
+      let code = reasonCode;
+      let why = reason;
+      if (requested === "evaluate" || pass > 0) {
+        const d = await deriveMemberAction(supabase, memberId, branchId);
+        action = d.action;
+        code = d.reasonCode;
+        why = pass > 0 ? `${reason || d.reason} (re-check after concurrent change)` : reason ? `${reason} → ${d.reason}` : d.reason;
+      }
+      last = await applyMemberAction(supabase, memberId, action, why, branchId, code);
+      if (lockErr) break;
+      const { data: rerun, error: relErr } = await supabase.rpc("mips_member_lock_release", {
+        p_member_id: memberId,
+        p_owner: owner,
+        p_keep_if_rerun: true,
+      });
+      if (relErr || rerun !== true) {
+        released = true;
+        break;
+      }
+      console.log(`[mips-access] ${memberId}: concurrent change arrived while working — re-checking (pass ${pass + 2})`);
+    }
+  } finally {
+    if (!lockErr && !released) {
+      try {
+        await supabase.rpc("mips_member_lock_release", { p_member_id: memberId, p_owner: owner, p_keep_if_rerun: false });
+      } catch (e) {
+        console.warn("[mips-access] lock release failed:", e);
+      }
+    }
+  }
+  return last;
+}
+
+// Core per-member revoke/restore. Always entered via runMemberActionLocked.
 async function applyMemberAction(
   supabase: any,
   member_id: string,
   action: "revoke" | "restore",
   reason: string | undefined,
   branch_id_override: string | undefined,
-  reasonCode?: "dues" | "expired" | "frozen" | "manual",
+  reasonCode?: ReasonCode,
 ): Promise<ActionResult> {
   const { data: member, error: memberError } = await supabase
     .from("members")
@@ -231,7 +482,6 @@ async function applyMemberAction(
     }
   }
 
-
   // Branch-specific MIPS connection if any
   let mipsBaseUrl: string | undefined;
   let mipsUsername: string | undefined;
@@ -256,73 +506,40 @@ async function applyMemberAction(
   const existing = await lookupPerson(baseUrl, token, personSn);
   if (!existing) {
     console.log(`Person ${personSn} not found in MIPS — nothing to ${action}`);
-    await supabase
-      .from("members")
-      .update({
-        hardware_access_status: action === "revoke" ? "revoked" : "none",
-        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
-      })
-      .eq("id", member_id);
+    await setMemberHardwareState(
+      supabase,
+      member_id,
+      action === "revoke" ? "revoked" : "none",
+      action === "revoke" ? (reasonCode || "manual") : null,
+    );
     return { success: true, action, message: "Person not found in MIPS, status updated locally" };
   }
 
-  // FORCE-REVOKE: If dues are detected, we use REVOKED_DATE regardless of the requested action
-  // to ensure the gate is terminal in the middleware.
-  let newValidTimeEnd = REVOKED_DATE;
-  
-  if (action === "restore") {
-    const { data: membership } = await supabase
-      .from("memberships")
-      .select("start_date, end_date")
-      .eq("member_id", member_id)
-      .eq("status", "active")
-      .order("end_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (membership) {
-      newValidTimeEnd = formatDate(membership.end_date + "T23:59:59", REVOKED_DATE);
-    } else {
-      console.warn(`No active membership found for member ${member_id}, cannot restore access`);
-      return {
-        success: false,
-        action,
-        error: "No active membership found. Cannot restore hardware access without a valid membership.",
-      };
-    }
+  // Desired validity from committed CRM state (dues always force the revocation date).
+  const desired = await computeDesiredValidity(supabase, member_id, action, effectiveBranchId);
+  if (action === "restore" && desired.error && desired.error.startsWith("No active membership")) {
+    console.warn(`No active membership found for member ${member_id}, cannot restore access`);
+    return { success: false, action, error: desired.error };
   }
-
-  // Double Check: Even if CRM asked for restore, if DB says dues, we force revoke date.
-  const { data: accessStatus } = await supabase.rpc("member_access_status", { _member_id: member_id, _branch_id: effectiveBranchId || null });
-  if (accessStatus && accessStatus.allowed === false) {
+  let newValidTimeEnd = desired.validTimeEnd;
+  if (action === "restore" && newValidTimeEnd === REVOKED_DATE) {
     console.warn(`Override: CRM requested ${action} but dues detected. Forcing revocation date.`);
-    newValidTimeEnd = REVOKED_DATE;
   }
 
-  // v2.14.0 — IDEMPOTENCY GUARD. The 30-minute sweep kept re-revoking people who
-  // were ALREADY revoked on the server. Every repeat sent another PUT plus a
-  // persionIssue to both gates, and that burst is what pushed the Android
-  // terminals into a face-template rebuild / low-memory reboot loop. If MIPS
-  // already reports the exact validity we are about to write, there is nothing
-  // to send — just reconcile the CRM row and return.
+  // v2.14.0 — IDEMPOTENCY GUARD. If MIPS already reports the exact validity we are
+  // about to write, there is nothing to send — just reconcile the CRM row and return.
   const sameDay = (a: unknown, b: unknown) =>
     String(a || "").trim().slice(0, 10) === String(b || "").trim().slice(0, 10);
   if (sameDay(existing.validTimeEnd, newValidTimeEnd)) {
     console.log(
       `[MIPS-ACCESS] No-op for ${personSn}: server already at validTimeEnd=${existing.validTimeEnd} — skipping PUT + device dispatch`,
     );
-    await supabase
-      .from("members")
-      .update({
-        hardware_access_status: action === "revoke" ? "revoked" : "active",
-        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
-      })
-      .eq("id", member_id);
-    await supabase
-      .from("hardware_access_events")
-      .update({ requires_sync: false })
-      .eq("member_id", member_id)
-      .eq("requires_sync", true);
+    await setMemberHardwareState(
+      supabase,
+      member_id,
+      action === "revoke" ? "revoked" : "active",
+      action === "revoke" ? (reasonCode || "manual") : null,
+    );
     return {
       success: true,
       action,
@@ -343,7 +560,6 @@ async function applyMemberAction(
     `[MIPS-ACCESS] Updating ${personSn} (${updatedPerson.name || existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action}, full_record=${!!detail})`,
   );
 
-
   const putRes = await fetch(`${baseUrl}/personInfo/person`, {
     method: "PUT",
     headers: authHeaders(token),
@@ -357,21 +573,22 @@ async function applyMemberAction(
     return { success: false, action, error: putJson.msg || "MIPS update failed" };
   }
 
+  const ledger = { entity_type: "member" as const, entity_id: member_id, branch_id: effectiveBranchId ?? null };
   let undeliveredGates: number[] = [];
   try {
     const dispatchAuthType: 1 | 2 = newValidTimeEnd === REVOKED_DATE ? 2 : 1;
-    undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, dispatchAuthType)).undelivered;
+    undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, dispatchAuthType, ledger)).undelivered;
     console.log(`Dispatched ${action} to devices for personId=${existing.personId}`);
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
   }
 
-  // v2.8.0 — READ-BACK VERIFICATION WITH RETRY + RE-PUSH. MIPS can answer 200 and
-  // still serve a stale record for a moment (write-behind cache), and it can also
-  // silently drop the update. Poll a few times, re-push once, and only log an
-  // error when the value is still wrong after that.
+  // v2.8.0 — READ-BACK VERIFICATION. MIPS can answer 200 and still serve a stale
+  // record for a moment (write-behind cache), and it can also silently drop the
+  // update. Poll a few times before deciding.
   const norm = (v: string | null) => String(v || "").trim().slice(0, 10);
   let verified = false;
+  let superseded = false;
   let observedValidTimeEnd: string | null = null;
 
   const readBack = async (): Promise<boolean> => {
@@ -393,34 +610,51 @@ async function applyMemberAction(
   }
 
   if (!verified) {
-    // One corrective re-push before giving up — covers the silent-drop case.
-    try {
-      console.warn(`[MIPS-ACCESS] Re-pushing ${personSn} after failed read-back`);
-      const retryDetail = await fetchPersonDetail(baseUrl, token, existing.personId);
-      const retryRes = await fetch(`${baseUrl}/personInfo/person`, {
-        method: "PUT",
-        headers: authHeaders(token),
-        body: JSON.stringify(stripPhotoPayload({
-          ...(retryDetail || updatedPerson),
-          personId: existing.personId,
-          personSn,
-          validTimeEnd: newValidTimeEnd,
-          expiredType: 0,
-        })),
-      });
-      await retryRes.json().catch(() => ({}));
-      await dispatchToDevices(
-        baseUrl,
-        token,
-        existing.personId,
-        supabase,
-        effectiveBranchId,
-        newValidTimeEnd === REVOKED_DATE ? 2 : 1,
-      ).catch(() => {});
-      await new Promise((r) => setTimeout(r, 1500));
-      verified = await readBack();
-    } catch (e) {
-      console.warn("MIPS re-push failed (non-fatal):", e);
+    // v2.15.0 — A NEWER change (renewal, comp days, dues) may have legitimately
+    // moved the target while we were writing. Re-derive from committed state: if
+    // the server already holds the fresh target this is convergence, not a
+    // mismatch, and re-pushing our stale value would start a write fight.
+    const fresh = await computeDesiredValidity(supabase, member_id, action, effectiveBranchId);
+    const freshEnd = fresh.validTimeEnd;
+    if (norm(observedValidTimeEnd) === norm(freshEnd)) {
+      console.log(
+        `[MIPS-ACCESS] ${personSn}: server holds the newer target ${observedValidTimeEnd} (ours was ${newValidTimeEnd}) — superseded, converged`,
+      );
+      newValidTimeEnd = freshEnd;
+      verified = true;
+      superseded = true;
+    } else {
+      // One corrective re-push with the FRESH value — covers the silent-drop case.
+      try {
+        newValidTimeEnd = freshEnd;
+        console.warn(`[MIPS-ACCESS] Re-pushing ${personSn} after failed read-back (target ${newValidTimeEnd})`);
+        const retryDetail = await fetchPersonDetail(baseUrl, token, existing.personId);
+        const retryRes = await fetch(`${baseUrl}/personInfo/person`, {
+          method: "PUT",
+          headers: authHeaders(token),
+          body: JSON.stringify(stripPhotoPayload({
+            ...(retryDetail || updatedPerson),
+            personId: existing.personId,
+            personSn,
+            validTimeEnd: newValidTimeEnd,
+            expiredType: 0,
+          })),
+        });
+        await retryRes.json().catch(() => ({}));
+        await dispatchToDevices(
+          baseUrl,
+          token,
+          existing.personId,
+          supabase,
+          effectiveBranchId,
+          newValidTimeEnd === REVOKED_DATE ? 2 : 1,
+          ledger,
+        ).catch(() => {});
+        await new Promise((r) => setTimeout(r, 1500));
+        verified = await readBack();
+      } catch (e) {
+        console.warn("MIPS re-push failed (non-fatal):", e);
+      }
     }
   }
 
@@ -447,42 +681,28 @@ async function applyMemberAction(
     }
   }
 
-
-
-  // Only mark the member as fully revoked when MIPS actually confirmed the new
+  // Only mark the member as fully reconciled when MIPS actually confirmed the
   // validity. An unverified push keeps the previous status so the sweep retries.
-  const newStatus = action === "revoke" ? "revoked" : "active";
+  const effectiveAction: "revoke" | "restore" = newValidTimeEnd === REVOKED_DATE ? "revoke" : "restore";
+  const newStatus = effectiveAction === "revoke" ? "revoked" : "active";
   if (verified) {
-    await supabase
-      .from("members")
-      .update({
-        hardware_access_status: newStatus,
-        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
-      })
-      .eq("id", member_id);
-
-    // v2.10.0 — the hardware now matches the CRM, so stop the sweep from
-    // re-processing this member forever.
-    await supabase
-      .from("hardware_access_events")
-      .update({ requires_sync: false })
-      .eq("member_id", member_id)
-      .eq("requires_sync", true);
+    await setMemberHardwareState(
+      supabase,
+      member_id,
+      newStatus,
+      effectiveAction === "revoke" ? (reasonCode || "manual") : null,
+    );
   }
 
-
-
-  // v2.11.0 — the sweep re-asserts the same revocation every 30 min. Logging it
-  // each time floods the Live Access Feed and buries real face scans, so only
-  // log a CRM-SYSTEM state change (nothing identical in the last 12 hours).
-  const crmMessage = `Hardware access ${action}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}` +
-    (verified ? " (verified)" : ` (UNVERIFIED — server reports ${observedValidTimeEnd ?? "unknown"})`);
+  // v2.11.0 — only log a CRM-SYSTEM state change (nothing identical in the last 12 hours).
+  const crmMessage = `Hardware access ${effectiveAction}d: ${reason || action}. validTimeEnd=${newValidTimeEnd}` +
+    (verified ? (superseded ? " (verified, superseded by newer change)" : " (verified)") : ` (UNVERIFIED — server reports ${observedValidTimeEnd ?? "unknown"})`);
   const { data: dupLog } = await supabase
     .from("access_logs")
     .select("id")
     .eq("member_id", member_id)
     .eq("device_sn", "CRM-SYSTEM")
-    .eq("event_type", `hardware_${action}`)
+    .eq("event_type", `hardware_${effectiveAction}`)
     .eq("message", crmMessage)
     .gte("created_at", new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
     .limit(1)
@@ -491,8 +711,8 @@ async function applyMemberAction(
   if (!dupLog) {
     await supabase.from("access_logs").insert({
       device_sn: "CRM-SYSTEM",
-      event_type: `hardware_${action}`,
-      result: action === "revoke" ? "member_denied" : "member",
+      event_type: `hardware_${effectiveAction}`,
+      result: effectiveAction === "revoke" ? "member_denied" : "member",
       message: crmMessage,
       member_id: member_id,
       branch_id: effectiveBranchId,
@@ -514,12 +734,11 @@ async function applyMemberAction(
       ? `Gate(s) ${undeliveredGates.join(", ")} stayed busy — the change was not delivered to them`
       : undefined,
     message: verified && !gatesMissed
-      ? `Hardware access ${action}d successfully`
+      ? `Hardware access ${effectiveAction}d successfully`
       : verified
-      ? `Hardware access ${action}d on the server but ${undeliveredGates.length} gate(s) did not receive it`
+      ? `Hardware access ${effectiveAction}d on the server but ${undeliveredGates.length} gate(s) did not receive it`
       : `Hardware access ${action} pushed but NOT confirmed by MIPS`,
   };
-
 }
 
 async function sweepExpired(supabase: any) {
@@ -542,7 +761,7 @@ async function sweepExpired(supabase: any) {
     code: "dues" | "expired" | "frozen" = "expired",
   ) => {
     try {
-      const result = await applyMemberAction(supabase, m.id, "revoke", reason, m.branch_id, code);
+      const result = await runMemberActionLocked(supabase, m.id, "revoke", reason, m.branch_id, code);
       if (result.success) {
         if ((result as any).skipped) {
           skippedNoop++;
@@ -636,7 +855,7 @@ async function sweepExpired(supabase: any) {
   }
   for (const row of restorable || []) {
     try {
-      const result = await applyMemberAction(
+      const result = await runMemberActionLocked(
         supabase,
         row.member_id,
         "restore",
@@ -870,7 +1089,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const action = body?.action as "revoke" | "restore" | "sweep_expired" | undefined;
+    const action = body?.action as "revoke" | "restore" | "evaluate" | "sweep_expired" | undefined;
 
     if (!action) {
       return new Response(JSON.stringify({ error: "Missing action" }), {
@@ -916,7 +1135,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action !== "revoke" && action !== "restore") {
+    if (action !== "revoke" && action !== "restore" && action !== "evaluate") {
       return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -936,7 +1155,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const result = await applyMemberAction(supabase, member_id, action, reason, branch_id);
+    // v2.15.0 — every member path runs under the per-member lock. DB webhooks
+    // send `evaluate`; the worker derives revoke/restore from committed state.
+    const result = await runMemberActionLocked(supabase, member_id, action, reason, branch_id);
     const status = result.success ? 200 : result.error === "Member not found" ? 404 : 400;
     return new Response(JSON.stringify(result), {
       status,
