@@ -77,6 +77,8 @@ Deno.serve(async (req) => {
     let offline = 0;
     let recovered = 0;
     let restarts = 0;
+    let storms = 0;
+
 
     for (const conn of connections || []) {
       const baseUrl = String(conn.server_url).replace(/\/+$/, "");
@@ -130,7 +132,9 @@ Deno.serve(async (req) => {
           is_online: isOnline,
           last_reconcile_at: nowIso,
         };
-        if (isOnline) patch.last_heartbeat = nowIso;
+        // Record the gate's OWN last heartbeat when the server gives us one, so
+        // "last seen" in the fleet view is the terminal's truth, not our poll time.
+        if (isOnline) patch.last_heartbeat = Number.isFinite(beatMs) ? new Date(beatMs).toISOString() : nowIso;
 
         if (was && !isOnline) {
           // ---- went down ----
