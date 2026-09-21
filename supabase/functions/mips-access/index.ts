@@ -1102,7 +1102,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const action = body?.action as "revoke" | "restore" | "evaluate" | "sweep_expired" | undefined;
+    const action = body?.action as
+      | "revoke"
+      | "restore"
+      | "evaluate"
+      | "sweep_expired"
+      | "revoke_staff"
+      | "restore_staff"
+      | undefined;
 
     if (!action) {
       return new Response(JSON.stringify({ error: "Missing action" }), {
