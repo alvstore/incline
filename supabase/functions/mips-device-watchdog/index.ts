@@ -112,7 +112,11 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const remote = await getCachedMipsDevices(supabase, conn.branch_id, baseUrl, token);
+      // Heartbeat ages are measured against the moment the roster was fetched
+      // from MIPS (the shared cache may be up to 120 s old), never against now.
+      const snapshot = await getCachedMipsDevicesWithMeta(supabase, conn.branch_id, baseUrl, token);
+      const remote = snapshot.rows;
+      const rosterAtMs = snapshot.fetchedAt;
       const remoteBySn = new Map<string, any>();
       for (const d of remote) {
         const sn = d.deviceKey || d.sn || d.serialNumber;
