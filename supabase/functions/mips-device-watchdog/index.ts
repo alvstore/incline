@@ -120,12 +120,21 @@ Deno.serve(async (req) => {
         // the server has not heard from it for two whole poll cycles.
         const flagOnline = r.onlineFlag === 1 || r.status === 1 || r.status === "1";
         const rawBeat = r.lastActiveTime || r.last_active_time || r.lastHeartbeat;
-        const beatMs = rawBeat ? Date.parse(String(rawBeat).replace(" ", "T")) : NaN;
+        // v1.2.0 — the MIPS server formats lastActiveTime in its JVM zone (IST,
+        // e.g. "2026-09-21 20:49:40") with no offset. Parsing that bare string in
+        // Deno treated it as UTC, pushing every heartbeat 5.5 h into the future,
+        // so the age clamped to 0 and a gate could never be judged stale — the
+        // reason the card read "Stable 24h" through a day of restarts.
+        const beatMs = rawBeat ? parseMipsTime(String(rawBeat)) : NaN;
         const beatAgeSec = Number.isFinite(beatMs)
           ? Math.max(0, Math.round((Date.now() - beatMs) / 1000))
           : null;
         const heartbeatStale = beatAgeSec === null ? !flagOnline : beatAgeSec > STALE_HEARTBEAT_SEC;
         const isOnline = flagOnline || !heartbeatStale;
+        // Gate beats every 60 s. Two missed beats at poll time is a real silence
+        // window (a fast reboot lands here), even though it's too short to flip
+        // the gate offline. Recorded as evidence, never as a restart.
+        const missedBeats = beatAgeSec !== null && beatAgeSec >= GAP_MIN_SEC && beatAgeSec <= STALE_HEARTBEAT_SEC;
 
         const was = dev.is_online === true;
         const patch: Record<string, unknown> = {
