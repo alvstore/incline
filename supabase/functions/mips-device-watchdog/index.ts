@@ -247,6 +247,47 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ---- v1.2.0 missed-heartbeat evidence (gate still counted online) ----
+        if (missedBeats && isOnline) {
+          try {
+            const dedupeSince = new Date(Date.now() - STORM_DEDUPE_MIN * 60_000).toISOString();
+            const { count: already } = await supabase
+              .from("access_device_health_events")
+              .select("id", { count: "exact", head: true })
+              .eq("device_id", dev.id)
+              .eq("event_type", "heartbeat_gap")
+              .gte("detected_at", dedupeSince);
+            if (!already) {
+              const blameSince = new Date(Date.now() - BLAME_WINDOW_MIN * 60_000).toISOString();
+              const { count: cmds } = await supabase
+                .from("mips_sync_attempts")
+                .select("id", { count: "exact", head: true })
+                .eq("device_id", dev.id)
+                .eq("operation", "device_dispatch")
+                .gte("created_at", blameSince);
+              gaps++;
+              events.push({
+                branch_id: dev.branch_id,
+                device_id: dev.id,
+                serial_number: dev.serial_number,
+                device_name: dev.device_name,
+                event_type: "heartbeat_gap",
+                detected_at: nowIso,
+                offline_seconds: beatAgeSec,
+                dispatches_before: cmds ?? 0,
+                details: {
+                  heartbeat_age_sec: beatAgeSec,
+                  last_heartbeat: Number.isFinite(beatMs) ? new Date(beatMs).toISOString() : null,
+                  server_online_flag: flagOnline,
+                  classification: "gate missed 2+ heartbeats at poll time — consistent with a fast terminal-app restart",
+                },
+              });
+            }
+          } catch (gapErr) {
+            console.warn("[mips-device-watchdog] gap detection failed (non-fatal)", gapErr);
+          }
+        }
+
         // ---- v1.2.0 command-storm detection (independent of online state) ----
         try {
           const stormSince = new Date(Date.now() - STORM_WINDOW_MIN * 60_000).toISOString();
