@@ -16156,6 +16156,50 @@ export type Database = {
         Returns: Json
       }
       generate_employee_code: { Args: { p_branch_id: string }; Returns: string }
+      generate_invoice_number_for: {
+        Args: { _inv: Database["public"]["Tables"]["invoices"]["Row"] }
+        Returns: {
+          amount_paid: number | null
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          customer_email: string | null
+          customer_gstin: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          discount_amount: number | null
+          document_series: string | null
+          due_date: string | null
+          gst_rate: number | null
+          id: string
+          invoice_number: string | null
+          invoice_type: string | null
+          is_gst_invoice: boolean | null
+          is_proforma: boolean
+          member_id: string | null
+          next_reminder_at: string | null
+          notes: string | null
+          payment_due_date: string | null
+          pos_sale_id: string | null
+          refund_amount: number | null
+          refund_reason: string | null
+          refunded_at: string | null
+          refunded_by: string | null
+          reminder_sent_at: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["invoice_status"]
+          subtotal: number
+          tax_amount: number | null
+          total_amount: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "invoices"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       generate_pt_commission: {
         Args: { _member_package_id: string; _payment_mode: string }
         Returns: number
@@ -17166,6 +17210,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      reap_abandoned_addon_invoices: {
+        Args: { _older_than_minutes?: number }
+        Returns: Json
       }
       reap_stuck_communication_logs: {
         Args: { _older_than_minutes?: number }
