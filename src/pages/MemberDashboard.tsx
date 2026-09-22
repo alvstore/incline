@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Calendar, Clock, CreditCard, Dumbbell, FileText, 
-  TrendingUp, User, AlertCircle, CheckCircle, Lock, Gift, Snowflake, Sparkles, Plus, Heart
+  TrendingUp, User, AlertCircle, CheckCircle, Lock, Gift, Snowflake, Sparkles, Plus, Heart, CalendarClock
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -27,6 +27,9 @@ export default function MemberDashboard() {
   const { 
     member, 
     activeMembership, 
+    scheduledMembership,
+    isScheduled,
+    daysUntilStart,
     ptPackages, 
     recentAttendance, 
     pendingInvoices,
@@ -36,6 +39,14 @@ export default function MemberDashboard() {
   } = useMemberData();
 
   const isFrozen = activeMembership?.status === 'frozen';
+  const startsLabel = scheduledMembership
+    ? daysUntilStart <= 0
+      ? 'Starts today'
+      : daysUntilStart === 1
+        ? 'Starts tomorrow'
+        : `Starts in ${daysUntilStart} days`
+    : '';
+
   const [emblaRef] = useEmblaCarousel({ loop: true });
   const [addOnOpen, setAddOnOpen] = useState(false);
 
@@ -234,11 +245,22 @@ export default function MemberDashboard() {
                 </p>
               )}
             </div>
+          ) : isScheduled ? (
+            <div className="text-right">
+              <Badge className="w-fit bg-primary/10 text-primary border-primary/30 hover:bg-primary/20">
+                <CalendarClock className="h-3.5 w-3.5 mr-1" />
+                Scheduled — {scheduledMembership?.plan?.name || 'Plan'}
+              </Badge>
+              <p className="text-xs text-muted-foreground mt-1">
+                {startsLabel} • {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}
+              </p>
+            </div>
           ) : (
             <Badge variant={activeMembership ? "default" : "destructive"} className="w-fit">
               {activeMembership ? 'Active Membership' : 'No Active Membership'}
             </Badge>
           )}
+
         </div>
 
         {/* Ad Banners Carousel */}
@@ -274,14 +296,30 @@ export default function MemberDashboard() {
           </Alert>
         )}
 
+        {/* Scheduled membership notice */}
+        {isScheduled && (
+          <Alert className="border-primary/30 bg-primary/5">
+            <CalendarClock className="h-4 w-4 text-primary" />
+            <AlertTitle className="text-primary">
+              Membership Scheduled — {scheduledMembership?.plan?.name}
+            </AlertTitle>
+            <AlertDescription className="text-muted-foreground">
+              Your plan begins on {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} and runs until{' '}
+              {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}. Gym entry, bookings and benefits unlock
+              automatically on your start date.
+            </AlertDescription>
+          </Alert>
+        )}
+
+
         {/* Primary Stats */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <StatCard
             title="Membership Status"
-            value={isFrozen ? 'Frozen' : (activeMembership ? activeMembership.plan?.name || 'Active' : 'Inactive')}
-            icon={isFrozen ? Snowflake : CreditCard}
-            description={isFrozen ? 'Membership Paused' : (activeMembership ? `${daysRemaining} days remaining` : 'Renew now')}
-            variant={isFrozen ? "default" : (activeMembership ? "success" : "destructive")}
+            value={isFrozen ? 'Frozen' : (activeMembership ? activeMembership.plan?.name || 'Active' : (isScheduled ? (scheduledMembership?.plan?.name || 'Scheduled') : 'Inactive'))}
+            icon={isFrozen ? Snowflake : (isScheduled ? CalendarClock : CreditCard)}
+            description={isFrozen ? 'Membership Paused' : (activeMembership ? `${daysRemaining} days remaining` : (isScheduled ? `${startsLabel} • ${format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}` : 'Renew now'))}
+            variant={isFrozen ? "default" : (activeMembership ? "success" : (isScheduled ? "accent" : "destructive"))}
           />
           <StatCard
             title="PT Sessions"
@@ -384,8 +422,20 @@ export default function MemberDashboard() {
             <CardContent>
               {!activeMembership ? (
                 <div className="text-center py-4">
-                  <p className="text-muted-foreground mb-4">No active membership</p>
-                  <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
+                  {isScheduled ? (
+                    <>
+                      <p className="text-muted-foreground mb-1">
+                        Your {scheduledMembership?.plan?.name} benefits unlock on{' '}
+                        {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}.
+                      </p>
+                      <p className="text-xs text-muted-foreground">{startsLabel}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground mb-4">No active membership</p>
+                      <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
+                    </>
+                  )}
                 </div>
               ) : (!entitlements || entitlements.length === 0) && benefitCredits.length === 0 ? (
                 <div className="text-center py-4">
@@ -548,12 +598,35 @@ export default function MemberDashboard() {
                     </Button>
                   )}
                 </>
+              ) : isScheduled ? (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan</span>
+                    <span className="font-medium">{scheduledMembership?.plan?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge className="bg-primary/10 text-primary border-primary/30">
+                      <CalendarClock className="h-3 w-3 mr-1" />Scheduled
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Start Date</span>
+                    <span>{format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">End Date</span>
+                    <span>{format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{startsLabel} — access opens automatically.</p>
+                </>
               ) : (
                 <div className="text-center py-4">
                   <p className="text-muted-foreground mb-4">No active membership</p>
                   <Button asChild><Link to="/my-requests">Request Membership</Link></Button>
                 </div>
               )}
+
             </CardContent>
           </Card>
 

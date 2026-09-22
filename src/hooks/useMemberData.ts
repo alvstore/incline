@@ -74,6 +74,31 @@ export function useMemberData() {
     },
   });
 
+  // Get scheduled (advance-booked) membership — status stays 'pending' until its start date.
+  const { data: scheduledMembership } = useQuery({
+    queryKey: ['my-scheduled-membership', member?.id],
+    enabled: !!member,
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('memberships')
+        .select(`
+          *,
+          plan:membership_plans(id, name, duration_days, price, max_freeze_days)
+        `)
+        .eq('member_id', member!.id)
+        .eq('status', 'pending')
+        .gte('end_date', today)
+        .order('start_date', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+
   // Get PT packages
   const { data: ptPackages = [] } = useQuery({
     queryKey: ['my-pt-packages', member?.id, myTrainers.length],
@@ -210,10 +235,19 @@ export function useMemberData() {
     ? Math.max(0, Math.ceil((new Date(activeMembership.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
+  // A membership booked in advance: nothing active yet, but it starts on a known date.
+  const isScheduled = !activeMembership && !!scheduledMembership;
+  const daysUntilStart = scheduledMembership
+    ? Math.max(0, Math.ceil((new Date(scheduledMembership.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
   return {
     actor: member,
     member,
     activeMembership,
+    scheduledMembership,
+    isScheduled,
+    daysUntilStart,
     ptPackages,
     myTrainers,
     trainerMap,
@@ -225,6 +259,7 @@ export function useMemberData() {
     isLoading: memberLoading || membershipLoading,
   };
 }
+
 
 export function useUnifiedActor() {
   const { member, isLoading: memberLoading, activeMembership, daysRemaining } = useMemberData();
