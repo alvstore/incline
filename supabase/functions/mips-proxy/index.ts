@@ -304,7 +304,39 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = getBaseUrl(mipsServerUrl);
-    const token = await getRuoYiToken(baseUrl, mipsUsername, mipsPassword);
+
+    // Shared token cache: one login serves every worker AND every browser tab,
+    // instead of one login per proxy call.
+    let token: string;
+    try {
+      token = await getCachedMipsToken(authClient, branch_id || null, {
+        baseUrl,
+        username: mipsUsername,
+        password: mipsPassword,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/login failed|no token|认证/i.test(msg)) throw new MipsError("auth_failed", msg);
+      throw classifyTransport(e);
+    }
+
+    const upperMethod = method.toUpperCase();
+
+    // The device roster is the heaviest MIPS endpoint and the single most-polled
+    // one. Serve unfiltered GETs from the shared 120s cache so N open tabs cost
+    // the Tomcat server at most one fetch every two minutes.
+    if (upperMethod === "GET" && endpoint === "/through/device/list" && !params) {
+      const snapshot = await getCachedMipsDevicesWithMeta(authClient, branch_id || null, baseUrl, token);
+      return new Response(JSON.stringify({
+        success: true,
+        status: 200,
+        cached: snapshot.fromCache,
+        data: { code: 200, msg: "ok", rows: snapshot.rows, total: snapshot.rows.length },
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     let url = `${baseUrl}${endpoint}`;
     if (params) {
