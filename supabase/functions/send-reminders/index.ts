@@ -1,4 +1,4 @@
-// send-reminders v2.5.0 — 7/5/3 cadence + multi-channel fallback chain (whatsapp → sms → email), channel-correct template resolution; skips membership-expiry reminders for branches handed over to the Renewal Engine.
+// send-reminders v2.6.0 — membership expiry reminders use the shared dispatcher and approved UTILITY templates; skips branches handed over to the Renewal Engine.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
@@ -251,6 +251,83 @@ Deno.serve(async (req) => {
         last = res;
       }
       return last;
+    }
+
+    /**
+     * Membership reminders must use the dispatcher so WhatsApp sends resolve an
+     * approved UTILITY template outside the 24-hour service window. The generic
+     * utility template covers cadence days without a dedicated Meta template.
+     */
+    async function dispatchMembershipReminder(
+      channel: Channel,
+      params: {
+        branchId: string;
+        memberId: string;
+        membershipId: string;
+        phone?: string | null;
+        email?: string | null;
+        memberName: string;
+        planName: string;
+        expiryDate: string;
+        daysOut: number;
+        subject: string;
+        message: string;
+      },
+    ): Promise<DeliveryResult> {
+      if (channel === "notification") {
+        return { status: "skipped", error: "channel=notification (in-app only)", channel };
+      }
+      const recipient = channel === "email" ? params.email : params.phone;
+      if (!recipient) {
+        return { status: "skipped", error: channel === "email" ? "no email" : "no phone number", channel };
+      }
+
+      // The approved 7-day template's body is cadence-neutral and names the
+      // expiry date, so it safely covers 7/5/3-day reminders as UTILITY.
+      const eventKey = params.daysOut === 1
+        ? "membership_expiring_1d"
+        : "membership_expiring_7d";
+      try {
+        const { data, error } = await adminClient.functions.invoke("dispatch-communication", {
+          body: {
+            branch_id: params.branchId,
+            channel,
+            category: "membership_reminder",
+            recipient,
+            member_id: params.memberId,
+            payload: {
+              subject: params.subject,
+              body: params.message,
+              variables: {
+                event_key: eventKey,
+                member_name: params.memberName,
+                first_name: params.memberName.split(/\s+/)[0] || "Member",
+                plan_name: params.planName,
+                expiry_date: params.expiryDate,
+                days_to_expiry: String(params.daysOut),
+                variable_1: params.memberName,
+                variable_2: params.expiryDate,
+              },
+              use_branded_template: channel === "email",
+            },
+            dedupe_key: `membership_expiry:${params.membershipId}:${params.daysOut}:${channel}`,
+            ttl_seconds: 30 * 24 * 60 * 60,
+          },
+        });
+        if (error) return { status: "failed", error: error.message, channel };
+        const response = (data ?? {}) as Record<string, unknown>;
+        const status = String(response.status ?? "failed");
+        if (status === "sent" || status === "queued") {
+          return { status: "sent", error: null, channel };
+        }
+        return {
+          status: status === "skipped" ? "skipped" : "failed",
+          error: String(response.reason ?? response.error ?? `dispatcher returned ${status}`),
+          channel,
+        };
+      } catch (error) {
+        return { status: "failed", error: error instanceof Error ? error.message : String(error), channel };
+      }
     }
 
 
@@ -574,20 +651,34 @@ Deno.serve(async (req) => {
             message, type: "warning", category: "membership", action_url: "/my-membership",
           });
 
-          const delivery = await deliverChain(channelChain, {
-
-            branchId: ms.branch_id,
-            memberId: ms.member_id,
-            phone: member.profiles?.phone,
-            email: member.profiles?.email,
-            subject,
-            message,
+          let delivery: DeliveryResult = {
+            status: "skipped",
+            error: "no outbound channel configured",
+            channel: "notification",
+          };
+          const expiryDate = new Date(`${ms.end_date}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            timeZone: "Asia/Kolkata",
           });
-          logComm(delivery, {
-            branchId: ms.branch_id, memberId: ms.member_id,
-            recipient: member.profiles?.email || member.profiles?.phone || member.member_code,
-            subject, message,
-          });
+          for (const channel of channelChain) {
+            if (channel === "notification") continue;
+            delivery = await dispatchMembershipReminder(channel, {
+              branchId: ms.branch_id,
+              memberId: ms.member_id,
+              membershipId: ms.id,
+              phone: member.profiles?.phone,
+              email: member.profiles?.email,
+              memberName,
+              planName,
+              expiryDate,
+              daysOut,
+              subject,
+              message: `Your ${planName} membership expires in ${daysOut} day${daysOut > 1 ? "s" : ""} on ${expiryDate}. Renew now to avoid interruption.`,
+            });
+            if (delivery.status === "sent") break;
+          }
 
           if (delivery.status === "sent") results.membership_expiry++;
           else if (delivery.status === "failed") failures.membership_expiry++;
