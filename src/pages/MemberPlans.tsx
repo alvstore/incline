@@ -39,7 +39,7 @@ interface Plan {
 }
 
 export default function MemberPlansPage() {
-  const { member, activeMembership, isLoading: memberLoading } = useMemberData();
+  const { member, activeMembership, scheduledMembership, isScheduled, daysUntilStart, isLoading: memberLoading } = useMemberData();
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [presetPlanId, setPresetPlanId] = useState<string | undefined>(undefined);
   const [addOnOpen, setAddOnOpen] = useState(false);
