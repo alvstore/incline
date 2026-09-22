@@ -27,6 +27,9 @@ export default function MemberDashboard() {
   const { 
     member, 
     activeMembership, 
+    scheduledMembership,
+    isScheduled,
+    daysUntilStart,
     ptPackages, 
     recentAttendance, 
     pendingInvoices,
@@ -36,6 +39,14 @@ export default function MemberDashboard() {
   } = useMemberData();
 
   const isFrozen = activeMembership?.status === 'frozen';
+  const startsLabel = scheduledMembership
+    ? daysUntilStart <= 0
+      ? 'Starts today'
+      : daysUntilStart === 1
+        ? 'Starts tomorrow'
+        : `Starts in ${daysUntilStart} days`
+    : '';
+
   const [emblaRef] = useEmblaCarousel({ loop: true });
   const [addOnOpen, setAddOnOpen] = useState(false);
 
