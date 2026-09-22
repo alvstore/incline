@@ -15,7 +15,6 @@ import DeviceHealthStrip from "@/components/devices/DeviceHealthStrip";
 import DeviceAttentionBar from "@/components/devices/DeviceAttentionBar";
 import FaceEnrolmentPanel from "@/components/devices/FaceEnrolmentPanel";
 import MipsServerStatusBanner from "@/components/devices/MipsServerStatusBanner";
-import GateWatchdogCard from "@/components/devices/GateWatchdogCard";
 import GateErrorLogCard from "@/components/devices/GateErrorLogCard";
 
 import DeviceSetupSheet from "@/components/devices/DeviceSetupSheet";
@@ -97,7 +96,7 @@ const DeviceManagement = () => {
               <ScanFace className="h-4 w-4" /> Face Sync
             </TabsTrigger>
             <TabsTrigger value="watchdog" className="gap-1.5 rounded-lg">
-              <HeartPulse className="h-4 w-4" /> Restart Watchdog
+              <HeartPulse className="h-4 w-4" /> Gate Errors
             </TabsTrigger>
             <TabsTrigger value="live-feed" className="gap-1.5 rounded-lg">
               <Activity className="h-4 w-4" /> Live Feed
@@ -117,7 +116,6 @@ const DeviceManagement = () => {
           </TabsContent>
 
           <TabsContent value="watchdog" className="space-y-4">
-            <GateWatchdogCard branchId={branchFilter || undefined} />
             <GateErrorLogCard branchId={branchFilter || undefined} />
           </TabsContent>
 
