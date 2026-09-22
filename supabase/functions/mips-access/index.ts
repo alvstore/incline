@@ -30,7 +30,7 @@
 //         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
@@ -61,7 +61,7 @@ async function getRuoYiToken(
   const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  return await getCachedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
+  return await getVerifiedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
 }
 
 function authHeaders(token: string): Record<string, string> {

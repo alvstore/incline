@@ -20,7 +20,7 @@ import {
   dispatchPerson,
   releaseDispatchSlot,
 } from "../_shared/mipsDispatch.ts";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
     }
     if (!serverUrl) return json({ error: "No MIPS server configured" }, 400);
     const baseUrl = serverUrl.replace(/\/+$/, "");
-    const token = await getCachedMipsToken(supabase, branch_id ?? null, { baseUrl, username, password });
+    const token = await getVerifiedMipsToken(supabase, branch_id ?? null, { baseUrl, username, password });
 
     // 1. Device inventory — shared 120s cache, so parallel workers hit MIPS once.
     const devRows: any[] = await getCachedMipsDevices(supabase, branch_id ?? null, baseUrl, token);

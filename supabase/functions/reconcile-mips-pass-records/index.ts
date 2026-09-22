@@ -18,7 +18,7 @@ import {
   recordTransportFailure,
   recordSuccess,
 } from "../_shared/mipsHealth.ts";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 
 type Role = "owner" | "admin" | "manager" | "staff" | "trainer" | "member";
 
@@ -171,7 +171,7 @@ async function getRuoYiToken(
   username: string,
   password: string,
 ): Promise<string> {
-  return await getCachedMipsToken(tokenCacheClient(), branchId, { baseUrl, username, password });
+  return await getVerifiedMipsToken(tokenCacheClient(), branchId, { baseUrl, username, password });
 }
 
 function extractRows(json: Record<string, unknown>): MipsPassRecord[] {

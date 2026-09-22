@@ -39,7 +39,7 @@ import {
   recordSuccess,
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 import {
   type LedgerDevice,
@@ -408,7 +408,7 @@ Deno.serve(async (req) => {
       let token: string;
       let counts: DeviceCount[];
       try {
-        token = await getCachedMipsToken(supabase, branchId, { baseUrl, username, password });
+        token = await getVerifiedMipsToken(supabase, branchId, { baseUrl, username, password });
         counts = await readDeviceCounts(supabase, branchId, baseUrl, token);
         await recordSuccess(supabase, branchId);
       } catch (e) {
