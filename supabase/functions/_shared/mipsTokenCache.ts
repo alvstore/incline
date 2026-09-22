@@ -14,7 +14,11 @@
 type Db = any;
 
 const TOKEN_KEY = "mips_auth_token";
-const TTL_MS = 22 * 60 * 60 * 1000;
+// RuoYi/Spring Security expires the session after ~30 min of idleness and drops
+// every session when Tomcat restarts. A 22h TTL therefore handed out tokens the
+// server had already forgotten (401 "认证失败"). Cache for 20 min and always
+// verify before use — logins stay rare, but never stale.
+const TTL_MS = 20 * 60 * 1000;
 
 interface TokenRecord {
   token: string;
