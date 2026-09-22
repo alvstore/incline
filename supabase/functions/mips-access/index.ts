@@ -80,7 +80,11 @@ async function lookupPerson(baseUrl: string, token: string, personSn: string): P
     method: "GET",
     headers: authHeaders(token),
   });
-  const json = await res.json();
+  const json = await res.json().catch(() => null);
+  // Never let an auth failure masquerade as "person does not exist".
+  if (res.status === 401 || Number(json?.code) === 401) {
+    throw new Error(`MIPS authentication failed while looking up ${personSn}: ${json?.msg || "unauthorized"}`);
+  }
   const rows = json?.rows || json?.data;
   if (!Array.isArray(rows)) return null;
   return rows.find((r: any) => r.personSn === personSn) || null;
