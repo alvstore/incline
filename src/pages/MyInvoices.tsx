@@ -85,9 +85,18 @@ export default function MyInvoices() {
     );
   }
 
-  const pendingInvoices = invoices.filter(inv => ['pending', 'partial', 'overdue'].includes(inv.status));
-  const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+  // Drafts are unfinished online checkouts — nothing is owed on them, so they are
+  // never listed as bills. They surface in their own "Payment not completed" card.
+  const draftInvoices = invoices.filter(inv => inv.status === 'draft');
+  const issuedInvoices = invoices.filter(inv => inv.status !== 'draft');
+  const pendingInvoices = issuedInvoices.filter(inv => ['pending', 'partial', 'overdue'].includes(inv.status));
+  const paidInvoices = issuedInvoices.filter(inv => inv.status === 'paid');
   const totalPending = pendingInvoices.reduce((sum, inv) => sum + (inv.total_amount - (inv.amount_paid || 0)), 0);
+
+  const discardDraft = async (invoiceId: string) => {
+    await supabase.rpc('abandon_online_addon_invoice' as never, { _invoice_id: invoiceId } as never);
+    refetch();
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
