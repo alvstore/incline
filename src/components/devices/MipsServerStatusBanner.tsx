@@ -48,7 +48,7 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
         return v.open && !worst.open ? v : worst;
       }, null);
     },
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
     staleTime: 15_000,
   });
 

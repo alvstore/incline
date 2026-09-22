@@ -67,7 +67,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         .eq("status", "pending");
       return count ?? 0;
     },
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
   });
 
   const handleHealQueue = async () => {
