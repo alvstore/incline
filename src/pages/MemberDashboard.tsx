@@ -598,12 +598,35 @@ export default function MemberDashboard() {
                     </Button>
                   )}
                 </>
+              ) : isScheduled ? (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan</span>
+                    <span className="font-medium">{scheduledMembership?.plan?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge className="bg-primary/10 text-primary border-primary/30">
+                      <CalendarClock className="h-3 w-3 mr-1" />Scheduled
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Start Date</span>
+                    <span>{format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">End Date</span>
+                    <span>{format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{startsLabel} — access opens automatically.</p>
+                </>
               ) : (
                 <div className="text-center py-4">
                   <p className="text-muted-foreground mb-4">No active membership</p>
                   <Button asChild><Link to="/my-requests">Request Membership</Link></Button>
                 </div>
               )}
+
             </CardContent>
           </Card>
 
