@@ -345,8 +345,6 @@ Deno.serve(async (req) => {
       url += `?${searchParams.toString()}`;
     }
 
-    const upperMethod = method.toUpperCase();
-
     const fetchOptions: RequestInit = {
       method: upperMethod,
       headers: {
