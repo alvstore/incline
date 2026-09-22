@@ -245,11 +245,22 @@ export default function MemberDashboard() {
                 </p>
               )}
             </div>
+          ) : isScheduled ? (
+            <div className="text-right">
+              <Badge className="w-fit bg-primary/10 text-primary border-primary/30 hover:bg-primary/20">
+                <CalendarClock className="h-3.5 w-3.5 mr-1" />
+                Scheduled — {scheduledMembership?.plan?.name || 'Plan'}
+              </Badge>
+              <p className="text-xs text-muted-foreground mt-1">
+                {startsLabel} • {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}
+              </p>
+            </div>
           ) : (
             <Badge variant={activeMembership ? "default" : "destructive"} className="w-fit">
               {activeMembership ? 'Active Membership' : 'No Active Membership'}
             </Badge>
           )}
+
         </div>
 
         {/* Ad Banners Carousel */}
