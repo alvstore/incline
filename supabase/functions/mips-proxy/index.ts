@@ -1,4 +1,10 @@
-// mips-proxy v1.4.1
+// mips-proxy v1.5.0
+// v1.5.0 — LOAD SHEDDING. The browser Device Command Center hit this proxy every
+// 30s per open tab, and each call logged in to Tomcat and pulled the heavy
+// /through/device/list. Now: auth comes from the shared cross-worker token cache
+// (`_shared/mipsTokenCache.ts`) and device-list GETs are served from the shared
+// 120s roster cache (`_shared/mipsDeviceCache.ts`). Saved-credential testing still
+// performs a real login so a rotated password is verified immediately.
 // v1.4.1 — normalize legacy host:port runtime values before constructing URLs.
 // v1.4.0 — secure owner/admin connection management, draft credential testing,
 // and credential-scoped token caching so password rotations take effect immediately.
@@ -7,6 +13,8 @@
 // password apart from a dead server instead of labelling everything "Unreachable".
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevicesWithMeta } from "../_shared/mipsDeviceCache.ts";
 
 async function generateHmacSha256(message: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -296,7 +304,39 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = getBaseUrl(mipsServerUrl);
-    const token = await getRuoYiToken(baseUrl, mipsUsername, mipsPassword);
+
+    // Shared token cache: one login serves every worker AND every browser tab,
+    // instead of one login per proxy call.
+    let token: string;
+    try {
+      token = await getCachedMipsToken(authClient, branch_id || null, {
+        baseUrl,
+        username: mipsUsername,
+        password: mipsPassword,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/login failed|no token|认证/i.test(msg)) throw new MipsError("auth_failed", msg);
+      throw classifyTransport(e);
+    }
+
+    const upperMethod = method.toUpperCase();
+
+    // The device roster is the heaviest MIPS endpoint and the single most-polled
+    // one. Serve unfiltered GETs from the shared 120s cache so N open tabs cost
+    // the Tomcat server at most one fetch every two minutes.
+    if (upperMethod === "GET" && endpoint === "/through/device/list" && !params) {
+      const snapshot = await getCachedMipsDevicesWithMeta(authClient, branch_id || null, baseUrl, token);
+      return new Response(JSON.stringify({
+        success: true,
+        status: 200,
+        cached: snapshot.fromCache,
+        data: { code: 200, msg: "ok", rows: snapshot.rows, total: snapshot.rows.length },
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     let url = `${baseUrl}${endpoint}`;
     if (params) {
@@ -304,8 +344,6 @@ Deno.serve(async (req) => {
       for (const [k, v] of Object.entries(params)) searchParams.set(k, v);
       url += `?${searchParams.toString()}`;
     }
-
-    const upperMethod = method.toUpperCase();
 
     const fetchOptions: RequestInit = {
       method: upperMethod,

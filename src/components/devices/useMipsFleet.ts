@@ -73,11 +73,15 @@ export interface GateTruth {
 export function useMipsFleet(branchId?: string) {
   const scope = branchId || "all";
 
+  // Polling intervals are deliberately slow: every tick reaches the MIPS Tomcat
+  // server, and aggressive 30s polling from open browser tabs was a major share
+  // of the load that dropped the gateway TCP link the turnstiles ride on.
   const connectionQuery = useQuery({
     queryKey: ["mips-connection-test", scope],
     queryFn: () => testMIPSConnection(branchId),
     staleTime: 10_000,
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
+    refetchOnWindowFocus: false,
     retry: false,
     placeholderData: keepPreviousData,
   });
@@ -86,7 +90,8 @@ export function useMipsFleet(branchId?: string) {
     queryKey: ["mips-devices", scope],
     queryFn: () => fetchMIPSDevices(branchId),
     staleTime: 10_000,
-    refetchInterval: 30_000,
+    refetchInterval: 300_000,
+    refetchOnWindowFocus: false,
     retry: 1,
     placeholderData: keepPreviousData,
   });
@@ -153,7 +158,8 @@ export function useMipsFleet(branchId?: string) {
       };
     },
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: 600_000,
+    refetchOnWindowFocus: false,
     retry: 1,
   });
 
