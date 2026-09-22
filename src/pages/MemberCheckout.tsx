@@ -69,7 +69,7 @@ export default function MemberCheckout() {
       const { data, error: fetchErr } = await supabase
         .from('invoices')
         .select(`
-          id, invoice_number, total_amount, amount_paid, status, due_date, branch_id, member_id,
+          id, invoice_number, total_amount, amount_paid, status, due_date, branch_id, member_id, invoice_type,
           members!invoices_member_id_fkey ( user_id ),
           branches!invoices_branch_id_fkey ( name )
         `)
@@ -112,6 +112,7 @@ export default function MemberCheckout() {
         member_phone: memberPhone,
         member_email: memberEmail,
         branch_name: (data.branches as any)?.name || 'Incline Fitness',
+        invoice_type: (data as any).invoice_type ?? null,
       });
     } catch {
       setError('Failed to load invoice.');
