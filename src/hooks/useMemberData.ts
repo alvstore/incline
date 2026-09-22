@@ -235,10 +235,19 @@ export function useMemberData() {
     ? Math.max(0, Math.ceil((new Date(activeMembership.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
+  // A membership booked in advance: nothing active yet, but it starts on a known date.
+  const isScheduled = !activeMembership && !!scheduledMembership;
+  const daysUntilStart = scheduledMembership
+    ? Math.max(0, Math.ceil((new Date(scheduledMembership.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
   return {
     actor: member,
     member,
     activeMembership,
+    scheduledMembership,
+    isScheduled,
+    daysUntilStart,
     ptPackages,
     myTrainers,
     trainerMap,
@@ -250,6 +259,7 @@ export function useMemberData() {
     isLoading: memberLoading || membershipLoading,
   };
 }
+
 
 export function useUnifiedActor() {
   const { member, isLoading: memberLoading, activeMembership, daysRemaining } = useMemberData();
