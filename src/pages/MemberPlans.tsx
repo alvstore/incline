@@ -181,6 +181,32 @@ export default function MemberPlansPage() {
               </div>
             </CardContent>
           </Card>
+        ) : isScheduled ? (
+          <Card className="overflow-hidden rounded-2xl border-border/60 shadow-lg shadow-primary/10">
+            <CardContent className="grid gap-4 bg-gradient-to-r from-primary to-primary p-6 text-primary-foreground md:grid-cols-[1.4fr_1fr] md:items-center">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full bg-card/15 backdrop-blur px-3 py-1 text-xs font-medium">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  Scheduled Membership
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold">{scheduledMembership?.plan?.name || 'Your Plan'}</h2>
+                <p className="text-sm text-primary-foreground/85">
+                  {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} →{' '}
+                  {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-card/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/70">Starts in</p>
+                  <p className="mt-2 text-2xl font-semibold">{daysUntilStart} {daysUntilStart === 1 ? 'day' : 'days'}</p>
+                </div>
+                <div className="rounded-2xl bg-card/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/70">Outstanding dues</p>
+                  <p className="mt-2 text-2xl font-semibold">₹{totalDue.toLocaleString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <div className="flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
             <span className="text-muted-foreground">
@@ -188,6 +214,7 @@ export default function MemberPlansPage() {
             </span>
           </div>
         )}
+
 
         {/* Pending invoices quick view */}
         {pendingInvoices.length > 0 && (
