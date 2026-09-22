@@ -515,7 +515,26 @@ async function applyMemberAction(
   const baseUrl = getBaseUrl(mipsBaseUrl);
   const token = await getRuoYiToken(supabase, effectiveBranchId ?? null, mipsBaseUrl, mipsUsername, mipsPassword);
 
-  const existing = await lookupPerson(baseUrl, token, personSn);
+  let existing = await lookupPerson(baseUrl, token, personSn);
+  if (!existing && action === "restore") {
+    // Self-heal: a member who registered or bought a plan but was never created
+    // on the gate server must be provisioned now, otherwise they simply never
+    // get access and the miss is invisible until someone is stuck at the door.
+    console.log(`Person ${personSn} missing in MIPS — provisioning via sync-to-mips before restore`);
+    try {
+      await supabase.functions.invoke("sync-to-mips", {
+        body: {
+          person_type: "member",
+          person_id: member_id,
+          branch_id: effectiveBranchId ?? undefined,
+          deploy_to_devices: true,
+        },
+      });
+    } catch (e) {
+      console.warn(`[mips-access] auto-provision failed for ${personSn}:`, e);
+    }
+    existing = await lookupPerson(baseUrl, token, personSn);
+  }
   if (!existing) {
     console.log(`Person ${personSn} not found in MIPS — nothing to ${action}`);
     await setMemberHardwareState(
