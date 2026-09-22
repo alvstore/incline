@@ -220,7 +220,7 @@ export default function MyInvoices() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => {
+                  {issuedInvoices.map((invoice) => {
                     const amountDue = invoice.total_amount - (invoice.amount_paid || 0);
                     return (
                       <TableRow key={invoice.id}>
