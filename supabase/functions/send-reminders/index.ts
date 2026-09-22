@@ -649,20 +649,34 @@ Deno.serve(async (req) => {
             message, type: "warning", category: "membership", action_url: "/my-membership",
           });
 
-          const delivery = await deliverChain(channelChain, {
-
-            branchId: ms.branch_id,
-            memberId: ms.member_id,
-            phone: member.profiles?.phone,
-            email: member.profiles?.email,
-            subject,
-            message,
+          let delivery: DeliveryResult = {
+            status: "skipped",
+            error: "no outbound channel configured",
+            channel: "notification",
+          };
+          const expiryDate = new Date(`${ms.end_date}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            timeZone: "Asia/Kolkata",
           });
-          logComm(delivery, {
-            branchId: ms.branch_id, memberId: ms.member_id,
-            recipient: member.profiles?.email || member.profiles?.phone || member.member_code,
-            subject, message,
-          });
+          for (const channel of channelChain) {
+            if (channel === "notification") continue;
+            delivery = await dispatchMembershipReminder(channel, {
+              branchId: ms.branch_id,
+              memberId: ms.member_id,
+              membershipId: ms.id,
+              phone: member.profiles?.phone,
+              email: member.profiles?.email,
+              memberName,
+              planName,
+              expiryDate,
+              daysOut,
+              subject,
+              message,
+            });
+            if (delivery.status === "sent") break;
+          }
 
           if (delivery.status === "sent") results.membership_expiry++;
           else if (delivery.status === "failed") failures.membership_expiry++;
