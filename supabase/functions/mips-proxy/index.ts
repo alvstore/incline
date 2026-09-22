@@ -1,4 +1,10 @@
-// mips-proxy v1.4.1
+// mips-proxy v1.5.0
+// v1.5.0 — LOAD SHEDDING. The browser Device Command Center hit this proxy every
+// 30s per open tab, and each call logged in to Tomcat and pulled the heavy
+// /through/device/list. Now: auth comes from the shared cross-worker token cache
+// (`_shared/mipsTokenCache.ts`) and device-list GETs are served from the shared
+// 120s roster cache (`_shared/mipsDeviceCache.ts`). Saved-credential testing still
+// performs a real login so a rotated password is verified immediately.
 // v1.4.1 — normalize legacy host:port runtime values before constructing URLs.
 // v1.4.0 — secure owner/admin connection management, draft credential testing,
 // and credential-scoped token caching so password rotations take effect immediately.
@@ -7,6 +13,8 @@
 // password apart from a dead server instead of labelling everything "Unreachable".
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getCachedMipsDevicesWithMeta } from "../_shared/mipsDeviceCache.ts";
 
 async function generateHmacSha256(message: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
