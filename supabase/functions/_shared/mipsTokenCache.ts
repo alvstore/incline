@@ -134,6 +134,49 @@ export async function getCachedMipsToken(
   return token;
 }
 
+/**
+ * Same as getCachedMipsToken, but proves the token is still accepted by the
+ * server with one cheap authenticated GET. On 401 the cache entry is dropped
+ * and a fresh login is performed — so callers can never fire a write with a
+ * session Tomcat has already invalidated.
+ */
+export async function getVerifiedMipsToken(
+  supabase: Db,
+  branchId: string | null,
+  creds: MipsCredentials,
+): Promise<string> {
+  const baseUrl = String(creds.baseUrl || "").replace(/\/+$/, "");
+  const token = await getCachedMipsToken(supabase, branchId, { ...creds, baseUrl });
+  if (await tokenWorks(baseUrl, token)) return token;
+
+  await invalidateMipsToken(supabase, branchId, { baseUrl, username: creds.username });
+  return await getCachedMipsToken(supabase, branchId, { ...creds, baseUrl });
+}
+
+async function tokenWorks(baseUrl: string, token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${baseUrl}/personInfo/person/list?pageNum=1&pageSize=1`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "TENANT-ID": "1",
+        "Accept": "application/json",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 401) return false;
+    const text = await res.text();
+    // deno-lint-ignore no-explicit-any
+    let j: any;
+    try { j = JSON.parse(text); } catch { return true; }
+    return Number(j?.code) !== 401;
+  } catch {
+    // Network trouble is not an auth problem — keep the token, let the caller
+    // surface the real transport error (and the circuit breaker handle it).
+    return true;
+  }
+}
+
 /** Drop a token that the server rejected so the next call re-authenticates. */
 export async function invalidateMipsToken(
   supabase: Db,
