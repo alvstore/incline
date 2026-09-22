@@ -316,10 +316,10 @@ export default function MemberDashboard() {
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <StatCard
             title="Membership Status"
-            value={isFrozen ? 'Frozen' : (activeMembership ? activeMembership.plan?.name || 'Active' : 'Inactive')}
-            icon={isFrozen ? Snowflake : CreditCard}
-            description={isFrozen ? 'Membership Paused' : (activeMembership ? `${daysRemaining} days remaining` : 'Renew now')}
-            variant={isFrozen ? "default" : (activeMembership ? "success" : "destructive")}
+            value={isFrozen ? 'Frozen' : (activeMembership ? activeMembership.plan?.name || 'Active' : (isScheduled ? (scheduledMembership?.plan?.name || 'Scheduled') : 'Inactive'))}
+            icon={isFrozen ? Snowflake : (isScheduled ? CalendarClock : CreditCard)}
+            description={isFrozen ? 'Membership Paused' : (activeMembership ? `${daysRemaining} days remaining` : (isScheduled ? `${startsLabel} • ${format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}` : 'Renew now'))}
+            variant={isFrozen ? "default" : (activeMembership ? "success" : (isScheduled ? "accent" : "destructive"))}
           />
           <StatCard
             title="PT Sessions"
