@@ -3,7 +3,7 @@
 // if already set by an admin. Called by MIPSDevicesTab "Import all" button.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const baseUrl = serverUrl.replace(/\/+$/, "");
 
     // Auth via the shared token cache (no per-invocation /login against Tomcat)
-    const token = await getCachedMipsToken(supabase, branchId ?? null, { baseUrl, username, password });
+    const token = await getVerifiedMipsToken(supabase, branchId ?? null, { baseUrl, username, password });
 
     // List devices live (this worker is a writer — it re-primes the shared cache)
     const rows: any[] = await getCachedMipsDevices(supabase, branchId ?? null, baseUrl, token, { forceRefresh: true });

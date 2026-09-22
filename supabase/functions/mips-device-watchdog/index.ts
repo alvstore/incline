@@ -22,7 +22,7 @@
 // missed poll cycles) before calling a gate down. A gate must also have been
 // down for at least MIN_DOWN_SEC before a recovery counts as a reboot.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevicesWithMeta } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       const baseUrl = String(conn.server_url).replace(/\/+$/, "");
       let token: string;
       try {
-        token = await getCachedMipsToken(supabase, conn.branch_id, {
+        token = await getVerifiedMipsToken(supabase, conn.branch_id, {
           baseUrl,
           username: conn.username,
           password: conn.password,

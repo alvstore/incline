@@ -44,7 +44,7 @@ import {
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
 import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 
@@ -134,7 +134,7 @@ async function getRuoYiToken(
   const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  return await getCachedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
+  return await getVerifiedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -154,6 +154,11 @@ async function lookupPerson(baseUrl: string, token: string, personSn: string): P
   const text = await res.text();
   let json: any;
   try { json = JSON.parse(text); } catch { return null; }
+  // An auth failure must NEVER look like "person does not exist" — that turned
+  // a 401 into a bogus create POST and a misleading toast on the Devices page.
+  if (res.status === 401 || Number(json?.code) === 401) {
+    throw new Error(`MIPS authentication failed while looking up ${personSn}: ${json?.msg || text.slice(0, 160)}`);
+  }
   const rows = json?.rows || json?.data;
   if (!Array.isArray(rows)) return null;
   return rows.find((r: any) => r.personSn === personSn) || null;

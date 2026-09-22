@@ -30,7 +30,7 @@
 //         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
-import { getCachedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
 const corsHeaders = {
@@ -61,7 +61,7 @@ async function getRuoYiToken(
   const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  return await getCachedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
+  return await getVerifiedMipsToken(supabase, branchId, { baseUrl: url, username: user, password: pass });
 }
 
 function authHeaders(token: string): Record<string, string> {
@@ -80,7 +80,11 @@ async function lookupPerson(baseUrl: string, token: string, personSn: string): P
     method: "GET",
     headers: authHeaders(token),
   });
-  const json = await res.json();
+  const json = await res.json().catch(() => null);
+  // Never let an auth failure masquerade as "person does not exist".
+  if (res.status === 401 || Number(json?.code) === 401) {
+    throw new Error(`MIPS authentication failed while looking up ${personSn}: ${json?.msg || "unauthorized"}`);
+  }
   const rows = json?.rows || json?.data;
   if (!Array.isArray(rows)) return null;
   return rows.find((r: any) => r.personSn === personSn) || null;
@@ -515,7 +519,26 @@ async function applyMemberAction(
   const baseUrl = getBaseUrl(mipsBaseUrl);
   const token = await getRuoYiToken(supabase, effectiveBranchId ?? null, mipsBaseUrl, mipsUsername, mipsPassword);
 
-  const existing = await lookupPerson(baseUrl, token, personSn);
+  let existing = await lookupPerson(baseUrl, token, personSn);
+  if (!existing && action === "restore") {
+    // Self-heal: a member who registered or bought a plan but was never created
+    // on the gate server must be provisioned now, otherwise they simply never
+    // get access and the miss is invisible until someone is stuck at the door.
+    console.log(`Person ${personSn} missing in MIPS — provisioning via sync-to-mips before restore`);
+    try {
+      await supabase.functions.invoke("sync-to-mips", {
+        body: {
+          person_type: "member",
+          person_id: member_id,
+          branch_id: effectiveBranchId ?? undefined,
+          deploy_to_devices: true,
+        },
+      });
+    } catch (e) {
+      console.warn(`[mips-access] auto-provision failed for ${personSn}:`, e);
+    }
+    existing = await lookupPerson(baseUrl, token, personSn);
+  }
   if (!existing) {
     console.log(`Person ${personSn} not found in MIPS — nothing to ${action}`);
     await setMemberHardwareState(

@@ -14,7 +14,11 @@
 type Db = any;
 
 const TOKEN_KEY = "mips_auth_token";
-const TTL_MS = 22 * 60 * 60 * 1000;
+// RuoYi/Spring Security expires the session after ~30 min of idleness and drops
+// every session when Tomcat restarts. A 22h TTL therefore handed out tokens the
+// server had already forgotten (401 "认证失败"). Cache for 20 min and always
+// verify before use — logins stay rare, but never stale.
+const TTL_MS = 20 * 60 * 1000;
 
 interface TokenRecord {
   token: string;
@@ -128,6 +132,49 @@ export async function getCachedMipsToken(
     // Non-fatal: the token is still usable for this invocation.
   }
   return token;
+}
+
+/**
+ * Same as getCachedMipsToken, but proves the token is still accepted by the
+ * server with one cheap authenticated GET. On 401 the cache entry is dropped
+ * and a fresh login is performed — so callers can never fire a write with a
+ * session Tomcat has already invalidated.
+ */
+export async function getVerifiedMipsToken(
+  supabase: Db,
+  branchId: string | null,
+  creds: MipsCredentials,
+): Promise<string> {
+  const baseUrl = String(creds.baseUrl || "").replace(/\/+$/, "");
+  const token = await getCachedMipsToken(supabase, branchId, { ...creds, baseUrl });
+  if (await tokenWorks(baseUrl, token)) return token;
+
+  await invalidateMipsToken(supabase, branchId, { baseUrl, username: creds.username });
+  return await getCachedMipsToken(supabase, branchId, { ...creds, baseUrl });
+}
+
+async function tokenWorks(baseUrl: string, token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${baseUrl}/personInfo/person/list?pageNum=1&pageSize=1`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "TENANT-ID": "1",
+        "Accept": "application/json",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 401) return false;
+    const text = await res.text();
+    // deno-lint-ignore no-explicit-any
+    let j: any;
+    try { j = JSON.parse(text); } catch { return true; }
+    return Number(j?.code) !== 401;
+  } catch {
+    // Network trouble is not an auth problem — keep the token, let the caller
+    // surface the real transport error (and the circuit breaker handle it).
+    return true;
+  }
 }
 
 /** Drop a token that the server rejected so the next call re-authenticates. */
