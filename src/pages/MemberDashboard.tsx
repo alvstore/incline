@@ -422,8 +422,20 @@ export default function MemberDashboard() {
             <CardContent>
               {!activeMembership ? (
                 <div className="text-center py-4">
-                  <p className="text-muted-foreground mb-4">No active membership</p>
-                  <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
+                  {isScheduled ? (
+                    <>
+                      <p className="text-muted-foreground mb-1">
+                        Your {scheduledMembership?.plan?.name} benefits unlock on{' '}
+                        {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}.
+                      </p>
+                      <p className="text-xs text-muted-foreground">{startsLabel}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground mb-4">No active membership</p>
+                      <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
+                    </>
+                  )}
                 </div>
               ) : (!entitlements || entitlements.length === 0) && benefitCredits.length === 0 ? (
                 <div className="text-center py-4">
