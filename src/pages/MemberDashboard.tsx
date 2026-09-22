@@ -296,6 +296,22 @@ export default function MemberDashboard() {
           </Alert>
         )}
 
+        {/* Scheduled membership notice */}
+        {isScheduled && (
+          <Alert className="border-primary/30 bg-primary/5">
+            <CalendarClock className="h-4 w-4 text-primary" />
+            <AlertTitle className="text-primary">
+              Membership Scheduled — {scheduledMembership?.plan?.name}
+            </AlertTitle>
+            <AlertDescription className="text-muted-foreground">
+              Your plan begins on {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} and runs until{' '}
+              {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}. Gym entry, bookings and benefits unlock
+              automatically on your start date.
+            </AlertDescription>
+          </Alert>
+        )}
+
+
         {/* Primary Stats */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <StatCard
