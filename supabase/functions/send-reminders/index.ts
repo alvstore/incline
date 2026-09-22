@@ -305,6 +305,8 @@ Deno.serve(async (req) => {
                 plan_name: params.planName,
                 expiry_date: params.expiryDate,
                 days_to_expiry: String(params.daysOut),
+                variable_1: params.memberName,
+                variable_2: params.expiryDate,
               },
               use_branded_template: channel === "email",
             },
@@ -673,7 +675,7 @@ Deno.serve(async (req) => {
               expiryDate,
               daysOut,
               subject,
-              message,
+              message: `Your ${planName} membership expires in ${daysOut} day${daysOut > 1 ? "s" : ""} on ${expiryDate}. Renew now to avoid interruption.`,
             });
             if (delivery.status === "sent") break;
           }
