@@ -85,9 +85,18 @@ export default function MyInvoices() {
     );
   }
 
-  const pendingInvoices = invoices.filter(inv => ['pending', 'partial', 'overdue'].includes(inv.status));
-  const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+  // Drafts are unfinished online checkouts — nothing is owed on them, so they are
+  // never listed as bills. They surface in their own "Payment not completed" card.
+  const draftInvoices = invoices.filter(inv => inv.status === 'draft');
+  const issuedInvoices = invoices.filter(inv => inv.status !== 'draft');
+  const pendingInvoices = issuedInvoices.filter(inv => ['pending', 'partial', 'overdue'].includes(inv.status));
+  const paidInvoices = issuedInvoices.filter(inv => inv.status === 'paid');
   const totalPending = pendingInvoices.reduce((sum, inv) => sum + (inv.total_amount - (inv.amount_paid || 0)), 0);
+
+  const discardDraft = async (invoiceId: string) => {
+    await supabase.rpc('abandon_online_addon_invoice' as never, { _invoice_id: invoiceId } as never);
+    refetch();
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -155,13 +164,45 @@ export default function MyInvoices() {
           </Card>
         </div>
 
+        {/* Unfinished online checkouts — no bill, nothing owed */}
+        {draftInvoices.length > 0 && (
+          <Card className="rounded-2xl border-amber-200 bg-amber-50/60 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Payment not completed</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                These orders were never paid, so no bill has been raised and nothing is due. Retry the payment or remove them.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {draftInvoices.map((inv) => (
+                <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background p-3">
+                  <div>
+                    <p className="text-sm font-semibold">₹{Number(inv.total_amount).toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Started {format(new Date(inv.created_at), 'dd MMM yyyy, h:mm a')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => handlePayNow(inv)}>
+                      <CreditCard className="h-4 w-4 mr-1" /> Retry payment
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => discardDraft(inv.id)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Invoices Table */}
         <Card className="border-border/50">
           <CardHeader>
             <CardTitle>All Invoices</CardTitle>
           </CardHeader>
           <CardContent>
-            {invoices.length === 0 ? (
+            {issuedInvoices.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground">No invoices found</p>
@@ -179,7 +220,7 @@ export default function MyInvoices() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => {
+                  {issuedInvoices.map((invoice) => {
                     const amountDue = invoice.total_amount - (invoice.amount_paid || 0);
                     return (
                       <TableRow key={invoice.id}>

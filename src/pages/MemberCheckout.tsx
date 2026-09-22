@@ -29,6 +29,7 @@ interface InvoiceInfo {
   member_phone: string;
   member_email: string;
   branch_name: string;
+  invoice_type: string | null;
 }
 
 /**
@@ -68,7 +69,7 @@ export default function MemberCheckout() {
       const { data, error: fetchErr } = await supabase
         .from('invoices')
         .select(`
-          id, invoice_number, total_amount, amount_paid, status, due_date, branch_id, member_id,
+          id, invoice_number, total_amount, amount_paid, status, due_date, branch_id, member_id, invoice_type,
           members!invoices_member_id_fkey ( user_id ),
           branches!invoices_branch_id_fkey ( name )
         `)
@@ -111,6 +112,7 @@ export default function MemberCheckout() {
         member_phone: memberPhone,
         member_email: memberEmail,
         branch_name: (data.branches as any)?.name || 'Incline Fitness',
+        invoice_type: (data as any).invoice_type ?? null,
       });
     } catch {
       setError('Failed to load invoice.');
@@ -207,10 +209,20 @@ export default function MemberCheckout() {
           setSubmitting(false);
         }
       },
-      (err) => {
+      async (err) => {
         if (err.message !== 'Payment cancelled') {
           toast.error(err.message || 'Payment failed');
           setError(err.message);
+        }
+        // Cancelled/failed online add-on checkout: drop the unfinished draft so the
+        // member is never billed (and never gate-blocked) for an unpaid order.
+        if (invoice.status === 'draft' && invoice.invoice_type === 'benefit_addon') {
+          try {
+            await supabase.rpc('abandon_online_addon_invoice' as never, { _invoice_id: invoice.id } as never);
+            navigate('/my-invoices', { replace: true });
+          } catch {
+            /* best effort — the scheduled cleanup will remove it */
+          }
         }
         setSubmitting(false);
       },
