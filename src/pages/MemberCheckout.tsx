@@ -219,7 +219,7 @@ export default function MemberCheckout() {
         if (invoice.status === 'draft' && invoice.invoice_type === 'benefit_addon') {
           try {
             await supabase.rpc('abandon_online_addon_invoice' as never, { _invoice_id: invoice.id } as never);
-            navigate('/member/invoices', { replace: true });
+            navigate('/my-invoices', { replace: true });
           } catch {
             /* best effort — the scheduled cleanup will remove it */
           }
