@@ -209,10 +209,20 @@ export default function MemberCheckout() {
           setSubmitting(false);
         }
       },
-      (err) => {
+      async (err) => {
         if (err.message !== 'Payment cancelled') {
           toast.error(err.message || 'Payment failed');
           setError(err.message);
+        }
+        // Cancelled/failed online add-on checkout: drop the unfinished draft so the
+        // member is never billed (and never gate-blocked) for an unpaid order.
+        if (invoice.status === 'draft' && invoice.invoice_type === 'benefit_addon') {
+          try {
+            await supabase.rpc('abandon_online_addon_invoice' as never, { _invoice_id: invoice.id } as never);
+            navigate('/member/invoices', { replace: true });
+          } catch {
+            /* best effort — the scheduled cleanup will remove it */
+          }
         }
         setSubmitting(false);
       },
