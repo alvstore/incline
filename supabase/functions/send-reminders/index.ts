@@ -282,11 +282,11 @@ Deno.serve(async (req) => {
         return { status: "skipped", error: channel === "email" ? "no email" : "no phone number", channel };
       }
 
-      const eventKey = params.daysOut === 7
-        ? "membership_expiring_7d"
-        : params.daysOut === 1
+      // The approved 7-day template's body is cadence-neutral and names the
+      // expiry date, so it safely covers 7/5/3-day reminders as UTILITY.
+      const eventKey = params.daysOut === 1
         ? "membership_expiring_1d"
-        : "universal_utility";
+        : "membership_expiring_7d";
       try {
         const { data, error } = await adminClient.functions.invoke("dispatch-communication", {
           body: {
