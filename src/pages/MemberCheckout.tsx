@@ -29,6 +29,7 @@ interface InvoiceInfo {
   member_phone: string;
   member_email: string;
   branch_name: string;
+  invoice_type: string | null;
 }
 
 /**
