@@ -280,6 +280,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Offboarded staff / trainers must never reach the dashboard, even if a
+  // stale session survives. People who are also members keep member access.
+  useEffect(() => {
+    if (!user?.id || isLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('is_staff_offboarded', { _user_id: user.id });
+        if (cancelled || error || data !== true) return;
+        if (roles.some((r) => r.role === 'member')) return;
+        await supabase.auth.signOut();
+        try { queryClient.clear(); } catch { /* ignore */ }
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth?reason=offboarded';
+        }
+      } catch {
+        // never block sign-in on a check failure
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, isLoading, roles, queryClient]);
+
+
   // Realtime profile refresh — pick up avatar / name changes made elsewhere
   useEffect(() => {
     if (!user?.id) return;
