@@ -18,7 +18,7 @@ import {
   recordTransportFailure,
   recordSuccess,
 } from "../_shared/mipsHealth.ts";
-import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
+import { getVerifiedMipsToken, invalidateMipsToken } from "../_shared/mipsTokenCache.ts";
 
 type Role = "owner" | "admin" | "manager" | "staff" | "trainer" | "member";
 
@@ -208,7 +208,7 @@ async function fetchPassPage(
   endpoint: PassEndpoint,
   page: number,
   pageSize: number,
-): Promise<{ rows: MipsPassRecord[]; ok: boolean; error?: string; transport?: boolean }> {
+): Promise<{ rows: MipsPassRecord[]; ok: boolean; error?: string; transport?: boolean; authFailed?: boolean }> {
   const searchParams = new URLSearchParams({ [endpoint.pageParam]: String(page), pageSize: String(pageSize) });
   const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
   console.log(`[reconcile-mips-pass-records] GET ${url}`);
@@ -241,7 +241,9 @@ async function fetchPassPage(
   const rows = extractRows(json);
   const code = Number(json.code);
   if (res.ok && (code === 200 || code === 0 || rows.length > 0)) return { rows, ok: true };
-  return { rows: [], ok: false, error: `${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}` };
+  const msg = getString(json.msg ?? json.message) || text.slice(0, 160);
+  const authFailed = res.status === 401 || code === 401 || /认证失败|未授权|unauthorized|invalid token|令牌/i.test(msg);
+  return { rows: [], ok: false, error: `${endpoint.path}: ${msg}`, authFailed };
 }
 
 /**
@@ -251,22 +253,37 @@ async function fetchPassPage(
  */
 async function fetchPassRecords(connection: MipsConnection, limit: number, pages = 1): Promise<MipsPassRecord[]> {
   const baseUrl = getBaseUrl(connection.server_url);
-  const token = await getRuoYiToken(connection.branch_id ?? null, baseUrl, connection.username, connection.password);
+  let token = await getRuoYiToken(connection.branch_id ?? null, baseUrl, connection.username, connection.password);
 
-  const errors: string[] = [];
+  let errors: string[] = [];
   let transportFailures = 0;
   let working: PassEndpoint | null = null;
   let firstPage: MipsPassRecord[] = [];
 
-  for (const endpoint of PASS_ENDPOINTS) {
-    const result = await fetchPassPage(baseUrl, token, endpoint, 1, limit);
-    if (result.ok) {
-      working = endpoint;
-      firstPage = result.rows;
-      break;
+  // Two passes: if the server rejects the cached session ("认证失败"), drop it
+  // and re-login once instead of failing every run until the TTL lapses.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    errors = [];
+    transportFailures = 0;
+    let authFailed = false;
+
+    for (const endpoint of PASS_ENDPOINTS) {
+      const result = await fetchPassPage(baseUrl, token, endpoint, 1, limit);
+      if (result.ok) {
+        working = endpoint;
+        firstPage = result.rows;
+        break;
+      }
+      if (result.error) errors.push(result.error);
+      if (result.transport) transportFailures++;
+      if (result.authFailed) authFailed = true;
     }
-    if (result.error) errors.push(result.error);
-    if (result.transport) transportFailures++;
+
+    if (working || !authFailed || attempt === 1) break;
+
+    console.warn("[reconcile-mips-pass-records] auth rejected — invalidating cached token and re-logging in");
+    await invalidateMipsToken(tokenCacheClient(), connection.branch_id ?? null, { baseUrl, username: connection.username });
+    token = await getRuoYiToken(connection.branch_id ?? null, baseUrl, connection.username, connection.password);
   }
 
   if (!working) {

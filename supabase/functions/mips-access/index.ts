@@ -312,15 +312,31 @@ async function deriveMemberAction(
   }
 
   const today = istToday();
-  const { data: frozen } = await supabase
+  // A currently valid, paid membership always wins over a stale frozen row from
+  // an older plan — freezing once must never lock out a member who re-purchased.
+  const { data: currentActive } = await supabase
     .from("memberships")
-    .select("id")
+    .select("id, end_date")
     .eq("member_id", memberId)
-    .eq("status", "frozen")
+    .eq("status", "active")
     .lte("start_date", today)
+    .gte("end_date", today)
+    .order("end_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (frozen) return { action: "revoke", reasonCode: "frozen", reason: "membership frozen" };
+
+  if (!currentActive) {
+    const { data: frozen } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("member_id", memberId)
+      .eq("status", "frozen")
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .limit(1)
+      .maybeSingle();
+    if (frozen) return { action: "revoke", reasonCode: "frozen", reason: "membership frozen" };
+  }
 
   const { data: access } = await supabase.rpc("member_access_status", {
     _member_id: memberId,
@@ -334,16 +350,7 @@ async function deriveMemberAction(
     };
   }
 
-  const { data: active } = await supabase
-    .from("memberships")
-    .select("id, end_date")
-    .eq("member_id", memberId)
-    .eq("status", "active")
-    .lte("start_date", today)
-    .gte("end_date", today)
-    .order("end_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const active = currentActive;
   if (!active) return { action: "revoke", reasonCode: "expired", reason: "no active membership" };
 
   return { action: "restore", reasonCode: "manual", reason: `active membership until ${active.end_date}` };
