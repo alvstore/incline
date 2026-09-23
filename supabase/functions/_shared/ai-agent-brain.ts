@@ -2598,13 +2598,14 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     directoryProfile = profile ?? null;
 
     if (profile?.id) {
-      const { data: member } = await supabase
+      const { data: member, error: memberErr } = await supabase
         .from("members")
-        .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
+        .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
         .eq("user_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (memberErr) console.error(`[AI:${platform}] member lookup failed:`, memberErr.message);
       
       if (member) {
         console.log(`[AI:${platform}] member resolved via profiles.phone check for ${senderId}`);
