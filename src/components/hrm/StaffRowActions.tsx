@@ -117,11 +117,20 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-xs">Status</DropdownMenuLabel>
           <DropdownMenuItem
-            onClick={() => setConfirmOpen(true)}
+            onClick={() => {
+              // Deactivating staff must revoke turnstile access first — always
+              // go through the offboarding workflow.
+              if (person.is_active) {
+                setOffboardMode('offboard');
+                setOffboardOpen(true);
+              } else {
+                setConfirmOpen(true);
+              }
+            }}
             className={person.is_active && !isOffboarded ? 'text-warning focus:text-warning' : ''}
           >
             {person.is_active
-              ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Soft deactivate</>
+              ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Deactivate (offboard)…</>
               : <><UserCheck className="h-3.5 w-3.5 mr-2" /> Quick reactivate</>}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
