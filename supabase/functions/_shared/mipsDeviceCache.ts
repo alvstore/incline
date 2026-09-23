@@ -43,10 +43,22 @@ export async function fetchMipsDevices(baseUrl: string, token: string): Promise<
   try {
     j = JSON.parse(text);
   } catch {
-    j = {};
+    // A booting Tomcat / auth redirect serves HTML. Never turn that into an
+    // empty roster — callers must see a real error, not "no devices".
+    throw new Error(`MIPS device list non-JSON (HTTP ${res.status}): ${text.slice(0, 160)}`);
   }
-  const rows = j?.rows || j?.data || [];
-  return Array.isArray(rows) ? rows : [];
+  const code = Number(j?.code);
+  if (!res.ok || res.status === 401 || code === 401 || code === 403) {
+    throw new Error(`MIPS device list failed (HTTP ${res.status}, code ${j?.code ?? "-"}): ${String(j?.msg ?? j?.message ?? "").slice(0, 160)}`);
+  }
+  const rows = j?.rows ?? j?.data ?? null;
+  if (!Array.isArray(rows)) {
+    if (Number.isFinite(code) && code !== 200 && code !== 0) {
+      throw new Error(`MIPS device list error code ${j?.code}: ${String(j?.msg ?? j?.message ?? "").slice(0, 160)}`);
+    }
+    return [];
+  }
+  return rows;
 }
 
 async function writeCache(supabase: Db, branchId: string | null, rec: CacheRecord) {
