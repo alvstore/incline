@@ -26,7 +26,8 @@ export default function TrainersPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingTrainer, setEditingTrainer] = useState<any>(null);
   const { data: trainers, isLoading } = useTrainers(branchId, !showInactive);
-  const deactivateTrainer = useDeactivateTrainer();
+  const [offboardOpen, setOffboardOpen] = useState(false);
+  const [offboardPerson, setOffboardPerson] = useState<UnifiedStaffPerson | null>(null);
 
   const { data: ptClientCounts = {} } = useQuery({
     queryKey: ['pt-client-counts', branchId],
