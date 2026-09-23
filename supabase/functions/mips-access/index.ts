@@ -350,16 +350,7 @@ async function deriveMemberAction(
     };
   }
 
-  const { data: active } = await supabase
-    .from("memberships")
-    .select("id, end_date")
-    .eq("member_id", memberId)
-    .eq("status", "active")
-    .lte("start_date", today)
-    .gte("end_date", today)
-    .order("end_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const active = currentActive;
   if (!active) return { action: "revoke", reasonCode: "expired", reason: "no active membership" };
 
   return { action: "restore", reasonCode: "manual", reason: `active membership until ${active.end_date}` };
