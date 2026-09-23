@@ -1,4 +1,7 @@
-// dispatch-communication v1.38.0 — sanitize template params (no newlines/tabs/
+// dispatch-communication v1.39.0 — fix in_app insert: notifications table uses
+//          `message` (not `body`); resolve user_id from a UUID recipient when
+//          input.user_id is absent.
+// v1.38.0 — sanitize template params (no newlines/tabs/
 //          4+ spaces) before sending to Meta. Fixes 132018 on class-announcement
 //          sends where `class_details` was a multi-line value.
 // v1.37.0 — outbound provenance stamping.
