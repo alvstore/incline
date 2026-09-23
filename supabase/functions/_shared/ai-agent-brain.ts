@@ -2610,6 +2610,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
       if (member) {
         console.log(`[AI:${platform}] member resolved via profiles.phone check for ${senderId}`);
         memberMatch = member;
+        if (!(memberMatch as any).profiles) {
+          (memberMatch as any).profiles = { full_name: profile.full_name, phone: profile.phone, email: profile.email };
+        }
         memberPhone = (profile as any).phone || undefined;
         memberEmail = (profile as any).email || undefined;
       }
