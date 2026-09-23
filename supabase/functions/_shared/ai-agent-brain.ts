@@ -2839,7 +2839,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   let daysRemaining: number | null = null;
   const { data: ms } = await supabase
     .from("memberships")
-    .select("id, plan_id, end_date, status, plans(name)")
+    .select("id, plan_id, end_date, status, membership_plans(name)")
     .eq("member_id", memberMatch.id)
     .eq("status", "active")
     .order("end_date", { ascending: false })
