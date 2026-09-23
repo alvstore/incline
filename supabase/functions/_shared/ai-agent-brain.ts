@@ -2598,17 +2598,21 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     directoryProfile = profile ?? null;
 
     if (profile?.id) {
-      const { data: member } = await supabase
+      const { data: member, error: memberErr } = await supabase
         .from("members")
-        .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
+        .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
         .eq("user_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (memberErr) console.error(`[AI:${platform}] member lookup failed:`, memberErr.message);
       
       if (member) {
         console.log(`[AI:${platform}] member resolved via profiles.phone check for ${senderId}`);
         memberMatch = member;
+        if (!(memberMatch as any).profiles) {
+          (memberMatch as any).profiles = { full_name: profile.full_name, phone: profile.phone, email: profile.email };
+        }
         memberPhone = (profile as any).phone || undefined;
         memberEmail = (profile as any).email || undefined;
       }
@@ -2688,8 +2692,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         // v8.0.0 — Check if this lead has ALREADY been promoted to a member
         const { data: memberByLead } = await supabase
           .from("members")
-          .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
-          .eq("captured_lead_id", (lead as any).id)
+          .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
+          .eq("lead_id", (lead as any).id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -2732,8 +2736,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             // v8.0.0 — Re-check for promotion on linked lead ID
             const { data: memberByLead2 } = await supabase
               .from("members")
-              .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
-              .eq("captured_lead_id", linkedId)
+              .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
+              .eq("lead_id", linkedId)
               .order("created_at", { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -2774,7 +2778,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             if (prof2?.id) {
               const { data: member2 } = await supabase
                 .from("members")
-                .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
+                .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
                 .eq("user_id", prof2.id)
                 .order("created_at", { ascending: false })
                 .limit(1)
@@ -2835,7 +2839,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   let daysRemaining: number | null = null;
   const { data: ms } = await supabase
     .from("memberships")
-    .select("id, plan_id, end_date, status, plans(name)")
+    .select("id, plan_id, end_date, status, membership_plans(name)")
     .eq("member_id", memberMatch.id)
     .eq("status", "active")
     .order("end_date", { ascending: false })
@@ -2843,7 +2847,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   if (ms) {
     membershipId = (ms as any).id;
     planId = (ms as any).plan_id;
-    planName = (ms as any).plans?.name;
+    planName = (ms as any).membership_plans?.name;
     endDate = (ms as any).end_date;
     if (endDate) {
       daysRemaining = Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));

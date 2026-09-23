@@ -336,14 +336,27 @@ serve(async (req) => {
         continue;
       }
 
-      const { data: linkedMember } = await supabase
-        .from("members")
+      // Members live in `members` keyed by profiles.id — resolve via profiles.phone
+      // (members has no phone_number column).
+      const phoneForms = Array.from(
+        new Set([chat.phone_number, cleanPhone, `+${cleanPhone}`, cleanPhone.replace(/^91/, "")].filter(Boolean)),
+      );
+      const { data: memberProfiles } = await supabase
+        .from("profiles")
         .select("id")
-        .eq("phone_number", chat.phone_number)
-        .maybeSingle();
-      if (linkedMember?.id) {
-        decisions.push({ phone: chat.phone_number, skipped: "is_member" });
-        continue;
+        .in("phone", phoneForms);
+      const profileIds = (memberProfiles ?? []).map((p: { id: string }) => p.id);
+      if (profileIds.length) {
+        const { data: linkedMember } = await supabase
+          .from("members")
+          .select("id")
+          .in("user_id", profileIds)
+          .limit(1)
+          .maybeSingle();
+        if (linkedMember?.id) {
+          decisions.push({ phone: chat.phone_number, skipped: "is_member" });
+          continue;
+        }
       }
 
       const chatPlatform = chat.platform || "whatsapp";

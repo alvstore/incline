@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.link_member_to_existing_lead_after() FROM PUBLIC, anon, authenticated;
