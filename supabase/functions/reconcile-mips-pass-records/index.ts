@@ -208,7 +208,7 @@ async function fetchPassPage(
   endpoint: PassEndpoint,
   page: number,
   pageSize: number,
-): Promise<{ rows: MipsPassRecord[]; ok: boolean; error?: string; transport?: boolean }> {
+): Promise<{ rows: MipsPassRecord[]; ok: boolean; error?: string; transport?: boolean; authFailed?: boolean }> {
   const searchParams = new URLSearchParams({ [endpoint.pageParam]: String(page), pageSize: String(pageSize) });
   const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
   console.log(`[reconcile-mips-pass-records] GET ${url}`);
@@ -241,7 +241,9 @@ async function fetchPassPage(
   const rows = extractRows(json);
   const code = Number(json.code);
   if (res.ok && (code === 200 || code === 0 || rows.length > 0)) return { rows, ok: true };
-  return { rows: [], ok: false, error: `${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}` };
+  const msg = getString(json.msg ?? json.message) || text.slice(0, 160);
+  const authFailed = res.status === 401 || code === 401 || /认证失败|未授权|unauthorized|invalid token|令牌/i.test(msg);
+  return { rows: [], ok: false, error: `${endpoint.path}: ${msg}`, authFailed };
 }
 
 /**
