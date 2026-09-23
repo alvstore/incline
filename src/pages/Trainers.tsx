@@ -228,6 +228,7 @@ export default function TrainersPage() {
         <AddTrainerDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={effectiveBranchId || ''} />
         <TrainerProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} trainer={selectedTrainer} onDeactivate={handleDeactivate} />
         <EditTrainerDrawer open={editOpen} onOpenChange={setEditOpen} trainer={editingTrainer} />
+        <OffboardStaffSheet open={offboardOpen} onOpenChange={setOffboardOpen} person={offboardPerson} mode="offboard" />
       </div>
     </AppLayout>
   );
