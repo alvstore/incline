@@ -2736,8 +2736,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             // v8.0.0 — Re-check for promotion on linked lead ID
             const { data: memberByLead2 } = await supabase
               .from("members")
-              .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
-              .eq("captured_lead_id", linkedId)
+              .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
+              .eq("lead_id", linkedId)
               .order("created_at", { ascending: false })
               .limit(1)
               .maybeSingle();
