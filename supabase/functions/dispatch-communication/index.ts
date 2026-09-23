@@ -1,4 +1,7 @@
-// dispatch-communication v1.38.0 — sanitize template params (no newlines/tabs/
+// dispatch-communication v1.39.0 — fix in_app insert: notifications table uses
+//          `message` (not `body`); resolve user_id from a UUID recipient when
+//          input.user_id is absent.
+// v1.38.0 — sanitize template params (no newlines/tabs/
 //          4+ spaces) before sending to Meta. Fixes 132018 on class-announcement
 //          sends where `class_details` was a multi-line value.
 // v1.37.0 — outbound provenance stamping.
@@ -1889,12 +1892,21 @@ Deno.serve(async (req) => {
         }
         case 'in_app': {
           // In-app notifications go through notifications table; dedupe handled there too.
+          // Schema: user_id, branch_id, title, message, type, category, is_read, action_url, metadata.
+          // Resolve user_id: explicit user_id wins; otherwise the recipient is used
+          // when the caller passed a UUID (common for member/staff in-app sends).
+          const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const targetUserId = input.user_id
+            ?? (UUID_RE.test(String(input.recipient ?? '')) ? input.recipient : null);
+          if (!targetUserId) throw new Error('in_app channel requires a user_id or a UUID recipient');
           const r = await supabase.from('notifications').insert({
-            user_id: input.user_id,
+            user_id: targetUserId,
             branch_id: input.branch_id,
             title: input.payload.subject ?? 'Notification',
-            body: input.payload.body,
+            message: input.payload.body,
+            type: 'info',
             category: input.category,
+            metadata: { source: 'dispatch-communication', channel: 'in_app', category: input.category },
           }).select('id').single();
           if (r.error && r.error.code !== '23505') throw new Error(r.error.message);
           providerMessageId = r.data?.id;
