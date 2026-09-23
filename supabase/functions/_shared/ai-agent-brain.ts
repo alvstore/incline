@@ -2778,7 +2778,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             if (prof2?.id) {
               const { data: member2 } = await supabase
                 .from("members")
-                .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
+                .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
                 .eq("user_id", prof2.id)
                 .order("created_at", { ascending: false })
                 .limit(1)
