@@ -108,8 +108,34 @@ export default function TrainersPage() {
 
   const openTrainerProfile = (trainer: any) => { setSelectedTrainer(trainer); setProfileOpen(true); };
   const openEditTrainer = (trainer: any, e: React.MouseEvent) => { e.stopPropagation(); setEditingTrainer(trainer); setEditOpen(true); };
-  const handleDeactivate = async (trainerId: string) => {
-    try { await deactivateTrainer.mutateAsync(trainerId); toast.success("Trainer deactivated"); } catch { toast.error("Failed to deactivate trainer"); }
+  // Turnstile access must be revoked before a trainer can be deactivated,
+  // so this always goes through the offboarding workflow.
+  const handleDeactivate = (trainerId: string) => {
+    const t: any = (trainers || []).find((x: any) => x.id === trainerId) || selectedTrainer;
+    if (!t) { toast.error('Trainer not found'); return; }
+    setOffboardPerson({
+      key: t.id,
+      user_id: t.user_id,
+      name: t.profile_name || t.full_name || 'Trainer',
+      email: t.profile_email ?? null,
+      phone: t.profile_phone ?? null,
+      avatar_url: t.profile_avatar ?? null,
+      profile: t.profile ?? null,
+      roles: ['trainer'],
+      trainer: t,
+      code: t.trainer_code ?? null,
+      department: null,
+      position: null,
+      specialization: t.specialization ?? null,
+      salary: 0,
+      branch_id: t.branch_id ?? null,
+      branch_name: null,
+      is_active: !!t.is_active,
+      exit_date: t.exit_date ?? null,
+      exit_type: t.exit_type ?? null,
+      hire_date: t.hire_date || t.created_at,
+    });
+    setOffboardOpen(true);
   };
 
   const totalPTClients = Object.values(ptClientCounts).reduce((sum: number, count: number) => sum + count, 0);
