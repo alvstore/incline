@@ -2847,7 +2847,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   if (ms) {
     membershipId = (ms as any).id;
     planId = (ms as any).plan_id;
-    planName = (ms as any).plans?.name;
+    planName = (ms as any).membership_plans?.name;
     endDate = (ms as any).end_date;
     if (endDate) {
       daysRemaining = Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
