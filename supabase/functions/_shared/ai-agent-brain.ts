@@ -2692,8 +2692,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         // v8.0.0 — Check if this lead has ALREADY been promoted to a member
         const { data: memberByLead } = await supabase
           .from("members")
-          .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
-          .eq("captured_lead_id", (lead as any).id)
+          .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
+          .eq("lead_id", (lead as any).id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
