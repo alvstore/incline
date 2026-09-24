@@ -112,7 +112,14 @@ export function MarkPtStatusMenu({
         code.includes('package_not_active') ? 'Package is not active' :
         code.includes('not_authorized') ? 'You are not allowed to mark this session' :
         code.includes('insufficient_gym_attendance') ? 'Cheating blocked: Member or Trainer were not checked in to the gym on this date.' :
-        code.includes('session_date_too_old') ? 'Session is too old to record manually (max 7 days).' :
+        code.includes('session_date_too_old') || code.includes('session_date_out_of_range') ? 'Session date must be within the last 7 days and not in the future.' :
+        code.includes('session_already_logged') ? 'A session is already logged for this member on this date.' :
+        code.includes('not_your_client') ? 'This member is not assigned to you.' :
+        code.includes('not_authorized_for_branch') ? 'You are not assigned to this branch.' :
+        code.includes('package_not_started_') ? `Package has not started yet (starts ${code.split('package_not_started_')[1] ?? ''}).` :
+        code.includes('package_not_found') ? 'PT package not found' :
+        code.includes('session_not_scheduled') ? 'This session was already marked.' :
+        code.includes('invalid_status') ? 'Invalid session status' :
         code || 'Could not log session'
       );
     },
@@ -179,7 +186,7 @@ export function MarkPtStatusMenu({
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={sessionDate}
                  max={getISTToday()}
-                min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                min={(() => { const d = new Date(`${getISTToday()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 7); return d.toISOString().slice(0, 10); })()}
                 onChange={(e) => setSessionDate(e.target.value)}
               />
               <p className="text-[10px] text-muted-foreground">
