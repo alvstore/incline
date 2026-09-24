@@ -186,7 +186,7 @@ export function MarkPtStatusMenu({
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={sessionDate}
                  max={getISTToday()}
-                min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                min={(() => { const d = new Date(`${getISTToday()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 7); return d.toISOString().slice(0, 10); })()}
                 onChange={(e) => setSessionDate(e.target.value)}
               />
               <p className="text-[10px] text-muted-foreground">
