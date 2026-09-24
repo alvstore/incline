@@ -112,7 +112,14 @@ export function MarkPtStatusMenu({
         code.includes('package_not_active') ? 'Package is not active' :
         code.includes('not_authorized') ? 'You are not allowed to mark this session' :
         code.includes('insufficient_gym_attendance') ? 'Cheating blocked: Member or Trainer were not checked in to the gym on this date.' :
-        code.includes('session_date_too_old') ? 'Session is too old to record manually (max 7 days).' :
+        code.includes('session_date_too_old') || code.includes('session_date_out_of_range') ? 'Session date must be within the last 7 days and not in the future.' :
+        code.includes('session_already_logged') ? 'A session is already logged for this member on this date.' :
+        code.includes('not_your_client') ? 'This member is not assigned to you.' :
+        code.includes('not_authorized_for_branch') ? 'You are not assigned to this branch.' :
+        code.includes('package_not_started_') ? `Package has not started yet (starts ${code.split('package_not_started_')[1] ?? ''}).` :
+        code.includes('package_not_found') ? 'PT package not found' :
+        code.includes('session_not_scheduled') ? 'This session was already marked.' :
+        code.includes('invalid_status') ? 'Invalid session status' :
         code || 'Could not log session'
       );
     },
