@@ -14351,6 +14351,7 @@ export type Database = {
           last_nurture_at: string | null
           last_nurture_hash: string | null
           last_nurture_text: string | null
+          linked_member_id: string | null
           nurture_angle_history: Json
           nurture_retry_count: number | null
           partial_lead_data: Json | null
@@ -14396,6 +14397,7 @@ export type Database = {
           last_nurture_at?: string | null
           last_nurture_hash?: string | null
           last_nurture_text?: string | null
+          linked_member_id?: string | null
           nurture_angle_history?: Json
           nurture_retry_count?: number | null
           partial_lead_data?: Json | null
@@ -14441,6 +14443,7 @@ export type Database = {
           last_nurture_at?: string | null
           last_nurture_hash?: string | null
           last_nurture_text?: string | null
+          linked_member_id?: string | null
           nurture_angle_history?: Json
           nurture_retry_count?: number | null
           partial_lead_data?: Json | null
@@ -14472,6 +14475,13 @@ export type Database = {
             columns: ["founder_handoff_task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_chat_settings_linked_member_id_fkey"
+            columns: ["linked_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
             referencedColumns: ["id"]
           },
         ]

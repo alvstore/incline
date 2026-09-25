@@ -1831,6 +1831,7 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
   let replyText: string | null = choice?.message?.content || null;
 
   // Tool execution loop.
+  let memberActionSucceeded = false;
   if (toolCalls?.length && tools && memberCtx.memberId) {
     const toolMessages: any[] = [];
     for (const tc of toolCalls) {
@@ -1858,6 +1859,8 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
         if (toolResult && typeof toolResult === "object" && (toolResult as any).success === false) {
           toolStatus = "error";
           toolError = String((toolResult as any).error || (toolResult as any).message || "tool_returned_failure").slice(0, 500);
+        } else if (/^(book_|cancel_|reschedule_)/.test(tc.function.name) && !(toolResult as any)?.error) {
+          memberActionSucceeded = true;
         }
       } catch (toolErr) {
         toolStatus = "error";
@@ -1932,6 +1935,15 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
   // Member-safe sanitizers only — canonical facts + no parroting.
   // The lead-funnel guards (name ladder, pricing/tour funnel, lead capture)
   // deliberately do NOT run here.
+  // v10.2.0 — MEMBER BOOKING TRUTH GUARD. Never let the model claim a
+  // booking/cancellation/reschedule unless the matching tool actually succeeded.
+  {
+    const claimsAction = /\b(i['’]?ve|i have|i|we['’]?ve|we have)\s+(just\s+)?(booked|added you|reserved|scheduled|confirmed|cancel+ed|moved|rescheduled)\b|\byou['’]?re (all )?(booked|set|confirmed)\b|\bbooking (is )?confirmed\b/i;
+    if (claimsAction.test(replyText || "") && !memberActionSucceeded) {
+      console.warn(`[AI:${ctx.platform}] blocked unverified booking claim for ${ctx.senderId}`);
+      replyText = "I couldn't confirm that booking in our system just yet. Let me check the live slots for you — could you tell me the facility and the date you'd like? You can also see open slots in the member portal at https://theincline.in/auth.";
+    }
+  }
   replyText = correctSocialHandles(replyText);
   replyText = correctAppStoreLinks(replyText);
   replyText = ensureMapsLink(replyText);
@@ -2615,6 +2627,31 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         }
         memberPhone = (profile as any).phone || undefined;
         memberEmail = (profile as any).email || undefined;
+      }
+    }
+  }
+
+  // v10.2.0 — LINKED ALT NUMBER. Staff may link an extra WhatsApp number
+  // (e.g. overseas SIM) to a member via whatsapp_chat_settings.linked_member_id.
+  if (!memberMatch && variants.length > 0) {
+    const { data: link } = await supabase
+      .from("whatsapp_chat_settings")
+      .select("linked_member_id")
+      .in("phone_number", variants)
+      .not("linked_member_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+    if (link?.linked_member_id) {
+      const { data: member } = await supabase
+        .from("members")
+        .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
+        .eq("id", link.linked_member_id)
+        .maybeSingle();
+      if (member) {
+        console.log(`[AI:${platform}] member resolved via linked alt number for ${senderId}`);
+        memberMatch = member;
+        memberPhone = (member as any).profiles?.phone || undefined;
+        memberEmail = (member as any).profiles?.email || undefined;
       }
     }
   }
