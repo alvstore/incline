@@ -2619,6 +2619,31 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     }
   }
 
+  // v10.2.0 — LINKED ALT NUMBER. Staff may link an extra WhatsApp number
+  // (e.g. overseas SIM) to a member via whatsapp_chat_settings.linked_member_id.
+  if (!memberMatch && variants.length > 0) {
+    const { data: link } = await supabase
+      .from("whatsapp_chat_settings")
+      .select("linked_member_id")
+      .in("phone_number", variants)
+      .not("linked_member_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+    if (link?.linked_member_id) {
+      const { data: member } = await supabase
+        .from("members")
+        .select("id, branch_id, member_code, status, profiles:profiles!members_user_id_profiles_fkey(full_name, phone, email)")
+        .eq("id", link.linked_member_id)
+        .maybeSingle();
+      if (member) {
+        console.log(`[AI:${platform}] member resolved via linked alt number for ${senderId}`);
+        memberMatch = member;
+        memberPhone = (member as any).profiles?.phone || undefined;
+        memberEmail = (member as any).profiles?.email || undefined;
+      }
+    }
+  }
+
   // v10.1.0 — INTERNAL TEAM GUARD. Before treating anyone as a lead, scan the
   // whole directory: trainers, employees and privileged roles. Owners, admins,
   // managers, staff and trainers must never be pushed through the lead funnel
