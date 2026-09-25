@@ -1,0 +1,2 @@
+ALTER TABLE public.whatsapp_chat_settings ADD COLUMN IF NOT EXISTS linked_member_id uuid REFERENCES public.members(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_wcs_linked_member ON public.whatsapp_chat_settings(linked_member_id);
