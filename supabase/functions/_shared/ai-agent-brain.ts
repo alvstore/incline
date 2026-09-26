@@ -1761,6 +1761,11 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
   dynamicSegments.push(
     `You are responding on ${platformLabel}. Conversation history may include messages from other channels — treat them as one continuous conversation.`,
   );
+  {
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "full", timeStyle: "short" });
+    const isoIST = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+    dynamicSegments.push(`CURRENT DATE & TIME (IST): ${nowIST} (date ${isoIST}). Always use this for "today", "tomorrow" and relative dates in tool calls.`);
+  }
   if (memberCtx.memberName) {
     dynamicSegments.push(`KNOWN MEMBER NAME: ${memberCtx.memberName}. Greet them by first name on your first reply.`);
   }
@@ -1890,9 +1895,21 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
         model: aiConfig.model || undefined,
         messages: [...aiMessages, choice.message, ...toolMessages],
       });
-      replyText = r2.raw?.choices?.[0]?.message?.content || replyText;
+      // v10.3.0: gateway may return content:null on raw choice; prefer normalized r2.content.
+      const rawContent = r2.raw?.choices?.[0]?.message?.content;
+      const followUpText =
+        (typeof r2.content === "string" && r2.content.trim()) ||
+        (typeof rawContent === "string" && rawContent.trim()) ||
+        "";
+      if (followUpText) replyText = followUpText;
+      else if (!replyText) {
+        replyText = "I checked our system for you, but couldn't find a matching slot right now. Could you tell me the day and time you'd prefer? You can also see all live slots at https://theincline.in/auth.";
+      }
     } catch (e) {
       console.error(`[AI:${ctx.platform}] member tool follow-up failed:`, e);
+      if (!replyText) {
+        replyText = "I checked our system for your request, but couldn't load the slot details just now. You can view all live classes and book directly at https://theincline.in/auth.";
+      }
     }
   }
 
