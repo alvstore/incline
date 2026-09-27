@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { X, MessageCircle } from "lucide-react";
 
 const WHATSAPP_NUMBER = "918298293003";
-const DRAFTED_MESSAGE = "Hi, I'd like to know more about Incline Fitness Founding memberships.";
+const DRAFTED_MESSAGE = "Hi, I'd like to know more about Incline memberships and book a club visit.";
 
 const WhatsAppWidget = () => {
   const [open, setOpen] = useState(false);
