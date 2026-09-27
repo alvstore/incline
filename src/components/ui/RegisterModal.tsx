@@ -187,7 +187,7 @@ const RegisterModal = () => {
           </div>
           <h3 className="text-2xl font-black text-foreground">You're In!</h3>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Welcome to the INCLINE founding members list. We'll reach out with exclusive updates and early access
+            Thanks for your interest in INCLINE. Our team will reach out shortly to plan your club visit and membership
             details.
           </p>
           <button
@@ -203,7 +203,7 @@ const RegisterModal = () => {
             <ResponsiveSheetTitle className="text-xl font-black text-foreground leading-tight">
               {step === 1 ? (
                 <>
-                  Join the <span className="text-primary">INCLINE</span> Waitlist
+                  Join <span className="text-primary">INCLINE</span>
                 </>
               ) : (
                 <>
@@ -212,7 +212,7 @@ const RegisterModal = () => {
               )}
             </ResponsiveSheetTitle>
             <p className="text-muted-foreground text-sm mt-1">
-              {step === 1 ? "Secure your spot as a founding member." : "Help us personalize your experience."}
+              {step === 1 ? "Book a club tour and membership consultation." : "Help us personalize your experience."}
             </p>
             {stepIndicator}
           </ResponsiveSheetHeader>
@@ -436,7 +436,7 @@ const RegisterModal = () => {
                   </div>
 
                   <p className="text-center text-muted-foreground text-xs">
-                    We'll never share your info. Founding members get priority access.
+                    We'll never share your info.
                   </p>
                 </div>
               )}

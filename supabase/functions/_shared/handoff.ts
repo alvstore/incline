@@ -77,12 +77,12 @@ export async function requestFounderHandoff(
   const displayName = (contactName && contactName.trim()) || chatPhone;
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 1); // review within 24h, no external SLA promise
-  const title = `Founding Member reservation — ${displayName}`;
+  const title = `Membership enquiry — ${displayName}`;
   const description =
-    `Lead reserved a Founding Member spot on ${platform} ${chatPhone}.\n` +
+    `Lead requested membership follow-up on ${platform} ${chatPhone}.\n` +
     `Reason: ${reason}.\n` +
     (summary ? `Context: ${summary}\n` : "") +
-    `Do NOT call this prospect before opening day — Founder's Phase policy.\n` +
+    `Follow up to schedule a club visit.\n` +
     `Open the WhatsApp inbox for the full transcript.`;
 
 
