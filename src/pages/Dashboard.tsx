@@ -347,31 +347,36 @@ export default function DashboardPage() {
         </div>
 
         {/* Hero Gradient Card */}
-        <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl shadow-lg shadow-primary/20 p-6 text-primary-foreground">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/70 p-6 text-primary-foreground shadow-lg shadow-primary/25">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-primary-foreground/10 blur-2xl" aria-hidden="true" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-primary-foreground/5 blur-3xl" aria-hidden="true" />
+          <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight">Gym Health</h2>
-              <p className="text-primary-foreground/70 text-sm mt-1">Real-time overview of your business</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/70">Live overview</p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">Gym Health</h2>
+              <p className="mt-1 text-sm text-primary-foreground/75">Real-time pulse of your business</p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-8">
-              <div className="text-center">
-                <p className="text-2xl md:text-3xl font-bold">{(stats as any)?.totalMembers || 0}</p>
-                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Total Members</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl bg-primary-foreground/10 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:bg-primary-foreground/15">
+                <p className="text-2xl font-bold tabular-nums md:text-3xl">{(stats as any)?.totalMembers || 0}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70 md:text-xs">Total Members</p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl md:text-3xl font-bold">{(stats as any)?.scheduledMemberships || 0}</p>
-                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Scheduled</p>
+              <div className="rounded-xl bg-primary-foreground/10 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:bg-primary-foreground/15">
+                <p className="text-2xl font-bold tabular-nums md:text-3xl">{(stats as any)?.scheduledMemberships || 0}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70 md:text-xs">Scheduled</p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl md:text-3xl font-bold">₹{((stats as any)?.monthlyRevenue || 0).toLocaleString()}</p>
-                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Revenue (MTD)</p>
+              <div className="rounded-xl bg-primary-foreground/10 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:bg-primary-foreground/15">
+                <p className="text-2xl font-bold tabular-nums md:text-3xl">₹{((stats as any)?.monthlyRevenue || 0).toLocaleString()}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70 md:text-xs">Revenue (MTD)</p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl md:text-3xl font-bold">{(stats as any)?.expiringMemberships || 0}</p>
-                {((stats as any)?.expiringMemberships || 0) > 0 && (
-                  <Badge className="bg-destructive text-white text-[10px] px-1 py-0 h-4 mt-1 border-0 animate-pulse">Action</Badge>
-                )}
-                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Expiring Soon</p>
+              <div className="rounded-xl bg-primary-foreground/10 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:bg-primary-foreground/15">
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold tabular-nums md:text-3xl">{(stats as any)?.expiringMemberships || 0}</p>
+                  {((stats as any)?.expiringMemberships || 0) > 0 && (
+                    <Badge className="h-4 border-0 bg-destructive px-1.5 py-0 text-[10px] text-destructive-foreground">Action</Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70 md:text-xs">Expiring Soon</p>
               </div>
             </div>
           </div>
