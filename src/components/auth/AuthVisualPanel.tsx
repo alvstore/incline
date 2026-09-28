@@ -1,15 +1,33 @@
 import { useState } from "react";
-import { Dumbbell, Sparkles, Zap } from "lucide-react";
+import { ArrowUpRight, Repeat, Snowflake, MapPin } from "lucide-react";
 import inclineLogo from "@/assets/incline-logo.png";
+import { FloatingPaths } from "@/components/ui/floating-paths";
+
+const PILLARS = [
+  {
+    icon: ArrowUpRight,
+    title: "Rise",
+    copy: "Panatta strength floor, personal training and group energy.",
+  },
+  {
+    icon: Snowflake,
+    title: "Reflect",
+    copy: "Infrared sauna, steam and cold plunge recovery suite.",
+  },
+  {
+    icon: Repeat,
+    title: "Repeat",
+    copy: "3D body scans and progress tracking that keep you consistent.",
+  },
+];
 
 /**
- * Decorative left-side panel for the redesigned /auth page.
- * Pure DOM/CSS — NO react-three-fiber, NO framer-motion.
- * All motion uses CSS keyframes defined in src/index.css and respects
- * `prefers-reduced-motion`.
+ * Left-side brand panel for /auth.
+ * Motion is transform/opacity only and respects prefers-reduced-motion.
  */
 export function AuthVisualPanel() {
   const [logoFailed, setLogoFailed] = useState(false);
+
   return (
     <aside
       aria-hidden="true"
@@ -20,110 +38,73 @@ export function AuthVisualPanel() {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(at 20% 20%, hsl(217 91% 32%) 0%, transparent 55%), radial-gradient(at 80% 70%, hsl(199 95% 38%) 0%, transparent 50%), linear-gradient(135deg, hsl(222 47% 8%) 0%, hsl(217 91% 14%) 55%, hsl(199 95% 22%) 100%)",
+            "radial-gradient(at 18% 12%, hsl(258 90% 40% / 0.85) 0%, transparent 55%), radial-gradient(at 85% 78%, hsl(226 90% 45% / 0.7) 0%, transparent 52%), linear-gradient(140deg, hsl(229 45% 7%) 0%, hsl(241 60% 12%) 55%, hsl(224 70% 16%) 100%)",
         }}
       />
 
-      {/* Drifting glow orbs */}
-      <span className="auth-orb auth-orb-1" />
-      <span className="auth-orb auth-orb-2" />
-      <span className="auth-orb auth-orb-3" />
+      {/* Kinetic paths */}
+      <FloatingPaths position={1} />
+      <FloatingPaths position={-1} />
 
-      {/* Subtle grid */}
-      <div className="auth-grid absolute inset-0 opacity-[0.18]" />
-
-      {/* Floating tagline words — kept in right margin away from main content */}
-      <span
-        className="absolute font-oswald font-bold tracking-widest text-primary-foreground/55 select-none pointer-events-none"
-        style={{
-          top: "12%",
-          right: "8%",
-          fontSize: "clamp(0.7rem, 1.1vw, 0.9rem)",
-          animation: "incFloatA 14s ease-in-out infinite",
-        }}
-      >
-        RISE
-      </span>
-      <span
-        className="hidden lg:block absolute font-oswald font-bold tracking-widest text-info/60 select-none pointer-events-none"
-        style={{
-          top: "40%",
-          right: "6%",
-          fontSize: "clamp(0.7rem, 1.1vw, 0.9rem)",
-          animation: "incFloatB 16s ease-in-out 1s infinite",
-        }}
-      >
-        REFLECT
-      </span>
-      <span
-        className="hidden lg:block absolute font-oswald font-bold tracking-widest text-primary-foreground/50 select-none pointer-events-none"
-        style={{
-          top: "70%",
-          right: "14%",
-          fontSize: "clamp(0.7rem, 1.1vw, 0.9rem)",
-          animation: "incFloatC 18s ease-in-out 2s infinite",
-        }}
-      >
-        REPEAT
-      </span>
+      {/* Soft vignette for text contrast */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
 
       {/* Content */}
-      <div className="relative z-10 h-full flex flex-col justify-between p-6 sm:p-10 lg:p-14 xl:p-16">
-        {/* Logo lockup — uses Incline logo image; falls back to text on error */}
+      <div className="relative z-10 h-full flex flex-col justify-between p-6 sm:p-10 lg:p-14">
+        {/* Logo lockup */}
         <div className="flex items-center gap-3">
           {!logoFailed ? (
             <img
               src={inclineLogo}
               alt="Incline"
               onError={() => setLogoFailed(true)}
-              className="h-9 lg:h-12 w-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+              className="h-10 lg:h-14 w-auto object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
             />
           ) : (
             <div className="leading-tight">
-              <div className="text-primary-foreground font-extrabold text-xl lg:text-2xl tracking-tight">Incline</div>
-              <div className="text-primary-foreground/60 text-[11px] tracking-wider uppercase">The Incline Life</div>
+              <div className="font-oswald font-extrabold text-2xl tracking-tight">INCLINE</div>
+              <div className="text-primary-foreground/60 text-[11px] tracking-[0.3em] uppercase">
+                Rise. Reflect. Repeat.
+              </div>
             </div>
           )}
         </div>
 
-        {/* Tagline + value props */}
-        <div className="space-y-6 lg:space-y-8 max-w-md">
-          <div className="space-y-3 lg:space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-card/10 border border-primary-foreground/15 backdrop-blur-md text-xs text-primary-foreground/85">
-              <Sparkles className="h-3.5 w-3.5 text-info" />
-              Built for serious gyms
-            </div>
-            <h2 className="font-oswald font-bold text-2xl sm:text-3xl lg:text-5xl xl:text-6xl leading-[1.05] tracking-tight">
-              Climb higher.
+        {/* Headline + pillars */}
+        <div className="hidden lg:block max-w-lg space-y-8">
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary-foreground/60">
+              The Incline Life
+            </p>
+            <h2 className="font-oswald font-bold text-4xl xl:text-5xl leading-[1.05] tracking-tight">
+              Rise. Reflect.
               <br />
-              <span className="bg-gradient-to-r from-info/25 via-white to-info/15 bg-clip-text text-transparent">
-                Every. Single. Day.
-              </span>
+              <span className="text-primary-foreground/70">Repeat.</span>
             </h2>
-            <p className="hidden lg:block text-primary-foreground/70 text-base leading-relaxed">
-              One platform for memberships, billing, classes, recovery, biometrics and growth — across every Incline branch.
+            <p className="text-primary-foreground/75 text-base leading-relaxed">
+              Your membership, classes, recovery sessions and progress — all in one place.
             </p>
           </div>
 
-          <ul className="hidden lg:block space-y-3 text-sm text-primary-foreground/80">
-            <li className="flex items-center gap-3">
-              <span className="h-8 w-8 rounded-lg bg-card/10 border border-primary-foreground/15 grid place-items-center">
-                <Zap className="h-4 w-4 text-info" />
-              </span>
-              Lightning-fast check-ins & POS
-            </li>
-            <li className="flex items-center gap-3">
-              <span className="h-8 w-8 rounded-lg bg-card/10 border border-primary-foreground/15 grid place-items-center">
-                <Dumbbell className="h-4 w-4 text-info" />
-              </span>
-              Smarter training, recovery & progress tracking
-            </li>
+          <ul className="space-y-4">
+            {PILLARS.map(({ icon: Icon, title, copy }) => (
+              <li key={title} className="flex items-start gap-3">
+                <span className="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-primary-foreground/10 border border-primary-foreground/15 grid place-items-center backdrop-blur-sm">
+                  <Icon className="h-4 w-4 text-primary-foreground" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold tracking-wide">{title}</p>
+                  <p className="text-sm text-primary-foreground/65 leading-relaxed">{copy}</p>
+                </div>
+              </li>
+            ))}
           </ul>
         </div>
 
-        {/* Footer (desktop only) */}
-        <div className="hidden lg:flex items-center justify-end text-xs text-primary-foreground/55">
-          <span>© Incline · The Incline Life by Incline</span>
+        {/* Footer */}
+        <div className="hidden lg:flex items-center gap-2 text-xs text-primary-foreground/60">
+          <MapPin className="h-3.5 w-3.5" />
+          <span>Sector 14, Udaipur · The Incline Life by Incline</span>
         </div>
       </div>
     </aside>
