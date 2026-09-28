@@ -1,4 +1,7 @@
-// renewal-engine-tick v1.1.0 — Phase 2 renewal orchestrator.
+// renewal-engine-tick v1.2.0 — Phase 2 renewal orchestrator.
+// v1.2.0 — voice escalation now authenticates to sarvam-voice with the
+//          x-system-call: renewal-engine identity (previously 401'd), and logs
+//          when a call is refused instead of silently dropping it.
 // Passive until renewal_engine_config.enabled = true (global row default false).
 // - single-flight lease (renewal_engine_acquire_lease)
 // - bounded batch per run + per-day cap
@@ -173,7 +176,13 @@ Deno.serve(async (req) => {
         try {
           const res = await fetch(`${supabaseUrl}/functions/v1/sarvam-voice`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceKey}`,
+              apikey: serviceKey,
+              // Server-side identity accepted by sarvam-voice for place_call only.
+              "x-system-call": "renewal-engine",
+            },
             body: JSON.stringify({
               action: "place_call",
               confirmed: true,
@@ -189,6 +198,12 @@ Deno.serve(async (req) => {
               _attempt_id: body.call_record_id,
             });
             voiceCalls++;
+          } else {
+            await captureEdgeError(
+              "renewal-engine-tick",
+              `Voice escalation not placed for member ${c.member_id}: ${JSON.stringify(body).slice(0, 300)}`,
+              { severity: "warning" },
+            );
           }
         } catch (e) {
           await captureEdgeError("renewal-engine-tick", e, { severity: "warning" });

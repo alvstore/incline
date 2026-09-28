@@ -367,13 +367,22 @@ Deno.serve(async (req) => {
     // marker header. It is a server-side identity; it may only tick the worker.
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const bearer = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
-    const isBrain = req.headers.get("x-system-call") === "automation-brain" &&
+    const systemCall = req.headers.get("x-system-call") ?? "";
+    const isBrain = systemCall === "automation-brain" &&
       !!serviceKey && bearer === serviceKey;
-    const isSystem = isToolKey || isBrain;
+    // The renewal orchestrator (renewal-engine-tick) escalates due cases to a
+    // voice call. Server-side identity; it may only place member calls.
+    const isRenewalEngine = systemCall === "renewal-engine" &&
+      !!serviceKey && bearer === serviceKey;
+    const isSystem = isToolKey || isBrain || isRenewalEngine;
 
     let userId: string | null = null;
     if (isSystem) {
-      const allowed = isBrain ? new Set(["auto_tick"]) : SYSTEM_ACTIONS;
+      const allowed = isBrain
+        ? new Set(["auto_tick"])
+        : isRenewalEngine
+        ? new Set(["place_call"])
+        : SYSTEM_ACTIONS;
       if (!allowed.has(action)) {
         return json({ ok: false, error: "Forbidden — system key cannot perform this action" }, 403);
       }

@@ -16,12 +16,16 @@ import {
   RenewalQueue,
   useRenewalAction,
   useRenewalCaseVoiceCalls,
+  useRenewalEngineConfig,
   useRenewalFunnel,
   useRenewalQueue,
   useRenewalQueueCounts,
   useRenewalVoiceCall,
+  useSetRenewalEngineConfig,
 } from '@/hooks/useRenewalCenter';
 import { useVoiceOpsSummary } from '@/hooks/useVoiceOps';
+import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/contexts/AuthContext';
 import { dispositionLook, formatDuration, statusLook } from '@/lib/voice/voiceOutcomes';
 import {
   AlertTriangle,
@@ -124,6 +128,7 @@ function expiryLook(days: number) {
 
 export default function RenewalCenter() {
   const { branchFilter } = useBranchContext();
+  const { hasAnyRole } = useAuth();
   const [queue, setQueue] = useState<RenewalQueue>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<RenewalCaseRow | null>(null);
@@ -139,12 +144,28 @@ export default function RenewalCenter() {
   const voiceCall = useRenewalVoiceCall();
   const voiceOps = useVoiceOpsSummary(branchFilter);
   const caseCalls = useRenewalCaseVoiceCalls(selected?.case_id);
+  const engineConfig = useRenewalEngineConfig(branchFilter);
+  const engineSave = useSetRenewalEngineConfig();
 
   const stats = funnel.data ?? {};
   const rows = cases.data ?? [];
   const total = rows[0]?.total_count ?? 0;
   const tabCounts = counts.data ?? {};
-  const engineOff = true;
+  const engineOff = engineConfig.data ? engineConfig.data.enabled !== true : true;
+  const autoVoiceOn = engineConfig.data?.voice_auto_call_enabled === true && !engineOff;
+  const canManageEngine = hasAnyRole(['owner', 'admin']);
+
+  async function saveEngine(patch: { enabled?: boolean; voice_auto_call_enabled?: boolean }, message: string) {
+    const id = engineConfig.data?.id;
+    if (!id) return;
+    try {
+      await engineSave.mutateAsync({ id, ...patch });
+      toast.success(message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update renewal automation');
+    }
+  }
+
   const integration = voiceOps.data?.integration;
   const voiceLive = integration?.is_active === true && Boolean(integration?.agent_phone_number);
   const callingWindow = integration ? `${integration.window_start ?? '10:00'}–${integration.window_end ?? '19:00'} IST` : null;
@@ -234,19 +255,53 @@ export default function RenewalCenter() {
           </div>
         </section>
 
-        {engineOff && (
-          <div className="flex gap-3 rounded-2xl bg-amber-50 p-4 text-sm shadow-lg shadow-amber-200/40">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <div
+          className={`flex flex-col gap-4 rounded-2xl p-4 text-sm shadow-lg lg:flex-row lg:items-center lg:justify-between ${
+            engineOff ? 'bg-amber-50 shadow-amber-200/40' : 'bg-emerald-50 shadow-emerald-200/40'
+          }`}
+        >
+          <div className="flex gap-3">
+            <ShieldCheck className={`mt-0.5 h-5 w-5 shrink-0 ${engineOff ? 'text-amber-600' : 'text-emerald-600'}`} />
             <div>
-              <p className="font-semibold text-foreground">Staff-led mode</p>
-              <p className="text-muted-foreground leading-relaxed">
-                Nothing is sent to members automatically from here. Existing expiry reminders continue unchanged.
-                Voice AI renewal calls happen only when a staff member presses Call now, inside the calling window
-                {callingWindow ? ` (${callingWindow})` : ''}; the outcome comes straight back into this queue.
+              <p className="font-semibold text-foreground">
+                {engineOff ? 'Staff-led mode' : 'Automatic renewal follow-up is on'}
+              </p>
+              <p className="leading-relaxed text-muted-foreground">
+                {engineOff
+                  ? `Nothing is sent to members automatically from here. Existing expiry reminders continue unchanged. Voice AI renewal calls happen only when a staff member presses Call now, inside the calling window${callingWindow ? ` (${callingWindow})` : ''}; the outcome comes straight back into this queue.`
+                  : `Members due for renewal are contacted automatically each day${autoVoiceOn ? `, and Ananya calls them inside the calling window${callingWindow ? ` (${callingWindow})` : ''}` : ''}. Every outcome lands back in this queue.`}
               </p>
             </div>
           </div>
-        )}
+          {canManageEngine && engineConfig.data && (
+            <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="renewal-engine-enabled"
+                  checked={!engineOff}
+                  disabled={engineSave.isPending}
+                  onCheckedChange={(v) => saveEngine({ enabled: v }, v ? 'Automatic renewal follow-up is on' : 'Back to staff-led mode')}
+                  className="cursor-pointer"
+                />
+                <Label htmlFor="renewal-engine-enabled" className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Auto follow-up
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="renewal-engine-voice"
+                  checked={autoVoiceOn}
+                  disabled={engineSave.isPending || engineOff}
+                  onCheckedChange={(v) => saveEngine({ voice_auto_call_enabled: v }, v ? 'Ananya will call renewals automatically' : 'Automatic renewal calls turned off')}
+                  className="cursor-pointer"
+                />
+                <Label htmlFor="renewal-engine-voice" className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Auto voice calls
+                </Label>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {statCards.map((card) => (
