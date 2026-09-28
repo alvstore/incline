@@ -183,3 +183,55 @@ export function useRenewalVoiceCall() {
     },
   });
 }
+
+export interface RenewalEngineConfig {
+  id: string;
+  branch_id: string | null;
+  enabled: boolean;
+  voice_auto_call_enabled: boolean;
+  voice_stage_offsets: number[] | null;
+  voice_escalate_after: number | null;
+  daily_cap: number | null;
+  channel: string | null;
+}
+
+/**
+ * Live automation settings for the renewal engine. Branch row wins when one
+ * exists, otherwise the global row (branch_id IS NULL) applies.
+ */
+export function useRenewalEngineConfig(branchId: string | undefined) {
+  return useQuery({
+    queryKey: ['renewal-engine-config', branchId ?? 'global'],
+    queryFn: async (): Promise<RenewalEngineConfig | null> => {
+      const { data, error } = await supabase
+        .from('renewal_engine_config')
+        .select('id, branch_id, enabled, voice_auto_call_enabled, voice_stage_offsets, voice_escalate_after, daily_cap, channel');
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as RenewalEngineConfig[];
+      return rows.find((r) => branchId && r.branch_id === branchId)
+        ?? rows.find((r) => r.branch_id === null)
+        ?? null;
+    },
+  });
+}
+
+export function useSetRenewalEngineConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; enabled?: boolean; voice_auto_call_enabled?: boolean }) => {
+      const patch: Record<string, boolean> = {};
+      if (typeof input.enabled === 'boolean') patch.enabled = input.enabled;
+      if (typeof input.voice_auto_call_enabled === 'boolean') {
+        patch.voice_auto_call_enabled = input.voice_auto_call_enabled;
+      }
+      const { error } = await supabase
+        .from('renewal_engine_config')
+        .update(patch)
+        .eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['renewal-engine-config'] });
+    },
+  });
+}
