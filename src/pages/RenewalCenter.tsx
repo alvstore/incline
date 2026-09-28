@@ -128,6 +128,7 @@ function expiryLook(days: number) {
 
 export default function RenewalCenter() {
   const { branchFilter } = useBranchContext();
+  const { hasAnyRole } = useAuth();
   const [queue, setQueue] = useState<RenewalQueue>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<RenewalCaseRow | null>(null);
