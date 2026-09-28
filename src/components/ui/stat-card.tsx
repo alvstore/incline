@@ -43,17 +43,17 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <Card className={cn('rounded-xl border-none shadow-lg shadow-primary/10 transition-all hover:shadow-xl', className)}>
+    <Card className={cn('rounded-2xl border-none shadow-lg shadow-primary/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/15', className)}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
         {Icon && (
-          <div className={cn('p-2 rounded-lg', iconBgStyles[variant])}>
+          <div className={cn('p-2 rounded-full', iconBgStyles[variant])}>
             <Icon className={cn('h-4 w-4', variantStyles[variant])} />
           </div>
         )}
       </CardHeader>
       <CardContent>
-        <div className={cn('text-2xl font-bold text-foreground', variantStyles[variant] !== 'text-foreground' && variantStyles[variant])}>
+        <div className={cn('text-2xl font-bold tabular-nums text-foreground', variantStyles[variant] !== 'text-foreground' && variantStyles[variant])}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </div>
         {description && (
