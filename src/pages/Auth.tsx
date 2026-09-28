@@ -68,7 +68,7 @@ export default function AuthPage() {
   const handleLoginSuccess = () => navigate('/home');
 
   return (
-    <div className="incline-auth min-h-dvh w-full bg-muted lg:grid lg:grid-cols-2">
+    <div className="incline-auth min-h-dvh w-full bg-background lg:grid lg:grid-cols-2">
       <SEO
         title="Sign in | The Incline Life"
         description="Sign in to your Incline membership portal to book classes, manage your plan, view invoices and access recovery sessions."
@@ -82,20 +82,20 @@ export default function AuthPage() {
       </div>
 
       {/* Mobile compact hero */}
-      <div className="lg:hidden relative h-[280px] overflow-hidden">
+      <div className="lg:hidden relative h-[210px] overflow-hidden">
         <AuthVisualPanel />
       </div>
 
       {/* RIGHT — Auth card */}
       <div className="relative flex flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
         {/* Soft decorative bg blobs (right side, behind card) */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-info/15 blur-3xl" />
-          <div className="absolute bottom-0 -left-20 h-72 w-72 rounded-full bg-info/15 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-28 -right-24 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-info/10 blur-3xl" />
         </div>
 
-        <div className="relative w-full max-w-[440px] space-y-6">
-          <div className="glass-card rounded-3xl p-6 sm:p-8">
+        <div className="relative w-full max-w-[440px] space-y-6 animate-fade-in">
+          <div className="rounded-2xl bg-card p-6 sm:p-8 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <LoginForm onSuccess={handleLoginSuccess} />
           </div>
 
@@ -111,6 +111,7 @@ export default function AuthPage() {
           </p>
         </div>
       </div>
+
     </div>
   );
 }
