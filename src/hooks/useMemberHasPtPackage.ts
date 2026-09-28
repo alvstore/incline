@@ -24,7 +24,9 @@ export function useMemberHasPtPackage() {
       const { count } = await supabase
         .from('member_pt_packages')
         .select('id', { count: 'exact', head: true })
-        .eq('member_id', member.id);
+        .eq('member_id', member.id)
+        // Cancelled invoices / reversed packages are not real PT relationships.
+        .not('status', 'in', '(reversed,cancelled)');
       return (count ?? 0) > 0;
     },
   });

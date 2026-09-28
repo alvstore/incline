@@ -1061,14 +1061,22 @@ export function MemberProfileDrawer({
   // Scheduled plan that has not started yet — still needs gift days / date edits / early start
   const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
   const currentMembership = activeMembership || pendingMembership;
-  const activePTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'active');
-  const pendingPTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'pending_payment');
+  // Cancelled/reversed PT packages (e.g. invoice cancelled after a wrong sale)
+  // must not surface as a real PT relationship — exclude them before any
+  // active/pending/last-package logic runs.
+  const validPTPackages = useMemo(() => {
+    return (memberDetails?.member_pt_packages ?? []).filter(
+      (p: any) => p.status !== 'reversed' && p.status !== 'cancelled',
+    );
+  }, [memberDetails?.member_pt_packages]);
+  const activePTPackage = validPTPackages.find((p: any) => p.status === 'active');
+  const pendingPTPackage = validPTPackages.find((p: any) => p.status === 'pending_payment');
   const lastPTPackage = useMemo(() => {
-    const list = [...(memberDetails?.member_pt_packages ?? [])];
+    const list = [...validPTPackages];
     if (!list.length) return null;
     return list.sort((a: any, b: any) =>
       new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())[0];
-  }, [memberDetails?.member_pt_packages]);
+  }, [validPTPackages]);
   /** Current PT relationship — drives the primary PT action so we never re-sell blindly. */
   const ptState: 'none' | 'pending' | 'active' | 'lapsed' =
     activePTPackage ? 'active'
