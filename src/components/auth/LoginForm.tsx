@@ -82,10 +82,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
-        <p className="text-sm text-muted-foreground">Sign in to your Incline account to continue</p>
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+          Rise. Reflect. Repeat.
+        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h1>
+        <p className="text-sm text-muted-foreground">
+          Sign in with your email or mobile number to continue.
+        </p>
       </div>
+
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handlePasswordSubmit)} className="space-y-3.5">
