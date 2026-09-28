@@ -58,7 +58,7 @@ export function AuthVisualPanel() {
               src={inclineLogo}
               alt="Incline"
               onError={() => setLogoFailed(true)}
-              className="h-10 lg:h-14 w-auto object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
+              className="h-12 lg:h-20 w-auto object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
             />
           ) : (
             <div className="leading-tight">
