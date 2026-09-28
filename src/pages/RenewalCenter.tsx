@@ -16,12 +16,16 @@ import {
   RenewalQueue,
   useRenewalAction,
   useRenewalCaseVoiceCalls,
+  useRenewalEngineConfig,
   useRenewalFunnel,
   useRenewalQueue,
   useRenewalQueueCounts,
   useRenewalVoiceCall,
+  useSetRenewalEngineConfig,
 } from '@/hooks/useRenewalCenter';
 import { useVoiceOpsSummary } from '@/hooks/useVoiceOps';
+import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/contexts/AuthContext';
 import { dispositionLook, formatDuration, statusLook } from '@/lib/voice/voiceOutcomes';
 import {
   AlertTriangle,
@@ -139,12 +143,28 @@ export default function RenewalCenter() {
   const voiceCall = useRenewalVoiceCall();
   const voiceOps = useVoiceOpsSummary(branchFilter);
   const caseCalls = useRenewalCaseVoiceCalls(selected?.case_id);
+  const engineConfig = useRenewalEngineConfig(branchFilter);
+  const engineSave = useSetRenewalEngineConfig();
 
   const stats = funnel.data ?? {};
   const rows = cases.data ?? [];
   const total = rows[0]?.total_count ?? 0;
   const tabCounts = counts.data ?? {};
-  const engineOff = true;
+  const engineOff = engineConfig.data ? engineConfig.data.enabled !== true : true;
+  const autoVoiceOn = engineConfig.data?.voice_auto_call_enabled === true && !engineOff;
+  const canManageEngine = hasAnyRole(['owner', 'admin']);
+
+  async function saveEngine(patch: { enabled?: boolean; voice_auto_call_enabled?: boolean }, message: string) {
+    const id = engineConfig.data?.id;
+    if (!id) return;
+    try {
+      await engineSave.mutateAsync({ id, ...patch });
+      toast.success(message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update renewal automation');
+    }
+  }
+
   const integration = voiceOps.data?.integration;
   const voiceLive = integration?.is_active === true && Boolean(integration?.agent_phone_number);
   const callingWindow = integration ? `${integration.window_start ?? '10:00'}–${integration.window_end ?? '19:00'} IST` : null;
