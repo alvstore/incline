@@ -112,6 +112,29 @@ const prettyDate = (iso: string): string =>
     timeZone: "UTC", day: "numeric", month: "short",
   });
 
+const weekday = (iso: string): string =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", weekday: "short" });
+
+// "Today" / "Tomorrow" / "Thu 2 Oct"
+const dayLabel = (iso: string): string => {
+  const today = istDate();
+  if (iso === today) return "Today";
+  if (iso === addDays(today, 1)) return "Tomorrow";
+  return `${weekday(iso)} ${prettyDate(iso)}`;
+};
+
+// Compact variant that fits Meta's 24-char row titles: "Today" / "Tmrw" / "2 Oct"
+const dayShort = (iso: string): string => {
+  const today = istDate();
+  if (iso === today) return "Today";
+  if (iso === addDays(today, 1)) return "Tmrw";
+  return prettyDate(iso);
+};
+
+// Initials used to keep slot row titles unique per facility: "Steam room" -> "SR"
+const typeInitials = (name: string): string =>
+  String(name).split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase();
+
 const prettyTime = (hhmmss: string): string => {
   const [h, m] = String(hhmmss).split(":").map(Number);
   const ampm = h >= 12 ? "PM" : "AM";
