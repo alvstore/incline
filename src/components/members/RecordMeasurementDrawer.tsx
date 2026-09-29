@@ -109,11 +109,70 @@ export function RecordMeasurementDrawer({
     setFormData((prev) => ({ ...prev, gender_presentation: derivedPresentation }));
   }, [derivedPresentation]);
 
+  /** Last recorded values — used by the auto-fill action and by the height hint. */
+  const { data: lastRecord, isFetching: loadingLast } = useQuery({
+    queryKey: ['member-measurements-latest', memberId],
+    enabled: open && Boolean(memberId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_measurements')
+        .select('*')
+        .eq('member_id', memberId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as Record<string, number | string | null> | null;
+    },
+  });
+
+  const lastHeight = useMemo(() => {
+    const value = Number(lastRecord?.height_cm ?? NaN);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }, [lastRecord]);
+
+  /** Copy the member's last recorded numbers into the empty fields. */
+  const autoFillFromHistory = useCallback(() => {
+    if (!lastRecord) {
+      toast.info('No earlier measurement on file for this member yet.');
+      return;
+    }
+    let copied = 0;
+    setFormData((prev) => {
+      const next = { ...prev };
+      measurementFieldDefinitions.forEach((field) => {
+        const previous = lastRecord[field.key];
+        if (previous === null || previous === undefined) return;
+        if ((next[field.key] ?? '') !== '') return;
+        next[field.key] = String(previous);
+        copied += 1;
+      });
+      return next;
+    });
+    toast.success(copied ? `Filled ${copied} value${copied > 1 ? 's' : ''} from the last record.` : 'Everything is already filled in.');
+  }, [lastRecord]);
+
+  // Height rarely changes — carry it forward automatically so BMI is never wrong.
+  useEffect(() => {
+    if (!open || !lastHeight) return;
+    setFormData((prev) => (prev.height_cm ? prev : { ...prev, height_cm: String(lastHeight) }));
+  }, [open, lastHeight]);
+
   const calculateBMI = () => {
     const weight = Number.parseFloat(formData.weight_kg || '');
     const height = Number.parseFloat(formData.height_cm || '');
     if (!weight || !height) return null;
     return (weight / Math.pow(height / 100, 2)).toFixed(1);
+  };
+
+  const bmiBand = (value: string | null) => {
+    if (!value) return null;
+    const bmiValue = Number.parseFloat(value);
+    if (bmiValue < 18.5) return 'Below standard';
+    if (bmiValue < 25) return 'Standard';
+    if (bmiValue < 30) return 'Above standard';
+    return 'High';
   };
 
   const cleanupDraftPhotos = async (paths: string[]) => {
