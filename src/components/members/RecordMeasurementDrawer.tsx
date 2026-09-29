@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +15,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Loader2, Ruler, Scale, TrendingUp, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Camera, Loader2, RefreshCw, Ruler, Scale, TrendingUp, X } from 'lucide-react';
 import {
   measurementFieldDefinitions,
   normalizeMeasurementDraft,
@@ -109,11 +109,70 @@ export function RecordMeasurementDrawer({
     setFormData((prev) => ({ ...prev, gender_presentation: derivedPresentation }));
   }, [derivedPresentation]);
 
+  /** Last recorded values — used by the auto-fill action and by the height hint. */
+  const { data: lastRecord, isFetching: loadingLast } = useQuery({
+    queryKey: ['member-measurements-latest', memberId],
+    enabled: open && Boolean(memberId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_measurements')
+        .select('*')
+        .eq('member_id', memberId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as Record<string, number | string | null> | null;
+    },
+  });
+
+  const lastHeight = useMemo(() => {
+    const value = Number(lastRecord?.height_cm ?? NaN);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }, [lastRecord]);
+
+  /** Copy the member's last recorded numbers into the empty fields. */
+  const autoFillFromHistory = useCallback(() => {
+    if (!lastRecord) {
+      toast.info('No earlier measurement on file for this member yet.');
+      return;
+    }
+    let copied = 0;
+    setFormData((prev) => {
+      const next = { ...prev };
+      measurementFieldDefinitions.forEach((field) => {
+        const previous = lastRecord[field.key];
+        if (previous === null || previous === undefined) return;
+        if ((next[field.key] ?? '') !== '') return;
+        next[field.key] = String(previous);
+        copied += 1;
+      });
+      return next;
+    });
+    toast.success(copied ? `Filled ${copied} value${copied > 1 ? 's' : ''} from the last record.` : 'Everything is already filled in.');
+  }, [lastRecord]);
+
+  // Height rarely changes — carry it forward automatically so BMI is never wrong.
+  useEffect(() => {
+    if (!open || !lastHeight) return;
+    setFormData((prev) => (prev.height_cm ? prev : { ...prev, height_cm: String(lastHeight) }));
+  }, [open, lastHeight]);
+
   const calculateBMI = () => {
     const weight = Number.parseFloat(formData.weight_kg || '');
     const height = Number.parseFloat(formData.height_cm || '');
     if (!weight || !height) return null;
     return (weight / Math.pow(height / 100, 2)).toFixed(1);
+  };
+
+  const bmiBand = (value: string | null) => {
+    if (!value) return null;
+    const bmiValue = Number.parseFloat(value);
+    if (bmiValue < 18.5) return 'Below standard';
+    if (bmiValue < 25) return 'Standard';
+    if (bmiValue < 30) return 'Above standard';
+    return 'High';
   };
 
   const cleanupDraftPhotos = async (paths: string[]) => {
@@ -249,9 +308,23 @@ export function RecordMeasurementDrawer({
 
         <div className="mt-6 space-y-6 pb-6">
           <Card className="rounded-2xl border-border/60 bg-card shadow-lg shadow-primary/5">
-            <CardContent className="pt-5">
-              <p className="text-lg font-semibold text-foreground">{memberName}</p>
-              <p className="text-sm text-muted-foreground">Secure, branch-scoped measurement capture with private progress photos.</p>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-5">
+              <div>
+                <p className="text-lg font-semibold text-foreground">{memberName}</p>
+                <p className="text-sm text-muted-foreground">Secure, branch-scoped measurement capture with private progress photos.</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="cursor-pointer rounded-full"
+                onClick={autoFillFromHistory}
+                disabled={loadingLast || !lastRecord}
+                aria-label="Fill fields from the last recorded measurement"
+              >
+                {loadingLast ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Fill from last record
+              </Button>
             </CardContent>
           </Card>
 
@@ -293,7 +366,15 @@ export function RecordMeasurementDrawer({
                 <Scale className="h-4 w-4" />
                 Live BMI
               </div>
-              <div className="mt-2 text-3xl font-semibold">{bmi || '--'}</div>
+              <div className="mt-2 text-3xl font-semibold tabular-nums">{bmi || '--'}</div>
+              <p className="mt-1 text-xs text-primary-foreground/75">
+                {bmi ? bmiBand(bmi) : 'Enter weight and height'}
+              </p>
+              {lastHeight && (
+                <p className="mt-2 text-[11px] text-primary-foreground/60">
+                  Last height on file: {lastHeight} cm
+                </p>
+              )}
             </div>
           </div>
 

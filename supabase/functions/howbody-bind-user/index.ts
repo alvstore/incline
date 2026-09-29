@@ -1,4 +1,6 @@
-// v2.0.0 — Bind HOWBODY scanner session to a member (calls /openApi/setUserInfo)
+// v2.1.0 — Bind HOWBODY scanner session to a member (calls /openApi/setUserInfo)
+// Height is required (entered at the QR screen or taken from the last measurement);
+// the old silent 170 cm default produced wrong BMI/body-fat results.
 // Kind-aware entitlement: a BODY scan requires BODY entitlement; a POSTURE scan requires
 // POSTURE entitlement. Posture entitlement may NEVER substitute for body entitlement.
 // scanId is single-use: a scanId already bound (or completed) cannot be re-bound.
@@ -12,6 +14,8 @@ interface BindBody {
   scanId?: string;
   memberId?: string;
   kind?: string;
+  /** Height in cm entered on the QR screen (100–250). Overrides the last recorded height. */
+  heightCm?: number;
 }
 
 /** Human-readable denial reason mapped from howbody_scan_quota() output. */
@@ -129,7 +133,8 @@ Deno.serve(async (req) => {
       age = Math.max(4, Math.min(99, Math.floor(diff / (365.25 * 24 * 3600 * 1000))));
     }
 
-    // Latest measurement for height
+    // Height — supplied at the QR screen, otherwise the member's last recorded height.
+    // Never silently fall back to a generic 170 cm: it corrupts BMI and body-fat results.
     const { data: meas } = await sb
       .from("member_measurements")
       .select("height_cm")
@@ -138,7 +143,38 @@ Deno.serve(async (req) => {
       .order("recorded_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const height = Math.max(80, Math.min(250, Number(meas?.height_cm) || 170));
+
+    const storedHeight = Number(meas?.height_cm);
+    const suppliedHeightRaw = Number(body.heightCm);
+    const suppliedHeight = Number.isFinite(suppliedHeightRaw) && suppliedHeightRaw >= 100 && suppliedHeightRaw <= 250
+      ? Number(suppliedHeightRaw.toFixed(1))
+      : null;
+    const height = suppliedHeight ?? (Number.isFinite(storedHeight) && storedHeight >= 100 ? storedHeight : null);
+
+    if (!height) {
+      return json({
+        ok: false,
+        code: "height_required",
+        error: "Please enter the member's height before starting the scan — the scanner needs it to calculate BMI.",
+      }, 200);
+    }
+
+    // Remember a freshly entered height so later scans and BMI stay correct.
+    if (suppliedHeight && suppliedHeight !== storedHeight) {
+      await sb.from("member_measurements").insert({
+        member_id: memberId,
+        height_cm: suppliedHeight,
+        notes: "Height captured at body scanner login",
+      });
+    }
+
+    if (!age) {
+      return json({
+        ok: false,
+        code: "dob_required",
+        error: "Please add the member's date of birth to their profile — the scanner needs their age.",
+      }, 200);
+    }
 
     // Call HOWBODY setUserInfo
     const { baseUrl } = await getHowbodyCreds();
@@ -154,7 +190,7 @@ Deno.serve(async (req) => {
         tel: profile.phone || "",
         sex,
         height,
-        age: age ?? 25,
+        age,
       }),
     });
     const hbBody = await hbResp.json().catch(() => ({}));

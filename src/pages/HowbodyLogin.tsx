@@ -38,6 +38,9 @@ export default function HowbodyLogin() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [kind, setKind] = useState<ScanKind>(kindParam === "posture" ? "posture" : "body");
+  // Height is mandatory — the scanner cannot calculate BMI or body fat without it.
+  const [height, setHeight] = useState("");
+  const [heightPrefilled, setHeightPrefilled] = useState(false);
 
 
   // Resolve friendly device label from inventory (falls back to raw equipmentNo)
@@ -69,6 +72,26 @@ export default function HowbodyLogin() {
     })();
     return () => { cancelled = true; };
   }, [user, isStaff]);
+
+  // Prefill height from the member's last recorded measurement
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!memberId) return;
+      const { data } = await supabase
+        .from("member_measurements")
+        .select("height_cm")
+        .eq("member_id", memberId)
+        .not("height_cm", "is", null)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data?.height_cm) return;
+      setHeight(String(data.height_cm));
+      setHeightPrefilled(true);
+    })();
+    return () => { cancelled = true; };
+  }, [memberId]);
 
   // Realtime: navigate when session completes
   useEffect(() => {
@@ -132,10 +155,19 @@ export default function HowbodyLogin() {
       setStatus("error");
       return;
     }
+    const heightValue = Number.parseFloat(height);
+    if (!Number.isFinite(heightValue) || heightValue < 100 || heightValue > 250) {
+      toast({
+        title: "Height needed",
+        description: "Enter a height between 100 and 250 cm so the scan results are accurate.",
+        variant: "destructive",
+      });
+      return;
+    }
     setStatus("binding");
     setErrorMsg(null);
     const { data, error } = await supabase.functions.invoke("howbody-bind-user", {
-      body: { equipmentNo, scanId, memberId: targetMemberId, kind },
+      body: { equipmentNo, scanId, memberId: targetMemberId, kind, heightCm: heightValue },
     });
     if (error || !data?.ok) {
       setErrorMsg(data?.error || error?.message || "Could not bind to scanner.");
@@ -263,7 +295,26 @@ export default function HowbodyLogin() {
           </div>
         </div>
 
-
+        <div className="mt-5 space-y-2">
+          <Label htmlFor="scan-height">Height (cm)</Label>
+          <Input
+            id="scan-height"
+            type="number"
+            inputMode="decimal"
+            min={100}
+            max={250}
+            step={0.5}
+            value={height}
+            onChange={(e) => { setHeight(e.target.value); setHeightPrefilled(false); }}
+            placeholder="e.g. 164"
+            className="h-12"
+          />
+          <p className="text-xs text-muted-foreground">
+            {heightPrefilled
+              ? "Taken from the last record — correct it if it has changed."
+              : "Required. Body fat and BMI are calculated from this, so measure it accurately."}
+          </p>
+        </div>
 
         {!isStaff && memberId && (
           <div className="mt-6 space-y-4">
