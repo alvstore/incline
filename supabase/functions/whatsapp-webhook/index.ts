@@ -706,6 +706,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
           { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name, created_at: (inboundMsg as any).created_at ?? null },
           branchId,
           messageId,
+          { allowRepeat: true },
         );
         return;
       }
@@ -879,12 +880,13 @@ async function sendAiReply(
   inboundMsg: { phone_number: string; contact_name: string | null; created_at?: string | null },
   branchId: string,
   inboundMessageId?: string,
+  opts: { allowRepeat?: boolean } = {},
 ) {
   try {
   // ── Hard duplicate guard (v3) ────────────────────────────────────────────
   // Structurally prevents the "same sentence three times" failure mode: if the
   // exact same body was already sent to this contact in the last 24h, suppress.
-  try {
+  if (!opts.allowRepeat) try {
     const dupSince = new Date(Date.now() - 24 * 3600_000).toISOString();
     const { data: dupRows } = await supabase
       .from("whatsapp_messages")
