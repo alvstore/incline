@@ -693,6 +693,35 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     console.warn("[whatsapp-webhook] opt-out gate failed (continuing to AI):", gateErr);
   }
 
+  // v8.0.0 — MEMBER GATEWAY. Active members get the deterministic self-service
+  // menu (zero LLM). Non-members and any gateway failure fall through to the AI.
+  try {
+    const { resolveActiveMember, runMemberGateway } = await import("../_shared/whatsapp-member-menu.ts");
+    const memberCtx = await resolveActiveMember(supabase, phoneNumber, branchId);
+    if (memberCtx) {
+      const reply = await runMemberGateway(supabase, memberCtx, inboundMsg.content, phoneNumber);
+      if (reply) {
+        await sendAiReply(
+          reply,
+          { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name, created_at: (inboundMsg as any).created_at ?? null },
+          branchId,
+          messageId,
+        );
+        return;
+      }
+    }
+  } catch (gwErr) {
+    console.warn("[whatsapp-webhook] member gateway failed (falling back to AI):", gwErr);
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_member_gateway",
+        p_severity: "warning",
+        p_message: `Member gateway failed for ${phoneNumber}`,
+        p_context: { branch_id: branchId, error: String((gwErr as Error)?.message ?? gwErr) },
+      });
+    } catch { /* noop */ }
+  }
+
   // v6.5.0 — BRAIN HEARTBEAT. Worker reaps mid-LLM-call had been silently
   // swallowing failures (no catch could fire). We now insert a `start` row
   // BEFORE invoking the brain and an `end`/`error` row AFTER. A start without
