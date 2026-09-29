@@ -132,10 +132,19 @@ export default function HowbodyLogin() {
       setStatus("error");
       return;
     }
+    const heightValue = Number.parseFloat(height);
+    if (!Number.isFinite(heightValue) || heightValue < 100 || heightValue > 250) {
+      toast({
+        title: "Height needed",
+        description: "Enter a height between 100 and 250 cm so the scan results are accurate.",
+        variant: "destructive",
+      });
+      return;
+    }
     setStatus("binding");
     setErrorMsg(null);
     const { data, error } = await supabase.functions.invoke("howbody-bind-user", {
-      body: { equipmentNo, scanId, memberId: targetMemberId, kind },
+      body: { equipmentNo, scanId, memberId: targetMemberId, kind, heightCm: heightValue },
     });
     if (error || !data?.ok) {
       setErrorMsg(data?.error || error?.message || "Could not bind to scanner.");
