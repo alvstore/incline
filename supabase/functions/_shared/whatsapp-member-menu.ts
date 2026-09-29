@@ -337,11 +337,13 @@ async function bookSlotByTitle(supabase: any, ctx: MemberContext, title: string)
       p_slot_id: match.id,
       p_member_id: ctx.memberId,
       p_membership_id: ms?.id ?? null,
-      p_source: "whatsapp",
+      p_source: "whatsapp_ai",
     });
     if (error) return `I couldn't reserve that slot (${error.message}). Please try another time or reply *Front desk*.${BACK}`;
     if (!data?.success) return `I couldn't reserve that slot: ${data?.error ?? "not available"}.${BACK}`;
-    return `✅ Reserved — *${t.name}* on ${prettyDate(match.slot_date)} at ${prettyTime(match.start_time)}. Please arrive 5 minutes early.${BACK}`;
+    const left = await unitsFor(supabase, ctx, ms?.id ?? null, t.id);
+    const leftTxt = left < 0 ? "" : ` You have ${left} ${t.name} session${left === 1 ? "" : "s"} left.`;
+    return `✅ Reserved — *${t.name}* on ${prettyDate(match.slot_date)} at ${prettyTime(match.start_time)}.${leftTxt} Please arrive 5 minutes early.${BACK}`;
   }
   return null;
 }
