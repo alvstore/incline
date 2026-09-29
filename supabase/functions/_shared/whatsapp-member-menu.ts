@@ -1,4 +1,4 @@
-// whatsapp-member-menu.ts — v1.0.0
+// whatsapp-member-menu.ts — v1.1.0
 // Deterministic (zero-LLM) WhatsApp self-service gateway for ACTIVE members.
 //
 // Epic 1  Phone normalisation + active-member resolution
@@ -23,6 +23,7 @@ export interface MemberContext {
   fullName: string;
   firstName: string;
   assignedTrainerId: string | null;
+  gender: string | null;
 }
 
 // ─── Epic 1: phone normalisation ──────────────────────────────────────────────
@@ -43,7 +44,7 @@ export async function resolveActiveMember(
   const variants = phoneVariants(phone);
   if (variants.length === 0) return null;
 
-  const build = (m: any, profileName?: string | null): MemberContext => {
+  const build = (m: any, profileName?: string | null, profileGender?: string | null): MemberContext => {
     const fullName = profileName || m?.profiles?.full_name || "there";
     return {
       memberId: m.id,
@@ -52,13 +53,14 @@ export async function resolveActiveMember(
       fullName,
       firstName: String(fullName).trim().split(/\s+/)[0] || "there",
       assignedTrainerId: m.assigned_trainer_id ?? null,
+      gender: (profileGender ?? m?.profiles?.gender ?? null) as string | null,
     };
   };
 
   // Primary: profiles.phone -> members
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name")
+    .select("id, full_name, gender")
     .in("phone", variants)
     .limit(5);
 
@@ -69,7 +71,7 @@ export async function resolveActiveMember(
       .eq("user_id", p.id)
       .eq("status", "active")
       .maybeSingle();
-    if (m) return build(m, p.full_name);
+    if (m) return build(m, p.full_name, p.gender);
   }
 
   // Fallback: an alternate / international number linked to a member
@@ -84,7 +86,7 @@ export async function resolveActiveMember(
   if (linked?.linked_member_id) {
     const { data: m } = await supabase
       .from("members")
-      .select("id, branch_id, member_code, status, assigned_trainer_id, profiles:user_id(full_name)")
+      .select("id, branch_id, member_code, status, assigned_trainer_id, profiles:user_id(full_name, gender)")
       .eq("id", linked.linked_member_id)
       .eq("status", "active")
       .maybeSingle();
@@ -109,6 +111,29 @@ const prettyDate = (iso: string): string =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", {
     timeZone: "UTC", day: "numeric", month: "short",
   });
+
+const weekday = (iso: string): string =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", weekday: "short" });
+
+// "Today" / "Tomorrow" / "Thu 2 Oct"
+const dayLabel = (iso: string): string => {
+  const today = istDate();
+  if (iso === today) return "Today";
+  if (iso === addDays(today, 1)) return "Tomorrow";
+  return `${weekday(iso)} ${prettyDate(iso)}`;
+};
+
+// Compact variant that fits Meta's 24-char row titles: "Today" / "Tmrw" / "2 Oct"
+const dayShort = (iso: string): string => {
+  const today = istDate();
+  if (iso === today) return "Today";
+  if (iso === addDays(today, 1)) return "Tmrw";
+  return prettyDate(iso);
+};
+
+// Initials used to keep slot row titles unique per facility: "Steam room" -> "SR"
+const typeInitials = (name: string): string =>
+  String(name).split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 3).toUpperCase();
 
 const prettyTime = (hhmmss: string): string => {
   const [h, m] = String(hhmmss).split(":").map(Number);
@@ -201,58 +226,93 @@ async function handleMembership(supabase: any, ctx: MemberContext): Promise<stri
   ].join("\n") + BACK;
 }
 
-async function todaysClasses(supabase: any, ctx: MemberContext) {
+// Upcoming classes: today's remaining sessions first, then the next 7 days.
+// (Members message us in the evening, when today's schedule is already over.)
+async function upcomingClasses(supabase: any, ctx: MemberContext) {
   const today = istDate();
   const { data } = await supabase
     .from("classes")
     .select("id, name, scheduled_at, capacity, booked_count, venue, external_trainer_name, session_date")
     .eq("branch_id", ctx.branchId)
-    .eq("session_date", today)
+    .gte("session_date", today)
+    .lte("session_date", addDays(today, 7))
     .eq("is_active", true)
     .is("cancelled_at", null)
     .order("scheduled_at", { ascending: true })
-    .limit(10);
-  return (data ?? []).filter((c: any) => new Date(c.scheduled_at).getTime() > Date.now() - 15 * 60_000);
+    .limit(40);
+  return (data ?? [])
+    .filter((c: any) => new Date(c.scheduled_at).getTime() > Date.now() - 15 * 60_000)
+    .slice(0, 9);
 }
 
-const classRowTitle = (c: any) => cut(`${c.name} ${tsTime(c.scheduled_at)}`, 24);
+const classRowTitle = (c: any) =>
+  cut(`${cut(c.name, 9)} ${dayShort(c.session_date)} ${tsTime(c.scheduled_at).replace(/\s/g, "")}`, 24);
 
 async function handleClasses(supabase: any, ctx: MemberContext): Promise<string> {
-  const classes = await todaysClasses(supabase, ctx);
+  const classes = await upcomingClasses(supabase, ctx);
   if (classes.length === 0) {
-    return `No group classes left on today's schedule, ${ctx.firstName}. You can see the full week in your portal: ${PORTAL}/my-classes${BACK}`;
+    return `No group classes on the schedule for the coming week, ${ctx.firstName}. Your portal always has the latest: ${PORTAL}/my-classes${BACK}`;
   }
+  const today = istDate();
   const rows: Row[] = classes.map((c: any) => {
     const left = Math.max(0, (c.capacity ?? 0) - (c.booked_count ?? 0));
     return {
       id: `CLASS:${c.id}`,
       title: classRowTitle(c),
-      description: `${left > 0 ? `${left} spots left` : "Full"}${c.venue ? ` · ${c.venue}` : ""}`,
+      description: cut(
+        `${c.name} · ${dayLabel(c.session_date)} ${tsTime(c.scheduled_at)} · ${left > 0 ? `${left} spots left` : "Full"}`,
+        72,
+      ),
     };
   });
-  return list(`Today's classes at Incline, ${ctx.firstName}. Tap one to book instantly:`, "See classes", rows, "Today's classes");
+  const scope = classes.every((c: any) => c.session_date === today) ? "Today's classes" : "Upcoming classes";
+  return list(`${scope} at Incline, ${ctx.firstName}. Tap one to book instantly:`, "See classes", rows, cut(scope, 24));
 }
 
 async function bookClassByTitle(supabase: any, ctx: MemberContext, title: string): Promise<string | null> {
-  const classes = await todaysClasses(supabase, ctx);
+  const classes = await upcomingClasses(supabase, ctx);
   const match = classes.find((c: any) => norm(classRowTitle(c)) === norm(title));
   if (!match) return null;
   const { data, error } = await supabase.rpc("book_class", { _class_id: match.id, _member_id: ctx.memberId });
   if (error) return `I couldn't complete that booking just now (${error.message}). Please try again or reply *Front desk*.${BACK}`;
   if (!data?.success) return `I couldn't book that class: ${data?.error ?? "not available"}.${BACK}`;
-  return `✅ You're booked for *${match.name}* at ${tsTime(match.scheduled_at)} today. See you on the floor!${BACK}`;
+  return `✅ You're booked for *${match.name}* on ${dayLabel(match.session_date)} at ${tsTime(match.scheduled_at)}. See you on the floor!${BACK}`;
 }
 
-async function recoveryTypes(supabase: any, ctx: MemberContext) {
-  const { data } = await supabase
+// Recovery rooms are gender-specific (Steam Room Male / Steam Room Female …).
+// Only the facilities matching the member's profile gender may be offered,
+// otherwise the same 6:00 AM steam slot shows up twice — once per room.
+async function recoveryContext(supabase: any, ctx: MemberContext) {
+  const g = String(ctx.gender ?? "").toLowerCase();
+
+  const { data: facilities } = await supabase
+    .from("facilities")
+    .select("id, name, benefit_type_id, gender_access, is_active, under_maintenance")
+    .eq("branch_id", ctx.branchId)
+    .eq("is_active", true);
+
+  const facIdsByType = new Map<string, string[]>();
+  for (const f of facilities ?? []) {
+    if (f.under_maintenance) continue;
+    const access = String(f.gender_access ?? "all").toLowerCase();
+    const allowed = access === "all" || access === "any" || !access || (g ? access === g : true);
+    if (!allowed || !f.benefit_type_id) continue;
+    const arr = facIdsByType.get(f.benefit_type_id) ?? [];
+    arr.push(f.id);
+    facIdsByType.set(f.benefit_type_id, arr);
+  }
+
+  const { data: allTypes } = await supabase
     .from("benefit_types")
     .select("id, name, code")
     .eq("branch_id", ctx.branchId)
     .eq("is_bookable", true)
     .eq("is_active", true)
     .order("display_order", { ascending: true })
-    .limit(10);
-  return data ?? [];
+    .limit(20);
+
+  const types = (allTypes ?? []).filter((t: any) => (facIdsByType.get(t.id) ?? []).length > 0);
+  return { types, facIdsByType };
 }
 
 async function unitsFor(supabase: any, ctx: MemberContext, membershipId: string | null, typeId: string): Promise<number> {
@@ -266,8 +326,11 @@ async function unitsFor(supabase: any, ctx: MemberContext, membershipId: string 
   return typeof data === "number" ? data : 0;
 }
 
+const RECOVERY_WINDOW_DAYS = 6; // today + 6 => a full week of choices
+
+// Step 1 — which recovery service (only those with sessions left).
 async function handleRecovery(supabase: any, ctx: MemberContext): Promise<string> {
-  const types = await recoveryTypes(supabase, ctx);
+  const { types } = await recoveryContext(supabase, ctx);
   if (types.length === 0) {
     return `Recovery bookings aren't open on WhatsApp right now. You can book from your portal: ${PORTAL}/my-benefits${BACK}`;
   }
@@ -276,7 +339,11 @@ async function handleRecovery(supabase: any, ctx: MemberContext): Promise<string
   for (const t of types) {
     const units = await unitsFor(supabase, ctx, ms?.id ?? null, t.id);
     if (units === 0) continue;
-    rows.push({ id: `FAC:${t.id}`, title: cut(t.name, 24), description: units < 0 ? "Unlimited · tap for open times" : `${units} session${units === 1 ? "" : "s"} left · tap for open times` });
+    rows.push({
+      id: `FAC:${t.id}`,
+      title: cut(t.name, 24),
+      description: units < 0 ? "Unlimited · tap to pick a day" : `${units} session${units === 1 ? "" : "s"} left · tap to pick a day`,
+    });
   }
   if (rows.length === 0) {
     return `You don't have any steam, sauna or ice bath sessions left right now, ${ctx.firstName}. Reply *Front desk* to add sessions or see add-ons at ${PORTAL}/my-benefits${BACK}`;
@@ -284,53 +351,128 @@ async function handleRecovery(supabase: any, ctx: MemberContext): Promise<string
   return list(`Which recovery service would you like, ${ctx.firstName}? Only services with sessions left are shown.`, "See services", rows, "Recovery suite");
 }
 
-async function openSlots(supabase: any, ctx: MemberContext, benefitTypeId: string) {
+async function openSlots(
+  supabase: any,
+  ctx: MemberContext,
+  facilityIds: string[],
+  dateFrom: string,
+  dateTo: string,
+) {
+  if (facilityIds.length === 0) return [];
   const today = istDate();
   const { data } = await supabase
     .from("benefit_slots")
-    .select("id, slot_date, start_time, capacity, booked_count")
+    .select("id, slot_date, start_time, end_time, capacity, booked_count, facility_id")
     .eq("branch_id", ctx.branchId)
-    .eq("benefit_type_id", benefitTypeId)
+    .in("facility_id", facilityIds)
     .eq("is_active", true)
-    .gte("slot_date", today)
-    .lte("slot_date", addDays(today, 1))
+    .gte("slot_date", dateFrom)
+    .lte("slot_date", dateTo)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true })
-    .limit(40);
-  const nowHm = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false }).slice(0, 5);
+    .limit(400);
+
+  const nowHm = new Date().toLocaleTimeString("en-GB", { timeZone: IST, hour12: false }).slice(0, 5);
+  const seen = new Set<string>();
   return (data ?? [])
     .filter((s: any) => (s.capacity ?? 0) - (s.booked_count ?? 0) > 0)
     .filter((s: any) => s.slot_date !== today || String(s.start_time).slice(0, 5) > nowHm)
-    .slice(0, 9);
+    .filter((s: any) => {
+      const key = `${s.slot_date}|${String(s.start_time).slice(0, 5)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
+// Row titles are the only thing Meta echoes back, so they must be unique and
+// short enough (24 chars) to survive without truncation.
+const dateRowTitle = (typeName: string, iso: string) => cut(`${typeInitials(typeName)} · ${dayShort(iso)}`, 24);
 const slotRowTitle = (typeName: string, s: any) =>
-  cut(`${cut(typeName, 10)} ${s.slot_date === istDate() ? "" : prettyDate(s.slot_date) + " "}${prettyTime(s.start_time)}`, 24);
+  cut(`${typeInitials(typeName)} ${dayShort(s.slot_date)} ${prettyTime(s.start_time).replace(/\s/g, "")}`, 24);
 
-async function handleFacilitySlots(supabase: any, ctx: MemberContext, typeId: string, typeName: string): Promise<string> {
+// Step 2 — which day.
+async function handleFacilityDates(supabase: any, ctx: MemberContext, typeId: string, typeName: string): Promise<string> {
   const ms = await activeMembership(supabase, ctx.memberId);
   const units = await unitsFor(supabase, ctx, ms?.id ?? null, typeId);
   if (units === 0) {
     return `You have no ${typeName} sessions left, ${ctx.firstName}. Reply *Front desk* to add sessions.${BACK}`;
   }
-  const slots = await openSlots(supabase, ctx, typeId);
+  const { facIdsByType } = await recoveryContext(supabase, ctx);
+  const today = istDate();
+  const slots = await openSlots(supabase, ctx, facIdsByType.get(typeId) ?? [], today, addDays(today, RECOVERY_WINDOW_DAYS));
   if (slots.length === 0) {
-    return `No open ${typeName} slots for today or tomorrow. You can check later slots here: ${PORTAL}/my-benefits${BACK}`;
+    return `No open ${typeName} times in the next week, ${ctx.firstName}. Our front desk can help — reply *Front desk*, or check ${PORTAL}/my-benefits${BACK}`;
   }
-  const rows: Row[] = slots.map((s: any) => ({
+
+  const byDate = new Map<string, number>();
+  for (const s of slots) byDate.set(s.slot_date, (byDate.get(s.slot_date) ?? 0) + 1);
+
+  const rows: Row[] = [...byDate.entries()].slice(0, 9).map(([iso, count]) => ({
+    id: `FACDATE:${typeId}:${iso}`,
+    title: dateRowTitle(typeName, iso),
+    description: cut(`${dayLabel(iso)} · ${count} time${count === 1 ? "" : "s"} open`, 72),
+  }));
+
+  const left = units < 0 ? "unlimited sessions" : `${units} session${units === 1 ? "" : "s"} left`;
+  return list(
+    `${typeName} — you have ${left}.\nWhich day would you like, ${ctx.firstName}?`,
+    "Pick a day",
+    rows,
+    cut(`${typeName} · days`, 24),
+  );
+}
+
+// Step 3 — which time on that day.
+async function handleFacilityTimes(
+  supabase: any,
+  ctx: MemberContext,
+  typeId: string,
+  typeName: string,
+  iso: string,
+): Promise<string> {
+  const { facIdsByType } = await recoveryContext(supabase, ctx);
+  const slots = await openSlots(supabase, ctx, facIdsByType.get(typeId) ?? [], iso, iso);
+  if (slots.length === 0) {
+    return `${typeName} is fully booked on ${dayLabel(iso)}, ${ctx.firstName}. Reply *Book recovery suite* to pick another day.${BACK}`;
+  }
+  const rows: Row[] = slots.slice(0, 9).map((s: any) => ({
     id: `SLOT:${s.id}`,
     title: slotRowTitle(typeName, s),
-    description: `${prettyDate(s.slot_date)} · ${(s.capacity ?? 0) - (s.booked_count ?? 0)} spots open`,
+    description: cut(
+      `${prettyTime(s.start_time)}${s.end_time ? ` – ${prettyTime(s.end_time)}` : ""} · ${(s.capacity ?? 0) - (s.booked_count ?? 0)} spots open`,
+      72,
+    ),
   }));
-  const left = units < 0 ? "Unlimited sessions" : `${units} session${units === 1 ? "" : "s"} left`;
-  return list(`${typeName} — ${left}. Pick a date and time to reserve:`, "See times", rows, cut(typeName, 24));
+  return list(
+    `${typeName} · ${dayLabel(iso)}\nTap a time to reserve it, ${ctx.firstName}:`,
+    "Pick a time",
+    rows,
+    cut(`${dayLabel(iso)} times`, 24),
+  );
+}
+
+// Resolve a tapped day row ("SR · Tmrw") back to its service + date.
+async function dateTapTarget(supabase: any, ctx: MemberContext, title: string) {
+  const { types } = await recoveryContext(supabase, ctx);
+  const today = istDate();
+  const n = norm(title);
+  for (const t of types) {
+    for (let i = 0; i <= RECOVERY_WINDOW_DAYS; i++) {
+      const iso = addDays(today, i);
+      if (norm(dateRowTitle(t.name, iso)) === n) return { typeId: t.id, typeName: t.name, iso };
+    }
+  }
+  return null;
 }
 
 async function bookSlotByTitle(supabase: any, ctx: MemberContext, title: string): Promise<string | null> {
-  const types = await recoveryTypes(supabase, ctx);
+  const { types, facIdsByType } = await recoveryContext(supabase, ctx);
+  const today = istDate();
+  const n = norm(title);
   for (const t of types) {
-    const slots = await openSlots(supabase, ctx, t.id);
-    const match = slots.find((s: any) => norm(slotRowTitle(t.name, s)) === norm(title));
+    const slots = await openSlots(supabase, ctx, facIdsByType.get(t.id) ?? [], today, addDays(today, RECOVERY_WINDOW_DAYS));
+    const match = slots.find((s: any) => norm(slotRowTitle(t.name, s)) === n);
     if (!match) continue;
     const ms = await activeMembership(supabase, ctx.memberId);
     const { data, error } = await supabase.rpc("book_facility_slot", {
@@ -343,7 +485,7 @@ async function bookSlotByTitle(supabase: any, ctx: MemberContext, title: string)
     if (!data?.success) return `I couldn't reserve that slot: ${data?.error ?? "not available"}.${BACK}`;
     const left = await unitsFor(supabase, ctx, ms?.id ?? null, t.id);
     const leftTxt = left < 0 ? "" : ` You have ${left} ${t.name} session${left === 1 ? "" : "s"} left.`;
-    return `✅ Reserved — *${t.name}* on ${prettyDate(match.slot_date)} at ${prettyTime(match.start_time)}.${leftTxt} Please arrive 5 minutes early.${BACK}`;
+    return `✅ Reserved — *${t.name}* on ${dayLabel(match.slot_date)} at ${prettyTime(match.start_time)}.${leftTxt} Please arrive 5 minutes early.${BACK}`;
   }
   return null;
 }
@@ -450,37 +592,58 @@ async function handleTrainer(supabase: any, ctx: MemberContext): Promise<string>
 
 async function handleMyPlans(supabase: any, ctx: MemberContext): Promise<string> {
   const today = istDate();
+  // Show the latest plan of each kind even when its validity window has passed —
+  // a member whose diet plan expired still wants to open it (and know it lapsed).
   const { data: plans } = await supabase
     .from("member_fitness_plans")
     .select("plan_type, plan_name, valid_until, source_kind")
     .eq("member_id", ctx.memberId)
-    .or(`valid_until.is.null,valid_until.gte.${today}`)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(20);
 
-  const workout = (plans ?? []).find((p: any) => p.plan_type === "workout");
-  let diet = (plans ?? []).find((p: any) => p.plan_type === "diet");
+  const pick = (kind: string) => {
+    const of = (plans ?? []).filter((p: any) => p.plan_type === kind);
+    return of.find((p: any) => !p.valid_until || p.valid_until >= today) ?? of[0] ?? null;
+  };
+
+  const workout = pick("workout");
+  let diet = pick("diet");
 
   if (!diet) {
     const { data: dp } = await supabase
       .from("diet_plans")
-      .select("name")
+      .select("name, end_date")
       .eq("member_id", ctx.memberId)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (dp) diet = { plan_name: dp.name, plan_type: "diet" } as any;
+    if (dp) diet = { plan_name: dp.name, plan_type: "diet", valid_until: dp.end_date } as any;
   }
 
   if (!workout && !diet) {
     return `You don't have a workout or diet plan assigned yet, ${ctx.firstName}. Reply *Request plan* and I'll ask your coach to prepare one.${BACK}`;
   }
 
+  const stamp = (p: any) => {
+    if (!p?.valid_until) return "";
+    return p.valid_until >= today
+      ? `\nValid till: ${prettyDate(p.valid_until)}`
+      : `\n⚠️ Expired on ${prettyDate(p.valid_until)} — reply *Request plan* for a fresh one.`;
+  };
+
   const lines = ["📥 *Your assigned plans*", ""];
-  if (workout) lines.push(`Workout: ${workout.plan_name}\nOpen & download: ${PORTAL}/my-workout`);
-  if (workout && diet) lines.push("");
-  if (diet) lines.push(`Diet: ${diet.plan_name}\nOpen & download: ${PORTAL}/my-diet`);
+  if (workout) {
+    lines.push(`🏋️ Workout: ${workout.plan_name}${stamp(workout)}\nOpen & download: ${PORTAL}/my-workout`);
+  } else {
+    lines.push("🏋️ Workout: none assigned yet — reply *Request plan*.");
+  }
+  lines.push("");
+  if (diet) {
+    lines.push(`🥗 Diet: ${diet.plan_name}${stamp(diet)}\nOpen & download: ${PORTAL}/my-diet`);
+  } else {
+    lines.push("🥗 Diet: none assigned yet — reply *Request plan*.");
+  }
   lines.push("");
   lines.push("Sign in with your registered number to view or download.");
   return lines.join("\n") + BACK;
@@ -617,15 +780,22 @@ export async function runMemberGateway(
 
   if (!raw || GREETING_RE.test(raw)) return mainMenu(ctx);
 
-  // Exact sub-menu taps first (facility / slot titles echoed back by Meta),
+  // Exact sub-menu taps first (service / day / time titles echoed back by Meta),
   // otherwise keyword routing below would bounce "Steam room" back to the menu.
   const menuMatch = MENU.find((r) => norm(r.title) === n);
   if (!menuMatch) {
-    const recTypes = await recoveryTypes(supabase, ctx);
-    const fac = recTypes.find((t: any) => norm(cut(t.name, 24)) === n);
-    if (fac) return await handleFacilitySlots(supabase, ctx, fac.id, fac.name);
+    const { types } = await recoveryContext(supabase, ctx);
+    const fac = types.find((t: any) => norm(cut(t.name, 24)) === n);
+    if (fac) return await handleFacilityDates(supabase, ctx, fac.id, fac.name);
+
+    const dayTap = await dateTapTarget(supabase, ctx, raw);
+    if (dayTap) return await handleFacilityTimes(supabase, ctx, dayTap.typeId, dayTap.typeName, dayTap.iso);
+
     const slotTap = await bookSlotByTitle(supabase, ctx, raw);
     if (slotTap) return slotTap;
+
+    const classTap = await bookClassByTitle(supabase, ctx, raw);
+    if (classTap) return classTap;
   }
   const pick = menuMatch?.id
     ?? (/(membership|my plan\b|validity|expiry)/.test(n) ? "MENU_MEMBERSHIP" : null)
@@ -654,18 +824,6 @@ export async function runMemberGateway(
   if (n === "workout plan") return await handleRequestPlan(supabase, ctx, "workout");
   if (n === "diet plan") return await handleRequestPlan(supabase, ctx, "diet");
   if (n === "both plans") return await handleRequestPlan(supabase, ctx, "both");
-
-  // Recovery facility selection
-  const types = await recoveryTypes(supabase, ctx);
-  const facility = types.find((t: any) => norm(cut(t.name, 24)) === n);
-  if (facility) return await handleFacilitySlots(supabase, ctx, facility.id, facility.name);
-
-  // Class / slot selections (title echoed back by Meta)
-  const classReply = await bookClassByTitle(supabase, ctx, raw);
-  if (classReply) return classReply;
-
-  const slotReply = await bookSlotByTitle(supabase, ctx, raw);
-  if (slotReply) return slotReply;
 
   // Epic 3 — everything else is an operational exception: triage it.
   return await handleTriage(supabase, ctx, raw, phone);
