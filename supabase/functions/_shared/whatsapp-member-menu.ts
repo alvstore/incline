@@ -592,37 +592,58 @@ async function handleTrainer(supabase: any, ctx: MemberContext): Promise<string>
 
 async function handleMyPlans(supabase: any, ctx: MemberContext): Promise<string> {
   const today = istDate();
+  // Show the latest plan of each kind even when its validity window has passed —
+  // a member whose diet plan expired still wants to open it (and know it lapsed).
   const { data: plans } = await supabase
     .from("member_fitness_plans")
     .select("plan_type, plan_name, valid_until, source_kind")
     .eq("member_id", ctx.memberId)
-    .or(`valid_until.is.null,valid_until.gte.${today}`)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(20);
 
-  const workout = (plans ?? []).find((p: any) => p.plan_type === "workout");
-  let diet = (plans ?? []).find((p: any) => p.plan_type === "diet");
+  const pick = (kind: string) => {
+    const of = (plans ?? []).filter((p: any) => p.plan_type === kind);
+    return of.find((p: any) => !p.valid_until || p.valid_until >= today) ?? of[0] ?? null;
+  };
+
+  const workout = pick("workout");
+  let diet = pick("diet");
 
   if (!diet) {
     const { data: dp } = await supabase
       .from("diet_plans")
-      .select("name")
+      .select("name, end_date")
       .eq("member_id", ctx.memberId)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (dp) diet = { plan_name: dp.name, plan_type: "diet" } as any;
+    if (dp) diet = { plan_name: dp.name, plan_type: "diet", valid_until: dp.end_date } as any;
   }
 
   if (!workout && !diet) {
     return `You don't have a workout or diet plan assigned yet, ${ctx.firstName}. Reply *Request plan* and I'll ask your coach to prepare one.${BACK}`;
   }
 
+  const stamp = (p: any) => {
+    if (!p?.valid_until) return "";
+    return p.valid_until >= today
+      ? `\nValid till: ${prettyDate(p.valid_until)}`
+      : `\n⚠️ Expired on ${prettyDate(p.valid_until)} — reply *Request plan* for a fresh one.`;
+  };
+
   const lines = ["📥 *Your assigned plans*", ""];
-  if (workout) lines.push(`Workout: ${workout.plan_name}\nOpen & download: ${PORTAL}/my-workout`);
-  if (workout && diet) lines.push("");
-  if (diet) lines.push(`Diet: ${diet.plan_name}\nOpen & download: ${PORTAL}/my-diet`);
+  if (workout) {
+    lines.push(`🏋️ Workout: ${workout.plan_name}${stamp(workout)}\nOpen & download: ${PORTAL}/my-workout`);
+  } else {
+    lines.push("🏋️ Workout: none assigned yet — reply *Request plan*.");
+  }
+  lines.push("");
+  if (diet) {
+    lines.push(`🥗 Diet: ${diet.plan_name}${stamp(diet)}\nOpen & download: ${PORTAL}/my-diet`);
+  } else {
+    lines.push("🥗 Diet: none assigned yet — reply *Request plan*.");
+  }
   lines.push("");
   lines.push("Sign in with your registered number to view or download.");
   return lines.join("\n") + BACK;
