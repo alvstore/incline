@@ -780,15 +780,22 @@ export async function runMemberGateway(
 
   if (!raw || GREETING_RE.test(raw)) return mainMenu(ctx);
 
-  // Exact sub-menu taps first (facility / slot titles echoed back by Meta),
+  // Exact sub-menu taps first (service / day / time titles echoed back by Meta),
   // otherwise keyword routing below would bounce "Steam room" back to the menu.
   const menuMatch = MENU.find((r) => norm(r.title) === n);
   if (!menuMatch) {
-    const recTypes = await recoveryTypes(supabase, ctx);
-    const fac = recTypes.find((t: any) => norm(cut(t.name, 24)) === n);
-    if (fac) return await handleFacilitySlots(supabase, ctx, fac.id, fac.name);
+    const { types } = await recoveryContext(supabase, ctx);
+    const fac = types.find((t: any) => norm(cut(t.name, 24)) === n);
+    if (fac) return await handleFacilityDates(supabase, ctx, fac.id, fac.name);
+
+    const dayTap = await dateTapTarget(supabase, ctx, raw);
+    if (dayTap) return await handleFacilityTimes(supabase, ctx, dayTap.typeId, dayTap.typeName, dayTap.iso);
+
     const slotTap = await bookSlotByTitle(supabase, ctx, raw);
     if (slotTap) return slotTap;
+
+    const classTap = await bookClassByTitle(supabase, ctx, raw);
+    if (classTap) return classTap;
   }
   const pick = menuMatch?.id
     ?? (/(membership|my plan\b|validity|expiry)/.test(n) ? "MENU_MEMBERSHIP" : null)
@@ -817,18 +824,6 @@ export async function runMemberGateway(
   if (n === "workout plan") return await handleRequestPlan(supabase, ctx, "workout");
   if (n === "diet plan") return await handleRequestPlan(supabase, ctx, "diet");
   if (n === "both plans") return await handleRequestPlan(supabase, ctx, "both");
-
-  // Recovery facility selection
-  const types = await recoveryTypes(supabase, ctx);
-  const facility = types.find((t: any) => norm(cut(t.name, 24)) === n);
-  if (facility) return await handleFacilitySlots(supabase, ctx, facility.id, facility.name);
-
-  // Class / slot selections (title echoed back by Meta)
-  const classReply = await bookClassByTitle(supabase, ctx, raw);
-  if (classReply) return classReply;
-
-  const slotReply = await bookSlotByTitle(supabase, ctx, raw);
-  if (slotReply) return slotReply;
 
   // Epic 3 — everything else is an operational exception: triage it.
   return await handleTriage(supabase, ctx, raw, phone);
