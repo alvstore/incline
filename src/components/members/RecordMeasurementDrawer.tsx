@@ -366,7 +366,15 @@ export function RecordMeasurementDrawer({
                 <Scale className="h-4 w-4" />
                 Live BMI
               </div>
-              <div className="mt-2 text-3xl font-semibold">{bmi || '--'}</div>
+              <div className="mt-2 text-3xl font-semibold tabular-nums">{bmi || '--'}</div>
+              <p className="mt-1 text-xs text-primary-foreground/75">
+                {bmi ? bmiBand(bmi) : 'Enter weight and height'}
+              </p>
+              {lastHeight && (
+                <p className="mt-2 text-[11px] text-primary-foreground/60">
+                  Last height on file: {lastHeight} cm
+                </p>
+              )}
             </div>
           </div>
 
