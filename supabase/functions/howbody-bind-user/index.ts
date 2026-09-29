@@ -1,4 +1,6 @@
-// v2.0.0 — Bind HOWBODY scanner session to a member (calls /openApi/setUserInfo)
+// v2.1.0 — Bind HOWBODY scanner session to a member (calls /openApi/setUserInfo)
+// Height is required (entered at the QR screen or taken from the last measurement);
+// the old silent 170 cm default produced wrong BMI/body-fat results.
 // Kind-aware entitlement: a BODY scan requires BODY entitlement; a POSTURE scan requires
 // POSTURE entitlement. Posture entitlement may NEVER substitute for body entitlement.
 // scanId is single-use: a scanId already bound (or completed) cannot be re-bound.
@@ -12,6 +14,8 @@ interface BindBody {
   scanId?: string;
   memberId?: string;
   kind?: string;
+  /** Height in cm entered on the QR screen (100–250). Overrides the last recorded height. */
+  heightCm?: number;
 }
 
 /** Human-readable denial reason mapped from howbody_scan_quota() output. */
@@ -186,7 +190,7 @@ Deno.serve(async (req) => {
         tel: profile.phone || "",
         sex,
         height,
-        age: age ?? 25,
+        age,
       }),
     });
     const hbBody = await hbResp.json().catch(() => ({}));
