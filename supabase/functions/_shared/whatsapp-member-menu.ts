@@ -23,6 +23,7 @@ export interface MemberContext {
   fullName: string;
   firstName: string;
   assignedTrainerId: string | null;
+  gender: string | null;
 }
 
 // ─── Epic 1: phone normalisation ──────────────────────────────────────────────
