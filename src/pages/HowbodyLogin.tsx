@@ -38,6 +38,9 @@ export default function HowbodyLogin() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [kind, setKind] = useState<ScanKind>(kindParam === "posture" ? "posture" : "body");
+  // Height is mandatory — the scanner cannot calculate BMI or body fat without it.
+  const [height, setHeight] = useState("");
+  const [heightPrefilled, setHeightPrefilled] = useState(false);
 
 
   // Resolve friendly device label from inventory (falls back to raw equipmentNo)
@@ -69,6 +72,26 @@ export default function HowbodyLogin() {
     })();
     return () => { cancelled = true; };
   }, [user, isStaff]);
+
+  // Prefill height from the member's last recorded measurement
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!memberId) return;
+      const { data } = await supabase
+        .from("member_measurements")
+        .select("height_cm")
+        .eq("member_id", memberId)
+        .not("height_cm", "is", null)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data?.height_cm) return;
+      setHeight(String(data.height_cm));
+      setHeightPrefilled(true);
+    })();
+    return () => { cancelled = true; };
+  }, [memberId]);
 
   // Realtime: navigate when session completes
   useEffect(() => {
