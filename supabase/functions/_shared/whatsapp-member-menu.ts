@@ -279,16 +279,40 @@ async function bookClassByTitle(supabase: any, ctx: MemberContext, title: string
   return `✅ You're booked for *${match.name}* on ${dayLabel(match.session_date)} at ${tsTime(match.scheduled_at)}. See you on the floor!${BACK}`;
 }
 
-async function recoveryTypes(supabase: any, ctx: MemberContext) {
-  const { data } = await supabase
+// Recovery rooms are gender-specific (Steam Room Male / Steam Room Female …).
+// Only the facilities matching the member's profile gender may be offered,
+// otherwise the same 6:00 AM steam slot shows up twice — once per room.
+async function recoveryContext(supabase: any, ctx: MemberContext) {
+  const g = String(ctx.gender ?? "").toLowerCase();
+
+  const { data: facilities } = await supabase
+    .from("facilities")
+    .select("id, name, benefit_type_id, gender_access, is_active, under_maintenance")
+    .eq("branch_id", ctx.branchId)
+    .eq("is_active", true);
+
+  const facIdsByType = new Map<string, string[]>();
+  for (const f of facilities ?? []) {
+    if (f.under_maintenance) continue;
+    const access = String(f.gender_access ?? "all").toLowerCase();
+    const allowed = access === "all" || access === "any" || !access || (g ? access === g : true);
+    if (!allowed || !f.benefit_type_id) continue;
+    const arr = facIdsByType.get(f.benefit_type_id) ?? [];
+    arr.push(f.id);
+    facIdsByType.set(f.benefit_type_id, arr);
+  }
+
+  const { data: allTypes } = await supabase
     .from("benefit_types")
     .select("id, name, code")
     .eq("branch_id", ctx.branchId)
     .eq("is_bookable", true)
     .eq("is_active", true)
     .order("display_order", { ascending: true })
-    .limit(10);
-  return data ?? [];
+    .limit(20);
+
+  const types = (allTypes ?? []).filter((t: any) => (facIdsByType.get(t.id) ?? []).length > 0);
+  return { types, facIdsByType };
 }
 
 async function unitsFor(supabase: any, ctx: MemberContext, membershipId: string | null, typeId: string): Promise<number> {
@@ -302,8 +326,11 @@ async function unitsFor(supabase: any, ctx: MemberContext, membershipId: string 
   return typeof data === "number" ? data : 0;
 }
 
+const RECOVERY_WINDOW_DAYS = 6; // today + 6 => a full week of choices
+
+// Step 1 — which recovery service (only those with sessions left).
 async function handleRecovery(supabase: any, ctx: MemberContext): Promise<string> {
-  const types = await recoveryTypes(supabase, ctx);
+  const { types } = await recoveryContext(supabase, ctx);
   if (types.length === 0) {
     return `Recovery bookings aren't open on WhatsApp right now. You can book from your portal: ${PORTAL}/my-benefits${BACK}`;
   }
@@ -312,7 +339,11 @@ async function handleRecovery(supabase: any, ctx: MemberContext): Promise<string
   for (const t of types) {
     const units = await unitsFor(supabase, ctx, ms?.id ?? null, t.id);
     if (units === 0) continue;
-    rows.push({ id: `FAC:${t.id}`, title: cut(t.name, 24), description: units < 0 ? "Unlimited · tap for open times" : `${units} session${units === 1 ? "" : "s"} left · tap for open times` });
+    rows.push({
+      id: `FAC:${t.id}`,
+      title: cut(t.name, 24),
+      description: units < 0 ? "Unlimited · tap to pick a day" : `${units} session${units === 1 ? "" : "s"} left · tap to pick a day`,
+    });
   }
   if (rows.length === 0) {
     return `You don't have any steam, sauna or ice bath sessions left right now, ${ctx.firstName}. Reply *Front desk* to add sessions or see add-ons at ${PORTAL}/my-benefits${BACK}`;
@@ -320,53 +351,128 @@ async function handleRecovery(supabase: any, ctx: MemberContext): Promise<string
   return list(`Which recovery service would you like, ${ctx.firstName}? Only services with sessions left are shown.`, "See services", rows, "Recovery suite");
 }
 
-async function openSlots(supabase: any, ctx: MemberContext, benefitTypeId: string) {
+async function openSlots(
+  supabase: any,
+  ctx: MemberContext,
+  facilityIds: string[],
+  dateFrom: string,
+  dateTo: string,
+) {
+  if (facilityIds.length === 0) return [];
   const today = istDate();
   const { data } = await supabase
     .from("benefit_slots")
-    .select("id, slot_date, start_time, capacity, booked_count")
+    .select("id, slot_date, start_time, end_time, capacity, booked_count, facility_id")
     .eq("branch_id", ctx.branchId)
-    .eq("benefit_type_id", benefitTypeId)
+    .in("facility_id", facilityIds)
     .eq("is_active", true)
-    .gte("slot_date", today)
-    .lte("slot_date", addDays(today, 1))
+    .gte("slot_date", dateFrom)
+    .lte("slot_date", dateTo)
     .order("slot_date", { ascending: true })
     .order("start_time", { ascending: true })
-    .limit(40);
-  const nowHm = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false }).slice(0, 5);
+    .limit(400);
+
+  const nowHm = new Date().toLocaleTimeString("en-GB", { timeZone: IST, hour12: false }).slice(0, 5);
+  const seen = new Set<string>();
   return (data ?? [])
     .filter((s: any) => (s.capacity ?? 0) - (s.booked_count ?? 0) > 0)
     .filter((s: any) => s.slot_date !== today || String(s.start_time).slice(0, 5) > nowHm)
-    .slice(0, 9);
+    .filter((s: any) => {
+      const key = `${s.slot_date}|${String(s.start_time).slice(0, 5)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
+// Row titles are the only thing Meta echoes back, so they must be unique and
+// short enough (24 chars) to survive without truncation.
+const dateRowTitle = (typeName: string, iso: string) => cut(`${typeInitials(typeName)} · ${dayShort(iso)}`, 24);
 const slotRowTitle = (typeName: string, s: any) =>
-  cut(`${cut(typeName, 10)} ${s.slot_date === istDate() ? "" : prettyDate(s.slot_date) + " "}${prettyTime(s.start_time)}`, 24);
+  cut(`${typeInitials(typeName)} ${dayShort(s.slot_date)} ${prettyTime(s.start_time).replace(/\s/g, "")}`, 24);
 
-async function handleFacilitySlots(supabase: any, ctx: MemberContext, typeId: string, typeName: string): Promise<string> {
+// Step 2 — which day.
+async function handleFacilityDates(supabase: any, ctx: MemberContext, typeId: string, typeName: string): Promise<string> {
   const ms = await activeMembership(supabase, ctx.memberId);
   const units = await unitsFor(supabase, ctx, ms?.id ?? null, typeId);
   if (units === 0) {
     return `You have no ${typeName} sessions left, ${ctx.firstName}. Reply *Front desk* to add sessions.${BACK}`;
   }
-  const slots = await openSlots(supabase, ctx, typeId);
+  const { facIdsByType } = await recoveryContext(supabase, ctx);
+  const today = istDate();
+  const slots = await openSlots(supabase, ctx, facIdsByType.get(typeId) ?? [], today, addDays(today, RECOVERY_WINDOW_DAYS));
   if (slots.length === 0) {
-    return `No open ${typeName} slots for today or tomorrow. You can check later slots here: ${PORTAL}/my-benefits${BACK}`;
+    return `No open ${typeName} times in the next week, ${ctx.firstName}. Our front desk can help — reply *Front desk*, or check ${PORTAL}/my-benefits${BACK}`;
   }
-  const rows: Row[] = slots.map((s: any) => ({
+
+  const byDate = new Map<string, number>();
+  for (const s of slots) byDate.set(s.slot_date, (byDate.get(s.slot_date) ?? 0) + 1);
+
+  const rows: Row[] = [...byDate.entries()].slice(0, 9).map(([iso, count]) => ({
+    id: `FACDATE:${typeId}:${iso}`,
+    title: dateRowTitle(typeName, iso),
+    description: cut(`${dayLabel(iso)} · ${count} time${count === 1 ? "" : "s"} open`, 72),
+  }));
+
+  const left = units < 0 ? "unlimited sessions" : `${units} session${units === 1 ? "" : "s"} left`;
+  return list(
+    `${typeName} — you have ${left}.\nWhich day would you like, ${ctx.firstName}?`,
+    "Pick a day",
+    rows,
+    cut(`${typeName} · days`, 24),
+  );
+}
+
+// Step 3 — which time on that day.
+async function handleFacilityTimes(
+  supabase: any,
+  ctx: MemberContext,
+  typeId: string,
+  typeName: string,
+  iso: string,
+): Promise<string> {
+  const { facIdsByType } = await recoveryContext(supabase, ctx);
+  const slots = await openSlots(supabase, ctx, facIdsByType.get(typeId) ?? [], iso, iso);
+  if (slots.length === 0) {
+    return `${typeName} is fully booked on ${dayLabel(iso)}, ${ctx.firstName}. Reply *Book recovery suite* to pick another day.${BACK}`;
+  }
+  const rows: Row[] = slots.slice(0, 9).map((s: any) => ({
     id: `SLOT:${s.id}`,
     title: slotRowTitle(typeName, s),
-    description: `${prettyDate(s.slot_date)} · ${(s.capacity ?? 0) - (s.booked_count ?? 0)} spots open`,
+    description: cut(
+      `${prettyTime(s.start_time)}${s.end_time ? ` – ${prettyTime(s.end_time)}` : ""} · ${(s.capacity ?? 0) - (s.booked_count ?? 0)} spots open`,
+      72,
+    ),
   }));
-  const left = units < 0 ? "Unlimited sessions" : `${units} session${units === 1 ? "" : "s"} left`;
-  return list(`${typeName} — ${left}. Pick a date and time to reserve:`, "See times", rows, cut(typeName, 24));
+  return list(
+    `${typeName} · ${dayLabel(iso)}\nTap a time to reserve it, ${ctx.firstName}:`,
+    "Pick a time",
+    rows,
+    cut(`${dayLabel(iso)} times`, 24),
+  );
+}
+
+// Resolve a tapped day row ("SR · Tmrw") back to its service + date.
+async function dateTapTarget(supabase: any, ctx: MemberContext, title: string) {
+  const { types } = await recoveryContext(supabase, ctx);
+  const today = istDate();
+  const n = norm(title);
+  for (const t of types) {
+    for (let i = 0; i <= RECOVERY_WINDOW_DAYS; i++) {
+      const iso = addDays(today, i);
+      if (norm(dateRowTitle(t.name, iso)) === n) return { typeId: t.id, typeName: t.name, iso };
+    }
+  }
+  return null;
 }
 
 async function bookSlotByTitle(supabase: any, ctx: MemberContext, title: string): Promise<string | null> {
-  const types = await recoveryTypes(supabase, ctx);
+  const { types, facIdsByType } = await recoveryContext(supabase, ctx);
+  const today = istDate();
+  const n = norm(title);
   for (const t of types) {
-    const slots = await openSlots(supabase, ctx, t.id);
-    const match = slots.find((s: any) => norm(slotRowTitle(t.name, s)) === norm(title));
+    const slots = await openSlots(supabase, ctx, facIdsByType.get(t.id) ?? [], today, addDays(today, RECOVERY_WINDOW_DAYS));
+    const match = slots.find((s: any) => norm(slotRowTitle(t.name, s)) === n);
     if (!match) continue;
     const ms = await activeMembership(supabase, ctx.memberId);
     const { data, error } = await supabase.rpc("book_facility_slot", {
@@ -379,7 +485,7 @@ async function bookSlotByTitle(supabase: any, ctx: MemberContext, title: string)
     if (!data?.success) return `I couldn't reserve that slot: ${data?.error ?? "not available"}.${BACK}`;
     const left = await unitsFor(supabase, ctx, ms?.id ?? null, t.id);
     const leftTxt = left < 0 ? "" : ` You have ${left} ${t.name} session${left === 1 ? "" : "s"} left.`;
-    return `✅ Reserved — *${t.name}* on ${prettyDate(match.slot_date)} at ${prettyTime(match.start_time)}.${leftTxt} Please arrive 5 minutes early.${BACK}`;
+    return `✅ Reserved — *${t.name}* on ${dayLabel(match.slot_date)} at ${prettyTime(match.start_time)}.${leftTxt} Please arrive 5 minutes early.${BACK}`;
   }
   return null;
 }
