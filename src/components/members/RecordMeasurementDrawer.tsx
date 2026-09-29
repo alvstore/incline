@@ -308,9 +308,23 @@ export function RecordMeasurementDrawer({
 
         <div className="mt-6 space-y-6 pb-6">
           <Card className="rounded-2xl border-border/60 bg-card shadow-lg shadow-primary/5">
-            <CardContent className="pt-5">
-              <p className="text-lg font-semibold text-foreground">{memberName}</p>
-              <p className="text-sm text-muted-foreground">Secure, branch-scoped measurement capture with private progress photos.</p>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-5">
+              <div>
+                <p className="text-lg font-semibold text-foreground">{memberName}</p>
+                <p className="text-sm text-muted-foreground">Secure, branch-scoped measurement capture with private progress photos.</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="cursor-pointer rounded-full"
+                onClick={autoFillFromHistory}
+                disabled={loadingLast || !lastRecord}
+                aria-label="Fill fields from the last recorded measurement"
+              >
+                {loadingLast ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Fill from last record
+              </Button>
             </CardContent>
           </Card>
 
