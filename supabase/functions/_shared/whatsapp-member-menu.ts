@@ -203,46 +203,57 @@ async function handleMembership(supabase: any, ctx: MemberContext): Promise<stri
   ].join("\n") + BACK;
 }
 
-async function todaysClasses(supabase: any, ctx: MemberContext) {
+// Upcoming classes: today's remaining sessions first, then the next 7 days.
+// (Members message us in the evening, when today's schedule is already over.)
+async function upcomingClasses(supabase: any, ctx: MemberContext) {
   const today = istDate();
   const { data } = await supabase
     .from("classes")
     .select("id, name, scheduled_at, capacity, booked_count, venue, external_trainer_name, session_date")
     .eq("branch_id", ctx.branchId)
-    .eq("session_date", today)
+    .gte("session_date", today)
+    .lte("session_date", addDays(today, 7))
     .eq("is_active", true)
     .is("cancelled_at", null)
     .order("scheduled_at", { ascending: true })
-    .limit(10);
-  return (data ?? []).filter((c: any) => new Date(c.scheduled_at).getTime() > Date.now() - 15 * 60_000);
+    .limit(40);
+  return (data ?? [])
+    .filter((c: any) => new Date(c.scheduled_at).getTime() > Date.now() - 15 * 60_000)
+    .slice(0, 9);
 }
 
-const classRowTitle = (c: any) => cut(`${c.name} ${tsTime(c.scheduled_at)}`, 24);
+const classRowTitle = (c: any) =>
+  cut(`${cut(c.name, 9)} ${dayShort(c.session_date)} ${tsTime(c.scheduled_at).replace(/\s/g, "")}`, 24);
 
 async function handleClasses(supabase: any, ctx: MemberContext): Promise<string> {
-  const classes = await todaysClasses(supabase, ctx);
+  const classes = await upcomingClasses(supabase, ctx);
   if (classes.length === 0) {
-    return `No group classes left on today's schedule, ${ctx.firstName}. You can see the full week in your portal: ${PORTAL}/my-classes${BACK}`;
+    return `No group classes on the schedule for the coming week, ${ctx.firstName}. Your portal always has the latest: ${PORTAL}/my-classes${BACK}`;
   }
+  const today = istDate();
   const rows: Row[] = classes.map((c: any) => {
     const left = Math.max(0, (c.capacity ?? 0) - (c.booked_count ?? 0));
     return {
       id: `CLASS:${c.id}`,
       title: classRowTitle(c),
-      description: `${left > 0 ? `${left} spots left` : "Full"}${c.venue ? ` · ${c.venue}` : ""}`,
+      description: cut(
+        `${c.name} · ${dayLabel(c.session_date)} ${tsTime(c.scheduled_at)} · ${left > 0 ? `${left} spots left` : "Full"}`,
+        72,
+      ),
     };
   });
-  return list(`Today's classes at Incline, ${ctx.firstName}. Tap one to book instantly:`, "See classes", rows, "Today's classes");
+  const scope = classes.every((c: any) => c.session_date === today) ? "Today's classes" : "Upcoming classes";
+  return list(`${scope} at Incline, ${ctx.firstName}. Tap one to book instantly:`, "See classes", rows, cut(scope, 24));
 }
 
 async function bookClassByTitle(supabase: any, ctx: MemberContext, title: string): Promise<string | null> {
-  const classes = await todaysClasses(supabase, ctx);
+  const classes = await upcomingClasses(supabase, ctx);
   const match = classes.find((c: any) => norm(classRowTitle(c)) === norm(title));
   if (!match) return null;
   const { data, error } = await supabase.rpc("book_class", { _class_id: match.id, _member_id: ctx.memberId });
   if (error) return `I couldn't complete that booking just now (${error.message}). Please try again or reply *Front desk*.${BACK}`;
   if (!data?.success) return `I couldn't book that class: ${data?.error ?? "not available"}.${BACK}`;
-  return `✅ You're booked for *${match.name}* at ${tsTime(match.scheduled_at)} today. See you on the floor!${BACK}`;
+  return `✅ You're booked for *${match.name}* on ${dayLabel(match.session_date)} at ${tsTime(match.scheduled_at)}. See you on the floor!${BACK}`;
 }
 
 async function recoveryTypes(supabase: any, ctx: MemberContext) {
