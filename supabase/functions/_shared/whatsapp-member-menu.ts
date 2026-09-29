@@ -44,7 +44,7 @@ export async function resolveActiveMember(
   const variants = phoneVariants(phone);
   if (variants.length === 0) return null;
 
-  const build = (m: any, profileName?: string | null): MemberContext => {
+  const build = (m: any, profileName?: string | null, profileGender?: string | null): MemberContext => {
     const fullName = profileName || m?.profiles?.full_name || "there";
     return {
       memberId: m.id,
@@ -53,13 +53,14 @@ export async function resolveActiveMember(
       fullName,
       firstName: String(fullName).trim().split(/\s+/)[0] || "there",
       assignedTrainerId: m.assigned_trainer_id ?? null,
+      gender: (profileGender ?? m?.profiles?.gender ?? null) as string | null,
     };
   };
 
   // Primary: profiles.phone -> members
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name")
+    .select("id, full_name, gender")
     .in("phone", variants)
     .limit(5);
 
@@ -70,7 +71,7 @@ export async function resolveActiveMember(
       .eq("user_id", p.id)
       .eq("status", "active")
       .maybeSingle();
-    if (m) return build(m, p.full_name);
+    if (m) return build(m, p.full_name, p.gender);
   }
 
   // Fallback: an alternate / international number linked to a member
@@ -85,7 +86,7 @@ export async function resolveActiveMember(
   if (linked?.linked_member_id) {
     const { data: m } = await supabase
       .from("members")
-      .select("id, branch_id, member_code, status, assigned_trainer_id, profiles:user_id(full_name)")
+      .select("id, branch_id, member_code, status, assigned_trainer_id, profiles:user_id(full_name, gender)")
       .eq("id", linked.linked_member_id)
       .eq("status", "active")
       .maybeSingle();
