@@ -295,7 +295,26 @@ export default function HowbodyLogin() {
           </div>
         </div>
 
-
+        <div className="mt-5 space-y-2">
+          <Label htmlFor="scan-height">Height (cm)</Label>
+          <Input
+            id="scan-height"
+            type="number"
+            inputMode="decimal"
+            min={100}
+            max={250}
+            step={0.5}
+            value={height}
+            onChange={(e) => { setHeight(e.target.value); setHeightPrefilled(false); }}
+            placeholder="e.g. 164"
+            className="h-12"
+          />
+          <p className="text-xs text-muted-foreground">
+            {heightPrefilled
+              ? "Taken from the last record — correct it if it has changed."
+              : "Required. Body fat and BMI are calculated from this, so measure it accurately."}
+          </p>
+        </div>
 
         {!isStaff && memberId && (
           <div className="mt-6 space-y-4">
