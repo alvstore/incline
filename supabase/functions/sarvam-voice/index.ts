@@ -449,6 +449,70 @@ Deno.serve(async (req) => {
     // ---- actions -----------------------------------------------------------
     if (action === "get_state") return await stateResponse();
 
+    // v1.4.0 — Owner/admin only: import the call recording from Sarvam into
+    // our private storage once, then hand back a short-lived signed URL.
+    if (action === "get_recording") {
+      const callId = typeof body.call_id === "string" ? body.call_id : null;
+      if (!callId) return json({ ok: false, error: "call_id is required" }, 400);
+      const { data: attempt } = await sb.from("voice_call_attempts")
+        .select("id, provider_interaction_id, context_payload").eq("id", callId).maybeSingle();
+      if (!attempt) return json({ ok: false, error: "Call not found" }, 404);
+      const ctx = (attempt.context_payload as Record<string, unknown>) || {};
+      let path = typeof ctx.recording_path === "string" ? ctx.recording_path : null;
+
+      if (!path) {
+        const interactionId = attempt.provider_interaction_id as string | null;
+        if (!interactionId) return json({ ok: false, error: "No recording available yet for this call.", code: "no_interaction" }, 404);
+        const key = await loadKey();
+        if (!key || !cfg.org_id || !cfg.workspace_id || !cfg.app_id) {
+          return json({ ok: false, error: "Voice AI is not fully configured.", code: "config_incomplete" }, 400);
+        }
+        const metaUrl = `${BASE.analytics}/analytics/v1/${encodeURIComponent(cfg.org_id)}/${encodeURIComponent(cfg.workspace_id)}/${encodeURIComponent(cfg.app_id)}/recordings/${encodeURIComponent(interactionId)}`;
+        const metaRes = await fetch(metaUrl, { headers: { "X-API-Key": key } });
+        const ctype = metaRes.headers.get("content-type") || "";
+        if (!metaRes.ok) {
+          return json({ ok: false, error: `Recording not available from provider (HTTP ${metaRes.status}).`, code: "provider_unavailable" }, 404);
+        }
+        let audio: ArrayBuffer;
+        let audioType = "audio/wav";
+        if (ctype.startsWith("audio/") || ctype.includes("octet-stream")) {
+          audio = await metaRes.arrayBuffer();
+          if (ctype.startsWith("audio/")) audioType = ctype.split(";")[0];
+        } else {
+          const meta = await metaRes.json().catch(() => ({})) as Record<string, unknown>;
+          const findUrl = (o: unknown): string | null => {
+            if (typeof o === "string" && /^https?:\/\//.test(o)) return o;
+            if (o && typeof o === "object") {
+              for (const v of Object.values(o as Record<string, unknown>)) {
+                const u = findUrl(v);
+                if (u) return u;
+              }
+            }
+            return null;
+          };
+          const src = findUrl(meta);
+          if (!src) return json({ ok: false, error: "Provider returned no recording link.", code: "no_recording" }, 404);
+          const aRes = await fetch(src);
+          if (!aRes.ok) return json({ ok: false, error: "Could not download the recording.", code: "download_failed" }, 502);
+          const at = aRes.headers.get("content-type") || "";
+          if (at.startsWith("audio/")) audioType = at.split(";")[0];
+          audio = await aRes.arrayBuffer();
+        }
+        const ext = audioType.includes("mpeg") ? "mp3" : audioType.includes("ogg") ? "ogg" : "wav";
+        path = `${callId}.${ext}`;
+        const { error: upErr } = await sb.storage.from("voice-recordings")
+          .upload(path, new Uint8Array(audio), { contentType: audioType, upsert: true });
+        if (upErr) throw new Error(`Recording upload failed: ${upErr.message}`);
+        await sb.from("voice_call_attempts")
+          .update({ context_payload: { ...ctx, recording_path: path, recording_imported_at: new Date().toISOString() } })
+          .eq("id", callId);
+      }
+
+      const { data: signed, error: sErr } = await sb.storage.from("voice-recordings").createSignedUrl(path, 300);
+      if (sErr || !signed) throw new Error(`Could not sign recording: ${sErr?.message}`);
+      return json({ ok: true, url: signed.signedUrl });
+    }
+
     // Owner/admin only: the URLs + shared tokens to paste into the Sarvam
     // dashboard (webhook receiver and agent tool endpoint).
     if (action === "get_endpoints") {
