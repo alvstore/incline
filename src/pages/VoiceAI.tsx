@@ -31,6 +31,8 @@ import {
   DISPOSITION_OPTIONS, STATUS_OPTIONS, isLiveStatus,
 } from '@/lib/voice/voiceOutcomes';
 import { VoiceCallDetailSheet } from '@/components/voice/VoiceCallDetailSheet';
+import { VoiceCallFeed } from '@/components/voice/VoiceCallFeed';
+import { VoiceCallWorkspace } from '@/components/voice/VoiceCallWorkspace';
 import { AutomationHealthCard } from '@/components/voice/AutomationHealthCard';
 import { toast } from 'sonner';
 
@@ -202,6 +204,7 @@ export default function VoiceAIPage() {
   const [page, setPage] = useState(0);
   const [analyticsDays, setAnalyticsDays] = useState(30);
   const [openCallId, setOpenCallId] = useState<string | null>(null);
+  const [pickedCallId, setPickedCallId] = useState<string | null>(null);
 
   const canSeeAnalytics = can.viewFinancials(roles) || can.crossBranchView(roles);
   const canControl = can.manageAutomations(roles) || can.manageSettings(roles);
@@ -270,6 +273,12 @@ export default function VoiceAIPage() {
   });
 
   const total = historyQ.data?.[0]?.total_count ?? 0;
+  // The workspace always shows something: the picked call, else the newest one.
+  const historyRows = historyQ.data ?? [];
+  const activeCallId = historyRows.some((r) => r.id === pickedCallId)
+    ? pickedCallId
+    : (historyRows[0]?.id ?? null);
+  const setActiveCallId = setPickedCallId;
   const readiness = integration?.is_active
     ? { label: 'READY', className: 'bg-emerald-100 text-emerald-700' }
     : integration?.agent_id
@@ -435,25 +444,38 @@ export default function VoiceAIPage() {
               </CardContent>
             </Card>
 
-            <CallsTable
-              rows={historyQ.data ?? []}
-              isLoading={historyQ.isLoading}
-              onOpen={setOpenCallId}
-              emptyTitle="No Voice AI calls yet"
-              emptyHint="Calls appear here once the retention agent starts dialling, or after a test call is placed from Settings → Integrations → Voice AI."
-            />
+            {/* Command center: call feed on the left, the selected call on the right. */}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+              <Card className="overflow-hidden rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between border-b px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Calls</p>
+                  <span className="text-xs text-muted-foreground">{total} total</span>
+                </div>
+                <div className="max-h-[640px] overflow-y-auto">
+                  <VoiceCallFeed
+                    rows={historyQ.data ?? []}
+                    isLoading={historyQ.isLoading}
+                    selectedId={activeCallId}
+                    onSelect={setActiveCallId}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    {(historyQ.data?.length ?? 0) === 0 ? 0 : page * PAGE_SIZE + 1}
+                    –{page * PAGE_SIZE + (historyQ.data?.length ?? 0)} of {total}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="cursor-pointer"
+                      disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
+                    <Button variant="outline" size="sm" className="cursor-pointer"
+                      disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                  </div>
+                </div>
+              </Card>
 
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                Showing {(historyQ.data?.length ?? 0) === 0 ? 0 : page * PAGE_SIZE + 1}
-                –{page * PAGE_SIZE + (historyQ.data?.length ?? 0)} of {total} results
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="cursor-pointer"
-                  disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
-                <Button variant="outline" size="sm" className="cursor-pointer"
-                  disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}>Next</Button>
-              </div>
+              <Card className="rounded-2xl shadow-sm">
+                <VoiceCallWorkspace callId={activeCallId} onOpenFullDetail={setOpenCallId} />
+              </Card>
             </div>
           </TabsContent>
 

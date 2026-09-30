@@ -125,6 +125,28 @@
     --gradient-accent: linear-gradient(135deg, hsl(24 95% 53%), hsl(24 95% 63%));
     --gradient-hero: linear-gradient(135deg, hsl(222 47% 6%) 0%, hsl(222 47% 12%) 100%);
   }
+
+  /* Ultra-luxury surface (Renewal Concierge + Voice AI command centre).
+     Deep obsidian with champagne gold accents — always dark, in both themes. */
+  :root,
+  .dark {
+    --lux-obsidian: 222 39% 5%;
+    --lux-charcoal: 222 26% 10%;
+    --lux-slate: 220 18% 16%;
+    --lux-line: 40 18% 82%;
+    --lux-ivory: 40 30% 96%;
+    --lux-mist: 220 12% 66%;
+    --lux-gold: 42 62% 63%;
+    --lux-bronze: 30 45% 48%;
+    --lux-emerald: 158 55% 52%;
+    --lux-amber: 38 88% 62%;
+    --lux-rose: 358 66% 62%;
+    --gradient-lux: linear-gradient(135deg, hsl(222 39% 5%) 0%, hsl(222 26% 11%) 55%, hsl(224 24% 8%) 100%);
+    --gradient-gold: linear-gradient(120deg, hsl(42 62% 63%), hsl(30 45% 48%));
+    --shadow-lux: 0 24px 60px -24px hsl(222 60% 2% / 0.85);
+    --shadow-gold: 0 16px 40px -18px hsl(42 62% 45% / 0.55);
+  }
+
 }
 
 @layer base {

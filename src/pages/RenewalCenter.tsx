@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { MemberRenewalConcierge } from '@/components/renewal/MemberRenewalConcierge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -137,6 +138,9 @@ export default function RenewalCenter() {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
 
+  // Members see their own concierge; staff and management see the retention queue.
+  const isMemberView = hasAnyRole(['member']) && !hasAnyRole(['owner', 'admin', 'manager', 'staff']);
+
   const cases = useRenewalQueue(branchFilter, queue, search);
   const funnel = useRenewalFunnel(branchFilter);
   const counts = useRenewalQueueCounts(branchFilter);
@@ -204,6 +208,16 @@ export default function RenewalCenter() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Voice AI could not start this call');
     }
+  }
+
+  if (isMemberView) {
+    return (
+      <AppLayout>
+        <div className="-m-4 min-h-[calc(100dvh-4rem)] bg-lux-obsidian p-4 md:-m-6 md:p-8">
+          <MemberRenewalConcierge />
+        </div>
+      </AppLayout>
+    );
   }
 
   return (
