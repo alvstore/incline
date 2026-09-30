@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     // Member + branch + trainer
     const { data: member } = await supabase
       .from("members")
-      .select("id, member_code, branch_id, assigned_trainer_id, user_id, profiles:user_id (full_name, phone, email)")
+      .select("id, member_code, branch_id, assigned_trainer_id, user_id, profiles:user_id (full_name, phone, email, gender, date_of_birth)")
       .eq("id", report.member_id)
       .single();
     if (!member) return jr({ error: "Member not found" }, 404);
