@@ -1,4 +1,7 @@
+// v2.16.0 — gate commands are addressed by terminal serial number, not a
+//          remembered numeric id (see resolveGateTargets below).
 // v2.15.0 — STORM FIX (21 Sep 2026 gate restarts). Root cause: one purchase
+
 //          transaction fired up to 8 parallel invocations for the same member
 //          (4 hardware_access_events rows + membership + member webhooks), some
 //          carrying `revoke` for the transient "pending" state. They fought over
