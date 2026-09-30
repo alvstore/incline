@@ -271,6 +271,12 @@ export default function VoiceAIPage() {
   });
 
   const total = historyQ.data?.[0]?.total_count ?? 0;
+  // The workspace always shows something: the picked call, else the newest one.
+  const historyRows = historyQ.data ?? [];
+  const activeCallId = historyRows.some((r) => r.id === pickedCallId)
+    ? pickedCallId
+    : (historyRows[0]?.id ?? null);
+  const setActiveCallId = setPickedCallId;
   const readiness = integration?.is_active
     ? { label: 'READY', className: 'bg-emerald-100 text-emerald-700' }
     : integration?.agent_id
