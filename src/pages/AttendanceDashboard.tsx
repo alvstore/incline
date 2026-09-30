@@ -34,6 +34,8 @@ import { Dumbbell } from 'lucide-react';
 import { StaffRosterBoard } from '@/components/attendance/StaffRosterBoard';
 import { StaffMonthHistory } from '@/components/attendance/StaffMonthHistory';
 import { MemberAttendanceHistory } from '@/components/attendance/MemberAttendanceHistory';
+import { BlockedEntryAttempts } from '@/components/attendance/BlockedEntryAttempts';
+
 
 
 type FlashState = {
@@ -916,11 +918,15 @@ export default function AttendanceDashboard() {
                 )}
                 {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
                   <>
+                    <TabsTrigger value="blocked" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                      <ShieldAlert className="h-3.5 w-3.5" />Refused Entries
+                    </TabsTrigger>
                     <TabsTrigger value="history" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
                       <History className="h-3.5 w-3.5" />History
                     </TabsTrigger>
                   </>
                 )}
+
               </TabsList>
 
               {/* PT Sessions Tab */}
@@ -1061,6 +1067,18 @@ export default function AttendanceDashboard() {
                     <MemberAttendanceHistory branchId={effectiveBranchId} />
                   )}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="blocked" className="mt-6">
+                <BlockedEntryAttempts
+                  branchId={effectiveBranchId}
+                  from={`${dateFilter}T00:00:00`}
+                  to={`${dateFilter}T23:59:59.999`}
+                  showMemberColumn
+                  title="Refused entries"
+                  description="People who came to the club on this date but the gate turned away."
+                />
+
               </TabsContent>
 
             </Tabs>

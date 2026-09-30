@@ -1,4 +1,7 @@
+// v2.16.0 — gate commands are addressed by terminal serial number, not a
+//          remembered numeric id (see resolveGateTargets below).
 // v2.15.0 — STORM FIX (21 Sep 2026 gate restarts). Root cause: one purchase
+
 //          transaction fired up to 8 parallel invocations for the same member
 //          (4 hardware_access_events rows + membership + member webhooks), some
 //          carrying `revoke` for the transient "pending" state. They fought over
@@ -123,6 +126,96 @@ interface DispatchLedger {
   branch_id?: string | null;
 }
 
+// v2.16.0 — STALE GATE ID FIX (30 Sep 2026, INC-26-0101). A terminal that is
+// re-registered on the MIPS server gets a NEW numeric device id, but
+// access_devices still held the old one. Every revoke was then addressed to a
+// device id that no longer exists: MIPS accepted the call, the real gate never
+// received it, and the member kept walking in on a cached pass while the CRM
+// showed "revoked". Serial number is the only stable identity, so the live
+// roster is matched by serial and the stored id is self-healed before dispatch.
+async function resolveGateTargets(
+  baseUrl: string,
+  token: string,
+  supabase: any,
+  branchId?: string,
+): Promise<{ ids: number[]; uuidByMipsId: Map<number, string> }> {
+  const uuidByMipsId = new Map<number, string>();
+  const ids: number[] = [];
+
+  let stored: Array<{ id: string; mips_device_id: number | null; serial_number: string | null }> = [];
+  try {
+    let query = supabase
+      .from("access_devices")
+      .select("id, mips_device_id, serial_number")
+      .eq("is_online", true);
+    if (branchId) query = query.eq("branch_id", branchId);
+    const { data } = await query;
+    stored = (data ?? []) as typeof stored;
+  } catch {}
+
+  // Live roster keyed by serial — the authority on which numeric id is current.
+  let liveBySerial = new Map<string, number>();
+  let liveIds = new Set<number>();
+  try {
+    const rows = await getCachedMipsDevices(supabase, branchId ?? null, baseUrl, token);
+    for (const row of rows ?? []) {
+      const liveId = Number((row as any).id);
+      if (!Number.isFinite(liveId)) continue;
+      liveIds.add(liveId);
+      const serial = String((row as any).deviceKey ?? (row as any).deviceSn ?? "").trim().toUpperCase();
+      if (serial) liveBySerial.set(serial, liveId);
+    }
+  } catch (e) {
+    // Roster unreachable: fall back to stored ids rather than skipping a
+    // safety-critical revoke, but say so loudly in the logs.
+    console.warn("[mips-access] device roster unavailable, using stored gate ids:", e);
+    liveBySerial = new Map();
+    liveIds = new Set();
+  }
+
+  for (const device of stored) {
+    const serial = String(device.serial_number ?? "").trim().toUpperCase();
+    const liveId = serial ? liveBySerial.get(serial) : undefined;
+    const storedId = Number(device.mips_device_id);
+    let targetId: number | null = null;
+
+    if (liveId !== undefined) {
+      targetId = liveId;
+      if (Number.isFinite(storedId) && storedId !== liveId) {
+        console.warn(
+          `[mips-access] gate ${serial} moved from device id ${storedId} to ${liveId} — self-healing`,
+        );
+        try {
+          await supabase.from("access_devices").update({ mips_device_id: liveId }).eq("id", device.id);
+        } catch (e) {
+          console.warn("[mips-access] could not persist healed gate id (non-fatal):", e);
+        }
+      }
+    } else if (Number.isFinite(storedId)) {
+      // Keep the stored id only when the roster could not confirm otherwise.
+      if (liveIds.size > 0 && !liveIds.has(storedId)) {
+        console.warn(
+          `[mips-access] stored gate id ${storedId} (${serial || device.id}) is not on the MIPS server — skipping`,
+        );
+        continue;
+      }
+      targetId = storedId;
+    }
+
+    if (targetId === null) continue;
+    ids.push(targetId);
+    uuidByMipsId.set(targetId, device.id);
+  }
+
+  if (ids.length === 0 && liveIds.size > 0) {
+    // No CRM device rows matched — address every online terminal so the
+    // revoke still lands instead of silently doing nothing.
+    for (const id of liveIds) ids.push(id);
+  }
+
+  return { ids, uuidByMipsId };
+}
+
 async function dispatchToDevices(
   baseUrl: string,
   token: string,
@@ -132,32 +225,15 @@ async function dispatchToDevices(
   authType: 1 | 2 = 1,
   ledger?: DispatchLedger,
 ): Promise<{ undelivered: number[] }> {
-  let deviceIds: number[] = [];
-  const deviceUuidByMipsId = new Map<number, string>();
-  try {
-    let query = supabase.from("access_devices").select("id, mips_device_id").eq("is_online", true);
-    if (branchId) query = query.eq("branch_id", branchId);
-    const { data: devices } = await query;
-    if (devices?.length) {
-      for (const d of devices) {
-        if (d.mips_device_id && !isNaN(Number(d.mips_device_id))) {
-          deviceIds.push(Number(d.mips_device_id));
-          deviceUuidByMipsId.set(Number(d.mips_device_id), d.id);
-        }
-      }
-    }
-  } catch {}
-
-  if (deviceIds.length === 0) {
-    try {
-      const rows = await getCachedMipsDevices(supabase, branchId ?? null, baseUrl, token);
-      if (Array.isArray(rows)) {
-        deviceIds = rows.filter((d: any) => d.onlineFlag === 1 || d.status === 1).map((d: any) => d.id).filter((id: any) => !isNaN(Number(id)));
-      }
-    } catch {}
-  }
+  const { ids: deviceIds, uuidByMipsId: deviceUuidByMipsId } = await resolveGateTargets(
+    baseUrl,
+    token,
+    supabase,
+    branchId,
+  );
 
   if (deviceIds.length === 0) return { undelivered: [] as number[] };
+
 
   const undelivered: number[] = [];
 
@@ -572,12 +648,17 @@ async function applyMemberAction(
   }
 
   // v2.14.0 — IDEMPOTENCY GUARD. If MIPS already reports the exact validity we are
-  // about to write, there is nothing to send — just reconcile the CRM row and return.
+  // about to write, the central record needs no PUT.
+  // v2.16.0 — but a matching CENTRAL date does not mean the TERMINAL agrees: a
+  // bulk roster sync can re-issue an active pass straight onto the gate while the
+  // server still reads 2000-01-01 (this is how a dues-blocked member walked in on
+  // 30 Sep). So for a revoke we skip only the PUT and still re-dispatch the
+  // validity to every live gate.
   const sameDay = (a: unknown, b: unknown) =>
     String(a || "").trim().slice(0, 10) === String(b || "").trim().slice(0, 10);
   if (sameDay(existing.validTimeEnd, newValidTimeEnd)) {
     console.log(
-      `[MIPS-ACCESS] No-op for ${personSn}: server already at validTimeEnd=${existing.validTimeEnd} — skipping PUT + device dispatch`,
+      `[MIPS-ACCESS] Central record for ${personSn} already at validTimeEnd=${existing.validTimeEnd} — skipping PUT`,
     );
     await setMemberHardwareState(
       supabase,
@@ -585,13 +666,47 @@ async function applyMemberAction(
       action === "revoke" ? "revoked" : "active",
       action === "revoke" ? (reasonCode || "manual") : null,
     );
+
+    if (action !== "revoke") {
+      return {
+        success: true,
+        action,
+        skipped: "already_in_desired_state",
+        message: `Hardware access already ${action}d on the gate — nothing re-sent`,
+      };
+    }
+
+    let reDispatchUndelivered: number[] = [];
+    try {
+      const ledgerSkip = {
+        entity_type: "member" as const,
+        entity_id: member_id,
+        branch_id: effectiveBranchId ?? null,
+      };
+      reDispatchUndelivered = (await dispatchToDevices(
+        baseUrl,
+        token,
+        existing.personId,
+        supabase,
+        effectiveBranchId,
+        1,
+        ledgerSkip,
+      )).undelivered;
+    } catch (e) {
+      console.warn("[MIPS-ACCESS] Safety re-dispatch on revoke failed (non-fatal):", e);
+    }
+
     return {
       success: true,
       action,
-      skipped: "already_in_desired_state",
-      message: `Hardware access already ${action}d on the gate — nothing re-sent`,
+      skipped: "central_already_revoked_gates_resynced",
+      undeliveredGates: reDispatchUndelivered,
+      message: reDispatchUndelivered.length
+        ? `Central record already revoked; gate re-sync incomplete for device(s) ${reDispatchUndelivered.join(", ")}`
+        : "Central record already revoked; revocation re-pushed to all gates",
     };
   }
+
 
   const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
   const updatedPerson = stripPhotoPayload({

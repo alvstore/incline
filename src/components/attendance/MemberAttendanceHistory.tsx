@@ -16,7 +16,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { MemberHistorySearch } from './MemberHistorySearch';
+import { BlockedEntryAttempts } from './BlockedEntryAttempts';
 import { exportToCSV } from '@/lib/csvExport';
+
 
 type Visit = {
   id: string;
@@ -41,6 +43,15 @@ function durationLabel(inIso: string, outIso: string | null) {
 export function MemberAttendanceHistory({ branchId }: { branchId: string | undefined }) {
   const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [selectedMember, setSelectedMember] = useState<any>(null);
+
+  const monthRange = useMemo(() => {
+    const [year, m] = month.split('-').map(Number);
+    return {
+      start: `${month}-01T00:00:00`,
+      end: new Date(year, m, 0, 23, 59, 59, 999).toISOString(),
+    };
+  }, [month]);
+
 
   const { data: visits = [], isLoading, isError } = useQuery({
     queryKey: ['member-attendance-history', branchId, month, selectedMember?.id],
@@ -292,7 +303,16 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
               </CardContent>
             </Card>
           )}
+
+          <BlockedEntryAttempts
+            memberId={selectedMember.id}
+            branchId={branchId}
+            from={monthRange.start}
+            to={monthRange.end}
+            description="Times this member came to the club but the gate refused entry."
+          />
         </div>
+
       )}
     </div>
   );
