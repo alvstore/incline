@@ -1,3 +1,4 @@
+// v2.17.0 — backfill null validTimeBegin with joining date
 // v2.16.0 — gate commands are addressed by terminal serial number, not a
 //          remembered numeric id (see resolveGateTargets below).
 // v2.15.0 — STORM FIX (21 Sep 2026 gate restarts). Root cause: one purchase
@@ -656,7 +657,22 @@ async function applyMemberAction(
   // validity to every live gate.
   const sameDay = (a: unknown, b: unknown) =>
     String(a || "").trim().slice(0, 10) === String(b || "").trim().slice(0, 10);
-  if (sameDay(existing.validTimeEnd, newValidTimeEnd)) {
+  // v2.17.0 — Validity start = joining date, set once and never moved. Records
+  // created by the early bulk import have a null start; backfill it here.
+  const hasBegin = (v: unknown) => /^\d{4}-\d{2}-\d{2}/.test(String(v || "").trim());
+  let backfillBegin: string | null = null;
+  if (!hasBegin((existing as any).validTimeBegin)) {
+    const { data: firstMs } = await supabase
+      .from("memberships").select("start_date").eq("member_id", member_id)
+      .order("start_date", { ascending: true }).limit(1).maybeSingle();
+    let joinDate: string | null = firstMs?.start_date ?? null;
+    if (!joinDate) {
+      const { data: m } = await supabase.from("members").select("created_at").eq("id", member_id).maybeSingle();
+      joinDate = m?.created_at ? String(m.created_at).slice(0, 10) : null;
+    }
+    if (joinDate) backfillBegin = `${joinDate} 00:00:00`;
+  }
+  if (!backfillBegin && sameDay(existing.validTimeEnd, newValidTimeEnd)) {
     console.log(
       `[MIPS-ACCESS] Central record for ${personSn} already at validTimeEnd=${existing.validTimeEnd} — skipping PUT`,
     );
@@ -714,8 +730,10 @@ async function applyMemberAction(
     personId: existing.personId,
     personSn,
     validTimeEnd: newValidTimeEnd,
+    ...(backfillBegin ? { validTimeBegin: backfillBegin } : {}),
     expiredType: 0,
   });
+  if (backfillBegin) console.log(`[MIPS-ACCESS] Backfilling validTimeBegin=${backfillBegin} for ${personSn}`);
   console.log(
     `[MIPS-ACCESS] Updating ${personSn} (${updatedPerson.name || existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action}, full_record=${!!detail})`,
   );
