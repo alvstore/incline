@@ -64,7 +64,8 @@ export function ChatMessageBody({ content, direction }: ChatMessageBodyProps) {
   const { text, docs } = useMemo(() => {
     const found: DocLink[] = [];
     const seen = new Set<string>();
-    let cleaned = content.replace(URL_RE, (raw, _p, _o, offset: number) => {
+    // With no capture groups, the second replace-callback arg is the offset.
+    let cleaned = content.replace(URL_RE, (raw, offset: number) => {
       const url = raw.replace(/[.,;:!?]+$/, '');
       const trail = raw.slice(url.length);
       if (!isDocumentUrl(url)) return raw;
