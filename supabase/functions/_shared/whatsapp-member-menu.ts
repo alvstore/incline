@@ -871,6 +871,15 @@ export async function runMemberGateway(
     const classTap = await bookClassByTitle(supabase, ctx, raw);
     if (classTap) return classTap;
   }
+
+  // Plan-request sub-menu taps must resolve before the keyword chain below —
+  // Meta echoes the row title ("Workout plan"/"Diet plan"), which would
+  // otherwise be swallowed by the /my workout|my diet|…/ regex and show the
+  // already-assigned plans instead of creating the coach request.
+  if (n === "workout plan") return await handleRequestPlan(supabase, ctx, "workout");
+  if (n === "diet plan") return await handleRequestPlan(supabase, ctx, "diet");
+  if (n === "both plans") return await handleRequestPlan(supabase, ctx, "both");
+
   const pick = menuMatch?.id
     ?? (/(membership|my plan\b|validity|expiry)/.test(n) ? "MENU_MEMBERSHIP" : null)
     ?? (/(book a class|class|yoga|pilates|zumba|hiit)/.test(n) ? "MENU_CLASS" : null)
@@ -893,11 +902,6 @@ export async function runMemberGateway(
     case "MENU_ATTENDANCE": return await handleAttendance(supabase, ctx);
     case "MENU_HUMAN": return await handleHuman(supabase, ctx, phone);
   }
-
-  // Plan-request sub-menu
-  if (n === "workout plan") return await handleRequestPlan(supabase, ctx, "workout");
-  if (n === "diet plan") return await handleRequestPlan(supabase, ctx, "diet");
-  if (n === "both plans") return await handleRequestPlan(supabase, ctx, "both");
 
   // Epic 3 — everything else is an operational exception: triage it.
   return await handleTriage(supabase, ctx, raw, phone);

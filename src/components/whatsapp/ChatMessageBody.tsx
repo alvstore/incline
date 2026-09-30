@@ -35,13 +35,26 @@ export function isDocumentUrl(url: string): boolean {
 
 function labelFor(url: string, context: string): string {
   const lower = context.toLowerCase();
-  if (lower.includes('posture')) return 'Posture scan report.pdf';
-  if (lower.includes('body composition') || lower.includes('scan')) return 'Body composition report.pdf';
-  if (lower.includes('invoice')) return 'Invoice.pdf';
-  if (lower.includes('receipt')) return 'Receipt.pdf';
-  if (lower.includes('diet')) return 'Diet plan.pdf';
-  if (lower.includes('workout')) return 'Workout plan.pdf';
-  return 'Document.pdf';
+  // Pick the keyword that appears closest to the link — with two reports in
+  // one message, the nearest preceding name is the one the link belongs to.
+  const candidates: Array<[RegExp, string]> = [
+    [/posture/, 'Posture scan report.pdf'],
+    [/body composition|body scan|\bscan\b/, 'Body composition report.pdf'],
+    [/invoice/, 'Invoice.pdf'],
+    [/receipt/, 'Receipt.pdf'],
+    [/diet/, 'Diet plan.pdf'],
+    [/workout/, 'Workout plan.pdf'],
+  ];
+  let best = -1;
+  let bestLabel: string | null = null;
+  for (const [re, label] of candidates) {
+    const m = re.exec(lower);
+    if (m && m.index + m[0].length > best) {
+      best = m.index + m[0].length;
+      bestLabel = label;
+    }
+  }
+  return bestLabel ?? 'Document.pdf';
 }
 
 /** Renders chat text with PDF links pulled out into preview cards. */
@@ -51,16 +64,21 @@ export function ChatMessageBody({ content, direction }: ChatMessageBodyProps) {
   const { text, docs } = useMemo(() => {
     const found: DocLink[] = [];
     const seen = new Set<string>();
-    let cleaned = content.replace(URL_RE, (raw) => {
+    // With no capture groups, the second replace-callback arg is the offset.
+    let cleaned = content.replace(URL_RE, (raw, offset: number) => {
       const url = raw.replace(/[.,;:!?]+$/, '');
       const trail = raw.slice(url.length);
       if (!isDocumentUrl(url)) return raw;
-      const label = labelFor(url, content);
-      if (found.some((f) => f.label === label)) return trail;
-      if (!seen.has(url)) {
-        seen.add(url);
-        found.push({ url, label });
-      }
+      // Label from the text just before this URL so two different reports in
+      // one message get their own names ("…posture scan report: <url>").
+      const label = labelFor(url, content.slice(0, offset));
+      if (seen.has(url)) return trail;
+      seen.add(url);
+      // Never drop a distinct URL — make the label unique instead.
+      let unique = label;
+      let k = 2;
+      while (found.some((f) => f.label === unique)) unique = `${label} (${k++})`;
+      found.push({ url, label: unique });
       return trail;
     });
     cleaned = cleaned
