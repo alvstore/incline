@@ -23,7 +23,8 @@ rows at all) — they only existed on the server.
 ```
 - `numType` `"2"` = selected people, `"1"` = everyone
 - `deviceType` `"1"` = selected devices, `"2"` = all
-- `authType` `"1"` = issue, `"2"` = revoke
+- `authType` `"1"` = issue/update (keeps face enrolled), `"2"` = revoke/**deletes the face from the terminal library**.
+- **Access enforcement (mips-access v2.14.0) ALWAYS sends `1`**, even for dues revocation: entry is blocked via backdated `validTimeEnd = 2000-01-01`, not face deletion. The old revoke(2)→pay→re-issue(1) loop forced a full face-template re-decode on the Android gate each cycle and was the crash/restart loop root cause. `2` is reserved for true offboarding-style deletion, never routine dues flips.
 - HTTP/API 200 + msg "Personnel information is being issued…" means accepted.
 
 Always call it **one person per gate** so delivery truth stays separable.
