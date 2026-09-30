@@ -63,7 +63,9 @@ function win(x: unknown): string {
 function fmt(v: number | null | undefined, suffix = ""): string {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return "-";
   const n = Number(v);
-  const s = Math.abs(n % 1) < 0.0001 ? String(Math.round(n)) : n.toFixed(1);
+  const s = Math.abs(n % 1) < 0.0001
+    ? String(Math.round(n))
+    : n.toFixed(Math.abs(n) < 2 ? 2 : 1);
   return suffix ? `${s} ${suffix}` : s;
 }
 
@@ -193,7 +195,8 @@ export async function buildScanPdf(input: ScanPdfInput): Promise<Uint8Array> {
     const rows = group.metrics.filter((m) => m.value !== null && m.value !== undefined);
     if (!rows.length) continue;
 
-    need(30 + rowH);
+    // keep a group header with at least three of its rows
+    need(30 + rowH * Math.min(rows.length, 3));
     text(page, group.title.toUpperCase(), M, y, 8.5, bold, INDIGO);
     page.drawLine({ start: { x: M, y: y - 7 }, end: { x: W - M, y: y - 7 }, thickness: 1, color: INDIGO });
     y -= 20;
@@ -210,8 +213,8 @@ export async function buildScanPdf(input: ScanPdfInput): Promise<Uint8Array> {
       const z = zoneOf(m.value, m.band);
       if (m.band && z) {
         // range bar
-        const bx = M + 300;
-        const bw = 150;
+        const bx = M + 285;
+        const bw = 130;
         const span = m.band.high - m.band.low;
         const min = m.band.low - span;
         const max = m.band.high + span;
@@ -220,7 +223,7 @@ export async function buildScanPdf(input: ScanPdfInput): Promise<Uint8Array> {
         page.drawRectangle({ x: bx + bw / 3, y: base - 1, width: bw / 3, height: 5, color: rgb(0.80, 0.94, 0.88) });
         page.drawCircle({ x: bx + bw * pct, y: base + 1.5, size: 3.6, color: zoneColor[z] });
         const tag = zoneText[z];
-        text(page, tag, bx + bw + 10, base, 8, bold, zoneColor[z]);
+        text(page, tag, bx + bw + 9, base, 8, bold, zoneColor[z]);
         text(page, `Healthy ${m.band.low}-${m.band.high}${m.suffix ? ` ${m.suffix}` : ""}`, bx, base - 11, 7.5, font, MUTED);
       } else if (m.hint) {
         text(page, m.hint, M + 300, base, 8.5, font, MUTED);
