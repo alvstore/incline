@@ -1,3 +1,4 @@
+// v1.1.0 — Incline indigo branding to match the delivered PDF report.
 // v1.0.1 — Generate a printable HOWBODY report (auth required, returns HTML)
 // Escapes member-supplied strings to prevent stored XSS in generated reports.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -71,8 +72,8 @@ function shell(title: string, body: string) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>
 body{font-family:-apple-system,Segoe UI,Inter,sans-serif;color:#0f172a;max-width:800px;margin:24px auto;padding:0 24px}
-header{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #00d4b8;padding-bottom:12px;margin-bottom:18px}
-header h1{margin:0;font-size:18px;color:#00b89c}
+header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #4f46e5;padding-bottom:12px;margin-bottom:18px}
+header h1{margin:0;font-size:18px;color:#4f46e5;letter-spacing:.02em}
 header span{font-size:11px;color:#64748b}
 table tr:nth-child(odd){background:#f8fafc}
 @media print{header{break-after:avoid}}

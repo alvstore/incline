@@ -1,8 +1,12 @@
-// v2.1.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
+// v2.2.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
+// 2.2.0: generated fallback PDF redesigned (Incline branding, healthy-range
+//        indicators, coaching targets, AI "your scan, explained" note).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { buildScanPdf, type MetricGroup } from "../_shared/scan-report-pdf.ts";
+import { callAI } from "../_shared/ai-dispatcher.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,107 +39,134 @@ function normalisePhone(input: string | null | undefined): string | null {
   return digits ? `+${digits}` : null;
 }
 
-async function buildPdf(opts: {
-  title: string;
-  memberName: string;
-  branchName: string;
-  scanDateLabel: string;
-  rows: Array<[string, string]>;
-}): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const PAGE: [number, number] = [595.28, 841.89]; // A4
-  let page = pdf.addPage(PAGE);
-  const { width } = page.getSize();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+const num = (x: unknown): number | null => {
+  if (x === null || x === undefined || x === "") return null;
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+};
 
-  const win = (x: unknown): string =>
-    String(x ?? "")
-      .replace(/\u20b9/g, "Rs.")
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201c\u201d]/g, '"')
-      .replace(/[\u2013\u2014]/g, "-")
-      .replace(/\u2022/g, "-")
-      .replace(/\u00a0/g, " ")
-      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
-
-  const teal = rgb(0, 0.72, 0.61);
-  const slate = rgb(0.39, 0.45, 0.55);
-  const dark = rgb(0.06, 0.09, 0.16);
-
-  const drawFooter = (p: typeof page) => {
-    p.drawText(
-      "Generated from your body scan. Wellness reference only - not medical advice.",
-      { x: 40, y: 40, size: 9, font, color: slate },
-    );
-  };
-
-  // Header (first page only)
-  page.drawText("The Incline Life by Incline", { x: 40, y: 800, size: 14, font: bold, color: teal });
-  page.drawText(win(opts.title), { x: 40, y: 778, size: 18, font: bold, color: dark });
-  page.drawText(win(`${opts.memberName} · ${opts.branchName}`), { x: 40, y: 758, size: 11, font, color: slate });
-  page.drawText(win(`Scan: ${opts.scanDateLabel}`), { x: 40, y: 744, size: 10, font, color: slate });
-  page.drawLine({ start: { x: 40, y: 730 }, end: { x: width - 40, y: 730 }, thickness: 1.5, color: teal });
-
-  // Rows — paginate onto fresh pages instead of clipping.
-  let y = 700;
-  const lh = 22;
-  for (const [label, value] of opts.rows) {
-    if (y < 80) {
-      drawFooter(page);
-      page = pdf.addPage(PAGE);
-      page.drawText(win(`${opts.title} (continued)`), { x: 40, y: 800, size: 12, font: bold, color: teal });
-      page.drawLine({ start: { x: 40, y: 788 }, end: { x: width - 40, y: 788 }, thickness: 1, color: teal });
-      y = 760;
-    }
-    page.drawText(win(label), { x: 50, y, size: 11, font, color: slate });
-    page.drawText(win(value ?? "-"), { x: 280, y, size: 11, font: bold, color: dark });
-    y -= lh;
-  }
-
-  drawFooter(page);
-
-  return await pdf.save();
-}
-
-function bodyRows(r: any): Array<[string, string]> {
-  const v = (x: any, suffix = "") => (x === null || x === undefined || x === "" ? "—" : `${x}${suffix}`);
+/** Gender-aware healthy reference bands used for the range indicators. */
+function bodyGroups(r: any, sex: "male" | "female"): MetricGroup[] {
+  const female = sex === "female";
   return [
-    ["Health Score", v(r.health_score)],
-    ["Weight", v(r.weight, " kg")],
-    ["BMI", v(r.bmi)],
-    ["Body Fat %", v(r.pbf, " %")],
-    ["Skeletal Muscle Mass", v(r.smm, " kg")],
-    ["Total Body Water", v(r.tbw, " kg")],
-    ["Visceral Fat Rating", v(r.vfr)],
-    ["BMR", v(r.bmr, " kcal")],
-    ["Metabolic Age", v(r.metabolic_age)],
-    ["Target Weight", v(r.target_weight, " kg")],
-    ["Weight to Adjust", v(r.weight_control, " kg")],
-    ["Fat to Adjust", v(r.fat_control, " kg")],
-    ["Muscle to Adjust", v(r.muscle_control, " kg")],
-    ["Waist-to-Hip Ratio", v(r.whr)],
+    {
+      title: "Body composition",
+      metrics: [
+        { label: "Weight", value: num(r.weight), suffix: "kg" },
+        { label: "Skeletal muscle mass", value: num(r.smm), suffix: "kg", hint: "Higher is generally better" },
+        { label: "Total body water", value: num(r.tbw), suffix: "kg" },
+        { label: "Intracellular fluid", value: num(r.icf), suffix: "L" },
+        { label: "Extracellular fluid", value: num(r.ecf), suffix: "L" },
+      ],
+    },
+    {
+      title: "Obesity analysis",
+      metrics: [
+        { label: "BMI", value: num(r.bmi), band: { low: 18.5, high: 24.9 } },
+        {
+          label: "Body fat",
+          value: num(r.pbf),
+          suffix: "%",
+          band: female ? { low: 21, high: 33 } : { low: 10, high: 20 },
+        },
+        { label: "Visceral fat rating", value: num(r.vfr), band: { low: 1, high: 9 } },
+        {
+          label: "Waist-to-hip ratio",
+          value: num(r.whr),
+          band: female ? { low: 0.65, high: 0.85 } : { low: 0.7, high: 0.9 },
+        },
+      ],
+    },
+    {
+      title: "Metabolism",
+      metrics: [
+        { label: "Basal metabolic rate", value: num(r.bmr), suffix: "kcal", hint: "Daily calories at rest" },
+        { label: "Metabolic age", value: num(r.metabolic_age), hint: "Compared with your actual age" },
+      ],
+    },
+    {
+      title: "Coaching targets",
+      metrics: [
+        { label: "Target weight", value: num(r.target_weight), suffix: "kg" },
+        { label: "Weight to adjust", value: num(r.weight_control), suffix: "kg" },
+        { label: "Fat to adjust", value: num(r.fat_control), suffix: "kg", hint: "Negative means reduce" },
+        { label: "Muscle to adjust", value: num(r.muscle_control), suffix: "kg", hint: "Positive means build" },
+      ],
+    },
   ];
 }
 
-function postureRows(r: any): Array<[string, string]> {
-  const v = (x: any, suffix = "") => (x === null || x === undefined || x === "" ? "—" : `${x}${suffix}`);
+function postureGroups(r: any): MetricGroup[] {
   return [
-    ["Posture Score", v(r.score)],
-    ["Body Slope", v(r.body_slope)],
-    ["Head Forward", v(r.head_forward)],
-    ["Head Slant", v(r.head_slant)],
-    ["High/Low Shoulder", v(r.high_low_shoulder)],
-    ["Pelvis Forward", v(r.pelvis_forward)],
-    ["Knee (L/R)", `${v(r.knee_left)} / ${v(r.knee_right)}`],
-    ["Leg (L/R)", `${v(r.leg_left)} / ${v(r.leg_right)}`],
+    {
+      title: "Alignment overview",
+      metrics: [
+        { label: "Body slope", value: num(r.body_slope) },
+        { label: "Head forward", value: num(r.head_forward) },
+        { label: "Head slant", value: num(r.head_slant) },
+        { label: "High / low shoulder", value: num(r.high_low_shoulder) },
+        { label: "Pelvis forward", value: num(r.pelvis_forward) },
+      ],
+    },
+  ];
+}
+
+function posturePlainRows(r: any): Array<[string, string]> {
+  const v = (x: any) => (x === null || x === undefined || x === "" ? "-" : String(x));
+  return [
+    ["Posture type", v(r.posture_type)],
+    ["Body shape profile", v(r.body_shape_profile)],
+    ["Knee (left / right)", `${v(r.knee_left)} / ${v(r.knee_right)}`],
+    ["Leg (left / right)", `${v(r.leg_left)} / ${v(r.leg_right)}`],
+    ["Thigh (left / right)", `${v(r.left_thigh)} / ${v(r.right_thigh)}`],
+    ["Calf (left / right)", `${v(r.calf_left)} / ${v(r.calf_right)}`],
     ["Bust", v(r.bust)],
     ["Waist", v(r.waist)],
     ["Hip", v(r.hip)],
-    ["Thigh (L/R)", `${v(r.left_thigh)} / ${v(r.right_thigh)}`],
-    ["Calf (L/R)", `${v(r.calf_left)} / ${v(r.calf_right)}`],
   ];
 }
+
+/**
+ * Short, plain-language interpretation of the scan.
+ * Best-effort: never blocks or fails delivery.
+ */
+async function buildAiNote(
+  supabase: any,
+  kind: Kind,
+  memberName: string,
+  facts: string,
+): Promise<string | null> {
+  try {
+    const { content } = await callAI({
+      scope: "all",
+      supabase,
+      temperature: 0.4,
+      max_tokens: 320,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a fitness coach at Incline, a premium gym in Udaipur. Explain a member's " +
+            "in-club body scan in warm, plain English. Rules: 90-120 words, one short paragraph. " +
+            "Mention two things going well and two focus areas, then one practical next step in the gym " +
+            "(training, recovery or nutrition habit). Never diagnose, never mention illness, medication " +
+            "or medical conditions, never quote prices. Use only the numbers provided. Plain text only, " +
+            "no markdown, no bullet characters, no emoji.",
+        },
+        {
+          role: "user",
+          content: `Member: ${memberName}. Scan type: ${kind === "body" ? "body composition" : "posture"}.\n${facts}`,
+        },
+      ],
+    });
+    const out = String(content || "").replace(/\s+/g, " ").trim();
+    return out.length > 40 ? out.slice(0, 1200) : null;
+  } catch (e) {
+    console.warn("scan AI note failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -205,7 +236,7 @@ Deno.serve(async (req) => {
     // Member + branch + trainer
     const { data: member } = await supabase
       .from("members")
-      .select("id, member_code, branch_id, assigned_trainer_id, user_id, profiles:user_id (full_name, phone, email)")
+      .select("id, member_code, branch_id, assigned_trainer_id, user_id, profiles:user_id (full_name, phone, email, gender, date_of_birth)")
       .eq("id", report.member_id)
       .single();
     if (!member) return jr({ error: "Member not found" }, 404);
@@ -222,17 +253,76 @@ Deno.serve(async (req) => {
     // PDF — original vendor report wins. The generated summary exists only as a
     // recovery fallback when HOWBODY did not provide a source PDF.
     const title = kind === "body" ? "Body Composition Report" : "Posture Analysis Report";
-    const rows = kind === "body" ? bodyRows(report) : postureRows(report);
     const scanDateLabel = fmtDate(report.test_time || report.created_at);
     const originalPath = existing?.original_pdf_path || null;
     const path = originalPath || `scans/${member.id}/${kind}-${report_id}.pdf`;
     if (!originalPath) {
-      const pdfBytes = await buildPdf({ title, memberName, branchName, scanDateLabel, rows });
+      const payload: any = report.full_payload || {};
+      const rawSex = String(memberProfile?.gender || payload.sex || payload.gender || "").toLowerCase();
+      const sex: "male" | "female" = rawSex.startsWith("f") || rawSex === "2" ? "female" : "male";
+      const heightCm = num(payload.height) ?? num(payload.height_cm);
+      let age: number | null = num(payload.age);
+      if (!age && memberProfile?.date_of_birth) {
+        const dob = new Date(memberProfile.date_of_birth);
+        if (!Number.isNaN(dob.getTime())) {
+          age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000));
+        }
+      }
+
+      const groups = kind === "body" ? bodyGroups(report, sex) : postureGroups(report);
+      const plainRows = kind === "body" ? undefined : posturePlainRows(report);
+
+      const facts = groups
+        .flatMap((g) => g.metrics)
+        .filter((m) => m.value !== null && m.value !== undefined)
+        .map((m) => `${m.label}: ${m.value}${m.suffix ? ` ${m.suffix}` : ""}`)
+        .join("\n");
+      const scoreValue = kind === "body" ? num(report.health_score) : num(report.score);
+      const aiNote = await buildAiNote(
+        supabase,
+        kind as Kind,
+        memberName,
+        [
+          heightCm ? `Height: ${heightCm} cm` : "",
+          age ? `Age: ${age}` : "",
+          `Sex: ${sex}`,
+          scoreValue !== null ? `${kind === "body" ? "Health" : "Posture"} score: ${scoreValue}/100` : "",
+          facts,
+        ].filter(Boolean).join("\n"),
+      );
+
+      const facesStrip: Array<[string, string]> = [];
+      if (heightCm) facesStrip.push(["Height", `${heightCm} cm`]);
+      if (age) facesStrip.push(["Age", String(age)]);
+      facesStrip.push(["Sex", sex === "female" ? "Female" : "Male"]);
+
+      const pdfBytes = await buildScanPdf({
+        title,
+        subtitle: kind === "body"
+          ? "In-club body composition analysis"
+          : "In-club posture and alignment analysis",
+        memberName,
+        memberCode: member.member_code,
+        branchName,
+        scanDateLabel,
+        facts: facesStrip,
+        score: scoreValue === null ? undefined : {
+          value: scoreValue,
+          label: kind === "body" ? "Health score" : "Posture score",
+          caption: kind === "body"
+            ? "A combined view of your muscle, fat and hydration balance. Scores rise as muscle mass improves and body fat moves into range."
+            : "A combined view of your standing alignment. Scores rise as shoulder, pelvis and head position move closer to neutral.",
+        },
+        groups,
+        plainRows,
+        aiNote,
+      });
       const { error: upErr } = await supabase.storage
         .from("attachments")
         .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
       if (upErr) throw new Error(`PDF upload failed: ${upErr.message}`);
     }
+
 
     const { data: signed } = await supabase.storage
       .from("attachments")
