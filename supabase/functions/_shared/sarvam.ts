@@ -1,4 +1,5 @@
-// v1.2.0 — Sarvam Voice Agents adapter.
+// v1.3.0 — Sarvam Voice Agents adapter. Adds purpose-specific opening line via
+// app_overrides.initial_bot_message (renewal vs attendance/retention vs test).
 //
 // Single server-side boundary for every Sarvam call. Nothing else in the code
 // base may talk to Sarvam directly. Endpoints below are the officially
@@ -264,6 +265,9 @@ export async function createOutboundCall(
     agentVariables?: Record<string, unknown>;
     webhookUrl?: string;
     webhookMetadata?: Record<string, unknown>;
+    /** Documented app_overrides.initial_bot_message — replaces the agent's
+     *  default greeting so the call opens with the right purpose. */
+    initialBotMessage?: string;
   },
 ): Promise<{ attempt_id: string }> {
   requireScope(cfg);
@@ -294,6 +298,9 @@ export async function createOutboundCall(
         agent_phone_number: cfg.agent_phone_number,
       },
       ...(args.agentVariables ? { agent_variables: args.agentVariables } : {}),
+      ...(args.initialBotMessage
+        ? { app_overrides: { initial_bot_message: args.initialBotMessage } }
+        : {}),
     },
     user_config: { user_phone_number: args.to },
     ...(args.webhookUrl
