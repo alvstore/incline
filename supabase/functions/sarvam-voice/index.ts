@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   admin,
+  BASE,
   AGENT_INPUT_VARIABLES,
   AGENT_OUTPUT_VARIABLES,
   checkConnection,
