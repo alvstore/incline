@@ -303,7 +303,16 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
               </CardContent>
             </Card>
           )}
+
+          <BlockedEntryAttempts
+            memberId={selectedMember.id}
+            branchId={branchId}
+            from={monthRange.start}
+            to={monthRange.end}
+            description="Times this member came to the club but the gate refused entry."
+          />
         </div>
+
       )}
     </div>
   );
