@@ -57,9 +57,30 @@ export function PlanDownloadButton({
 
   const handleDownload = async () => {
     if (pdfUrl) {
-      window.open(pdfUrl, '_blank', 'noopener');
+      setBusy(true);
+      try {
+        // Stored links are private + expiring — always mint a fresh one.
+        const fresh = (await signAttachmentUrl(pdfUrl, 10 * 60)) ?? pdfUrl;
+        const res = await fetch(fresh);
+        if (!res.ok) throw new Error(`Download failed (${res.status})`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = pdfFilename || `${planType === 'workout' ? 'Workout' : 'Diet'}-Plan.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+      } catch (err) {
+        console.error('Stored plan PDF download failed:', err);
+        toast.error('Could not download the PDF. Please try again.');
+      } finally {
+        setBusy(false);
+      }
       return;
     }
+
     setBusy(true);
     try {
       await downloadPlanPdf({
