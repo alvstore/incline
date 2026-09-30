@@ -618,7 +618,14 @@ async function applyMemberAction(
   const ledger = { entity_type: "member" as const, entity_id: member_id, branch_id: effectiveBranchId ?? null };
   let undeliveredGates: number[] = [];
   try {
-    const dispatchAuthType: 1 | 2 = newValidTimeEnd === REVOKED_DATE ? 2 : 1;
+    // v2.14.0 — always Issue (1), never Revoke (2). authType 2 physically deletes
+    // the face from the terminal library, so every dues-revoke → pay → restore
+    // cycle forced a full template re-decode on the Android gate — the churn loop
+    // that kept crashing/restarting the app. With authType 1 the backdated
+    // validTimeEnd (2000-01-01) blocks entry while the face stays enrolled: the
+    // gate still greets by name, shows "Permission Denied", and payment restores
+    // access instantly with no photo re-upload or template rebuild.
+    const dispatchAuthType: 1 | 2 = 1;
     undeliveredGates = (await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, dispatchAuthType, ledger)).undelivered;
     console.log(`Dispatched ${action} to devices for personId=${existing.personId}`);
   } catch (e) {
