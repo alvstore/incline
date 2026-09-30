@@ -369,7 +369,9 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
               title={
                 mipsError
                   ? lastReconcile?.error || "MIPS server unreachable — showing stored events only"
-                  : `Backend imports MIPS records every 15s; imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}`
+                  : rtStatus === "live"
+                    ? `Live feed connected — scans appear instantly. Gate records are only re-checked when you press refresh. Last check imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}.`
+                    : `Live feed disconnected — falling back to a gate record check every 5 minutes. Last check imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}.`
               }
             >
               {mipsStatusText}
