@@ -916,11 +916,15 @@ export default function AttendanceDashboard() {
                 )}
                 {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
                   <>
+                    <TabsTrigger value="blocked" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                      <ShieldAlert className="h-3.5 w-3.5" />Refused Entries
+                    </TabsTrigger>
                     <TabsTrigger value="history" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
                       <History className="h-3.5 w-3.5" />History
                     </TabsTrigger>
                   </>
                 )}
+
               </TabsList>
 
               {/* PT Sessions Tab */}
