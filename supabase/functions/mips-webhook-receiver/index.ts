@@ -83,6 +83,39 @@ function normalizePersonCodeCandidates(rawCode: string): string[] {
   return Array.from(candidates);
 }
 
+async function handleMemberGateRefusal(supabase: any, memberId: string, branchId: string, personName: string) {
+  let reasonText = "Access blocked by gate";
+  let access: any = null;
+  try {
+    const { data } = await supabase.rpc("member_access_status", { _member_id: memberId, _branch_id: branchId });
+    access = data;
+    if (access && Number(access.outstanding_amount || 0) > 0) {
+      reasonText = `Access blocked: dues of Rs. ${access.outstanding_amount} overdue by ${access.days_overdue ?? "-"} day(s)`;
+    } else if (access?.reason) {
+      reasonText = `Access blocked: ${access.reason}`;
+    }
+  } catch (e) {
+    console.warn("member_access_status failed on face_1:", e);
+  }
+  try {
+    const { data: staff } = await supabase
+      .from("user_roles").select("user_id").in("role", ["owner", "admin", "manager", "staff"]);
+    const rows = (staff || []).map((s: any) => ({
+      user_id: s.user_id,
+      branch_id: branchId,
+      title: "Gate entry denied",
+      message: `${personName} was refused at the gate. ${reasonText}.`,
+      type: "warning",
+      category: "access",
+      action_url: "/attendance",
+    }));
+    if (rows.length) await supabase.from("notifications").insert(rows);
+  } catch (e) {
+    console.warn("face_1 front-desk notification failed:", e);
+  }
+  return { result: "member_denied", message: `${personName}: ${reasonText}` };
+}
+
 function mapFaceType(type: string): { result: string; description: string } {
   switch (type) {
     case "face_0":
@@ -739,8 +772,12 @@ Deno.serve(async (req) => {
 
         if (person.type === "member") {
           memberId = person.id;
+          // v-face1 — terminal itself refused (restricted time zone / validity).
+          // Never create attendance; log as member_denied and alert front desk.
           const outcome =
-            doorRole === "exit"
+            passType === "face_1" && doorRole !== "exit"
+              ? await handleMemberGateRefusal(supabase, person.id, person.branch_id, personName)
+              : doorRole === "exit"
               ? await handleMemberCheckout(supabase, person.id, person.branch_id, personName, scanTime)
               : await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType);
           result = outcome.result;

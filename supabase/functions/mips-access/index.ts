@@ -1,3 +1,4 @@
+// v2.18.0 — opt-in time-zone revoke (acTzNumber1=2) keeps blocked faces enrolled
 // v2.17.0 — backfill null validTimeBegin with joining date
 // v2.16.0 — gate commands are addressed by terminal serial number, not a
 //          remembered numeric id (see resolveGateTargets below).
@@ -706,18 +707,18 @@ async function applyMemberAction(
     }
     if (joinDate) backfillBegin = `${joinDate} 00:00:00`;
   }
-  if (!backfillBegin && sameDay(existing.validTimeEnd, newValidTimeEnd)) {
+  if (!backfillBegin && tzMatches && sameDay(existing.validTimeEnd, newValidTimeEnd)) {
     console.log(
       `[MIPS-ACCESS] Central record for ${personSn} already at validTimeEnd=${existing.validTimeEnd} — skipping PUT`,
     );
     await setMemberHardwareState(
       supabase,
       member_id,
-      action === "revoke" ? "revoked" : "active",
-      action === "revoke" ? (reasonCode || "manual") : null,
+      action === "revoke" || tzBlock ? "revoked" : "active",
+      action === "revoke" || tzBlock ? (reasonCode || "manual") : null,
     );
 
-    if (action !== "revoke") {
+    if (action !== "revoke" && !tzBlock) {
       return {
         success: true,
         action,
@@ -764,6 +765,7 @@ async function applyMemberAction(
     personId: existing.personId,
     personSn,
     validTimeEnd: newValidTimeEnd,
+    acTzNumber1: desiredTz,
     ...(backfillBegin ? { validTimeBegin: backfillBegin } : {}),
     expiredType: 0,
   });
@@ -815,7 +817,8 @@ async function applyMemberAction(
       const after = (await fetchPersonDetail(baseUrl, token, existing.personId)) ||
         (await lookupPerson(baseUrl, token, personSn));
       observedValidTimeEnd = after?.validTimeEnd ? String(after.validTimeEnd) : null;
-      return norm(observedValidTimeEnd) === norm(newValidTimeEnd);
+      const tzOk = (Number((after as any)?.acTzNumber1 ?? 0) || 0) === desiredTz;
+      return tzOk && norm(observedValidTimeEnd) === norm(newValidTimeEnd);
     } catch (e) {
       console.warn("Read-back verification failed:", e);
       return false;
@@ -834,7 +837,7 @@ async function applyMemberAction(
     // the server already holds the fresh target this is convergence, not a
     // mismatch, and re-pushing our stale value would start a write fight.
     const fresh = await computeDesiredValidity(supabase, member_id, action, effectiveBranchId);
-    const freshEnd = fresh.validTimeEnd;
+    const freshEnd = tzBlock ? newValidTimeEnd : fresh.validTimeEnd;
     if (norm(observedValidTimeEnd) === norm(freshEnd)) {
       console.log(
         `[MIPS-ACCESS] ${personSn}: server holds the newer target ${observedValidTimeEnd} (ours was ${newValidTimeEnd}) — superseded, converged`,
@@ -856,6 +859,7 @@ async function applyMemberAction(
             personId: existing.personId,
             personSn,
             validTimeEnd: newValidTimeEnd,
+            acTzNumber1: desiredTz,
             expiredType: 0,
           })),
         });
@@ -866,7 +870,7 @@ async function applyMemberAction(
           existing.personId,
           supabase,
           effectiveBranchId,
-          newValidTimeEnd === REVOKED_DATE ? 2 : 1,
+          1, // v2.18.0 — never authType 2 (deletes the face template)
           ledger,
         ).catch(() => {});
         await new Promise((r) => setTimeout(r, 1500));
@@ -902,7 +906,7 @@ async function applyMemberAction(
 
   // Only mark the member as fully reconciled when MIPS actually confirmed the
   // validity. An unverified push keeps the previous status so the sweep retries.
-  const effectiveAction: "revoke" | "restore" = newValidTimeEnd === REVOKED_DATE ? "revoke" : "restore";
+  const effectiveAction: "revoke" | "restore" = newValidTimeEnd === REVOKED_DATE || tzBlock ? "revoke" : "restore";
   const newStatus = effectiveAction === "revoke" ? "revoked" : "active";
   if (verified) {
     await setMemberHardwareState(
