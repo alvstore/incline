@@ -34,6 +34,8 @@ import { Dumbbell } from 'lucide-react';
 import { StaffRosterBoard } from '@/components/attendance/StaffRosterBoard';
 import { StaffMonthHistory } from '@/components/attendance/StaffMonthHistory';
 import { MemberAttendanceHistory } from '@/components/attendance/MemberAttendanceHistory';
+import { BlockedEntryAttempts } from '@/components/attendance/BlockedEntryAttempts';
+
 
 
 type FlashState = {
