@@ -44,6 +44,15 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
   const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [selectedMember, setSelectedMember] = useState<any>(null);
 
+  const monthRange = useMemo(() => {
+    const [year, m] = month.split('-').map(Number);
+    return {
+      start: `${month}-01T00:00:00`,
+      end: new Date(year, m, 0, 23, 59, 59, 999).toISOString(),
+    };
+  }, [month]);
+
+
   const { data: visits = [], isLoading, isError } = useQuery({
     queryKey: ['member-attendance-history', branchId, month, selectedMember?.id],
     enabled: !!branchId && !!selectedMember?.id,
