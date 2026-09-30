@@ -1,8 +1,12 @@
-// v2.1.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
+// v2.2.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
+// 2.2.0: generated fallback PDF redesigned (Incline branding, healthy-range
+//        indicators, coaching targets, AI "your scan, explained" note).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { buildScanPdf, type MetricGroup } from "../_shared/scan-report-pdf.ts";
+import { callAI } from "../_shared/ai-dispatcher.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
