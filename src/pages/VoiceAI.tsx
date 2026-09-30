@@ -202,6 +202,7 @@ export default function VoiceAIPage() {
   const [page, setPage] = useState(0);
   const [analyticsDays, setAnalyticsDays] = useState(30);
   const [openCallId, setOpenCallId] = useState<string | null>(null);
+  const [pickedCallId, setPickedCallId] = useState<string | null>(null);
 
   const canSeeAnalytics = can.viewFinancials(roles) || can.crossBranchView(roles);
   const canControl = can.manageAutomations(roles) || can.manageSettings(roles);
