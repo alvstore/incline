@@ -31,6 +31,8 @@ import {
   DISPOSITION_OPTIONS, STATUS_OPTIONS, isLiveStatus,
 } from '@/lib/voice/voiceOutcomes';
 import { VoiceCallDetailSheet } from '@/components/voice/VoiceCallDetailSheet';
+import { VoiceCallFeed } from '@/components/voice/VoiceCallFeed';
+import { VoiceCallWorkspace } from '@/components/voice/VoiceCallWorkspace';
 import { AutomationHealthCard } from '@/components/voice/AutomationHealthCard';
 import { toast } from 'sonner';
 
