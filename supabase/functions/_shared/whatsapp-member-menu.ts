@@ -1,4 +1,4 @@
-// whatsapp-member-menu.ts — v1.1.0
+// whatsapp-member-menu.ts — v1.2.0
 // Deterministic (zero-LLM) WhatsApp self-service gateway for ACTIVE members.
 //
 // Epic 1  Phone normalisation + active-member resolution

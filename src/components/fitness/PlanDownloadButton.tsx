@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadPlanPdf } from '@/utils/pdfBlob';
+import { signAttachmentUrl } from '@/lib/documents/signAttachment';
+
 
 interface PlanDownloadButtonProps {
   /** Stored file, when the plan was delivered as an uploaded PDF. */
