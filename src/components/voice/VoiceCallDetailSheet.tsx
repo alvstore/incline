@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, PhoneCall, ShieldAlert } from 'lucide-react'
 import { useVoiceCallDetail } from '@/hooks/useVoiceOps';
 import { dispositionLook, statusLook, formatDuration } from '@/lib/voice/voiceOutcomes';
 import { format } from 'date-fns';
+import { VoiceCallRecording } from './VoiceCallRecording';
 
 interface Props {
   callId: string | null;
@@ -39,22 +40,22 @@ function fmt(value?: string | null, pattern = 'dd MMM yyyy, HH:mm') {
   return Number.isNaN(d.getTime()) ? value : format(d, pattern);
 }
 
-function renderTranscript(transcript: unknown): string {
-  if (!transcript) return '';
-  if (typeof transcript === 'string') return transcript;
-  if (Array.isArray(transcript)) {
-    return transcript
-      .map((turn) => {
-        if (typeof turn === 'string') return turn;
-        const t = turn as Record<string, unknown>;
-        const who = String(t.role ?? t.speaker ?? 'turn');
-        const text = String(t.text ?? t.content ?? t.message ?? '');
-        return text ? `${who}: ${text}` : '';
-      })
-      .filter(Boolean)
-      .join('\n');
-  }
-  return '';
+interface TranscriptTurn { who: 'agent' | 'member'; text: string }
+
+function parseTranscript(transcript: unknown): TranscriptTurn[] {
+  if (!transcript) return [];
+  if (typeof transcript === 'string') return [{ who: 'agent', text: transcript }];
+  if (!Array.isArray(transcript)) return [];
+  return transcript
+    .map((turn): TranscriptTurn | null => {
+      if (typeof turn === 'string') return { who: 'agent', text: turn };
+      const t = turn as Record<string, unknown>;
+      const role = String(t.role ?? t.speaker ?? '').toLowerCase();
+      const text = String(t.en_text ?? t.text ?? t.content ?? t.message ?? t.indic_text ?? '').trim();
+      if (!text) return null;
+      return { who: role === 'agent' || role === 'assistant' || role === 'bot' ? 'agent' : 'member', text };
+    })
+    .filter((x): x is TranscriptTurn => x !== null);
 }
 
 export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
@@ -63,7 +64,7 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
 
   const disposition = dispositionLook(data?.disposition);
   const status = statusLook(data?.status);
-  const transcriptText = renderTranscript(data?.transcript);
+  const turns = parseTranscript(data?.transcript);
 
   return (
     <Sheet open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setShowTranscript(false); }}>
@@ -146,6 +147,7 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
             <div>
               {data.can_view_transcript ? (
                 <>
+                  {callId && <div className="mb-4"><VoiceCallRecording callId={callId} /></div>}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -157,9 +159,17 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
                     Transcript
                   </Button>
                   {showTranscript && (
-                    <pre className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-2xl bg-muted/40 p-4 text-xs leading-relaxed text-foreground">
-                      {transcriptText || 'No transcript was returned for this call.'}
-                    </pre>
+                    <div className="mt-2 max-h-96 space-y-2 overflow-y-auto rounded-2xl bg-muted/40 p-3">
+                      {turns.length === 0 && <p className="text-xs text-muted-foreground">No transcript was returned for this call.</p>}
+                      {turns.map((t, i) => (
+                        <div key={i} className={`flex ${t.who === 'agent' ? 'justify-start' : 'justify-end'}`}>
+                          <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${t.who === 'agent' ? 'bg-background text-foreground shadow-sm' : 'bg-primary text-primary-foreground'}`}>
+                            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider opacity-70">{t.who === 'agent' ? 'Ananya (AI)' : 'Member'}</p>
+                            {t.text}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </>
               ) : (
