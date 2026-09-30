@@ -51,16 +51,20 @@ export function ChatMessageBody({ content, direction }: ChatMessageBodyProps) {
   const { text, docs } = useMemo(() => {
     const found: DocLink[] = [];
     const seen = new Set<string>();
-    let cleaned = content.replace(URL_RE, (raw) => {
+    let cleaned = content.replace(URL_RE, (raw, _p, _o, offset: number) => {
       const url = raw.replace(/[.,;:!?]+$/, '');
       const trail = raw.slice(url.length);
       if (!isDocumentUrl(url)) return raw;
-      const label = labelFor(url, content);
-      if (found.some((f) => f.label === label)) return trail;
-      if (!seen.has(url)) {
-        seen.add(url);
-        found.push({ url, label });
-      }
+      // Label from the text just before this URL so two different reports in
+      // one message get their own names ("…posture scan report: <url>").
+      const label = labelFor(url, content.slice(0, offset));
+      if (seen.has(url)) return trail;
+      seen.add(url);
+      // Never drop a distinct URL — make the label unique instead.
+      let unique = label;
+      let k = 2;
+      while (found.some((f) => f.label === unique)) unique = `${label} (${k++})`;
+      found.push({ url, label: unique });
       return trail;
     });
     cleaned = cleaned
