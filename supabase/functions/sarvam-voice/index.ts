@@ -1,4 +1,4 @@
-// v1.2.0 — Sarvam Voice AI control plane (owner/admin only).
+// v1.3.0 — purpose-specific opening line (renewal vs retention). Sarvam Voice AI control plane (owner/admin only).
 //
 // Actions: get_state | get_readiness | run_eligibility_check | save_config |
 //          save_automation | set_active | test_connection | test_call
@@ -14,6 +14,7 @@ import {
   checkConnection,
   corsHeaders,
   buildAgentVariables,
+  buildOpeningLine,
   createOutboundCall,
   isOutboundCapable,
   json,
@@ -752,19 +753,21 @@ Deno.serve(async (req) => {
 
       const webhookUrl =
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/sarvam-voice-webhook?t=${encodeURIComponent(cfg.webhook_token ?? "")}`;
+      const finalVars = buildAgentVariables({
+        preferred_language: "Hindi",
+        ...(opts.vars ?? {}),
+        call_reason: opts.reason,
+        branch_name: calleeBranch,
+        phone: to,
+        member_name: calleeName,
+        member_code: calleeCode,
+        gender: opts.vars?.gender || (callerProfile?.gender ?? ""),
+      });
       try {
         const { attempt_id } = await createOutboundCall(opts.apiKey, cfg, {
           to,
-          agentVariables: buildAgentVariables({
-            preferred_language: "Hindi",
-            ...(opts.vars ?? {}),
-            call_reason: opts.reason,
-            branch_name: calleeBranch,
-            phone: to,
-            member_name: calleeName,
-            member_code: calleeCode,
-            gender: opts.vars?.gender || (callerProfile?.gender ?? ""),
-          }),
+          agentVariables: finalVars,
+          initialBotMessage: buildOpeningLine(opts.reason, finalVars),
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
           webhookMetadata: { attempt_ref: attemptRowId, source: opts.source },
         });
@@ -841,6 +844,13 @@ Deno.serve(async (req) => {
       const memberId: string | null = typeof body.member_id === "string" ? body.member_id : null;
       let to = normalizePhone(String(body.to || ""));
       let vars: Record<string, string> = {};
+      // Owner test calls (no member) may preview a scenario with sample plan data.
+      if (!memberId && body.test_vars && typeof body.test_vars === "object") {
+        for (const k of ["plan_name", "plan_expiry", "days_absent", "member_name"]) {
+          const v = (body.test_vars as Record<string, unknown>)[k];
+          if (typeof v === "string" && v.length <= 80) vars[k] = v;
+        }
+      }
       let callBranch: string | null = null;
       if (memberId) {
         const ctx = await memberCallContext(sb, memberId);

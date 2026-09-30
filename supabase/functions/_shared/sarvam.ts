@@ -1,4 +1,5 @@
-// v1.2.0 — Sarvam Voice Agents adapter.
+// v1.3.0 — Sarvam Voice Agents adapter. Adds purpose-specific opening line via
+// app_overrides.initial_bot_message (renewal vs attendance/retention vs test).
 //
 // Single server-side boundary for every Sarvam call. Nothing else in the code
 // base may talk to Sarvam directly. Endpoints below are the officially
@@ -264,6 +265,9 @@ export async function createOutboundCall(
     agentVariables?: Record<string, unknown>;
     webhookUrl?: string;
     webhookMetadata?: Record<string, unknown>;
+    /** Documented app_overrides.initial_bot_message — replaces the agent's
+     *  default greeting so the call opens with the right purpose. */
+    initialBotMessage?: string;
   },
 ): Promise<{ attempt_id: string }> {
   requireScope(cfg);
@@ -294,6 +298,9 @@ export async function createOutboundCall(
         agent_phone_number: cfg.agent_phone_number,
       },
       ...(args.agentVariables ? { agent_variables: args.agentVariables } : {}),
+      ...(args.initialBotMessage
+        ? { app_overrides: { initial_bot_message: args.initialBotMessage } }
+        : {}),
     },
     user_config: { user_phone_number: args.to },
     ...(args.webhookUrl
@@ -375,4 +382,50 @@ export function buildAgentVariables(input: AgentVariables): Record<string, strin
     out[key] = (input[key] ?? "").toString();
   }
   return out;
+}
+
+function prettyDate(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00+05:30`);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
+}
+
+function istToday(): string {
+  return new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+}
+
+/** Purpose-specific first sentence. Renewal calls must lead with the plan
+ *  expiry; only retention/attendance calls may mention absence. */
+export function buildOpeningLine(reason: string, vars: Record<string, string>): string {
+  const name = vars.member_name && vars.member_name !== "there" ? vars.member_name.split(" ")[0] : "";
+  const hi = name ? `Hi ${name}` : "Hi";
+  const plan = vars.plan_name ? `your ${vars.plan_name} membership` : "your Incline membership";
+  const r = (reason || "").toLowerCase();
+
+  if (r.includes("renewal") || r.includes("expiry")) {
+    const exp = vars.plan_expiry?.slice(0, 10);
+    if (exp) {
+      const today = istToday();
+      const when = prettyDate(exp);
+      if (exp < today) {
+        return `${hi}, this is Ananya calling from Incline. I noticed ${plan} expired on ${when}, and I wanted to help you renew it so your access continues without a break. Is now a good time for a quick minute?`;
+      }
+      if (exp === today) {
+        return `${hi}, this is Ananya calling from Incline. ${plan[0].toUpperCase()}${plan.slice(1)} expires today, and I wanted to help you renew it so your gym access continues smoothly. Is now a good time for a quick minute?`;
+      }
+      return `${hi}, this is Ananya calling from Incline. ${plan[0].toUpperCase()}${plan.slice(1)} is due for renewal on ${when}, and I wanted to help you renew it in advance so there's no break in access. Is now a good time for a quick minute?`;
+    }
+    return `${hi}, this is Ananya calling from Incline about renewing ${plan}. Is now a good time for a quick minute?`;
+  }
+
+  if (r.includes("retention") || r.includes("attendance") || r.includes("absence")) {
+    const days = Number(vars.days_absent);
+    const gap = Number.isFinite(days) && days > 0 ? `in about ${days} days` : "for a few days";
+    return `${hi}, this is Ananya calling from Incline. We haven't seen you at the club ${gap}, so I just wanted to check in and see if everything is okay.`;
+  }
+
+  if (r === "manual_test") {
+    return `${hi}, this is Ananya from Incline. This is a short test call from the Incline team.`;
+  }
+  return `${hi}, this is Ananya calling from Incline. Is now a good time for a quick minute?`;
 }
