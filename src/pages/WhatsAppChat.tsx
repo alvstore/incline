@@ -64,6 +64,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useConversationPresence } from '@/hooks/useConversationPresence';
 import { AgentPresenceBar } from '@/components/whatsapp/AgentPresenceBar';
 import { WhatsAppMediaAttachment } from '@/components/whatsapp/WhatsAppMediaAttachment';
+import { ChatMessageBody } from '@/components/whatsapp/ChatMessageBody';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -1589,11 +1590,12 @@ export default function WhatsAppChatPage() {
                                   </div>
                                 )}
                                 {msg.content && (
-                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [word-break:break-word] [overflow-wrap:anywhere] w-full">
-                                    {msg.message_type === 'comment'
+                                  <ChatMessageBody
+                                    direction={msg.direction === 'outbound' ? 'outbound' : 'inbound'}
+                                    content={msg.message_type === 'comment'
                                       ? msg.content.replace(/^\[Comment on [^\]]+\]\s*/, '')
                                       : msg.content}
-                                  </p>
+                                  />
                                 )}
                                 <div
                                   className={`flex items-center justify-end gap-1 mt-1 ${
