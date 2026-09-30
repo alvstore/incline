@@ -1,3 +1,4 @@
+// v2.8.0 - face_1 (terminal refused) on entry → member_denied + front-desk alert, never attendance.
 // v2.7.0 - Entry/exit aware attendance: the scanning gate's door_role decides whether a
 //           scan opens (entry) or closes (exit) the visit/shift, using the hardware scan time.
 // v2.6.0 - Gate ACK is never blocked by MIPS: relay + deny command run in the background with hard timeouts.
