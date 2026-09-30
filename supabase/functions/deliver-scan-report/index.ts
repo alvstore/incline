@@ -253,17 +253,76 @@ Deno.serve(async (req) => {
     // PDF — original vendor report wins. The generated summary exists only as a
     // recovery fallback when HOWBODY did not provide a source PDF.
     const title = kind === "body" ? "Body Composition Report" : "Posture Analysis Report";
-    const rows = kind === "body" ? bodyRows(report) : postureRows(report);
     const scanDateLabel = fmtDate(report.test_time || report.created_at);
     const originalPath = existing?.original_pdf_path || null;
     const path = originalPath || `scans/${member.id}/${kind}-${report_id}.pdf`;
     if (!originalPath) {
-      const pdfBytes = await buildPdf({ title, memberName, branchName, scanDateLabel, rows });
+      const payload: any = report.full_payload || {};
+      const rawSex = String(memberProfile?.gender || payload.sex || payload.gender || "").toLowerCase();
+      const sex: "male" | "female" = rawSex.startsWith("f") || rawSex === "2" ? "female" : "male";
+      const heightCm = num(payload.height) ?? num(payload.height_cm);
+      let age: number | null = num(payload.age);
+      if (!age && memberProfile?.date_of_birth) {
+        const dob = new Date(memberProfile.date_of_birth);
+        if (!Number.isNaN(dob.getTime())) {
+          age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000));
+        }
+      }
+
+      const groups = kind === "body" ? bodyGroups(report, sex) : postureGroups(report);
+      const plainRows = kind === "body" ? undefined : posturePlainRows(report);
+
+      const facts = groups
+        .flatMap((g) => g.metrics)
+        .filter((m) => m.value !== null && m.value !== undefined)
+        .map((m) => `${m.label}: ${m.value}${m.suffix ? ` ${m.suffix}` : ""}`)
+        .join("\n");
+      const scoreValue = kind === "body" ? num(report.health_score) : num(report.score);
+      const aiNote = await buildAiNote(
+        supabase,
+        kind as Kind,
+        memberName,
+        [
+          heightCm ? `Height: ${heightCm} cm` : "",
+          age ? `Age: ${age}` : "",
+          `Sex: ${sex}`,
+          scoreValue !== null ? `${kind === "body" ? "Health" : "Posture"} score: ${scoreValue}/100` : "",
+          facts,
+        ].filter(Boolean).join("\n"),
+      );
+
+      const facesStrip: Array<[string, string]> = [];
+      if (heightCm) facesStrip.push(["Height", `${heightCm} cm`]);
+      if (age) facesStrip.push(["Age", String(age)]);
+      facesStrip.push(["Sex", sex === "female" ? "Female" : "Male"]);
+
+      const pdfBytes = await buildScanPdf({
+        title,
+        subtitle: kind === "body"
+          ? "In-club body composition analysis"
+          : "In-club posture and alignment analysis",
+        memberName,
+        memberCode: member.member_code,
+        branchName,
+        scanDateLabel,
+        facts: facesStrip,
+        score: scoreValue === null ? undefined : {
+          value: scoreValue,
+          label: kind === "body" ? "Health score" : "Posture score",
+          caption: kind === "body"
+            ? "A combined view of your muscle, fat and hydration balance. Scores rise as muscle mass improves and body fat moves into range."
+            : "A combined view of your standing alignment. Scores rise as shoulder, pelvis and head position move closer to neutral.",
+        },
+        groups,
+        plainRows,
+        aiNote,
+      });
       const { error: upErr } = await supabase.storage
         .from("attachments")
         .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
       if (upErr) throw new Error(`PDF upload failed: ${upErr.message}`);
     }
+
 
     const { data: signed } = await supabase.storage
       .from("attachments")
