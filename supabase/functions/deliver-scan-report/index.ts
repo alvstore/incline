@@ -35,107 +35,134 @@ function normalisePhone(input: string | null | undefined): string | null {
   return digits ? `+${digits}` : null;
 }
 
-async function buildPdf(opts: {
-  title: string;
-  memberName: string;
-  branchName: string;
-  scanDateLabel: string;
-  rows: Array<[string, string]>;
-}): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const PAGE: [number, number] = [595.28, 841.89]; // A4
-  let page = pdf.addPage(PAGE);
-  const { width } = page.getSize();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+const num = (x: unknown): number | null => {
+  if (x === null || x === undefined || x === "") return null;
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+};
 
-  const win = (x: unknown): string =>
-    String(x ?? "")
-      .replace(/\u20b9/g, "Rs.")
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201c\u201d]/g, '"')
-      .replace(/[\u2013\u2014]/g, "-")
-      .replace(/\u2022/g, "-")
-      .replace(/\u00a0/g, " ")
-      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
-
-  const teal = rgb(0, 0.72, 0.61);
-  const slate = rgb(0.39, 0.45, 0.55);
-  const dark = rgb(0.06, 0.09, 0.16);
-
-  const drawFooter = (p: typeof page) => {
-    p.drawText(
-      "Generated from your body scan. Wellness reference only - not medical advice.",
-      { x: 40, y: 40, size: 9, font, color: slate },
-    );
-  };
-
-  // Header (first page only)
-  page.drawText("The Incline Life by Incline", { x: 40, y: 800, size: 14, font: bold, color: teal });
-  page.drawText(win(opts.title), { x: 40, y: 778, size: 18, font: bold, color: dark });
-  page.drawText(win(`${opts.memberName} · ${opts.branchName}`), { x: 40, y: 758, size: 11, font, color: slate });
-  page.drawText(win(`Scan: ${opts.scanDateLabel}`), { x: 40, y: 744, size: 10, font, color: slate });
-  page.drawLine({ start: { x: 40, y: 730 }, end: { x: width - 40, y: 730 }, thickness: 1.5, color: teal });
-
-  // Rows — paginate onto fresh pages instead of clipping.
-  let y = 700;
-  const lh = 22;
-  for (const [label, value] of opts.rows) {
-    if (y < 80) {
-      drawFooter(page);
-      page = pdf.addPage(PAGE);
-      page.drawText(win(`${opts.title} (continued)`), { x: 40, y: 800, size: 12, font: bold, color: teal });
-      page.drawLine({ start: { x: 40, y: 788 }, end: { x: width - 40, y: 788 }, thickness: 1, color: teal });
-      y = 760;
-    }
-    page.drawText(win(label), { x: 50, y, size: 11, font, color: slate });
-    page.drawText(win(value ?? "-"), { x: 280, y, size: 11, font: bold, color: dark });
-    y -= lh;
-  }
-
-  drawFooter(page);
-
-  return await pdf.save();
-}
-
-function bodyRows(r: any): Array<[string, string]> {
-  const v = (x: any, suffix = "") => (x === null || x === undefined || x === "" ? "—" : `${x}${suffix}`);
+/** Gender-aware healthy reference bands used for the range indicators. */
+function bodyGroups(r: any, sex: "male" | "female"): MetricGroup[] {
+  const female = sex === "female";
   return [
-    ["Health Score", v(r.health_score)],
-    ["Weight", v(r.weight, " kg")],
-    ["BMI", v(r.bmi)],
-    ["Body Fat %", v(r.pbf, " %")],
-    ["Skeletal Muscle Mass", v(r.smm, " kg")],
-    ["Total Body Water", v(r.tbw, " kg")],
-    ["Visceral Fat Rating", v(r.vfr)],
-    ["BMR", v(r.bmr, " kcal")],
-    ["Metabolic Age", v(r.metabolic_age)],
-    ["Target Weight", v(r.target_weight, " kg")],
-    ["Weight to Adjust", v(r.weight_control, " kg")],
-    ["Fat to Adjust", v(r.fat_control, " kg")],
-    ["Muscle to Adjust", v(r.muscle_control, " kg")],
-    ["Waist-to-Hip Ratio", v(r.whr)],
+    {
+      title: "Body composition",
+      metrics: [
+        { label: "Weight", value: num(r.weight), suffix: "kg" },
+        { label: "Skeletal muscle mass", value: num(r.smm), suffix: "kg", hint: "Higher is generally better" },
+        { label: "Total body water", value: num(r.tbw), suffix: "kg" },
+        { label: "Intracellular fluid", value: num(r.icf), suffix: "L" },
+        { label: "Extracellular fluid", value: num(r.ecf), suffix: "L" },
+      ],
+    },
+    {
+      title: "Obesity analysis",
+      metrics: [
+        { label: "BMI", value: num(r.bmi), band: { low: 18.5, high: 24.9 } },
+        {
+          label: "Body fat",
+          value: num(r.pbf),
+          suffix: "%",
+          band: female ? { low: 21, high: 33 } : { low: 10, high: 20 },
+        },
+        { label: "Visceral fat rating", value: num(r.vfr), band: { low: 1, high: 9 } },
+        {
+          label: "Waist-to-hip ratio",
+          value: num(r.whr),
+          band: female ? { low: 0.65, high: 0.85 } : { low: 0.7, high: 0.9 },
+        },
+      ],
+    },
+    {
+      title: "Metabolism",
+      metrics: [
+        { label: "Basal metabolic rate", value: num(r.bmr), suffix: "kcal", hint: "Daily calories at rest" },
+        { label: "Metabolic age", value: num(r.metabolic_age), hint: "Compared with your actual age" },
+      ],
+    },
+    {
+      title: "Coaching targets",
+      metrics: [
+        { label: "Target weight", value: num(r.target_weight), suffix: "kg" },
+        { label: "Weight to adjust", value: num(r.weight_control), suffix: "kg" },
+        { label: "Fat to adjust", value: num(r.fat_control), suffix: "kg", hint: "Negative means reduce" },
+        { label: "Muscle to adjust", value: num(r.muscle_control), suffix: "kg", hint: "Positive means build" },
+      ],
+    },
   ];
 }
 
-function postureRows(r: any): Array<[string, string]> {
-  const v = (x: any, suffix = "") => (x === null || x === undefined || x === "" ? "—" : `${x}${suffix}`);
+function postureGroups(r: any): MetricGroup[] {
   return [
-    ["Posture Score", v(r.score)],
-    ["Body Slope", v(r.body_slope)],
-    ["Head Forward", v(r.head_forward)],
-    ["Head Slant", v(r.head_slant)],
-    ["High/Low Shoulder", v(r.high_low_shoulder)],
-    ["Pelvis Forward", v(r.pelvis_forward)],
-    ["Knee (L/R)", `${v(r.knee_left)} / ${v(r.knee_right)}`],
-    ["Leg (L/R)", `${v(r.leg_left)} / ${v(r.leg_right)}`],
+    {
+      title: "Alignment overview",
+      metrics: [
+        { label: "Body slope", value: num(r.body_slope) },
+        { label: "Head forward", value: num(r.head_forward) },
+        { label: "Head slant", value: num(r.head_slant) },
+        { label: "High / low shoulder", value: num(r.high_low_shoulder) },
+        { label: "Pelvis forward", value: num(r.pelvis_forward) },
+      ],
+    },
+  ];
+}
+
+function posturePlainRows(r: any): Array<[string, string]> {
+  const v = (x: any) => (x === null || x === undefined || x === "" ? "-" : String(x));
+  return [
+    ["Posture type", v(r.posture_type)],
+    ["Body shape profile", v(r.body_shape_profile)],
+    ["Knee (left / right)", `${v(r.knee_left)} / ${v(r.knee_right)}`],
+    ["Leg (left / right)", `${v(r.leg_left)} / ${v(r.leg_right)}`],
+    ["Thigh (left / right)", `${v(r.left_thigh)} / ${v(r.right_thigh)}`],
+    ["Calf (left / right)", `${v(r.calf_left)} / ${v(r.calf_right)}`],
     ["Bust", v(r.bust)],
     ["Waist", v(r.waist)],
     ["Hip", v(r.hip)],
-    ["Thigh (L/R)", `${v(r.left_thigh)} / ${v(r.right_thigh)}`],
-    ["Calf (L/R)", `${v(r.calf_left)} / ${v(r.calf_right)}`],
   ];
 }
+
+/**
+ * Short, plain-language interpretation of the scan.
+ * Best-effort: never blocks or fails delivery.
+ */
+async function buildAiNote(
+  supabase: any,
+  kind: Kind,
+  memberName: string,
+  facts: string,
+): Promise<string | null> {
+  try {
+    const { content } = await callAI({
+      scope: "all",
+      supabase,
+      temperature: 0.4,
+      max_tokens: 320,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a fitness coach at Incline, a premium gym in Udaipur. Explain a member's " +
+            "in-club body scan in warm, plain English. Rules: 90-120 words, one short paragraph. " +
+            "Mention two things going well and two focus areas, then one practical next step in the gym " +
+            "(training, recovery or nutrition habit). Never diagnose, never mention illness, medication " +
+            "or medical conditions, never quote prices. Use only the numbers provided. Plain text only, " +
+            "no markdown, no bullet characters, no emoji.",
+        },
+        {
+          role: "user",
+          content: `Member: ${memberName}. Scan type: ${kind === "body" ? "body composition" : "posture"}.\n${facts}`,
+        },
+      ],
+    });
+    const out = String(content || "").replace(/\s+/g, " ").trim();
+    return out.length > 40 ? out.slice(0, 1200) : null;
+  } catch (e) {
+    console.warn("scan AI note failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
