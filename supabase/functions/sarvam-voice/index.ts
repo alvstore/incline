@@ -844,6 +844,13 @@ Deno.serve(async (req) => {
       const memberId: string | null = typeof body.member_id === "string" ? body.member_id : null;
       let to = normalizePhone(String(body.to || ""));
       let vars: Record<string, string> = {};
+      // Owner test calls (no member) may preview a scenario with sample plan data.
+      if (!memberId && body.test_vars && typeof body.test_vars === "object") {
+        for (const k of ["plan_name", "plan_expiry", "days_absent", "member_name"]) {
+          const v = (body.test_vars as Record<string, unknown>)[k];
+          if (typeof v === "string" && v.length <= 80) vars[k] = v;
+        }
+      }
       let callBranch: string | null = null;
       if (memberId) {
         const ctx = await memberCallContext(sb, memberId);
