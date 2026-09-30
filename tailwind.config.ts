@@ -79,6 +79,23 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        lux: {
+          obsidian: "hsl(var(--lux-obsidian))",
+          charcoal: "hsl(var(--lux-charcoal))",
+          slate: "hsl(var(--lux-slate))",
+          line: "hsl(var(--lux-line))",
+          ivory: "hsl(var(--lux-ivory))",
+          mist: "hsl(var(--lux-mist))",
+          gold: "hsl(var(--lux-gold))",
+          bronze: "hsl(var(--lux-bronze))",
+          emerald: "hsl(var(--lux-emerald))",
+          amber: "hsl(var(--lux-amber))",
+          rose: "hsl(var(--lux-rose))",
+        },
+      },
+      backgroundImage: {
+        "gradient-lux": "var(--gradient-lux)",
+        "gradient-gold": "var(--gradient-gold)",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -131,6 +148,8 @@ export default {
       boxShadow: {
         glow: "0 0 20px hsl(var(--accent) / 0.3)",
         "glow-lg": "0 0 40px hsl(var(--accent) / 0.4)",
+        lux: "var(--shadow-lux)",
+        gold: "var(--shadow-gold)",
       },
     },
   },
