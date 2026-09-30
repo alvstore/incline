@@ -648,12 +648,17 @@ async function applyMemberAction(
   }
 
   // v2.14.0 — IDEMPOTENCY GUARD. If MIPS already reports the exact validity we are
-  // about to write, there is nothing to send — just reconcile the CRM row and return.
+  // about to write, the central record needs no PUT.
+  // v2.16.0 — but a matching CENTRAL date does not mean the TERMINAL agrees: a
+  // bulk roster sync can re-issue an active pass straight onto the gate while the
+  // server still reads 2000-01-01 (this is how a dues-blocked member walked in on
+  // 30 Sep). So for a revoke we skip only the PUT and still re-dispatch the
+  // validity to every live gate.
   const sameDay = (a: unknown, b: unknown) =>
     String(a || "").trim().slice(0, 10) === String(b || "").trim().slice(0, 10);
   if (sameDay(existing.validTimeEnd, newValidTimeEnd)) {
     console.log(
-      `[MIPS-ACCESS] No-op for ${personSn}: server already at validTimeEnd=${existing.validTimeEnd} — skipping PUT + device dispatch`,
+      `[MIPS-ACCESS] Central record for ${personSn} already at validTimeEnd=${existing.validTimeEnd} — skipping PUT`,
     );
     await setMemberHardwareState(
       supabase,
@@ -661,13 +666,47 @@ async function applyMemberAction(
       action === "revoke" ? "revoked" : "active",
       action === "revoke" ? (reasonCode || "manual") : null,
     );
+
+    if (action !== "revoke") {
+      return {
+        success: true,
+        action,
+        skipped: "already_in_desired_state",
+        message: `Hardware access already ${action}d on the gate — nothing re-sent`,
+      };
+    }
+
+    let reDispatchUndelivered: number[] = [];
+    try {
+      const ledgerSkip = {
+        entity_type: "member" as const,
+        entity_id: member_id,
+        branch_id: effectiveBranchId ?? null,
+      };
+      reDispatchUndelivered = (await dispatchToDevices(
+        baseUrl,
+        token,
+        existing.personId,
+        supabase,
+        effectiveBranchId,
+        1,
+        ledgerSkip,
+      )).undelivered;
+    } catch (e) {
+      console.warn("[MIPS-ACCESS] Safety re-dispatch on revoke failed (non-fatal):", e);
+    }
+
     return {
       success: true,
       action,
-      skipped: "already_in_desired_state",
-      message: `Hardware access already ${action}d on the gate — nothing re-sent`,
+      skipped: "central_already_revoked_gates_resynced",
+      undeliveredGates: reDispatchUndelivered,
+      message: reDispatchUndelivered.length
+        ? `Central record already revoked; gate re-sync incomplete for device(s) ${reDispatchUndelivered.join(", ")}`
+        : "Central record already revoked; revocation re-pushed to all gates",
     };
   }
+
 
   const detail = await fetchPersonDetail(baseUrl, token, existing.personId);
   const updatedPerson = stripPhotoPayload({
