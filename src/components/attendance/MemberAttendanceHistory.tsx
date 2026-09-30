@@ -16,7 +16,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { MemberHistorySearch } from './MemberHistorySearch';
+import { BlockedEntryAttempts } from './BlockedEntryAttempts';
 import { exportToCSV } from '@/lib/csvExport';
+
 
 type Visit = {
   id: string;
