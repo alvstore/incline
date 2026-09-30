@@ -261,7 +261,9 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
     ? "MIPS syncing"
     : mipsError
       ? "MIPS unreachable"
-      : `MIPS · ${lastReconcile?.fetched ?? 0}`;
+      : rtStatus === "live"
+        ? `MIPS · ${lastReconcile?.fetched ?? 0}`
+        : `MIPS fallback · ${lastReconcile?.fetched ?? 0}`;
 
   const handleManualOverride = async () => {
     if (!branchId) {
