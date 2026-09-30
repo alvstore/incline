@@ -590,13 +590,44 @@ async function handleTrainer(supabase: any, ctx: MemberContext): Promise<string>
   return lines.join("\n") + BACK;
 }
 
+/** Mint a fresh 7-day signed link for a stored attachment (path or legacy URL). */
+async function signPlanPdf(supabase: any, stored: string | null | undefined): Promise<string | null> {
+  if (!stored) return null;
+  const value = String(stored).trim();
+  if (!value) return null;
+
+  let path: string | null = null;
+  if (!/^https?:\/\//i.test(value)) {
+    path = value.replace(/^\/+/, "").replace(/^attachments\//, "");
+  } else {
+    try {
+      const url = new URL(value);
+      const idx = url.pathname.indexOf("/attachments/");
+      if (idx !== -1) path = decodeURIComponent(url.pathname.slice(idx + "/attachments/".length));
+    } catch {
+      path = null;
+    }
+  }
+  if (!path) return /^https?:\/\//i.test(value) ? value : null;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from("attachments")
+      .createSignedUrl(path, 7 * 24 * 3600);
+    if (error || !data?.signedUrl) return /^https?:\/\//i.test(value) ? value : null;
+    return data.signedUrl as string;
+  } catch {
+    return /^https?:\/\//i.test(value) ? value : null;
+  }
+}
+
 async function handleMyPlans(supabase: any, ctx: MemberContext): Promise<string> {
   const today = istDate();
   // Show the latest plan of each kind even when its validity window has passed —
   // a member whose diet plan expired still wants to open it (and know it lapsed).
   const { data: plans } = await supabase
     .from("member_fitness_plans")
-    .select("plan_type, plan_name, valid_until, source_kind")
+    .select("plan_type, plan_name, valid_until, source_kind, pdf_url")
     .eq("member_id", ctx.memberId)
     .order("created_at", { ascending: false })
     .limit(20);
@@ -632,22 +663,36 @@ async function handleMyPlans(supabase: any, ctx: MemberContext): Promise<string>
       : `\n⚠️ Expired on ${prettyDate(p.valid_until)} — reply *Request plan* for a fresh one.`;
   };
 
+  const [workoutPdf, dietPdf] = await Promise.all([
+    signPlanPdf(supabase, workout?.pdf_url),
+    signPlanPdf(supabase, (diet as any)?.pdf_url),
+  ]);
+
   const lines = ["📥 *Your assigned plans*", ""];
   if (workout) {
-    lines.push(`🏋️ Workout: ${workout.plan_name}${stamp(workout)}\nOpen & download: ${PORTAL}/my-workout`);
+    lines.push(`🏋️ Workout: ${workout.plan_name}${stamp(workout)}`);
+    if (workoutPdf) lines.push(`📄 Download PDF: ${workoutPdf}`);
+    lines.push(`🌐 View in portal: ${PORTAL}/my-workout`);
   } else {
     lines.push("🏋️ Workout: none assigned yet — reply *Request plan*.");
   }
   lines.push("");
   if (diet) {
-    lines.push(`🥗 Diet: ${diet.plan_name}${stamp(diet)}\nOpen & download: ${PORTAL}/my-diet`);
+    lines.push(`🥗 Diet: ${diet.plan_name}${stamp(diet)}`);
+    if (dietPdf) lines.push(`📄 Download PDF: ${dietPdf}`);
+    lines.push(`🌐 View in portal: ${PORTAL}/my-diet`);
   } else {
     lines.push("🥗 Diet: none assigned yet — reply *Request plan*.");
   }
   lines.push("");
-  lines.push("Sign in with your registered number to view or download.");
+  lines.push(
+    workoutPdf || dietPdf
+      ? "PDF links stay live for 7 days. The portal always has the latest copy."
+      : "Sign in with your registered number to view or download.",
+  );
   return lines.join("\n") + BACK;
 }
+
 
 async function createTask(
   supabase: any,
