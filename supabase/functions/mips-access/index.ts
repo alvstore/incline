@@ -648,6 +648,40 @@ async function applyMemberAction(
     console.warn(`Override: CRM requested ${action} but dues detected. Forcing revocation date.`);
   }
 
+  // v2.18.0 — TIME-ZONE REVOKE MODE (opt-in, settings key `mips_tz_revoke_mode`,
+  // global row, value {enabled:true}). The tdxfacee firmware erases anyone whose
+  // validTimeEnd < now every 60s, so a backdated member becomes a "stranger".
+  // In TZ mode a blocked member with a live plan keeps the plan end date and is
+  // routed to access time zone 2 (must be configured as "no access" on every
+  // terminal BEFORE enabling), so the gate says "Permission Denied" (face_1).
+  // Expired/cancelled members with no live plan still use the revocation date.
+  // Default OFF: behaviour is byte-identical to v2.17.0 (acTzNumber1 stays 0).
+  const TZ_OPEN = 0;
+  const TZ_BLOCKED = 2;
+  let tzBlock = false;
+  try {
+    const { data: tzFlag } = await supabase
+      .from("settings").select("value").eq("key", "mips_tz_revoke_mode").is("branch_id", null).maybeSingle();
+    const v = (tzFlag as any)?.value;
+    const tzMode = v === true || v === "true" || v?.enabled === true;
+    if (tzMode && newValidTimeEnd === REVOKED_DATE) {
+      const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+      const { data: live } = await supabase
+        .from("memberships").select("end_date")
+        .eq("member_id", member_id).in("status", ["active", "frozen"])
+        .gte("end_date", today).order("end_date", { ascending: false }).limit(1).maybeSingle();
+      if (live?.end_date) {
+        tzBlock = true;
+        newValidTimeEnd = `${live.end_date} 23:59:59`;
+      }
+    }
+  } catch (e) {
+    console.warn("[MIPS-ACCESS] tz-mode flag read failed; using classic revoke:", e);
+  }
+  const desiredTz = tzBlock ? TZ_BLOCKED : TZ_OPEN;
+  const existingTz = Number((existing as any).acTzNumber1 ?? 0) || 0;
+  const tzMatches = existingTz === desiredTz;
+
   // v2.14.0 — IDEMPOTENCY GUARD. If MIPS already reports the exact validity we are
   // about to write, the central record needs no PUT.
   // v2.16.0 — but a matching CENTRAL date does not mean the TERMINAL agrees: a
