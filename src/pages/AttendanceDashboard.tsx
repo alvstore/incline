@@ -1063,6 +1063,18 @@ export default function AttendanceDashboard() {
                 </div>
               </TabsContent>
 
+              <TabsContent value="blocked" className="mt-6">
+                <BlockedEntryAttempts
+                  branchId={effectiveBranchId}
+                  from={`${dateFilter}T00:00:00`}
+                  to={`${dateFilter}T23:59:59.999`}
+                  showMemberColumn
+                  title="Refused entries"
+                  description="People who came to the club on this date but the gate turned away."
+                />
+
+              </TabsContent>
+
             </Tabs>
           </CardContent>
         </Card>
