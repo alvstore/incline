@@ -34,8 +34,6 @@ export function isDocumentUrl(url: string): boolean {
 }
 
 function labelFor(url: string, context: string): string {
-  const pathMatch = url.match(/\/([^/?]+\.pdf)/i)?.[1];
-  if (pathMatch) return decodeURIComponent(pathMatch);
   const lower = context.toLowerCase();
   if (lower.includes('posture')) return 'Posture scan report.pdf';
   if (lower.includes('body composition') || lower.includes('scan')) return 'Body composition report.pdf';
@@ -53,13 +51,17 @@ export function ChatMessageBody({ content, direction }: ChatMessageBodyProps) {
   const { text, docs } = useMemo(() => {
     const found: DocLink[] = [];
     const seen = new Set<string>();
-    let cleaned = content.replace(URL_RE, (url) => {
-      if (!isDocumentUrl(url)) return url;
+    let cleaned = content.replace(URL_RE, (raw) => {
+      const url = raw.replace(/[.,;:!?]+$/, '');
+      const trail = raw.slice(url.length);
+      if (!isDocumentUrl(url)) return raw;
+      const label = labelFor(url, content);
+      if (found.some((f) => f.label === label)) return trail;
       if (!seen.has(url)) {
         seen.add(url);
-        found.push({ url, label: labelFor(url, content) });
+        found.push({ url, label });
       }
-      return '';
+      return trail;
     });
     cleaned = cleaned
       .replace(/\s*[—–-]?\s*PDF:\s*(?=[\s,.]|$)/gi, ' ')
