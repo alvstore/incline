@@ -35,13 +35,26 @@ export function isDocumentUrl(url: string): boolean {
 
 function labelFor(url: string, context: string): string {
   const lower = context.toLowerCase();
-  if (lower.includes('posture')) return 'Posture scan report.pdf';
-  if (lower.includes('body composition') || lower.includes('scan')) return 'Body composition report.pdf';
-  if (lower.includes('invoice')) return 'Invoice.pdf';
-  if (lower.includes('receipt')) return 'Receipt.pdf';
-  if (lower.includes('diet')) return 'Diet plan.pdf';
-  if (lower.includes('workout')) return 'Workout plan.pdf';
-  return 'Document.pdf';
+  // Pick the keyword that appears closest to the link — with two reports in
+  // one message, the nearest preceding name is the one the link belongs to.
+  const candidates: Array<[RegExp, string]> = [
+    [/posture/, 'Posture scan report.pdf'],
+    [/body composition|body scan|\bscan\b/, 'Body composition report.pdf'],
+    [/invoice/, 'Invoice.pdf'],
+    [/receipt/, 'Receipt.pdf'],
+    [/diet/, 'Diet plan.pdf'],
+    [/workout/, 'Workout plan.pdf'],
+  ];
+  let best = -1;
+  let bestLabel: string | null = null;
+  for (const [re, label] of candidates) {
+    const m = re.exec(lower);
+    if (m && m.index + m[0].length > best) {
+      best = m.index + m[0].length;
+      bestLabel = label;
+    }
+  }
+  return bestLabel ?? 'Document.pdf';
 }
 
 /** Renders chat text with PDF links pulled out into preview cards. */
