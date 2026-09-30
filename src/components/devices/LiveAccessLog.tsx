@@ -177,16 +177,27 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
     },
   });
 
+  const [rtStatus, setRtStatus] = useState<"connecting" | "live" | "error">("connecting");
+
+  // Gate scans arrive over Realtime the moment the terminal posts them, so
+  // pulling the MIPS record list is a fallback — not a heartbeat. The old 15s
+  // loop kept every open tab hammering the Tomcat server (and through it the
+  // terminals). One pull on mount establishes today's baseline; after that we
+  // only re-pull every 5 minutes, and only while Realtime is not connected.
   useEffect(() => {
     reconcileMutation.mutate();
-    const interval = window.setInterval(() => {
-      if (!reconcileMutation.isPending) reconcileMutation.mutate();
-    }, 15_000);
-    return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
-  const [rtStatus, setRtStatus] = useState<"connecting" | "live" | "error">("connecting");
+  useEffect(() => {
+    if (rtStatus === "live") return;
+    const interval = window.setInterval(() => {
+      if (!reconcileMutation.isPending) reconcileMutation.mutate();
+    }, 300_000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, rtStatus]);
+
   useEffect(() => {
     const channel = supabase
       .channel("access-logs-realtime-" + (branchId || "all"))
@@ -250,7 +261,9 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
     ? "MIPS syncing"
     : mipsError
       ? "MIPS unreachable"
-      : `MIPS · ${lastReconcile?.fetched ?? 0}`;
+      : rtStatus === "live"
+        ? `MIPS · ${lastReconcile?.fetched ?? 0}`
+        : `MIPS fallback · ${lastReconcile?.fetched ?? 0}`;
 
   const handleManualOverride = async () => {
     if (!branchId) {
@@ -358,7 +371,9 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
               title={
                 mipsError
                   ? lastReconcile?.error || "MIPS server unreachable — showing stored events only"
-                  : `Backend imports MIPS records every 15s; imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}`
+                  : rtStatus === "live"
+                    ? `Live feed connected — scans appear instantly. Gate records are only re-checked when you press refresh. Last check imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}.`
+                    : `Live feed disconnected — falling back to a gate record check every 5 minutes. Last check imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}.`
               }
             >
               {mipsStatusText}

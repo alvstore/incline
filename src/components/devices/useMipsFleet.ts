@@ -130,7 +130,10 @@ export function useMipsFleet(branchId?: string) {
       const { data } = await q;
       return (data && data[0]) || null;
     },
-    refetchInterval: 30_000,
+    // Realtime INSERTs on access_logs already refresh the live surfaces; this
+    // poll is only a fallback, so it runs at 3 minutes instead of 30 seconds.
+    refetchInterval: 180_000,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
 
@@ -178,7 +181,8 @@ export function useMipsFleet(branchId?: string) {
       if (error) throw error;
       return (data || []) as FaceLedgerRow[];
     },
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
+    refetchOnWindowFocus: false,
   });
 
   const devices = devicesQuery.data ?? [];
