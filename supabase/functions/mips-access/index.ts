@@ -109,11 +109,14 @@ async function fetchPersonDetail(baseUrl: string, token: string, personId: numbe
 }
 
 
-// v2.13.0 — `authType` decides what the terminal does with the hand-off:
-//   1 = Issue  → the gate (re)builds the person's face template (expensive, and
-//                the repeated native-bitmap decode is what exhausted device RAM)
-//   2 = Revoke → the gate only drops/expires the authorisation, no template work
-// Access denial never needs a template rebuild, so revokes must dispatch with 2.
+// v2.14.0 — `authType` decides what the terminal does with the hand-off:
+//   1 = Issue/Update → updates the person's record (incl. validTimeEnd) and
+//                      keeps the face template enrolled on the terminal
+//   2 = Revoke/Delete → physically deletes the face from the terminal library
+// Access enforcement ALWAYS uses 1: denying entry is done via the backdated
+// validTimeEnd (2000-01-01), not by deleting the face. Deleting on every dues
+// revoke and re-enrolling on every payment was the delete/rebuild loop that
+// kept crashing and restarting the Android gate app.
 interface DispatchLedger {
   entity_type: "member" | "employee" | "trainer";
   entity_id: string;
