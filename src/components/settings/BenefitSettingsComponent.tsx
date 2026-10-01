@@ -45,6 +45,7 @@ interface ConfigureSheetProps {
     is_slot_booking_enabled?: boolean;
     slot_duration_minutes?: number;
     booking_opens_hours_before?: number;
+    min_advance_booking_hours?: number;
     cancellation_deadline_minutes?: number;
     no_show_policy?: NoShowPolicy;
     no_show_penalty_amount?: number;
@@ -59,6 +60,7 @@ interface ConfigureSheetProps {
 function ConfigureSheet({ open, onOpenChange, branchId, benefitType, benefitTypeId, label, icon, initialSettings }: ConfigureSheetProps) {
   const [duration, setDuration] = useState(initialSettings?.slot_duration_minutes ?? 30);
   const [bookingOpens, setBookingOpens] = useState(initialSettings?.booking_opens_hours_before ?? 24);
+  const [minAdvance, setMinAdvance] = useState(initialSettings?.min_advance_booking_hours ?? 0);
   const [cancellationDeadline, setCancellationDeadline] = useState(initialSettings?.cancellation_deadline_minutes ?? 60);
   const [noShowPolicy, setNoShowPolicy] = useState<NoShowPolicy>(initialSettings?.no_show_policy ?? "mark_used");
   const [noShowPenalty, setNoShowPenalty] = useState(initialSettings?.no_show_penalty_amount ?? 0);
@@ -79,6 +81,7 @@ function ConfigureSheet({ open, onOpenChange, branchId, benefitType, benefitType
         is_slot_booking_enabled: true,
         slot_duration_minutes: duration,
         booking_opens_hours_before: bookingOpens,
+        min_advance_booking_hours: minAdvance,
         cancellation_deadline_minutes: cancellationDeadline,
         no_show_policy: noShowPolicy,
         no_show_penalty_amount: noShowPenalty,
@@ -155,6 +158,15 @@ function ConfigureSheet({ open, onOpenChange, branchId, benefitType, benefitType
               <Label className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Cancel Deadline (mins)</Label>
               <Input type="number" value={cancellationDeadline} onChange={(e) => setCancellationDeadline(parseInt(e.target.value) || 60)} min={0} max={1440} />
             </div>
+          </div>
+
+          {/* Minimum advance notice */}
+          <div className="space-y-2 rounded-xl bg-primary/5 p-4">
+            <Label htmlFor="min-advance" className="flex items-center gap-2"><Clock className="h-4 w-4" /> Min Advance Notice (hrs before)</Label>
+            <Input id="min-advance" type="number" value={minAdvance} onChange={(e) => setMinAdvance(Math.max(0, Math.min(168, parseInt(e.target.value) || 0)))} min={0} max={168} />
+            <p className="text-xs text-muted-foreground">
+              Set to 24 for one-day-prior booking — members can't book same-day or last-minute slots. 0 = instant booking. Front desk can still book any slot.
+            </p>
           </div>
 
           {/* No-Show Policy */}
