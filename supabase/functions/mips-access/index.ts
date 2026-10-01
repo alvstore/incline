@@ -657,31 +657,32 @@ async function applyMemberAction(
   // terminal BEFORE enabling), so the gate says "Permission Denied" (face_1).
   // Expired/cancelled members with no live plan still use the revocation date.
   // Default OFF: behaviour is byte-identical to v2.17.0 (acTzNumber1 stays 0).
+  // v2.19.0 — FUTURE-START LOCK (replaces the TZ-2 experiment, which the
+  // terminal ignored: acGroupNumber is null so face_0 still opened the door).
+  // Live-tested 1 Oct 2026 on EMPINC0003: validTimeBegin=2099-01-01 +
+  // validTimeEnd=2099-12-31 → face recognised, gate voices "Permission Denied",
+  // door stays shut, and the 60s reaper never deletes the face (end > now).
+  // On restore, validTimeBegin goes back to the joining date.
+  const LOCK_BEGIN = "2099-01-01 00:00:00";
+  const LOCK_END = "2099-12-31 23:59:59";
   const TZ_OPEN = 0;
-  const TZ_BLOCKED = 2;
   let tzBlock = false;
   try {
     const { data: tzFlag } = await supabase
       .from("settings").select("value").eq("key", "mips_tz_revoke_mode").is("branch_id", null).maybeSingle();
     const v = (tzFlag as any)?.value;
-    const tzMode = v === true || v === "true" || v?.enabled === true;
-    if (tzMode && newValidTimeEnd === REVOKED_DATE) {
-      const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
-      const { data: live } = await supabase
-        .from("memberships").select("end_date")
-        .eq("member_id", member_id).in("status", ["active", "frozen"])
-        .gte("end_date", today).order("end_date", { ascending: false }).limit(1).maybeSingle();
-      if (live?.end_date) {
-        tzBlock = true;
-        newValidTimeEnd = `${live.end_date} 23:59:59`;
-      }
+    const lockMode = v === true || v === "true" || v?.enabled === true;
+    if (lockMode && newValidTimeEnd === REVOKED_DATE) {
+      tzBlock = true;
+      newValidTimeEnd = LOCK_END;
     }
   } catch (e) {
-    console.warn("[MIPS-ACCESS] tz-mode flag read failed; using classic revoke:", e);
+    console.warn("[MIPS-ACCESS] lock-mode flag read failed; using classic revoke:", e);
   }
-  const desiredTz = tzBlock ? TZ_BLOCKED : TZ_OPEN;
+  const desiredTz = TZ_OPEN;
   const existingTz = Number((existing as any).acTzNumber1 ?? 0) || 0;
-  const tzMatches = existingTz === desiredTz;
+  const existingBeginLocked = String((existing as any).validTimeBegin || "").startsWith("2099");
+  const tzMatches = existingTz === desiredTz && (tzBlock ? existingBeginLocked : !existingBeginLocked);
 
   // v2.14.0 — IDEMPOTENCY GUARD. If MIPS already reports the exact validity we are
   // about to write, the central record needs no PUT.
@@ -695,8 +696,8 @@ async function applyMemberAction(
   // v2.17.0 — Validity start = joining date, set once and never moved. Records
   // created by the early bulk import have a null start; backfill it here.
   const hasBegin = (v: unknown) => /^\d{4}-\d{2}-\d{2}/.test(String(v || "").trim());
-  let backfillBegin: string | null = null;
-  if (!hasBegin((existing as any).validTimeBegin)) {
+  let backfillBegin: string | null = tzBlock && !existingBeginLocked ? LOCK_BEGIN : null;
+  if (!tzBlock && (!hasBegin((existing as any).validTimeBegin) || existingBeginLocked)) {
     const { data: firstMs } = await supabase
       .from("memberships").select("start_date").eq("member_id", member_id)
       .order("start_date", { ascending: true }).limit(1).maybeSingle();
