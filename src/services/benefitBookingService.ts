@@ -15,6 +15,7 @@ export interface BenefitSettings {
   is_slot_booking_enabled: boolean;
   slot_duration_minutes: number;
   booking_opens_hours_before: number;
+  min_advance_booking_hours?: number;
   cancellation_deadline_minutes: number;
   no_show_policy: NoShowPolicy;
   no_show_penalty_amount: number;
