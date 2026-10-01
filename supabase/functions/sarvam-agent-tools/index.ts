@@ -228,6 +228,17 @@ Deno.serve(async (req) => {
           when ? `Requested time: ${when}.` : "",
           note ? `Note: ${note}` : "",
         ].filter(Boolean).join(" ");
+        // Dedup guard: one voice call must not create back-to-back duplicate callback tasks.
+        const taskTitle = unresolved
+          ? "Voice AI: callback requested (unresolved caller)"
+          : "Voice AI: callback requested by member";
+        let dupQuery = sb.from("tasks").select("id").eq("branch_id", target).eq("title", taskTitle)
+          .gte("created_at", new Date(Date.now() - 60_000).toISOString()).limit(1);
+        if (member?.id) dupQuery = dupQuery.eq("linked_entity_id", member.id);
+        const { data: dup } = await dupQuery;
+        if (dup && dup.length > 0) {
+          result = { booked: true, unresolved_caller: unresolved, message: "Callback already noted for the team." };
+        } else {
         const { error } = await sb.from("tasks").insert({
           branch_id: target,
           title: unresolved
@@ -247,6 +258,7 @@ Deno.serve(async (req) => {
           unresolved_caller: unresolved,
           message: "Callback noted for the team.",
         };
+        }
       }
     } else if (tool === "mark_do_not_contact") {
       const member = await resolveMember();
