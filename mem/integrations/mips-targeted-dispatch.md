@@ -61,3 +61,6 @@ Rows are removed once the gate finishes the push (`remark` shows
 `failureMessage` is a real failure. Verified Sep 2 2026: after issuing 5 missing
 people the queue drained within ~60s and gate `personCount` rose 136 → 144 (Gate 1)
 and 136 → 143 (Gate 2).
+
+## Dues lock = future start date (Oct 2026, mips-access v2.19.0)
+When `mips_tz_revoke_mode` is on, revoke sets validTimeBegin=2099-01-01 00:00:00 and validTimeEnd=2099-12-31 23:59:59 (acTzNumber1 stays 0). Live-tested: gate recognises the face, says "Permission Denied", stays shut, and the 60s reaper keeps the face. acTzNumber1=2 is ignored by the terminal (no acGroupNumber) — never rely on it. Restore resets validTimeBegin to the joining date.
