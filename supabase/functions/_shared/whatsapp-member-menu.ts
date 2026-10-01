@@ -362,7 +362,7 @@ async function openSlots(
   const today = istDate();
   const { data } = await supabase
     .from("benefit_slots")
-    .select("id, slot_date, start_time, end_time, capacity, booked_count, facility_id")
+    .select("id, slot_date, start_time, end_time, capacity, booked_count, facility_id, benefit_type_id")
     .eq("branch_id", ctx.branchId)
     .in("facility_id", facilityIds)
     .eq("is_active", true)
@@ -373,8 +373,26 @@ async function openSlots(
     .limit(400);
 
   const nowHm = new Date().toLocaleTimeString("en-GB", { timeZone: IST, hour12: false }).slice(0, 5);
+  // Minimum advance notice per benefit type (e.g. Steam = 24h) — hide slots inside the cutoff.
+  const typeIds = [...new Set((data ?? []).map((s: any) => s.benefit_type_id).filter(Boolean))];
+  const leadHours = new Map<string, number>();
+  if (typeIds.length) {
+    const { data: cfg } = await supabase
+      .from("benefit_settings")
+      .select("benefit_type_id, min_advance_booking_hours")
+      .eq("branch_id", ctx.branchId)
+      .in("benefit_type_id", typeIds);
+    for (const c of cfg ?? []) leadHours.set(c.benefit_type_id, Number(c.min_advance_booking_hours) || 0);
+  }
+  const nowMs = Date.now();
   const seen = new Set<string>();
   return (data ?? [])
+    .filter((s: any) => {
+      const h = leadHours.get(s.benefit_type_id) ?? 0;
+      if (h <= 0) return true;
+      const slotMs = new Date(`${s.slot_date}T${String(s.start_time).slice(0, 8)}+05:30`).getTime();
+      return slotMs >= nowMs + h * 3600_000;
+    })
     .filter((s: any) => (s.capacity ?? 0) - (s.booked_count ?? 0) > 0)
     .filter((s: any) => s.slot_date !== today || String(s.start_time).slice(0, 5) > nowHm)
     .filter((s: any) => {
