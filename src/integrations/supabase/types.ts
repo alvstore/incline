@@ -1518,6 +1518,7 @@ export type Database = {
           id: string
           is_slot_booking_enabled: boolean | null
           max_bookings_per_day: number | null
+          min_advance_booking_hours: number
           no_show_penalty_amount: number | null
           no_show_policy: Database["public"]["Enums"]["no_show_policy"] | null
           operating_hours_end: string | null
@@ -1537,6 +1538,7 @@ export type Database = {
           id?: string
           is_slot_booking_enabled?: boolean | null
           max_bookings_per_day?: number | null
+          min_advance_booking_hours?: number
           no_show_penalty_amount?: number | null
           no_show_policy?: Database["public"]["Enums"]["no_show_policy"] | null
           operating_hours_end?: string | null
@@ -1556,6 +1558,7 @@ export type Database = {
           id?: string
           is_slot_booking_enabled?: boolean | null
           max_bookings_per_day?: number | null
+          min_advance_booking_hours?: number
           no_show_penalty_amount?: number | null
           no_show_policy?: Database["public"]["Enums"]["no_show_policy"] | null
           operating_hours_end?: string | null
