@@ -1,3 +1,4 @@
+// v3.4.0 — DELTA-ONLY: gate push skipped when the person's state signature matches the last successful push.
 // v3.3.0 — OOM guard: 25s minimum gap between person pushes per gate and a
 // 3-minute per person/gate cooldown against duplicate triggers.
 // v3.1.0 — delta sweep no longer re-drives already-synced people on a 12h
@@ -449,6 +450,7 @@ async function dispatchToDevices(
   entityType?: "member" | "employee" | "trainer",
   entityId?: string,
   force = false,
+  stateSig?: string,
 ): Promise<{ results: any[]; deviceIds: number[] }> {
   // 1. Try to get device IDs from access_devices table
   //    IMPORTANT: include ALL mapped devices, not just is_online. MIPS server
@@ -587,8 +589,44 @@ async function dispatchToDevices(
     }
   }
 
+  // v3.4.0 — DELTA-ONLY. Last successful push per gate; same state ⇒ skip.
+  const lastSigByDevice = new Map<string, { sig: string | null; at: string }>();
+  const fullSyncAtByMips = new Map<number, string | null>();
+  if (stateSig && !force && personId) {
+    try {
+      const { data: prior } = await supabase
+        .from("mips_sync_attempts")
+        .select("device_id, response_payload, created_at")
+        .eq("operation", "device_dispatch")
+        .eq("mips_person_id", personId)
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      for (const r of prior || []) {
+        const k = String((r as any).device_id);
+        if (!lastSigByDevice.has(k)) lastSigByDevice.set(k, { sig: (r as any).response_payload?.state_sig ?? null, at: (r as any).created_at });
+      }
+      const { data: ds } = await supabase
+        .from("mips_dispatch_state")
+        .select("mips_device_id, last_full_sync_at")
+        .in("mips_device_id", deviceIds);
+      for (const d of ds || []) fullSyncAtByMips.set(Number((d as any).mips_device_id), (d as any).last_full_sync_at ?? null);
+    } catch (e) {
+      console.warn("[dispatchToDevices] delta-state lookup failed (dispatching normally):", e);
+      lastSigByDevice.clear();
+    }
+  }
+
   for (const mipsDeviceId of [...new Set(deviceIds)]) {
     const local = localDevices.find((d: any) => Number(d.mips_device_id) === mipsDeviceId);
+    const lastPush = local?.id ? lastSigByDevice.get(String(local.id)) : undefined;
+    const fullAt = fullSyncAtByMips.get(mipsDeviceId);
+    if (lastPush?.sig && lastPush.sig === stateSig && !(fullAt && fullAt > lastPush.at)) {
+      console.log(`[dispatchToDevices] person ${personId} → gate ${mipsDeviceId}: Skipped: Member already in desired hardware state.`);
+      deliveredDeviceIds.push(mipsDeviceId);
+      results.push({ mipsDeviceId, status: "skipped", reason: "Skipped: Member already in desired hardware state." });
+      continue;
+    }
     if (local?.id && coolingDevices.has(String(local.id))) {
       console.log(`[dispatchToDevices] person ${personId} → gate ${mipsDeviceId}: Skipped: 3-minute cooldown active`);
       results.push({ mipsDeviceId, status: "skipped", reason: "Skipped: 3-minute cooldown active" });
@@ -661,7 +699,9 @@ async function dispatchToDevices(
         last_error: lastError,
         response_code: responseCode,
         latency_ms: Date.now() - started,
-        response_payload: result,
+        response_payload: result && typeof result === "object" && !Array.isArray(result)
+          ? { ...result, state_sig: stateSig ?? null }
+          : { raw: result ?? null, state_sig: stateSig ?? null },
         completed_at: new Date().toISOString(),
         verification_payload: {
           accepted_only: status === "success",
@@ -1095,7 +1135,7 @@ Deno.serve(async (req) => {
         const putJson = await putRes.json().catch(() => ({}));
         const ok = putJson.code === 200 || putJson.code === 0;
         if (!ok) throw new Error(`MIPS revoke failed: ${putJson.msg || JSON.stringify(putJson)}`);
-        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, person_type, person_id); } catch (_) { /* non-fatal */ }
+        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, person_type, person_id, false, `${String(existing.validTimeBegin ?? "").slice(0, 10)}|${REVOKED_DATE.slice(0, 10)}|revoked`); } catch (_) { /* non-fatal */ }
       }
 
       await supabase.from(tableName).update({
@@ -1284,7 +1324,8 @@ Deno.serve(async (req) => {
       dispatchResult = { skipped: true, reason: "deploy_to_devices=false" };
     } else {
       try {
-        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id, force === true);
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id, force === true,
+          `${String(validTimeBegin).slice(0, 10)}|${String(validTimeEnd).slice(0, 10)}|${photoSource ?? ""}:${String(photoUrl || "").split("?")[0]}`);
       } catch (e) {
         console.error("Dispatch error:", e);
         dispatchResult = { error: String(e) };
