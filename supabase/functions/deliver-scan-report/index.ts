@@ -26,7 +26,7 @@ function jr(payload: unknown, status = 200) {
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+    return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
   } catch { return iso; }
 }
 
