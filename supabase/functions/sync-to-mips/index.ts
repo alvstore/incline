@@ -1,3 +1,5 @@
+// v3.3.0 — OOM guard: 25s minimum gap between person pushes per gate and a
+// 3-minute per person/gate cooldown against duplicate triggers.
 // v3.1.0 — delta sweep no longer re-drives already-synced people on a 12h
 // timer (root cause of the terminal reboots: every re-push rebuilt the gate's
 // native face index and leaked memory until Android OOM-killed the app), and a
