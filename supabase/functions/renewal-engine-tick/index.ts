@@ -1,4 +1,4 @@
-// v1.1.0 — treat busy line / cooldown / window as expected, not errors.
+// v1.3.0 — busy line, cooldown and calling window are expected outcomes, not logged as errors.
 // renewal-engine-tick v1.2.0 — Phase 2 renewal orchestrator.
 // v1.2.0 — voice escalation now authenticates to sarvam-voice with the
 //          x-system-call: renewal-engine identity (previously 401'd), and logs
