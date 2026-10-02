@@ -1,3 +1,4 @@
+// v2.21.0 — DELTA-ONLY: a gate push is skipped when its target state matches the last successful push.
 // v2.20.0 — OOM guard: 25s per-gate gap; all bulk loops strictly sequential.
 // v2.18.0 — opt-in time-zone revoke (acTzNumber1=2) keeps blocked faces enrolled
 // v2.17.0 — backfill null validTimeBegin with joining date
@@ -1262,7 +1263,7 @@ async function applyStaffAction(
       supabase,
       effectiveBranchId,
       newValidTimeEnd === REVOKED_DATE ? 2 : 1,
-      { entity_type: person_type, entity_id: person_id, branch_id: effectiveBranchId ?? null },
+      { entity_type: person_type, entity_id: person_id, branch_id: effectiveBranchId ?? null, state_sig: `staff|${String(newValidTimeEnd).slice(0, 10)}` },
     );
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
