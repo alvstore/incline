@@ -48,7 +48,7 @@ export default function AllBookingsPage() {
   const { effectiveBranchId: branchId = '' } = useBranchContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [rangePreset, setRangePreset] = useState<RangePreset>('7d');
-  const [customStart, setCustomStart] = useState(safeFormat((), 'yyyy-MM-dd'));
+  const [customStart, setCustomStart] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [customEnd, setCustomEnd] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -56,7 +56,7 @@ export default function AllBookingsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
-  const [timelineDate, setTimelineDate] = useState(safeFormat((), 'yyyy-MM-dd'));
+  const [timelineDate, setTimelineDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [expandedBooking, setExpandedBooking] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<RescheduleTarget | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -68,7 +68,7 @@ export default function AllBookingsPage() {
   }, []);
 
   const { startDate, endDate } = useMemo(() => {
-    const today = safeFormat((), 'yyyy-MM-dd');
+    const today = format(new Date(), 'yyyy-MM-dd');
     if (rangePreset === 'today') return { startDate: today, endDate: today };
     if (rangePreset === '3d') return { startDate: today, endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd') };
     if (rangePreset === '7d') return { startDate: today, endDate: format(addDays(new Date(), 7), 'yyyy-MM-dd') };
