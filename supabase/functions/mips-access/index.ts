@@ -1,3 +1,4 @@
+// v2.21.0 — DELTA-ONLY: a gate push is skipped when its target state matches the last successful push.
 // v2.20.0 — OOM guard: 25s per-gate gap; all bulk loops strictly sequential.
 // v2.18.0 — opt-in time-zone revoke (acTzNumber1=2) keeps blocked faces enrolled
 // v2.17.0 — backfill null validTimeBegin with joining date
@@ -127,6 +128,10 @@ interface DispatchLedger {
   entity_type: "member" | "employee" | "trainer";
   entity_id: string;
   branch_id?: string | null;
+  /** v2.21.0 — target hardware state signature; identical to the last successful push ⇒ skip. */
+  state_sig?: string;
+  /** Bypass the delta-only check (verification-failure re-push). */
+  force?: boolean;
 }
 
 // v2.16.0 — STALE GATE ID FIX (30 Sep 2026, INC-26-0101). A terminal that is
@@ -240,6 +245,38 @@ async function dispatchToDevices(
 
   const undelivered: number[] = [];
 
+  // v2.21.0 — DELTA-ONLY. Find the last successful push per gate for this person;
+  // if it carried the same target state signature (and no full roster download
+  // has hit that gate since), the terminal already holds this state — skip it.
+  const lastSigByDevice = new Map<string, { sig: string | null; at: string }>();
+  const fullSyncAtByMips = new Map<number, string | null>();
+  if (ledger?.state_sig && !ledger.force) {
+    try {
+      const { data: prior } = await supabase
+        .from("mips_sync_attempts")
+        .select("device_id, response_payload, created_at")
+        .eq("operation", "device_dispatch")
+        .eq("mips_person_id", personId)
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      for (const r of prior || []) {
+        const k = String((r as any).device_id);
+        if (!lastSigByDevice.has(k)) {
+          lastSigByDevice.set(k, { sig: (r as any).response_payload?.state_sig ?? null, at: (r as any).created_at });
+        }
+      }
+      const { data: ds } = await supabase
+        .from("mips_dispatch_state")
+        .select("mips_device_id, last_full_sync_at")
+        .in("mips_device_id", deviceIds.map(Number));
+      for (const d of ds || []) fullSyncAtByMips.set(Number((d as any).mips_device_id), (d as any).last_full_sync_at ?? null);
+    } catch (e) {
+      console.warn("[mips-access] delta-state lookup failed (dispatching normally):", e);
+      lastSigByDevice.clear();
+    }
+  }
+
   // v2.15.0 — every gate command is written to mips_sync_attempts so the
   // watchdog's "dispatches before the drop" evidence and the Personnel Sync
   // ledger see access traffic, not just photo pushes.
@@ -263,7 +300,7 @@ async function dispatchToDevices(
         last_error: status === "success" ? null : (detail.message ?? null),
         response_code: detail.httpStatus || detail.code || null,
         latency_ms: detail.latencyMs ?? null,
-        response_payload: { source: "mips-access", auth_type: authType, code: detail.code ?? null, msg: detail.message ?? null },
+        response_payload: { source: "mips-access", auth_type: authType, code: detail.code ?? null, msg: detail.message ?? null, state_sig: ledger.state_sig ?? null },
         completed_at: new Date().toISOString(),
         attempt_no: 1,
       });
@@ -275,6 +312,13 @@ async function dispatchToDevices(
   // Targeted per-gate push (v2.9.0). The old bulk `syncPerson` call discarded the
   // personId server-side and made every gate re-download the whole roster.
   for (const deviceId of [...new Set(deviceIds.map(Number))]) {
+    const uuid = deviceUuidByMipsId.get(deviceId);
+    const last = uuid ? lastSigByDevice.get(String(uuid)) : undefined;
+    const fullAt = fullSyncAtByMips.get(deviceId);
+    if (last && last.sig && last.sig === ledger?.state_sig && !(fullAt && fullAt > last.at)) {
+      console.log(`[mips-access] person ${personId} → gate ${deviceId}: Skipped: Member already in desired hardware state.`);
+      continue;
+    }
     let slotHeld = false;
     try {
       // Wait for the gate's throttle window instead of dropping the change:
@@ -711,6 +755,8 @@ async function applyMemberAction(
     }
     if (joinDate) backfillBegin = `${joinDate} 00:00:00`;
   }
+  // v2.21.0 — target hardware state signature for delta-only dispatch.
+  const stateSig = `${action === "revoke" || tzBlock ? "locked" : "open"}|${tzBlock ? "lock-begin" : "joined"}|${String(newValidTimeEnd).slice(0, 10)}`;
   if (!backfillBegin && tzMatches && sameDay(existing.validTimeEnd, newValidTimeEnd)) {
     console.log(
       `[MIPS-ACCESS] Central record for ${personSn} already at validTimeEnd=${existing.validTimeEnd} — skipping PUT`,
@@ -737,6 +783,7 @@ async function applyMemberAction(
         entity_type: "member" as const,
         entity_id: member_id,
         branch_id: effectiveBranchId ?? null,
+        state_sig: stateSig,
       };
       reDispatchUndelivered = (await dispatchToDevices(
         baseUrl,
@@ -791,7 +838,7 @@ async function applyMemberAction(
     return { success: false, action, error: putJson.msg || "MIPS update failed" };
   }
 
-  const ledger = { entity_type: "member" as const, entity_id: member_id, branch_id: effectiveBranchId ?? null };
+  const ledger: DispatchLedger = { entity_type: "member", entity_id: member_id, branch_id: effectiveBranchId ?? null, state_sig: stateSig };
   let undeliveredGates: number[] = [];
   try {
     // v2.14.0 — always Issue (1), never Revoke (2). authType 2 physically deletes
@@ -875,7 +922,7 @@ async function applyMemberAction(
           supabase,
           effectiveBranchId,
           1, // v2.18.0 — never authType 2 (deletes the face template)
-          ledger,
+          { ...ledger, force: true },
         ).catch(() => {});
         await new Promise((r) => setTimeout(r, 1500));
         verified = await readBack();
@@ -1216,7 +1263,7 @@ async function applyStaffAction(
       supabase,
       effectiveBranchId,
       newValidTimeEnd === REVOKED_DATE ? 2 : 1,
-      { entity_type: person_type, entity_id: person_id, branch_id: effectiveBranchId ?? null },
+      { entity_type: person_type, entity_id: person_id, branch_id: effectiveBranchId ?? null, state_sig: `staff|${String(newValidTimeEnd).slice(0, 10)}` },
     );
   } catch (e) {
     console.warn("Device dispatch failed (non-fatal):", e);
