@@ -1,3 +1,4 @@
+// v1.3.0 — busy line, cooldown and calling window are expected outcomes, not logged as errors.
 // renewal-engine-tick v1.2.0 — Phase 2 renewal orchestrator.
 // v1.2.0 — voice escalation now authenticates to sarvam-voice with the
 //          x-system-call: renewal-engine identity (previously 401'd), and logs
@@ -198,6 +199,11 @@ Deno.serve(async (req) => {
               _attempt_id: body.call_record_id,
             });
             voiceCalls++;
+          } else if (body?.code === "concurrency_limit") {
+            // Line busy with another call — expected; remaining cases retry next tick.
+            break;
+          } else if (["cooldown_active", "outside_window", "daily_cap_reached", "do_not_contact", "duplicate_live_call"].includes(body?.code)) {
+            continue;
           } else {
             await captureEdgeError(
               "renewal-engine-tick",

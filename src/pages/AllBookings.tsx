@@ -33,6 +33,13 @@ import { AttendanceActions } from '@/components/bookings/AttendanceActions';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { cn } from '@/lib/utils';
 
+
+const safeFormat = (v: Date | string | number | null | undefined, fmt: string, fallback = '—'): string => {
+  if (v === null || v === undefined || v === '') return fallback;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? fallback : format(d, fmt);
+};
+
 type RangePreset = 'today' | '3d' | '7d' | 'custom';
 type ViewMode = 'list' | 'prep' | 'calendar' | 'timeline';
 
@@ -135,7 +142,7 @@ export default function AllBookingsPage() {
         type: 'class',
         class_name: classMap[b.class_id]?.name,
         class_time: classMap[b.class_id]?.scheduled_at,
-        day: classMap[b.class_id]?.scheduled_at ? format(new Date(classMap[b.class_id].scheduled_at), 'yyyy-MM-dd') : startDate,
+        day: classMap[b.class_id]?.scheduled_at ? safeFormat((classMap[b.class_id].scheduled_at), 'yyyy-MM-dd') : startDate,
         member_name: b.member?.user_id ? profilesMap[b.member.user_id] : b.member?.member_code,
         member_code: b.member?.member_code,
       }));
@@ -201,7 +208,8 @@ export default function AllBookingsPage() {
       return bookings.map((b: any) => {
         const s = slotMap[b.slot_id];
         const facility = s?.facility_id ? facilities[s.facility_id] : undefined;
-        const startsAt = s ? new Date(`${s.slot_date}T${s.start_time}`) : null;
+        const startsAtRaw = s?.slot_date && s?.start_time ? new Date(`${s.slot_date}T${s.start_time}`) : null;
+        const startsAt = startsAtRaw && !isNaN(startsAtRaw.getTime()) ? startsAtRaw : null;
         const prepMinutes = facility?.prep ?? 0;
         return {
           ...b,
@@ -261,7 +269,7 @@ export default function AllBookingsPage() {
       return (sessions || []).map((s: any) => ({
         ...s,
         type: 'pt',
-        day: s.scheduled_at ? format(new Date(s.scheduled_at), 'yyyy-MM-dd') : startDate,
+        day: s.scheduled_at ? safeFormat((s.scheduled_at), 'yyyy-MM-dd') : startDate,
         member_name: s.member_pt_package?.member?.user_id ? profilesMap[s.member_pt_package.member.user_id] : s.member_pt_package?.member?.member_code,
         member_code: s.member_pt_package?.member?.member_code,
         trainer_name: s.trainer?.user_id ? profilesMap[s.trainer.user_id] : 'Unknown Trainer',
@@ -289,7 +297,7 @@ export default function AllBookingsPage() {
       if (classIds.length) {
         const { data: cb } = await supabase.from('class_bookings').select('class_id').in('class_id', classIds);
         const clsMap = (classes || []).reduce((a, c) => { a[c.id] = c.scheduled_at; return a; }, {} as Record<string, string>);
-        (cb || []).forEach((b: any) => { if (clsMap[b.class_id]) bump(format(new Date(clsMap[b.class_id]), 'yyyy-MM-dd'), 'classes'); });
+        (cb || []).forEach((b: any) => { if (clsMap[b.class_id]) bump(safeFormat((clsMap[b.class_id]), 'yyyy-MM-dd'), 'classes'); });
       }
 
       const { data: slots } = await supabase
@@ -305,7 +313,7 @@ export default function AllBookingsPage() {
       const { data: pt } = await supabase
         .from('pt_sessions').select('scheduled_at').eq('branch_id', branchId)
         .gte('scheduled_at', ms.toISOString()).lte('scheduled_at', me.toISOString());
-      (pt || []).forEach((s: any) => { if (s.scheduled_at) bump(format(new Date(s.scheduled_at), 'yyyy-MM-dd'), 'pt'); });
+      (pt || []).forEach((s: any) => { if (s.scheduled_at) bump(safeFormat((s.scheduled_at), 'yyyy-MM-dd'), 'pt'); });
 
       return { byDay };
     },
@@ -389,7 +397,7 @@ export default function AllBookingsPage() {
 
   // ---------- Export / print ----------
   const buildUnifiedRows = () => {
-    const fmtTime = (iso?: string) => (iso ? format(new Date(iso), 'hh:mm a') : '');
+    const fmtTime = (iso?: string) => (iso ? safeFormat((iso), 'hh:mm a') : '');
     const rows: Record<string, string>[] = [];
     filteredClassBookings.forEach((b: any) => rows.push({
       date: b.day, time: fmtTime(b.class_time), type: 'Class', item: b.class_name || '',
@@ -483,7 +491,7 @@ ${rows.map((r) => `<tr>
           <div className="min-w-0">
             <p className="font-medium truncate">{b.benefit_name}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {b.member_name || b.member_code} · session {format(b.starts_at, 'dd MMM HH:mm')}
+              {b.member_name || b.member_code} · session {safeFormat(b.starts_at, 'dd MMM HH:mm')}
             </p>
           </div>
         </div>
@@ -494,7 +502,7 @@ ${rows.map((r) => `<tr>
             </p>
             {!compact && (
               <p className="text-xs text-muted-foreground">
-                prep from {format(b.prep_start_at, 'dd MMM HH:mm')} · {Math.round(b.prep_minutes / 60)}h lead
+                prep from {safeFormat(b.prep_start_at, 'dd MMM HH:mm')} · {Math.round(b.prep_minutes / 60)}h lead
               </p>
             )}
           </div>
@@ -783,7 +791,7 @@ ${rows.map((r) => `<tr>
                       <div key={day} className="space-y-2">
                         <div className="sticky top-0 z-10 bg-card/95 backdrop-blur py-1.5 flex items-center gap-2">
                           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {format(parseISO(day), 'EEEE, dd MMM')}
+                            {safeFormat(parseISO(day), 'EEEE, dd MMM')}
                           </h3>
                           <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>
                         </div>
@@ -906,7 +914,7 @@ ${rows.map((r) => `<tr>
                       <div key={day} className="space-y-2">
                         <div className="sticky top-0 z-10 bg-card/95 backdrop-blur py-1.5 flex items-center gap-2">
                           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {format(parseISO(day), 'EEEE, dd MMM')}
+                            {safeFormat(parseISO(day), 'EEEE, dd MMM')}
                           </h3>
                           <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>
                         </div>
@@ -919,9 +927,9 @@ ${rows.map((r) => `<tr>
                               <TableRow key={b.id} className="hover:bg-muted/50 transition-colors">
                                 <TableCell><div className="font-medium">{b.member_name}</div><div className="text-sm text-muted-foreground">{b.member_code}</div></TableCell>
                                 <TableCell>{b.class_name}</TableCell>
-                                <TableCell>{b.class_time && format(new Date(b.class_time), 'HH:mm')}</TableCell>
+                                <TableCell>{b.class_time && safeFormat((b.class_time), 'HH:mm')}</TableCell>
                                 <TableCell>{getStatusBadge(b.status)}</TableCell>
-                                <TableCell className="text-muted-foreground">{format(new Date(b.booked_at), 'dd MMM HH:mm')}</TableCell>
+                                <TableCell className="text-muted-foreground">{safeFormat((b.booked_at), 'dd MMM HH:mm')}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -946,7 +954,7 @@ ${rows.map((r) => `<tr>
                       <div key={day} className="space-y-2">
                         <div className="sticky top-0 z-10 bg-card/95 backdrop-blur py-1.5 flex items-center gap-2">
                           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {format(parseISO(day), 'EEEE, dd MMM')}
+                            {safeFormat(parseISO(day), 'EEEE, dd MMM')}
                           </h3>
                           <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>
                         </div>
@@ -959,7 +967,7 @@ ${rows.map((r) => `<tr>
                               <TableRow key={s.id} className="hover:bg-muted/50 transition-colors">
                                 <TableCell><div className="font-medium">{s.member_name}</div><div className="text-sm text-muted-foreground">{s.member_code}</div></TableCell>
                                 <TableCell>{s.trainer_name}</TableCell>
-                                <TableCell>{s.scheduled_at && format(new Date(s.scheduled_at), 'HH:mm')}</TableCell>
+                                <TableCell>{s.scheduled_at && safeFormat((s.scheduled_at), 'HH:mm')}</TableCell>
                                 <TableCell>{getStatusBadge(s.status)}</TableCell>
                                 <TableCell className="text-muted-foreground max-w-[200px] truncate">{s.notes || '-'}</TableCell>
                               </TableRow>

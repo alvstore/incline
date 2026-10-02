@@ -229,8 +229,43 @@ export default function SystemHealth() {
 
   const generatePrompt = (err: ErrorLog) => {
     const source = err.source || 'frontend';
-    const prompt = `I have an error in my ${source === 'frontend' ? 'React application' : source === 'edge_function' ? 'backend function' : 'database'}. ${source === 'frontend' ? `The component crashed at route: ${err.route || 'unknown'}.` : ''} The error message is: ${err.error_message}. Here is the stack trace: ${err.stack_trace || 'N/A'}. Please audit the relevant code and provide a fix.`;
+    const where = source === 'frontend'
+      ? `React page at route ${err.route || 'unknown'} (src/pages, src/components)`
+      : source === 'edge_function'
+        ? `backend edge function "${err.function_name || err.route || 'unknown'}" (supabase/functions/${err.function_name || '<name>'}/index.ts)`
+        : `database (RPC/trigger/cron)${err.function_name ? ` "${err.function_name}"` : ''}`;
+    const frames = (err.stack_trace || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !/react-vendor|react-dom|scheduler|node_modules/.test(l))
+      .slice(0, 8)
+      .join('\n');
+    let ctx = '';
+    try { ctx = err.context ? JSON.stringify(err.context, null, 2).slice(0, 1500) : ''; } catch { ctx = ''; }
+    const prompt = [
+      '[Error investigation request — Incline Fitness]',
+      'Stack: React 18 + Vite + TypeScript + TanStack Query v5, Lovable Cloud edge functions (Deno), Postgres RPCs. Timezone: Asia/Kolkata.',
+      '',
+      `Where: ${where}`,
+      `Source: ${source} | Severity: ${err.severity || 'error'} | Status: ${err.status}`,
+      `Fingerprint: ${err.fingerprint || 'n/a'} | Occurrences: ${err.occurrence_count ?? 1}`,
+      `First seen: ${formatISTFull(err.created_at)}${err.last_seen ? ` | Last seen: ${formatISTFull(err.last_seen)}` : ''}`,
+      '',
+      'Error message:',
+      err.error_message,
+      '',
+      frames ? `Relevant stack frames (vendor frames removed):\n${frames}` : 'Stack trace: not captured',
+      ctx ? `\nContext payload:\n${ctx}` : '',
+      '',
+      'Please:',
+      '1. Identify the most likely root cause (say if it is expected behaviour that should not be logged as an error).',
+      '2. Name the exact file(s) and function(s) to edit.',
+      '3. Give the minimal, production-safe fix — guard bad data rather than crash; keep branch scoping and RBAC intact.',
+      '4. List sibling code paths with the same assumption and fix them too.',
+      '5. Describe how to verify the fix and prevent regression.',
+    ].filter((l) => l !== '').join('\n');
     setGeneratedPrompt(prompt);
+    navigator.clipboard?.writeText(prompt).then(() => toast.success('AI fix prompt copied')).catch(() => {});
   };
 
   const copyToClipboard = () => {
@@ -262,10 +297,7 @@ export default function SystemHealth() {
               System Health
             </h1>
             <p className="text-muted-foreground mt-1">
-              {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
-                                        
-                                            
-                                            Load the security issues from the scan results and fix the selected issues.`}
+              Monitor app, backend function and database errors with AI-assisted diagnostics.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
