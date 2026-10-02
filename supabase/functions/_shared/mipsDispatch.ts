@@ -21,6 +21,8 @@
 // (pushStatus + failureMessage) — never infer it from a device photo counter.
 
 export const MIPS_ISSUE_PATH = "/personInfo/person/persionIssue";
+/** Minimum seconds between two person pushes to the same gate (OOM guard). */
+export const DEFAULT_MIN_GAP_SECONDS = 25;
 export const MIPS_FULL_SYNC_PATH = "/through/device/syncPerson";
 export const MIPS_PUSH_LEDGER_PATH = "/personInfo/authedLog/list";
 
@@ -279,7 +281,9 @@ export async function claimDispatchSlot(
     const { data, error } = await supabase.rpc("mips_claim_dispatch_slot", {
       p_mips_device_id: mipsDeviceId,
       p_branch_id: branchId ?? null,
-      p_min_gap_seconds: opts.minGapSeconds ?? 5,
+      // 25s default: the Rockchip terminal needs ~4s to decode + ArcFace-extract
+      // each person and ~20s of idle time for Android GC, or it OOM-reboots.
+      p_min_gap_seconds: opts.minGapSeconds ?? DEFAULT_MIN_GAP_SECONDS,
       p_daily_cap: opts.dailyCap ?? 800,
       p_in_flight_seconds: opts.inFlightSeconds ?? 20,
     });

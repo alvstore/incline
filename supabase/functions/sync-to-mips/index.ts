@@ -1,3 +1,5 @@
+// v3.3.0 — OOM guard: 25s minimum gap between person pushes per gate and a
+// 3-minute per person/gate cooldown against duplicate triggers.
 // v3.1.0 — delta sweep no longer re-drives already-synced people on a 12h
 // timer (root cause of the terminal reboots: every re-push rebuilt the gate's
 // native face index and leaked memory until Android OOM-killed the app), and a
@@ -566,8 +568,39 @@ async function dispatchToDevices(
     }
   }
 
+  // v3.3.0 — 3-minute per person/gate cooldown (applies even with force) so a
+  // burst of duplicate triggers can never re-issue the same person to a gate.
+  const COOLDOWN_MS = 3 * 60 * 1000;
+  const coolingDevices = new Set<string>();
+  if (personId) {
+    try {
+      const { data: hot } = await supabase
+        .from("mips_sync_attempts")
+        .select("device_id")
+        .eq("operation", "device_dispatch")
+        .eq("mips_person_id", personId)
+        .in("status", ["success", "pending", "processing"])
+        .gte("created_at", new Date(Date.now() - COOLDOWN_MS).toISOString());
+      for (const r of hot || []) if ((r as any).device_id) coolingDevices.add(String((r as any).device_id));
+    } catch (e) {
+      console.warn("[dispatchToDevices] cooldown lookup failed (continuing):", e);
+    }
+  }
+
   for (const mipsDeviceId of [...new Set(deviceIds)]) {
     const local = localDevices.find((d: any) => Number(d.mips_device_id) === mipsDeviceId);
+    if (local?.id && coolingDevices.has(String(local.id))) {
+      console.log(`[dispatchToDevices] person ${personId} → gate ${mipsDeviceId}: Skipped: 3-minute cooldown active`);
+      results.push({ mipsDeviceId, status: "skipped", reason: "Skipped: 3-minute cooldown active" });
+      if (branchId) {
+        await supabase.from("mips_sync_attempts").insert({
+          branch_id: branchId, device_id: local.id, entity_type: entityType, entity_id: entityId,
+          mips_person_id: personId, operation: "device_dispatch", status: "skipped",
+          last_error: "Skipped: 3-minute cooldown active", completed_at: new Date().toISOString(),
+        });
+      }
+      continue;
+    }
     if (local?.id && recentlyDelivered.has(String(local.id))) {
       deliveredDeviceIds.push(mipsDeviceId);
       results.push({ mipsDeviceId, status: "skipped", reason: "already delivered recently" });
@@ -582,8 +615,10 @@ async function dispatchToDevices(
     try {
       // Wait out the per-gate throttle rather than dropping the push.
       slotHeld = await waitForDispatchSlot(supabase, mipsDeviceId, branchId ?? null, {
+        minGapSeconds: 25,
         dailyCap: 100,
         failOpen: false,
+        attempts: 16,
       });
       if (!slotHeld) {
         // Not a failure of the person or the photo — the gate is simply busy.

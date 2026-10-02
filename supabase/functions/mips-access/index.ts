@@ -1,3 +1,4 @@
+// v2.20.0 — OOM guard: 25s per-gate gap; all bulk loops strictly sequential.
 // v2.18.0 — opt-in time-zone revoke (acTzNumber1=2) keeps blocked faces enrolled
 // v2.17.0 — backfill null validTimeBegin with joining date
 // v2.16.0 — gate commands are addressed by terminal serial number, not a
@@ -279,6 +280,8 @@ async function dispatchToDevices(
       // Wait for the gate's throttle window instead of dropping the change:
       // a skipped revoke/restore silently diverges the hardware from the CRM.
       slotHeld = await waitForDispatchSlot(supabase, deviceId, branchId ?? null, {
+        minGapSeconds: 25,
+        attempts: 16,
         dailyCap: 800,
         // Access revocation/restoration is safety-critical and may proceed if
         // throttle bookkeeping alone is unavailable. Background writers fail closed.
