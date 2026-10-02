@@ -64,3 +64,6 @@ and 136 → 143 (Gate 2).
 
 ## Dues lock = future start date (Oct 2026, mips-access v2.19.0)
 When `mips_tz_revoke_mode` is on, revoke sets validTimeBegin=2099-01-01 00:00:00 and validTimeEnd=2099-12-31 23:59:59 (acTzNumber1 stays 0). Live-tested: gate recognises the face, says "Permission Denied", stays shut, and the 60s reaper keeps the face. acTzNumber1=2 is ignored by the terminal (no acGroupNumber) — never rely on it. Restore resets validTimeBegin to the joining date.
+
+## Delta-only dispatch (Oct 2026, mips-access v2.21.0 / sync-to-mips v3.4.0)
+Every successful gate push stores `response_payload.state_sig` (lock state + validity dates, plus photo for sync-to-mips). A new push to the same person+gate is skipped ("Skipped: Member already in desired hardware state.") when the signature matches the last success, unless a full roster sync hit that gate afterwards or the push is a verification-failure re-push (force). Combined with 25s gate gap + 3-min cooldown + sequential bulk loops.
