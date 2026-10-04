@@ -44,6 +44,7 @@ export default function MemberStore() {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [storeTab, setStoreTab] = useState<'products' | 'addons'>('products');
   const [cartOpen, setCartOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
@@ -511,8 +512,28 @@ export default function MemberStore() {
           </Card>
         )}
 
-        {/* Recovery & add-ons */}
+        {/* Sub-tabs: Add-ons vs Store products */}
         {!isStaffBuyer && (
+          <div role="tablist" aria-label="Store sections" className="grid grid-cols-2 gap-1 rounded-2xl bg-card p-1.5 shadow-lg shadow-slate-200/50 dark:shadow-none">
+            {([['products', 'Store products', Package], ['addons', 'Add-ons', Sparkles]] as const).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={storeTab === key}
+                onClick={() => setStoreTab(key)}
+                className={`flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+                  storeTab === key ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />{label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Recovery & add-ons */}
+        {!isStaffBuyer && storeTab === 'addons' && (
           <AddOnShowcase
             memberId={actor.id}
             memberName={actorName}
@@ -521,8 +542,7 @@ export default function MemberStore() {
           />
         )}
 
-
-
+        {(isStaffBuyer || storeTab === 'products') && (<>
         {/* Search + categories */}
         <div className="space-y-3">
           <div className="relative">
@@ -530,14 +550,14 @@ export default function MemberStore() {
             <label htmlFor="store-search" className="sr-only">Search products</label>
             <Input
               id="store-search"
-              placeholder="Search products…"
+              placeholder="Search protein, BCAA, creatine…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="rounded-xl pl-10"
             />
           </div>
           {categories.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap">
               {['all', ...categories].map((cat) => (
                 <button
                   key={cat}
@@ -678,6 +698,7 @@ export default function MemberStore() {
             </Card>
           </aside>
         </div>
+        </>)}
       </div>
 
       {/* Mobile sticky cart bar */}
