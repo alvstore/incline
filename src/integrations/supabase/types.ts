@@ -16831,6 +16831,10 @@ export type Database = {
         Args: { _at: string; _branch_id: string; _member_id: string }
         Returns: Json
       }
+      member_holds_plan: {
+        Args: { _plan_id: string; _user_id: string }
+        Returns: boolean
+      }
       member_matches_segment: {
         Args: { p_member_id: string; p_status: string }
         Returns: boolean
