@@ -65,7 +65,7 @@ export default function MemberAppHome() {
       <div className="mx-auto max-w-5xl space-y-5 bg-slate-50 px-4 py-5 dark:bg-background sm:px-6 lg:py-8">
         <header className="flex items-center justify-between gap-3">
           <div className="min-w-0"><p className="text-sm text-muted-foreground">{new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</p><h1 className="truncate text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Hello, {first}</h1></div>
-          <Link to="/member-profile" aria-label="View your profile" className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Avatar className="h-12 w-12 ring-2 ring-primary/30 ring-offset-2 ring-offset-background"><AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.full_name || 'Your avatar'} className="object-cover" /><AvatarFallback className="bg-primary/10 font-semibold text-primary">{initials}</AvatarFallback></Avatar></Link>
+          <Link to="/member-profile" aria-label="View your profile" className="hidden shrink-0 rounded-full lg:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Avatar className="h-12 w-12 ring-2 ring-primary/30 ring-offset-2 ring-offset-background"><AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.full_name || 'Your avatar'} className="object-cover" /><AvatarFallback className="bg-primary/10 font-semibold text-primary">{initials}</AvatarFallback></Avatar></Link>
         </header>
 
         <div className="grid gap-5 lg:grid-cols-5">
@@ -100,7 +100,7 @@ export default function MemberAppHome() {
           <Button asChild variant="outline" className="mt-4 min-h-11 w-full"><Link to="/book?type=classes">{isBooked ? 'View my bookings' : 'Browse classes'}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
         </section>
 
-        <section className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 dark:shadow-none" aria-label="Account">
+        <section className="hidden flex-wrap items-center justify-between gap-2 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 dark:shadow-none lg:flex" aria-label="Account">
           <p className="text-sm font-semibold text-foreground">Your account</p>
           <div className="flex flex-wrap gap-2"><MemberPasswordSheet /><Button variant="ghost" className="min-h-11" onClick={() => void signOut()}><LogOut className="mr-2 h-4 w-4" />Sign out</Button></div>
         </section>

@@ -28,13 +28,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { profile, roles } = useAuth();
   const { branchStatus, retryBranchFetch } = useBranchContext();
   const location = useLocation();
-  const showMemberMobileNav = roles.some((r) => r.role === 'member') && (
-    location.pathname === '/member-app' || location.pathname === '/member-dashboard' ||
-    location.pathname === '/book' || location.pathname === '/my-workout' ||
-    location.pathname === '/my-diet' || location.pathname === '/member-store' ||
-    location.pathname === '/member-feedback' || location.pathname === '/my-requests' ||
-    location.pathname === '/member-profile'
-  );
+  // Persistent bottom nav for members on every page (drawer navigation included).
+  const showMemberMobileNav = roles.some((r) => r.role === 'member') &&
+    !roles.some((r) => ['owner', 'admin', 'manager', 'staff', 'trainer'].includes(r.role));
 
   // Live presence heartbeat (mounted once globally)
   usePresenceHeartbeat();
