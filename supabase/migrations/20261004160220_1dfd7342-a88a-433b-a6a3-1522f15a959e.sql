@@ -1,0 +1,1 @@
+CREATE POLICY "Members view active pt packages at their branch" ON public.pt_packages FOR SELECT TO authenticated USING (is_active = true AND branch_id IN (SELECT m.branch_id FROM public.members m WHERE m.user_id = auth.uid()));

@@ -141,7 +141,7 @@ export function useMemberConcierge() {
   const ptOptions: ConciergePtOption[] = useMemo(
     () =>
       (ptQuery.data ?? [])
-        .filter((p) => (p.total_sessions ?? 0) > 0)
+        .filter((p) => (p.total_sessions ?? 0) > 0 || (p.validity_days ?? 0) > 0)
         .map((p) => ({
           id: p.id,
           name: p.name,
@@ -154,18 +154,27 @@ export function useMemberConcierge() {
     [ptQuery.data],
   );
 
-  /** Live PT balance across active packages. */
+  /** Live PT balance across active packages; trainer falls back to the member's assigned trainer. */
   const ptBalance = useMemo(() => {
+    type TrainerInfo = { profile?: { full_name?: string; avatar_url?: string | null } } | null;
     const active = (ptPackages as Array<Record<string, unknown>>).filter(
       (p) => String(p.status) === 'active',
     );
     const remaining = active.reduce((sum, p) => sum + (Number(p.sessions_remaining) || 0), 0);
     const total = active.reduce((sum, p) => sum + (Number(p.sessions_total) || 0), 0);
-    const trainer = active
-      .map((p) => (p.trainer as { profile?: { full_name?: string } } | null)?.profile?.full_name)
-      .find((n): n is string => Boolean(n)) ?? null;
-    return { remaining, total, trainer, hasPackage: active.length > 0 };
-  }, [ptPackages]);
+    const pkgTrainer = active
+      .map((p) => p.trainer as TrainerInfo)
+      .find((t) => Boolean(t?.profile?.full_name)) ?? null;
+    const assigned = (member as { assigned_trainer?: TrainerInfo } | null)?.assigned_trainer ?? null;
+    const source = pkgTrainer ?? assigned;
+    return {
+      remaining,
+      total,
+      trainer: source?.profile?.full_name ?? null,
+      trainerAvatar: source?.profile?.avatar_url ?? null,
+      hasPackage: active.length > 0,
+    };
+  }, [ptPackages, member]);
 
   /** An invoice already raised for this member and still payable. */
   const payableInvoice: ConciergeInvoiceSummary | null = useMemo(() => {
