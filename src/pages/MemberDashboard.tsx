@@ -20,6 +20,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 import { useState } from 'react';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function MemberDashboard() {
   const { profile } = useAuth();
@@ -594,19 +595,24 @@ export default function MemberDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {member.assigned_trainer || activePtPackage?.trainer ? (
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white"><User className="h-6 w-6" /></div>
-                  <div>
-                    <p className="font-semibold text-slate-900 dark:text-foreground">
-                      {member.assigned_trainer
-                        ? (member.assigned_trainer as any)?.profile?.full_name || 'Trainer'
-                        : (activePtPackage!.trainer as any)?.profiles?.full_name || 'Trainer'}
-                    </p>
-                    <p className="text-xs text-slate-500">{member.assigned_trainer ? 'Personal Trainer' : 'PT Package Trainer'}</p>
+              {member.assigned_trainer || activePtPackage?.trainer ? (() => {
+                const t = (member.assigned_trainer ?? activePtPackage!.trainer) as { profile?: { full_name?: string; avatar_url?: string | null } } | null;
+                const name = t?.profile?.full_name || 'Trainer';
+                const avatar = t?.profile?.avatar_url ?? null;
+                const ini = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+                return (
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-14 w-14 ring-2 ring-primary/20">
+                      {avatar && <AvatarImage src={avatar} alt={name} className="object-cover" />}
+                      <AvatarFallback className="bg-primary/10 font-semibold text-primary">{ini}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-900 dark:text-foreground">{name}</p>
+                      <p className="text-xs text-slate-500">{member.assigned_trainer ? 'Personal Trainer' : 'PT Package Trainer'}</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
+                );
+              })() : (
                 <div className="py-2 text-center"><p className="mb-4 text-sm text-slate-500">No trainer assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Trainer</Link></Button></div>
               )}
             </CardContent>

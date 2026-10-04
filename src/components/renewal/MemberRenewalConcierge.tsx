@@ -155,7 +155,9 @@ export function MemberRenewalConcierge() {
         <PtTopUpPanel
           options={ptOptions}
           trainerName={ptBalance.trainer}
+          trainerAvatar={ptBalance.trainerAvatar}
           remaining={ptBalance.remaining}
+          hasPackage={ptBalance.hasPackage}
           onSelect={openPt}
         />
       </div>
