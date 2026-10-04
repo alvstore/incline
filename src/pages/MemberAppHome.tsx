@@ -2,9 +2,8 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
-  Activity, ArrowRight, CalendarDays, ChevronRight, ClipboardList, Clock3,
-  Dumbbell, HeartPulse, LogOut, MessageSquare, ShoppingBag,
-  UserRound, UtensilsCrossed, Waves,
+  Activity, ArrowRight, CalendarDays, ClipboardList, Clock3,
+  Dumbbell, LogOut, MessageSquare, ShoppingBag, UserRound, UtensilsCrossed,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemberData } from '@/hooks/useMemberData';
@@ -14,30 +13,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { GymLoader } from '@/components/ui/gym-loader';
 import { MemberPasswordSheet } from '@/components/member/MemberPasswordSheet';
+import { StreakBanner } from '@/components/member-app/StreakBanner';
+import { TodayWorkoutCard } from '@/components/member-app/TodayWorkoutCard';
+import { RecoveryTray } from '@/components/member-app/RecoveryTray';
 
-const actions = [
-  { label: 'Book a class', description: 'Explore coached sessions', to: '/book?type=classes', icon: CalendarDays },
-  { label: 'Book recovery', description: 'Find an available facility slot', to: '/book?type=recovery', icon: Waves },
-  { label: 'Workout plan', description: 'See your coach’s plan', to: '/my-workout', icon: Dumbbell },
-  { label: 'Diet plan', description: 'Your nutrition guidance', to: '/my-diet', icon: UtensilsCrossed },
-  { label: 'Store & add-ons', description: 'Shop your club’s catalogue', to: '/member-store', icon: ShoppingBag },
-  { label: 'My progress', description: 'Visits and measurements', to: '/my-progress', icon: Activity },
-  { label: 'Feedback', description: 'Tell us how we’re doing', to: '/member-feedback', icon: MessageSquare },
-  { label: 'Requests', description: 'Track service requests', to: '/my-requests', icon: ClipboardList },
-];
-
-const card = 'rounded-2xl border border-slate-100 bg-white p-5 shadow-lg shadow-slate-200/50 dark:border-border dark:bg-card dark:shadow-none';
-
-function ActionLink({ action }: { action: typeof actions[number] }) {
-  const Icon = action.icon;
-  return (
-    <Link to={action.to} className="group flex min-h-[76px] items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm transition-all duration-200 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-border dark:bg-card">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden /></span>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-foreground">{action.label}</span><span className="block text-xs text-muted-foreground">{action.description}</span></span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden />
-    </Link>
-  );
-}
+const card = 'rounded-2xl bg-card p-5 shadow-lg shadow-slate-200/50 dark:shadow-none';
 
 /** A member-only, mobile-first doorway into the existing live member workflows. */
 export default function MemberAppHome() {
