@@ -1,5 +1,12 @@
 # AI Lead-Enquiry Architecture — Full Audit & Fix (NO DEPLOY)
 
+## Member mobile experience (2026-10-04)
+- [x] Replace sample-data `/mobile-preview` with a member-only, real-data `/member-app` hub; remove gate pass and simulated interactions. Old URL redirects to the member route.
+- [x] Connect live class/recovery booking, store/add-ons, diet/workout plans, feedback, requests, and account information to existing member workflows (no duplicate booking or purchase logic).
+- [x] Audit login/recovery; retain the email/mobile login and email-reset flow. Add a signed-in password-change sheet to the member profile and hub, plus existing avatar upload and editable profile details.
+- [x] Verify as a real member at 375, 768, 1024, and 1440 widths; check linked routes and no browser page errors. No booking, purchase, password mutation, or feedback submission performed during visual verification.
+- [ ] Native Android APK/AAB and iOS TestFlight/App Store delivery requires a separate Expo/React Native project. This Vite web implementation is not a native app and cannot be packaged directly as one.
+
 ## MIPS restart incident
 - [x] Pause face sweep, personnel delta sync, and device reconciliation.
 - [ ] Complete and verify cold-standby backup — manual dump ran, but parity still reports 209 tables and 10 buckets drifting.

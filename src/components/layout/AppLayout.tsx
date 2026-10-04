@@ -18,6 +18,7 @@ import { getNavMode, setNavMode, subscribeNavMode, type NavMode } from '@/lib/na
 import { getMenuForRole } from '@/config/menu';
 import { groupMenuIntoModules, findActiveModuleId } from '@/config/navModules';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
+import { MemberMobileNav } from '@/components/member/MemberMobileNav';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -27,6 +28,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { profile, roles } = useAuth();
   const { branchStatus, retryBranchFetch } = useBranchContext();
   const location = useLocation();
+  const showMemberMobileNav = roles.some((r) => r.role === 'member') && (
+    location.pathname === '/member-app' || location.pathname === '/member-dashboard' ||
+    location.pathname === '/book' || location.pathname === '/my-workout' ||
+    location.pathname === '/my-diet' || location.pathname === '/member-store' ||
+    location.pathname === '/member-feedback' || location.pathname === '/my-requests' ||
+    location.pathname === '/member-profile'
+  );
 
   // Live presence heartbeat (mounted once globally)
   usePresenceHeartbeat();
@@ -137,7 +145,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
 
     return (
-      <main className="flex-1 overflow-auto overflow-x-hidden p-6">
+      <main className={`flex-1 overflow-auto overflow-x-hidden p-6 ${showMemberMobileNav ? 'pb-28 lg:pb-6' : ''}`}>
         {children}
       </main>
     );
@@ -199,6 +207,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Full-width content (no sidebar) */}
         <div className="flex flex-1 flex-col min-w-0">
           {renderContent()}
+          {showMemberMobileNav && <MemberMobileNav />}
         </div>
 
         <SessionTimeoutWarning />
@@ -251,6 +260,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Full-width content (no sidebar) */}
         <div className="flex flex-1 flex-col min-w-0">
           {renderContent()}
+          {showMemberMobileNav && <MemberMobileNav />}
         </div>
 
         <SessionTimeoutWarning />
@@ -294,6 +304,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {renderContent()}
+        {showMemberMobileNav && <MemberMobileNav />}
       </div>
 
       <SessionTimeoutWarning />
