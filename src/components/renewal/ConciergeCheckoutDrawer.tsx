@@ -43,7 +43,7 @@ export function ConciergeCheckoutDrawer({
       >
         <SheetHeader className="border-b border-slate-200 px-6 py-6 text-left">
           <SheetTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
-            <ReceiptText className="h-5 w-5 text-indigo-600" aria-hidden />
+            <ReceiptText className="h-5 w-5 text-primary" aria-hidden />
             Your order
           </SheetTitle>
           <SheetDescription className="tracking-wide text-slate-500">
@@ -73,13 +73,13 @@ export function ConciergeCheckoutDrawer({
 
           {payableInvoice && (
             <div className="rounded-2xl bg-amber-50 p-5">
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-indigo-600">Awaiting payment</p>
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-primary">Awaiting payment</p>
               <p className="mt-2 text-sm tracking-wide text-slate-900">
                 Invoice {payableInvoice.invoiceNumber} · {formatINR(payableInvoice.balance)} outstanding
               </p>
               <Button
                 onClick={() => navigate(`/member/pay?invoice=${payableInvoice.id}`)}
-                className="mt-4 h-12 w-full cursor-pointer rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-sm font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="mt-4 h-12 w-full cursor-pointer rounded-2xl bg-theme-gradient text-sm font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Lock className="mr-2 h-4 w-4" aria-hidden />
                 Pay via UPI / Card
@@ -88,7 +88,7 @@ export function ConciergeCheckoutDrawer({
           )}
 
           <p className="flex items-start gap-2 text-xs leading-relaxed tracking-wide text-slate-500">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" aria-hidden />
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
             Confirming sends this to your club's front desk. They raise the invoice and send you a secure
             payment link — your membership is only extended once payment is received.
           </p>
@@ -106,7 +106,7 @@ export function ConciergeCheckoutDrawer({
             <Button
               disabled={!selection || submitting}
               onClick={() => selection && onConfirm(selection)}
-              className="h-12 cursor-pointer rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-sm font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="h-12 cursor-pointer rounded-2xl bg-theme-gradient text-sm font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
             >
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
               Confirm order

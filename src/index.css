@@ -571,3 +571,9 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+@layer utilities {
+  .bg-theme-gradient {
+    background-image: linear-gradient(to right, var(--theme-grad-from, #7c3aed), var(--theme-grad-to, #4f46e5));
+  }
+}

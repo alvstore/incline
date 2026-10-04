@@ -18,12 +18,12 @@ export function MembershipRenewCard({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 md:p-7 ${
-        isUpgrade ? 'ring-2 ring-indigo-500/40' : ''
+      className={`relative overflow-hidden rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7 ${
+        isUpgrade ? 'ring-2 ring-primary/40' : ''
       }`}
     >
       {isUpgrade && (
-        <span className="absolute right-5 top-5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+        <span className="absolute right-5 top-5 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
           Upgrade
         </span>
       )}
@@ -59,8 +59,8 @@ export function MembershipRenewCard({
       <Button
         onClick={() => onSelect(plan)}
         variant={isUpgrade ? 'default' : 'outline'}
-        className={`mt-6 h-12 w-full cursor-pointer rounded-xl text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-          isUpgrade ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-90' : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
+        className={`mt-6 h-12 w-full cursor-pointer rounded-xl text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring ${
+          isUpgrade ? 'bg-theme-gradient text-white hover:opacity-90' : 'border-primary/30 text-primary hover:bg-primary/10'
         }`}
       >
         {ctaLabel}

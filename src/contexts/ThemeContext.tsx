@@ -386,6 +386,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const root = document.documentElement;
 
+    root.style.setProperty('--theme-grad-from', theme.gradient[0]);
+    root.style.setProperty('--theme-grad-to', theme.gradient[1]);
+
     Object.entries(theme.vars).forEach(([key, value]) => {
       if (!key.startsWith('--sidebar-')) {
         root.style.setProperty(key, value);
