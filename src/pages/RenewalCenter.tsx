@@ -213,9 +213,7 @@ export default function RenewalCenter() {
   if (isMemberView) {
     return (
       <AppLayout>
-        <div className="-m-4 min-h-[calc(100dvh-4rem)] bg-lux-obsidian p-4 md:-m-6 md:p-8">
-          <MemberRenewalConcierge />
-        </div>
+        <MemberRenewalConcierge />
       </AppLayout>
     );
   }

@@ -5,10 +5,8 @@ import type { ConciergePlanOption } from '@/types/concierge';
 
 interface MembershipRenewCardProps {
   plan: ConciergePlanOption;
-  /** Highlighted upsell styling. */
   variant?: 'renew' | 'upgrade';
   ctaLabel: string;
-  /** Line shown under the price, e.g. new validity date. */
   footnote?: string;
   onSelect: (plan: ConciergePlanOption) => void;
 }
@@ -20,40 +18,38 @@ export function MembershipRenewCard({
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-3xl border p-6 backdrop-blur-xl transition-all duration-200 md:p-7 ${
-        isUpgrade
-          ? 'border-lux-gold/35 bg-lux-gold/[0.06] shadow-gold hover:border-lux-gold/60'
-          : 'border-lux-line/10 bg-lux-ivory/[0.04] shadow-lux hover:border-lux-gold/35'
+      className={`relative overflow-hidden rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 md:p-7 ${
+        isUpgrade ? 'ring-2 ring-indigo-500/40' : ''
       }`}
     >
       {isUpgrade && (
-        <span className="absolute right-6 top-6 rounded-full bg-gradient-gold px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-lux-obsidian">
+        <span className="absolute right-5 top-5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
           Upgrade
         </span>
       )}
 
-      <p className="text-[11px] uppercase tracking-[0.3em] text-lux-mist">
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
         {isUpgrade ? 'Elevate your access' : 'Your plan'}
       </p>
-      <h3 className="mt-3 text-2xl font-light tracking-wide text-lux-ivory">{plan.name}</h3>
+      <h3 className="mt-2 pr-20 text-xl font-bold text-slate-900">{plan.name}</h3>
       {plan.description && (
-        <p className="mt-2 text-sm leading-relaxed tracking-wide text-lux-mist">{plan.description}</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">{plan.description}</p>
       )}
 
-      <div className="mt-6 flex items-end gap-2">
-        <span className="text-3xl font-medium tracking-tight text-lux-ivory">{formatINR(plan.price)}</span>
-        <span className="pb-1 flex items-center gap-1 text-xs tracking-wide text-lux-mist">
+      <div className="mt-5 flex items-end gap-2">
+        <span className="text-3xl font-bold text-slate-900">{formatINR(plan.price)}</span>
+        <span className="flex items-center gap-1 pb-1 text-xs text-slate-500">
           <Clock3 className="h-3.5 w-3.5" aria-hidden />
           {plan.durationDays} days
         </span>
       </div>
-      {footnote && <p className="mt-2 text-xs tracking-wide text-lux-mist">{footnote}</p>}
+      {footnote && <p className="mt-1 text-xs text-slate-500">{footnote}</p>}
 
       {plan.perks.length > 0 && (
-        <ul className="mt-6 space-y-2.5">
+        <ul className="mt-5 space-y-2">
           {plan.perks.map((perk) => (
-            <li key={perk} className="flex items-start gap-2.5 text-sm tracking-wide text-lux-ivory/85">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-lux-gold" aria-hidden />
+            <li key={perk} className="flex items-start gap-2.5 text-sm text-slate-700">
+              <span className="mt-0.5 rounded-full bg-emerald-50 p-0.5 text-emerald-600"><Check className="h-3.5 w-3.5" aria-hidden /></span>
               {perk}
             </li>
           ))}
@@ -62,10 +58,9 @@ export function MembershipRenewCard({
 
       <Button
         onClick={() => onSelect(plan)}
-        className={`mt-7 h-12 w-full cursor-pointer rounded-2xl text-sm font-medium tracking-wide transition-all duration-200 focus-visible:ring-2 focus-visible:ring-lux-gold focus-visible:ring-offset-0 ${
-          isUpgrade
-            ? 'bg-gradient-gold text-lux-obsidian hover:opacity-90'
-            : 'border border-lux-line/20 bg-lux-ivory/5 text-lux-ivory hover:bg-lux-ivory/10'
+        variant={isUpgrade ? 'default' : 'outline'}
+        className={`mt-6 h-12 w-full cursor-pointer rounded-xl text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+          isUpgrade ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-90' : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
         }`}
       >
         {ctaLabel}
