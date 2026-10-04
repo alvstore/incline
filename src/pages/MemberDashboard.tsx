@@ -1,6 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -236,55 +235,105 @@ export default function MemberDashboard() {
   const activePtPackage = ptPackages.find(p => p.status === 'active');
   const totalPendingAmount = pendingInvoices.reduce((sum, inv) => sum + (inv.total_amount - (inv.amount_paid || 0)), 0);
 
+  const visitsThisMonth = recentAttendance.filter(a => {
+    const d = new Date(a.check_in); const n = new Date();
+    return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+  }).length;
+  const planName = activeMembership?.plan?.name || scheduledMembership?.plan?.name || 'No active plan';
+  const totalPlanDays = activeMembership
+    ? Math.max(1, differenceInDays(new Date(activeMembership.end_date), new Date(activeMembership.start_date)))
+    : 1;
+  const planUsedPct = activeMembership ? Math.min(100, Math.max(0, ((totalPlanDays - daysRemaining) / totalPlanDays) * 100)) : 0;
+  const card = 'rounded-2xl bg-white dark:bg-card shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10';
+  const label = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
+  const iconBadge = 'bg-indigo-50 text-indigo-600 p-2 rounded-full';
+  const statusBadge = isFrozen
+    ? { text: 'Frozen', cls: 'bg-blue-100 text-blue-700', Icon: Snowflake }
+    : activeMembership
+      ? { text: 'Active', cls: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle }
+      : isScheduled
+        ? { text: 'Scheduled', cls: 'bg-slate-100 text-slate-600', Icon: CalendarClock }
+        : { text: 'Inactive', cls: 'bg-red-100 text-red-700', Icon: AlertCircle };
+
+  const quickActions = [
+    { to: '/book', label: 'Book & Schedule', Icon: Calendar, disabled: isFrozen },
+    { to: '/my-progress', label: 'My Progress', Icon: TrendingUp },
+    { to: '/member-store', label: 'Shop', Icon: CreditCard },
+    { to: '/my-referrals', label: 'Refer & Earn', Icon: Gift },
+  ];
+
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Welcome, {profile?.full_name?.split(' ')[0] || 'Member'}!
-            </h1>
-            <p className="text-muted-foreground">
-              Member ID: {member.member_code} • {member.branch?.name}
-            </p>
-          </div>
-          {isFrozen ? (
-            <div className="text-right">
-              <Badge className="w-fit bg-info/10 text-info border-info/30 hover:bg-info/20">
-                <Snowflake className="h-3.5 w-3.5 mr-1" />
-                FROZEN — {activeMembership?.plan?.name || 'Plan'}
-              </Badge>
-              {freezeDetails?.end_date && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {differenceInDays(new Date(freezeDetails.end_date), new Date()) > 0
-                    ? `${differenceInDays(new Date(freezeDetails.end_date), new Date())} days remaining`
-                    : 'Freeze ending soon'}
-                  {' • Ends '}{format(new Date(freezeDetails.end_date), 'dd MMM yyyy')}
-                </p>
+        {/* Hero pass */}
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 md:p-8 text-white shadow-xl shadow-indigo-500/20">
+          <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-white/80">Welcome back</p>
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                  {profile?.full_name?.split(' ')[0] || 'Member'}
+                </h1>
+                <p className="mt-1 text-sm text-white/80">{member.member_code} · {member.branch?.name}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {quickActions.map(({ to, label: l, Icon, disabled }) => disabled ? (
+                  <span key={to} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/10 px-4 text-sm text-white/60 cursor-not-allowed">
+                    <Icon className="h-4 w-4" />{l}
+                  </span>
+                ) : (
+                  <Link key={to} to={to} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/15 px-4 text-sm font-medium backdrop-blur transition-colors duration-200 hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white cursor-pointer">
+                    <Icon className="h-4 w-4" />{l}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white/10 p-5 backdrop-blur ring-1 ring-white/20">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Your plan</p>
+                  <p className="truncate text-lg font-bold">{planName}</p>
+                </div>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadge.cls}`}>
+                  <statusBadge.Icon className="h-3 w-3" />{statusBadge.text}
+                </span>
+              </div>
+              {activeMembership ? (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-3xl font-bold">{isFrozen ? '—' : daysRemaining}</span>
+                    <span className="text-xs text-white/80">
+                      {isFrozen ? 'Paused' : 'days left'} · ends {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-valuenow={Math.round(planUsedPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Membership time used">
+                    <div className="h-full rounded-full bg-white" style={{ width: `${planUsedPct}%` }} />
+                  </div>
+                  {isFrozen && freezeDetails?.end_date && (
+                    <p className="text-xs text-white/80">Freeze ends {format(new Date(freezeDetails.end_date), 'dd MMM yyyy')}</p>
+                  )}
+                </div>
+              ) : isScheduled ? (
+                <p className="mt-4 text-sm text-white/90">{startsLabel} · {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}</p>
+              ) : (
+                <Button asChild size="sm" className="mt-4 bg-white text-indigo-700 hover:bg-white/90">
+                  <Link to="/renewal-center">Get a membership</Link>
+                </Button>
+              )}
+              {activeMembership && !isFrozen && daysRemaining <= 15 && (
+                <Button asChild size="sm" className="mt-4 w-full bg-white text-indigo-700 hover:bg-white/90">
+                  <Link to="/renewal-center">Renew now</Link>
+                </Button>
               )}
             </div>
-          ) : isScheduled ? (
-            <div className="text-right">
-              <Badge className="w-fit bg-primary/10 text-primary border-primary/30 hover:bg-primary/20">
-                <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                Scheduled — {scheduledMembership?.plan?.name || 'Plan'}
-              </Badge>
-              <p className="text-xs text-muted-foreground mt-1">
-                {startsLabel} • {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}
-              </p>
-            </div>
-          ) : (
-            <Badge variant={activeMembership ? "default" : "destructive"} className="w-fit">
-              {activeMembership ? 'Active Membership' : 'No Active Membership'}
-            </Badge>
-          )}
-
-        </div>
+          </div>
+        </section>
 
         {/* Ad Banners Carousel */}
         {banners.length > 0 && (
-          <div className="overflow-hidden rounded-2xl" ref={emblaRef}>
+          <div className="overflow-hidden rounded-2xl shadow-lg shadow-slate-200/50" ref={emblaRef}>
             <div className="flex">
               {banners.map((banner: any) => (
                 <div key={banner.id} className="flex-[0_0_100%] min-w-0">
@@ -301,123 +350,62 @@ export default function MemberDashboard() {
           </div>
         )}
 
-        {/* Frozen Alert */}
         {isFrozen && (
-          <Alert className="border-info/30 bg-info/5">
-            <Snowflake className="h-4 w-4 text-info" />
-            <AlertTitle className="text-info">Membership Frozen — {activeMembership?.plan?.name}</AlertTitle>
+          <Alert className="rounded-2xl border-0 bg-blue-50 shadow-lg shadow-slate-200/50">
+            <Snowflake className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-700">Membership frozen</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-muted-foreground">Your membership is currently paused. Gym access and bookings are disabled.</span>
-              <Button size="sm" variant="outline" className="w-fit border-info/30 text-info hover:bg-info/10" asChild>
+              <span className="text-slate-600">Gym access and bookings are paused.</span>
+              <Button size="sm" variant="outline" className="w-fit" asChild>
                 <Link to="/my-requests">Request Unfreeze</Link>
               </Button>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Scheduled membership notice */}
         {isScheduled && (
-          <Alert className="border-primary/30 bg-primary/5">
-            <CalendarClock className="h-4 w-4 text-primary" />
-            <AlertTitle className="text-primary">
-              Membership Scheduled — {scheduledMembership?.plan?.name}
-            </AlertTitle>
-            <AlertDescription className="text-muted-foreground">
-              Your plan begins on {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} and runs until{' '}
-              {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}. Gym entry, bookings and benefits unlock
-              automatically on your start date.
+          <Alert className="rounded-2xl border-0 bg-indigo-50 shadow-lg shadow-slate-200/50">
+            <CalendarClock className="h-4 w-4 text-indigo-600" />
+            <AlertTitle className="text-indigo-700">Membership scheduled — {scheduledMembership?.plan?.name}</AlertTitle>
+            <AlertDescription className="text-slate-600">
+              Runs {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} – {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}. Entry, bookings and benefits unlock automatically on your start date.
             </AlertDescription>
           </Alert>
         )}
 
-
-        {/* Primary Stats */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <StatCard
-            title="Membership Status"
-            value={isFrozen ? 'Frozen' : (activeMembership ? activeMembership.plan?.name || 'Active' : (isScheduled ? (scheduledMembership?.plan?.name || 'Scheduled') : 'Inactive'))}
-            icon={isFrozen ? Snowflake : (isScheduled ? CalendarClock : CreditCard)}
-            description={isFrozen ? 'Membership Paused' : (activeMembership ? `${daysRemaining} days remaining` : (isScheduled ? `${startsLabel} • ${format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}` : 'Renew now'))}
-            variant={isFrozen ? "default" : (activeMembership ? "success" : (isScheduled ? "accent" : "destructive"))}
-          />
-          <StatCard
-            title="PT Sessions"
-            value={activePtPackage?.sessions_remaining || 0}
-            icon={Dumbbell}
-            description={activePtPackage ? `of ${activePtPackage.sessions_total} remaining` : 'No active package'}
-            variant="accent"
-          />
-          <StatCard
-            title="This Month Visits"
-            value={recentAttendance.filter(a => new Date(a.check_in).getMonth() === new Date().getMonth()).length}
-            icon={Clock}
-            variant="default"
-          />
-          <div className="flex flex-col">
-            <StatCard
-              title="Pending Dues"
-              value={`₹${totalPendingAmount.toLocaleString()}`}
-              icon={FileText}
-              description={pendingInvoices.length > 0 ? `${pendingInvoices.length} invoice(s)` : 'All paid'}
-              variant={totalPendingAmount > 0 ? "warning" : "success"}
-            />
-            {totalPendingAmount > 0 && pendingInvoices[0]?.id && (
-              <Button asChild size="sm" className="mt-2 rounded-xl bg-gradient-to-r from-warning to-warning hover:from-warning hover:to-warning text-primary-foreground">
-                <Link to={`/member/pay?invoice=${pendingInvoices[0].id}`}>
-                  <CreditCard className="h-3.5 w-3.5 mr-1.5" /> Pay Now
-                </Link>
-              </Button>
+        {/* KPI strip */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <div className={`${card} p-5`}>
+            <div className="flex items-center justify-between"><span className={label}>PT Sessions</span><span className={iconBadge}><Dumbbell className="h-4 w-4" /></span></div>
+            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">{activePtPackage?.sessions_remaining || 0}</p>
+            <p className="text-xs text-slate-500">{activePtPackage ? `of ${activePtPackage.sessions_total} left` : 'No active package'}</p>
+          </div>
+          <div className={`${card} p-5`}>
+            <div className="flex items-center justify-between"><span className={label}>Visits this month</span><span className="bg-emerald-50 text-emerald-600 p-2 rounded-full"><Clock className="h-4 w-4" /></span></div>
+            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">{visitsThisMonth}</p>
+            <p className="text-xs text-slate-500">Last 10 check-ins tracked</p>
+          </div>
+          <div className={`${card} p-5`}>
+            <div className="flex items-center justify-between"><span className={label}>Classes booked</span><span className={iconBadge}><Calendar className="h-4 w-4" /></span></div>
+            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">{upcomingClasses.length}</p>
+            <p className="text-xs text-slate-500">Upcoming</p>
+          </div>
+          <div className={`${card} p-5`}>
+            <div className="flex items-center justify-between">
+              <span className={label}>Pending dues</span>
+              <span className={totalPendingAmount > 0 ? 'bg-red-50 text-red-600 p-2 rounded-full' : 'bg-emerald-50 text-emerald-600 p-2 rounded-full'}><FileText className="h-4 w-4" /></span>
+            </div>
+            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">₹{totalPendingAmount.toLocaleString('en-IN')}</p>
+            {totalPendingAmount > 0 && pendingInvoices[0]?.id ? (
+              <Link to={`/member/pay?invoice=${pendingInvoices[0].id}`} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">
+                <CreditCard className="h-3 w-3" /> Pay now · {pendingInvoices.length} invoice(s)
+              </Link>
+            ) : (
+              <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">All paid</span>
             )}
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid gap-4 md:grid-cols-4">
-          {isFrozen ? (
-            <Card className="opacity-50 cursor-not-allowed h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <Calendar className="h-8 w-8 text-muted-foreground" />
-                <span className="font-medium text-muted-foreground">Book & Schedule</span>
-                <span className="text-xs text-muted-foreground">Disabled while frozen</span>
-              </CardContent>
-            </Card>
-          ) : (
-            <Link to="/book">
-              <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full">
-                <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                  <Calendar className="h-8 w-8 text-accent" />
-                  <span className="font-medium">Book & Schedule</span>
-                </CardContent>
-              </Card>
-            </Link>
-          )}
-          <Link to="/my-progress">
-            <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <TrendingUp className="h-8 w-8 text-success" />
-                <span className="font-medium">View Progress</span>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/member-store">
-            <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <CreditCard className="h-8 w-8 text-warning" />
-                <span className="font-medium">Shop Products</span>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/my-referrals">
-            <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full">
-              <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
-                <Gift className="h-8 w-8 text-primary" />
-                <span className="font-medium">Refer & Earn</span>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
-
-        {/* Eligible Add-Ons strip */}
         {member && activeMembership && (
           <EligibleAddOns
             memberId={member.id}
@@ -429,255 +417,143 @@ export default function MemberDashboard() {
           />
         )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* My Entitlements */}
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-accent" />
+        {/* Bento grid */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Entitlements — wide */}
+          <Card className={`${card} border-0 lg:col-span-2`}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+                <span className={iconBadge}><Sparkles className="h-5 w-5" /></span>
                 My Entitlements
               </CardTitle>
+              {activeMembership && !isFrozen && (
+                <Button size="sm" variant="outline" onClick={() => setAddOnOpen(true)} className="rounded-full">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Add-On
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {!activeMembership ? (
-                <div className="text-center py-4">
+                <div className="py-6 text-center">
                   {isScheduled ? (
-                    <>
-                      <p className="text-muted-foreground mb-1">
-                        Your {scheduledMembership?.plan?.name} benefits unlock on{' '}
-                        {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}.
-                      </p>
-                      <p className="text-xs text-muted-foreground">{startsLabel}</p>
-                    </>
+                    <p className="text-sm text-slate-500">Your {scheduledMembership?.plan?.name} benefits unlock on {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}.</p>
                   ) : (
                     <>
-                      <p className="text-muted-foreground mb-4">No active membership</p>
-                      <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
+                      <p className="text-sm text-slate-500 mb-4">No active membership</p>
+                      <Button variant="outline" asChild><Link to="/renewal-center">Get Membership</Link></Button>
                     </>
                   )}
                 </div>
               ) : (!entitlements || entitlements.length === 0) && benefitCredits.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-muted-foreground">No benefits configured for your plan</p>
-                </div>
+                <p className="py-6 text-center text-sm text-slate-500">No benefits configured for your plan</p>
               ) : (
-                <div className="space-y-3">
-                  {(entitlements || []).map((ent: any) => {
-                    const IconComponent = getBenefitIcon(ent.icon || ent.code);
-                    // Sum purchased add-on credits for this benefit type (matches by name OR code, case-insensitive)
-                    const matchingCredits = (benefitCredits as any[]).filter((c: any) => {
-                      const cName = (c.benefit_type?.name || c.benefit_type || '').toString().toLowerCase();
-                      const cCode = (c.benefit_type?.code || '').toString().toLowerCase();
-                      return cName === (ent.name || '').toLowerCase() || cCode === (ent.code || '').toLowerCase();
-                    });
-                    const addOnRemaining = matchingCredits.reduce((s: number, c: any) => s + (c.credits_remaining || 0), 0);
-                    const planRemaining = ent.totalAllowed !== null ? Math.max(0, ent.totalAllowed - ent.used) : null;
-                    const totalRemaining = planRemaining === null ? null : planRemaining + addOnRemaining;
-
-                    return (
-                      <div key={ent.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-accent/10 flex items-center justify-center">
-                            <IconComponent className="h-4.5 w-4.5 text-accent" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{ent.name}</p>
-                            {ent.periodLabel && (
-                              <p className="text-xs text-muted-foreground capitalize">{ent.periodLabel}</p>
-                            )}
-                            {addOnRemaining > 0 && totalRemaining !== null && (
-                              <p className="text-[10px] text-destructive font-medium mt-0.5">
-                                Includes +{addOnRemaining} add-on credit{addOnRemaining !== 1 ? 's' : ''}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="text-right">
-                            {totalRemaining === null ? (
-                              <Badge variant="outline" className="text-success border-success/30">Unlimited</Badge>
-                            ) : (
-                              <span className="text-sm font-semibold">
-                                {totalRemaining}{' '}
-                                <span className="text-muted-foreground font-normal">
-                                  / {(ent.totalAllowed || 0) + addOnRemaining}
-                                </span>
-                              </span>
-                            )}
-                          </div>
-                          {!isFrozen && /steam|sauna|ice|pool|spa|recovery/i.test(`${ent.name || ''} ${ent.code || ''}`) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-9 rounded-full px-3 text-xs cursor-pointer"
-                              asChild
-                              aria-label={`Book ${ent.name}`}
-                            >
-                              <Link to="/book?type=recovery">Book</Link>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* Credits & gifts (purchased add-ons + complimentary sessions) */}
-                  {benefitCredits.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                        <Heart className="h-3 w-3 text-destructive" /> Credits &amp; Gifts
-                      </p>
-                      {benefitCredits.map((credit: any) => {
-                        const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                        return (
-                          <div key={credit.id} className="flex items-center justify-between p-2.5 bg-destructive/10 dark:bg-destructive/10 rounded-lg">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
-                                <Sparkles className="h-3.5 w-3.5 text-destructive" />
-                              </div>
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(entitlements || []).map((ent: any) => {
+                      const IconComponent = getBenefitIcon(ent.icon || ent.code);
+                      const matchingCredits = (benefitCredits as any[]).filter((c: any) => {
+                        const cName = (c.benefit_type?.name || c.benefit_type || '').toString().toLowerCase();
+                        const cCode = (c.benefit_type?.code || '').toString().toLowerCase();
+                        return cName === (ent.name || '').toLowerCase() || cCode === (ent.code || '').toLowerCase();
+                      });
+                      const addOnRemaining = matchingCredits.reduce((s: number, c: any) => s + (c.credits_remaining || 0), 0);
+                      const planRemaining = ent.totalAllowed !== null ? Math.max(0, ent.totalAllowed - ent.used) : null;
+                      const totalRemaining = planRemaining === null ? null : planRemaining + addOnRemaining;
+                      const totalCap = (ent.totalAllowed || 0) + addOnRemaining;
+                      const pct = totalRemaining === null ? 100 : totalCap > 0 ? (totalRemaining / totalCap) * 100 : 0;
+                      const bookable = !isFrozen && /steam|sauna|ice|pool|spa|recovery/i.test(`${ent.name || ''} ${ent.code || ''}`);
+                      return (
+                        <div key={ent.id} className="rounded-xl bg-slate-50 dark:bg-muted/40 p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className={iconBadge}><IconComponent className="h-4 w-4" /></span>
                               <div className="min-w-0">
-                                <p className="text-xs font-medium truncate">{credit.benefit_type?.name || 'Add-On'}</p>
-                                <p className="text-[10px] text-muted-foreground">Exp. {format(new Date(credit.expires_at), 'dd MMM')} · {daysLeft}d left</p>
+                                <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{ent.name}</p>
+                                <p className="text-xs text-slate-500 capitalize">{ent.periodLabel || 'Included'}</p>
                               </div>
                             </div>
-                            <span className="text-sm font-bold text-destructive shrink-0">
-                              {credit.credits_remaining}<span className="text-[10px] font-normal text-muted-foreground">/{credit.credits_total}</span>
-                            </span>
+                            {totalRemaining === null ? (
+                              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Unlimited</span>
+                            ) : (
+                              <span className="text-sm font-bold text-slate-900 dark:text-foreground">{totalRemaining}<span className="font-normal text-slate-500"> / {totalCap}</span></span>
+                            )}
                           </div>
-                        );
-                      })}
+                          {totalRemaining !== null && (
+                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={`${ent.name} remaining`} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+                              <div className={`h-full rounded-full ${pct <= 20 ? 'bg-amber-500' : 'bg-indigo-600'}`} style={{ width: `${pct}%` }} />
+                            </div>
+                          )}
+                          <div className="mt-3 flex items-center justify-between">
+                            {addOnRemaining > 0 ? <span className="text-xs text-slate-500">Includes +{addOnRemaining} add-on</span> : <span />}
+                            {bookable && (
+                              <Link to="/book?type=recovery" aria-label={`Book ${ent.name}`} className="text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">Book →</Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {benefitCredits.length > 0 && (
+                    <div className="space-y-2">
+                      <p className={`${label} flex items-center gap-1.5`}><Heart className="h-3 w-3" /> Credits &amp; Gifts</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {benefitCredits.map((credit: any) => {
+                          const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / 86400000);
+                          return (
+                            <div key={credit.id} className="flex items-center justify-between rounded-xl bg-violet-50 dark:bg-muted/40 p-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-slate-900 dark:text-foreground">{credit.benefit_type?.name || 'Add-On'}</p>
+                                <p className="text-xs text-slate-500">Exp. {format(new Date(credit.expires_at), 'dd MMM')} · {daysLeft}d left</p>
+                              </div>
+                              <span className="text-sm font-bold text-violet-700">{credit.credits_remaining}<span className="font-normal text-slate-500">/{credit.credits_total}</span></span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
-
                   {!isFrozen && (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to="/book?type=recovery">Book Now</Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAddOnOpen(true)}
-                        disabled={!activeMembership}
-                        className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Buy Add-On
-                      </Button>
-                    </div>
+                    <Button asChild className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-95">
+                      <Link to="/book?type=recovery">Book a recovery session</Link>
+                    </Button>
                   )}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Membership Details */}
-          <Card className="border-border/50">
+          {/* Next up */}
+          <Card className={`${card} border-0`}>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                {isFrozen ? <Snowflake className="h-5 w-5 text-info" /> : <CreditCard className="h-5 w-5" />}
-                Membership Details
+              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+                <span className={iconBadge}><Calendar className="h-5 w-5" /></span>
+                Next Up
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {activeMembership ? (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Plan</span>
-                    <span className="font-medium">{activeMembership.plan?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Status</span>
-                    {isFrozen ? (
-                      <Badge className="bg-info/10 text-info border-info/30"><Snowflake className="h-3 w-3 mr-1" />Frozen</Badge>
-                    ) : (
-                      <Badge variant="default">Active</Badge>
-                    )}
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Start Date</span>
-                    <span>{format(new Date(activeMembership.start_date), 'dd MMM yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">End Date</span>
-                    <span>{format(new Date(activeMembership.end_date), 'dd MMM yyyy')}</span>
-                  </div>
-                  {!isFrozen && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Days Remaining</span>
-                      <Badge variant={daysRemaining > 7 ? "default" : "destructive"}>{daysRemaining} days</Badge>
-                    </div>
-                  )}
-                  {isFrozen && (
-                    <Button className="w-full" variant="outline" asChild>
-                      <Link to="/my-requests">Request Unfreeze</Link>
-                    </Button>
-                  )}
-                  {!isFrozen && daysRemaining <= 7 && (
-                    <Button className="w-full" asChild>
-                      <Link to="/my-requests">Request Renewal</Link>
-                    </Button>
-                  )}
-                </>
-              ) : isScheduled ? (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Plan</span>
-                    <span className="font-medium">{scheduledMembership?.plan?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Status</span>
-                    <Badge className="bg-primary/10 text-primary border-primary/30">
-                      <CalendarClock className="h-3 w-3 mr-1" />Scheduled
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Start Date</span>
-                    <span>{format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">End Date</span>
-                    <span>{format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{startsLabel} — access opens automatically.</p>
-                </>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-muted-foreground mb-4">No active membership</p>
-                  <Button asChild><Link to="/my-requests">Request Membership</Link></Button>
-                </div>
-              )}
-
-            </CardContent>
-          </Card>
-
-          {/* Upcoming Classes */}
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2"><Calendar className="h-5 w-5" />Upcoming Classes</CardTitle>
             </CardHeader>
             <CardContent>
               {upcomingClasses.length === 0 ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">No classes booked yet — browse this week's schedule and reserve your spot.</p>
+                  <p className="text-sm text-slate-500">No classes booked yet — browse this week's schedule and reserve your spot.</p>
                   {clubClasses.map((cls) => (
-                    <div key={cls.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
+                    <div key={cls.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 dark:bg-muted/40 p-3">
                       <div className="min-w-0">
-                        <p className="truncate font-medium">{cls.name}</p>
-                        <p className="text-sm text-muted-foreground">{format(new Date(cls.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{cls.name}</p>
+                        <p className="text-xs text-slate-500">{format(new Date(cls.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
                       </div>
-                      {!isFrozen && <Button size="sm" variant="outline" asChild className="shrink-0"><Link to="/book">Book</Link></Button>}
+                      {!isFrozen && <Button size="sm" variant="outline" asChild className="shrink-0 rounded-full"><Link to="/book">Book</Link></Button>}
                     </div>
                   ))}
                   {!isFrozen && <Button className="w-full" variant="outline" asChild><Link to="/book">See full schedule</Link></Button>}
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {upcomingClasses.slice(0, 3).map((booking: any) => (
-                    <div key={booking.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{booking.class?.name}</p>
-                        <p className="text-sm text-muted-foreground">{format(new Date(booking.class?.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
+                  {upcomingClasses.slice(0, 4).map((booking: any) => (
+                    <div key={booking.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 dark:bg-muted/40 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{booking.class?.name}</p>
+                        <p className="text-xs text-slate-500">{format(new Date(booking.class?.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
                       </div>
-                      <Badge variant="outline">Booked</Badge>
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Booked</span>
                     </div>
                   ))}
                 </div>
@@ -685,59 +561,73 @@ export default function MemberDashboard() {
             </CardContent>
           </Card>
 
-          {/* Recent Attendance */}
-          <Card className="border-border/50">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5" />Recent Attendance</CardTitle></CardHeader>
+          {/* Recent attendance */}
+          <Card className={`${card} border-0`}>
+            <CardHeader>
+              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+                <span className="bg-emerald-50 text-emerald-600 p-2 rounded-full"><Clock className="h-5 w-5" /></span>
+                Recent Visits
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               {recentAttendance.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No attendance records</p>
+                <p className="py-4 text-center text-sm text-slate-500">No visits yet</p>
               ) : (
-                <div className="space-y-3">
+                <ul className="space-y-3">
                   {recentAttendance.slice(0, 5).map((record) => (
-                    <div key={record.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-success" /><span>{format(new Date(record.check_in), 'dd MMM yyyy')}</span></div>
-                      <span className="text-sm text-muted-foreground">{format(new Date(record.check_in), 'HH:mm')}{record.check_out && ` - ${format(new Date(record.check_out), 'HH:mm')}`}</span>
-                    </div>
+                    <li key={record.id} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-slate-900 dark:text-foreground"><CheckCircle className="h-4 w-4 text-emerald-500" />{format(new Date(record.check_in), 'EEE, dd MMM')}</span>
+                      <span className="text-slate-500">{format(new Date(record.check_in), 'HH:mm')}{record.check_out && ` – ${format(new Date(record.check_out), 'HH:mm')}`}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </CardContent>
           </Card>
 
-          {/* Assigned Trainer */}
-          <Card className="border-border/50">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Dumbbell className="h-5 w-5" />My Trainer</CardTitle></CardHeader>
+          {/* Trainer */}
+          <Card className={`${card} border-0`}>
+            <CardHeader>
+              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+                <span className={iconBadge}><Dumbbell className="h-5 w-5" /></span>
+                My Trainer
+              </CardTitle>
+            </CardHeader>
             <CardContent>
-              {member.assigned_trainer ? (
+              {member.assigned_trainer || activePtPackage?.trainer ? (
                 <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center"><User className="h-6 w-6 text-accent" /></div>
-                  <div><p className="font-medium">{(member.assigned_trainer as any)?.profile?.full_name || 'Trainer'}</p><p className="text-sm text-muted-foreground">Personal Trainer</p></div>
-                </div>
-              ) : activePtPackage?.trainer ? (
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center"><User className="h-6 w-6 text-accent" /></div>
-                  <div><p className="font-medium">{(activePtPackage.trainer as any)?.profiles?.full_name || 'Trainer'}</p><p className="text-sm text-muted-foreground">PT Package Trainer</p></div>
-                </div>
-              ) : (
-                <div className="text-center py-4"><p className="text-muted-foreground mb-4">No trainer assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Trainer</Link></Button></div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Assigned Locker */}
-          <Card className="border-border/50">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lock className="h-5 w-5" />My Locker</CardTitle></CardHeader>
-            <CardContent>
-              {assignedLocker ? (
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-warning/10 flex items-center justify-center"><Lock className="h-6 w-6 text-warning" /></div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white"><User className="h-6 w-6" /></div>
                   <div>
-                    <p className="font-medium">Locker #{assignedLocker.locker?.locker_number}</p>
-                    <p className="text-sm text-muted-foreground">{assignedLocker.locker?.size || 'Standard'} Size{assignedLocker.end_date && ` • Until ${format(new Date(assignedLocker.end_date), 'dd MMM yyyy')}`}</p>
+                    <p className="font-semibold text-slate-900 dark:text-foreground">
+                      {member.assigned_trainer
+                        ? (member.assigned_trainer as any)?.profile?.full_name || 'Trainer'
+                        : (activePtPackage!.trainer as any)?.profiles?.full_name || 'Trainer'}
+                    </p>
+                    <p className="text-xs text-slate-500">{member.assigned_trainer ? 'Personal Trainer' : 'PT Package Trainer'}</p>
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-4"><p className="text-muted-foreground mb-4">No locker assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Locker</Link></Button></div>
+                <div className="py-2 text-center"><p className="mb-4 text-sm text-slate-500">No trainer assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Trainer</Link></Button></div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Locker */}
+          <Card className={`${card} border-0`}>
+            <CardHeader>
+              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+                <span className="bg-amber-50 text-amber-600 p-2 rounded-full"><Lock className="h-5 w-5" /></span>
+                My Locker
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {assignedLocker ? (
+                <div>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-foreground">#{assignedLocker.locker?.locker_number}</p>
+                  <p className="text-xs text-slate-500">{assignedLocker.locker?.size || 'Standard'} size{assignedLocker.end_date && ` · until ${format(new Date(assignedLocker.end_date), 'dd MMM yyyy')}`}</p>
+                </div>
+              ) : (
+                <div className="py-2 text-center"><p className="mb-4 text-sm text-slate-500">No locker assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Locker</Link></Button></div>
               )}
             </CardContent>
           </Card>
