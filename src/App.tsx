@@ -113,7 +113,7 @@ const MealCatalogPage = lazy(() => import("./pages/MealCatalog"));
 const StaffDashboard = lazy(() => import("./pages/StaffDashboard"));
 const FollowUpCenter = lazy(() => import("./pages/FollowUpCenter"));
 const RenewalCenter = lazy(() => import("./pages/RenewalCenter"));
-const MobileAppPreview = lazy(() => import("./pages/MobileAppPreview"));
+const MemberAppHome = lazy(() => import("./pages/MemberAppHome"));
 
 // Admin pages
 const AdminRoles = lazy(() => import("./pages/AdminRoles"));
@@ -247,7 +247,8 @@ function RoutedContent() {
           <Route path="/staff-dashboard" element={<ProtectedRoute requiredRoles={['staff']}><StaffDashboard /></ProtectedRoute>} />
           <Route path="/follow-up-center" element={<ProtectedRoute requiredRoles={['staff', 'manager', 'admin', 'owner']}><FollowUpCenter /></ProtectedRoute>} />
           <Route path="/renewal-center" element={<ProtectedRoute requiredRoles={['staff', 'manager', 'admin', 'owner', 'member']}><RenewalCenter /></ProtectedRoute>} />
-          <Route path="/mobile-preview" element={<ProtectedRoute requiredRoles={['manager', 'admin', 'owner']}><MobileAppPreview /></ProtectedRoute>} />
+          <Route path="/mobile-preview" element={<Navigate to="/member-app" replace />} />
+          <Route path="/member-app" element={<ProtectedRoute requiredRoles={['member']}><MemberAppHome /></ProtectedRoute>} />
 
           {/* ==================== ADMIN/MANAGER/OWNER ROUTES ==================== */}
           <Route path="/dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><DashboardPage /></ProtectedRoute>} />

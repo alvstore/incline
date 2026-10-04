@@ -18,9 +18,10 @@ import { CommunicationPreferences } from '@/components/profile/CommunicationPref
 import { useQuery } from '@tanstack/react-query';
 import { Badge as UIBadge } from '@/components/ui/badge';
 import { PARQ_QUESTIONS, parseHealthConditions } from '@/lib/registration/healthQuestions';
+import { MemberPasswordSheet } from '@/components/member/MemberPasswordSheet';
 
 export default function MemberProfile() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, resetPassword } = useAuth();
   const { member, activeMembership, isLoading } = useMemberData();
   
   const [isEditing, setIsEditing] = useState(false);
@@ -98,9 +99,7 @@ export default function MemberProfile() {
     }
     setIsSendingReset(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
+      const { error } = await resetPassword(profile.email);
       if (error) throw error;
       toast.success('Password reset email sent! Check your inbox.');
     } catch (error: any) {
@@ -151,7 +150,8 @@ export default function MemberProfile() {
               Manage your personal information
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <MemberPasswordSheet />
             <Button variant="outline" onClick={handleSendPasswordReset} disabled={isSendingReset}>
               <KeyRound className="h-4 w-4 mr-2" />
               {isSendingReset ? 'Sending...' : 'Reset Password'}
