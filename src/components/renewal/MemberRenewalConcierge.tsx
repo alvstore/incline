@@ -69,10 +69,10 @@ export function MemberRenewalConcierge() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-72 w-full rounded-[28px]" />
+        <Skeleton className="h-72 w-full rounded-2xl" />
         <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-80 w-full rounded-3xl" />
-          <Skeleton className="h-80 w-full rounded-3xl" />
+          <Skeleton className="h-80 w-full rounded-2xl" />
+          <Skeleton className="h-80 w-full rounded-2xl" />
         </div>
       </div>
     );
@@ -80,9 +80,9 @@ export function MemberRenewalConcierge() {
 
   if (isError || !member) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-3xl border border-lux-line/10 bg-lux-charcoal p-12 text-center">
-        <AlertCircle className="h-6 w-6 text-lux-rose" aria-hidden />
-        <p className="text-sm tracking-wide text-lux-ivory">We could not load your membership right now.</p>
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-12 shadow-lg shadow-slate-200/50 text-center">
+        <AlertCircle className="h-6 w-6 text-red-500" aria-hidden />
+        <p className="text-sm tracking-wide text-slate-900">We could not load your membership right now.</p>
         <Button onClick={refetch} className="cursor-pointer rounded-2xl">Try again</Button>
       </div>
     );
@@ -106,19 +106,19 @@ export function MemberRenewalConcierge() {
       />
 
       {payableInvoice && (
-        <div className="flex flex-col gap-4 rounded-3xl border border-lux-gold/30 bg-lux-gold/[0.06] p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-2xl bg-amber-50 p-6 shadow-lg shadow-amber-100/50 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <ReceiptText className="mt-0.5 h-5 w-5 shrink-0 text-lux-gold" aria-hidden />
+            <ReceiptText className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
             <div>
-              <p className="text-sm font-medium tracking-wide text-lux-ivory">
+              <p className="text-sm font-medium tracking-wide text-slate-900">
                 Invoice {payableInvoice.invoiceNumber} is waiting
               </p>
-              <p className="text-xs tracking-wide text-lux-mist">
+              <p className="text-xs tracking-wide text-slate-500">
                 {formatINR(payableInvoice.balance)} outstanding{payableInvoice.dueDate ? ` · due ${formatDate(payableInvoice.dueDate)}` : ''}
               </p>
             </div>
           </div>
-          <Button asChild className="h-12 cursor-pointer rounded-2xl bg-gradient-gold px-6 text-sm font-medium tracking-wide text-lux-obsidian hover:opacity-90">
+          <Button asChild className="h-12 cursor-pointer rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 text-sm font-semibold text-white hover:opacity-90">
             <Link to={`/member/pay?invoice=${payableInvoice.id}`}>Pay via UPI / Card</Link>
           </Button>
         </div>
@@ -127,7 +127,7 @@ export function MemberRenewalConcierge() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <div>
-            <h2 className="text-xs uppercase tracking-[0.3em] text-lux-mist">Extend your access</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Extend your access</h2>
           </div>
           {renewPlan ? (
             <MembershipRenewCard
@@ -138,7 +138,7 @@ export function MemberRenewalConcierge() {
               onSelect={openPlan}
             />
           ) : (
-            <p className="rounded-3xl border border-dashed border-lux-line/15 p-8 text-center text-sm tracking-wide text-lux-mist">
+            <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm tracking-wide text-slate-500">
               No plans are published for your club yet. Please speak to the front desk.
             </p>
           )}

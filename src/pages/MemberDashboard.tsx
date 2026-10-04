@@ -93,6 +93,25 @@ export default function MemberDashboard() {
     },
   });
 
+  // Next club sessions — shown when the member has nothing booked yet
+  const { data: clubClasses = [] } = useQuery({
+    queryKey: ['member-dashboard-club-classes', member?.branch_id],
+    enabled: !!member?.branch_id,
+    queryFn: async (): Promise<{ id: string; name: string; scheduled_at: string }[]> => {
+      const { data, error } = await supabase
+        .from('classes')
+        .select('id, name, scheduled_at')
+        .eq('branch_id', member!.branch_id)
+        .eq('is_active', true)
+        .is('cancelled_at', null)
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(3);
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string; scheduled_at: string }[];
+    },
+  });
+
   // Fetch ad banners
   const { data: banners = [] } = useQuery({
     queryKey: ['member-banners', member?.branch_id],
@@ -637,9 +656,18 @@ export default function MemberDashboard() {
             </CardHeader>
             <CardContent>
               {upcomingClasses.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-muted-foreground mb-4">No upcoming classes</p>
-                  {!isFrozen && <Button variant="outline" asChild><Link to="/book">Book a Class</Link></Button>}
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">No classes booked yet — browse this week's schedule and reserve your spot.</p>
+                  {clubClasses.map((cls) => (
+                    <div key={cls.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{cls.name}</p>
+                        <p className="text-sm text-muted-foreground">{format(new Date(cls.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
+                      </div>
+                      {!isFrozen && <Button size="sm" variant="outline" asChild className="shrink-0"><Link to="/book">Book</Link></Button>}
+                    </div>
+                  ))}
+                  {!isFrozen && <Button className="w-full" variant="outline" asChild><Link to="/book">See full schedule</Link></Button>}
                 </div>
               ) : (
                 <div className="space-y-3">
