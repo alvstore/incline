@@ -245,9 +245,9 @@ export default function MemberDashboard() {
     ? Math.max(1, differenceInDays(new Date(activeMembership.end_date), new Date(activeMembership.start_date)))
     : 1;
   const planUsedPct = activeMembership ? Math.min(100, Math.max(0, ((totalPlanDays - daysRemaining) / totalPlanDays) * 100)) : 0;
-  const card = 'rounded-2xl bg-white dark:bg-card shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10';
+  const card = 'rounded-2xl bg-white dark:bg-card shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
   const label = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
-  const iconBadge = 'bg-indigo-50 text-indigo-600 p-2 rounded-full';
+  const iconBadge = 'bg-primary/10 text-primary p-2 rounded-full';
   const statusBadge = isFrozen
     ? { text: 'Frozen', cls: 'bg-blue-100 text-blue-700', Icon: Snowflake }
     : activeMembership
@@ -267,7 +267,7 @@ export default function MemberDashboard() {
     <AppLayout>
       <div className="space-y-6">
         {/* Hero pass */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 md:p-8 text-white shadow-xl shadow-indigo-500/20">
+        <section className="relative overflow-hidden rounded-2xl bg-theme-gradient p-6 md:p-8 text-white shadow-xl shadow-primary/20">
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
           <div className="relative grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
             <div className="space-y-4">
@@ -319,12 +319,12 @@ export default function MemberDashboard() {
               ) : isScheduled ? (
                 <p className="mt-4 text-sm text-white/90">{startsLabel} · {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}</p>
               ) : (
-                <Button asChild size="sm" className="mt-4 bg-white text-indigo-700 hover:bg-white/90">
+                <Button asChild size="sm" className="mt-4 bg-white text-primary hover:bg-white/90">
                   <Link to="/renewal-center">Get a membership</Link>
                 </Button>
               )}
               {activeMembership && !isFrozen && daysRemaining <= 15 && (
-                <Button asChild size="sm" className="mt-4 w-full bg-white text-indigo-700 hover:bg-white/90">
+                <Button asChild size="sm" className="mt-4 w-full bg-white text-primary hover:bg-white/90">
                   <Link to="/renewal-center">Renew now</Link>
                 </Button>
               )}
@@ -365,9 +365,9 @@ export default function MemberDashboard() {
         )}
 
         {isScheduled && (
-          <Alert className="rounded-2xl border-0 bg-indigo-50 shadow-lg shadow-slate-200/50">
-            <CalendarClock className="h-4 w-4 text-indigo-600" />
-            <AlertTitle className="text-indigo-700">Membership scheduled — {scheduledMembership?.plan?.name}</AlertTitle>
+          <Alert className="rounded-2xl border-0 bg-primary/10 shadow-lg shadow-slate-200/50">
+            <CalendarClock className="h-4 w-4 text-primary" />
+            <AlertTitle className="text-primary">Membership scheduled — {scheduledMembership?.plan?.name}</AlertTitle>
             <AlertDescription className="text-slate-600">
               Runs {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} – {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}. Entry, bookings and benefits unlock automatically on your start date.
             </AlertDescription>
@@ -398,7 +398,7 @@ export default function MemberDashboard() {
             </div>
             <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">₹{totalPendingAmount.toLocaleString('en-IN')}</p>
             {totalPendingAmount > 0 && pendingInvoices[0]?.id ? (
-              <Link to={`/member/pay?invoice=${pendingInvoices[0].id}`} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">
+              <Link to={`/member/pay?invoice=${pendingInvoices[0].id}`} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-ring rounded">
                 <CreditCard className="h-3 w-3" /> Pay now · {pendingInvoices.length} invoice(s)
               </Link>
             ) : (
@@ -481,13 +481,13 @@ export default function MemberDashboard() {
                           </div>
                           {totalRemaining !== null && (
                             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={`${ent.name} remaining`} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-                              <div className={`h-full rounded-full ${pct <= 20 ? 'bg-amber-500' : 'bg-indigo-600'}`} style={{ width: `${pct}%` }} />
+                              <div className={`h-full rounded-full ${pct <= 20 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
                             </div>
                           )}
                           <div className="mt-3 flex items-center justify-between">
                             {addOnRemaining > 0 ? <span className="text-xs text-slate-500">Includes +{addOnRemaining} add-on</span> : <span />}
                             {bookable && (
-                              <Link to="/book?type=recovery" aria-label={`Book ${ent.name}`} className="text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">Book →</Link>
+                              <Link to="/book?type=recovery" aria-label={`Book ${ent.name}`} className="text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-ring rounded">Book →</Link>
                             )}
                           </div>
                         </div>
@@ -501,12 +501,12 @@ export default function MemberDashboard() {
                         {benefitCredits.map((credit: any) => {
                           const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / 86400000);
                           return (
-                            <div key={credit.id} className="flex items-center justify-between rounded-xl bg-violet-50 dark:bg-muted/40 p-3">
+                            <div key={credit.id} className="flex items-center justify-between rounded-xl bg-primary/10 dark:bg-muted/40 p-3">
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-slate-900 dark:text-foreground">{credit.benefit_type?.name || 'Add-On'}</p>
                                 <p className="text-xs text-slate-500">Exp. {format(new Date(credit.expires_at), 'dd MMM')} · {daysLeft}d left</p>
                               </div>
-                              <span className="text-sm font-bold text-violet-700">{credit.credits_remaining}<span className="font-normal text-slate-500">/{credit.credits_total}</span></span>
+                              <span className="text-sm font-bold text-primary">{credit.credits_remaining}<span className="font-normal text-slate-500">/{credit.credits_total}</span></span>
                             </div>
                           );
                         })}
@@ -514,7 +514,7 @@ export default function MemberDashboard() {
                     </div>
                   )}
                   {!isFrozen && (
-                    <Button asChild className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-95">
+                    <Button asChild className="w-full bg-theme-gradient text-white hover:opacity-95">
                       <Link to="/book?type=recovery">Book a recovery session</Link>
                     </Button>
                   )}

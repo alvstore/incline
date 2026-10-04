@@ -118,7 +118,7 @@ export function MemberRenewalConcierge() {
               </p>
             </div>
           </div>
-          <Button asChild className="h-12 cursor-pointer rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 text-sm font-semibold text-white hover:opacity-90">
+          <Button asChild className="h-12 cursor-pointer rounded-2xl bg-theme-gradient px-6 text-sm font-semibold text-white hover:opacity-90">
             <Link to={`/member/pay?invoice=${payableInvoice.id}`}>Pay via UPI / Card</Link>
           </Button>
         </div>
