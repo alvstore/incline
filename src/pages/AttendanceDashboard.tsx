@@ -95,6 +95,7 @@ export default function AttendanceDashboard() {
   const [historyMonth, setHistoryMonth] = useState(getISTToday().substring(0, 7));
   const [historyScope, setHistoryScope] = useState<'staff' | 'members'>('staff');
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
+  const [memberView, setMemberView] = useState<'present' | 'absent'>('present');
 
   // Member attendance hook (rapid check-in)
   const {
@@ -962,8 +963,8 @@ export default function AttendanceDashboard() {
                     const exportData = filteredMemberAttendance.map((a) => ({
                     Name: a.members?.profiles?.full_name || 'Unknown',
                     Code: a.members?.member_code || '',
-                      'First Check In': format(new Date(a.firstCheckIn), 'yyyy-MM-dd HH:mm'),
-                      'Last Check Out': a.lastCheckOut ? format(new Date(a.lastCheckOut), 'yyyy-MM-dd HH:mm') : '',
+                      'First Check In': format(new Date(a.firstCheckIn), 'yyyy-MM-dd hh:mm a'),
+                      'Last Check Out': a.lastCheckOut ? format(new Date(a.lastCheckOut), 'yyyy-MM-dd hh:mm a') : '',
                       Duration: formatDuration(a.firstCheckIn, a.lastCheckOut),
                       Entries: a.scanCount,
                       Source: a.sourceLabel,
@@ -1019,6 +1020,25 @@ export default function AttendanceDashboard() {
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                   <p><span className="font-semibold text-foreground">One row per person.</span> Repeat gate scans are grouped into one daily visit; expand a row to review every entry.</p>
                 </div>
+                <div className="mb-4 inline-flex rounded-xl bg-muted/60 p-1" role="tablist" aria-label="Member attendance view">
+                  <button type="button" role="tab" aria-selected={memberView === 'present'} onClick={() => setMemberView('present')} className={`min-h-10 cursor-pointer rounded-lg px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${memberView === 'present' ? 'bg-card text-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>Present ({filteredMemberAttendance.length})</button>
+                  <button type="button" role="tab" aria-selected={memberView === 'absent'} onClick={() => setMemberView('absent')} className={`min-h-10 cursor-pointer rounded-lg px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${memberView === 'absent' ? 'bg-card text-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>Absent 3+ days ({filteredAbsentMembers.length})</button>
+                </div>
+                {memberView === 'absent' ? (
+                  <div className="space-y-2">
+                    {absentLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />) : absentError ? <p className="py-10 text-center text-sm text-destructive">Could not load absent members.</p> : filteredAbsentMembers.length === 0 ? (
+                      <div className="py-12 text-center"><CheckCircle className="mx-auto mb-3 h-10 w-10 text-emerald-500" /><p className="text-sm font-medium">Everyone has visited in the last 3 days</p></div>
+                    ) : filteredAbsentMembers.map((m) => (
+                      <div key={m.member_id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3 shadow-sm transition-colors duration-150 hover:bg-slate-50">
+                        <Avatar className="h-10 w-10"><AvatarImage src={m.avatar_url ?? undefined} /><AvatarFallback className="bg-accent/10 text-accent text-xs">{getInitials(m.full_name)}</AvatarFallback></Avatar>
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{m.full_name}</p><p className="text-xs text-muted-foreground">{m.member_code}</p></div>
+                        <div className="text-right text-xs"><p className="text-muted-foreground">Last visit</p><p className="font-semibold">{m.last_visit ? `${format(new Date(m.last_visit), 'dd MMM')}, ${fmtTime(m.last_visit)}` : 'Never visited'}</p></div>
+                        {absenceBadge(m.days_absent)}
+                        <Button variant="outline" size="sm" className="min-h-10 gap-1.5" disabled={isCheckingIn || isAlreadyCheckedIn(m.member_id)} onClick={() => handleQuickCheckIn(m.member_id, m.full_name, m.avatar_url ?? undefined)}><LogIn className="h-4 w-4" />Check In</Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (<>
                 {/* Bulk Check-out */}
                 {filteredMemberAttendance.some((a) => a.isActive) && (
                   <div className="flex justify-end mb-4">
@@ -1068,17 +1088,17 @@ export default function AttendanceDashboard() {
                             </Avatar>
                             <div>
                               <p className="font-medium">{attendance.members?.profiles?.full_name || 'Unknown'}</p>
-                              <p className="text-xs text-muted-foreground">{attendance.members?.member_code}</p>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5"><span className="text-xs text-muted-foreground">{attendance.members?.member_code}</span>{getStreakBadge(attendance.member_id)}</div>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">{fmtTime(attendance.firstCheckIn)}</TableCell>
                         <TableCell>{attendance.lastCheckOut ? fmtTime(attendance.lastCheckOut) : '—'}</TableCell>
                         <TableCell>{attendance.isActive ? 'Active' : formatDuration(attendance.firstCheckIn, attendance.lastCheckOut)}</TableCell>
-                        <TableCell><div className="flex items-center gap-2">{getSourceBadge(attendance)}{attendance.scanCount > 1 && <Badge variant="secondary" className="rounded-full">{attendance.scanCount} entries</Badge>}</div></TableCell>
+                        <TableCell><div className="flex items-center gap-2">{getSourceBadge(attendance)}{attendance.scanCount > 1 && <Badge variant="secondary" className="rounded-full">{attendance.scanCount} gate scans</Badge>}</div></TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {attendance.isActive ? <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs" disabled={isCheckingOut} onClick={() => checkOut(attendance.member_id, { onSuccess: () => refetchMemberToday() })}><LogOut className="h-3.5 w-3.5" /> Check Out</Button> : <Badge className="rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Completed</Badge>}
+                            {attendance.isActive ? <div className="flex items-center gap-2">{getStatusBadge(attendance)}<Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs" disabled={isCheckingOut} onClick={() => checkOut(attendance.member_id, { onSuccess: () => refetchMemberToday() })}><LogOut className="h-3.5 w-3.5" /> Check Out</Button></div> : getStatusBadge(attendance)}
                             {attendance.scanCount > 1 && <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`Show ${attendance.scanCount} entries for ${attendance.members?.profiles?.full_name || 'member'}`} onClick={() => setExpandedMemberId(expandedMemberId === attendance.member_id ? null : attendance.member_id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedMemberId === attendance.member_id ? 'rotate-180' : ''}`} /></Button>}
                           </div>
                         </TableCell>
@@ -1094,14 +1114,15 @@ export default function AttendanceDashboard() {
                 <div className="space-y-3 md:hidden">
                   {memberAttendanceLoading ? [0, 1, 2].map((item) => <Skeleton key={item} className="h-36 w-full rounded-2xl" />) : memberAttendanceError ? <p className="py-10 text-center text-sm text-destructive">Could not load member attendance.</p> : filteredMemberAttendance.map((attendance) => (
                     <div key={attendance.id} className="rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
-                      <div className="flex items-start gap-3"><Avatar className="h-11 w-11"><AvatarImage src={attendance.members?.profiles?.avatar_url} /><AvatarFallback className="bg-accent/10 text-accent text-xs">{getInitials(attendance.members?.profiles?.full_name)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{attendance.members?.profiles?.full_name || 'Unknown'}</p><p className="text-xs text-muted-foreground">{attendance.members?.member_code}</p></div>{attendance.isActive ? <Badge className="rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge> : <Badge className="rounded-full bg-slate-100 text-slate-600 hover:bg-slate-100">Completed</Badge>}</div>
+                      <div className="flex items-start gap-3"><Avatar className="h-11 w-11"><AvatarImage src={attendance.members?.profiles?.avatar_url} /><AvatarFallback className="bg-accent/10 text-accent text-xs">{getInitials(attendance.members?.profiles?.full_name)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{attendance.members?.profiles?.full_name || 'Unknown'}</p><p className="text-xs text-muted-foreground">{attendance.members?.member_code}</p><div className="mt-1">{getStreakBadge(attendance.member_id)}</div></div>{getStatusBadge(attendance)}</div>
                       <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center"><div><p className="text-[11px] text-muted-foreground">First in</p><p className="mt-1 text-sm font-semibold">{fmtTime(attendance.firstCheckIn)}</p></div><div><p className="text-[11px] text-muted-foreground">Last out</p><p className="mt-1 text-sm font-semibold">{attendance.lastCheckOut ? fmtTime(attendance.lastCheckOut) : '—'}</p></div><div><p className="text-[11px] text-muted-foreground">Duration</p><p className="mt-1 text-sm font-semibold">{attendance.isActive ? 'Active' : formatDuration(attendance.firstCheckIn, attendance.lastCheckOut)}</p></div></div>
-                      <div className="mt-3 flex min-h-11 items-center justify-between gap-2"><div className="flex items-center gap-2">{getSourceBadge(attendance)}{attendance.scanCount > 1 && <Badge variant="secondary" className="rounded-full">{attendance.scanCount} entries</Badge>}</div>{attendance.isActive ? <Button variant="outline" size="sm" className="min-h-11 gap-1.5" disabled={isCheckingOut} onClick={() => checkOut(attendance.member_id, { onSuccess: () => refetchMemberToday() })}><LogOut className="h-4 w-4" />Check Out</Button> : attendance.scanCount > 1 ? <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`Show ${attendance.scanCount} entries`} onClick={() => setExpandedMemberId(expandedMemberId === attendance.member_id ? null : attendance.member_id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedMemberId === attendance.member_id ? 'rotate-180' : ''}`} /></Button> : null}</div>
+                      <div className="mt-3 flex min-h-11 items-center justify-between gap-2"><div className="flex items-center gap-2">{getSourceBadge(attendance)}{attendance.scanCount > 1 && <Badge variant="secondary" className="rounded-full">{attendance.scanCount} gate scans</Badge>}</div>{attendance.isActive ? <Button variant="outline" size="sm" className="min-h-11 gap-1.5" disabled={isCheckingOut} onClick={() => checkOut(attendance.member_id, { onSuccess: () => refetchMemberToday() })}><LogOut className="h-4 w-4" />Check Out</Button> : attendance.scanCount > 1 ? <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`Show ${attendance.scanCount} entries`} onClick={() => setExpandedMemberId(expandedMemberId === attendance.member_id ? null : attendance.member_id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedMemberId === attendance.member_id ? 'rotate-180' : ''}`} /></Button> : null}</div>
                       {expandedMemberId === attendance.member_id && attendance.scanCount > 1 && <div className="mt-3 space-y-2 border-t border-border/60 pt-3">{attendance.entries.map((entry, index) => <div key={entry.id} className="flex items-center justify-between text-xs"><span className="font-medium">Entry {index + 1}</span><span className="text-muted-foreground">{fmtTime(entry.check_in)} – {entry.check_out ? fmtTime(entry.check_out) : 'Active'}</span></div>)}</div>}
                     </div>
                   ))}
                   {!memberAttendanceLoading && !memberAttendanceError && filteredMemberAttendance.length === 0 && <div className="py-12 text-center"><Users className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><p className="text-sm font-medium">No member attendance records</p><p className="mt-1 text-xs text-muted-foreground">Check-ins for this date will appear here.</p></div>}
                 </div>
+                </>)}
               </TabsContent>
 
               {/* Staff Check-in Tab — dual-shift roster board */}
