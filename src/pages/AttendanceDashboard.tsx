@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getISTToday, getISTNow } from '@/lib/utils/datetime';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -591,7 +591,7 @@ export default function AttendanceDashboard() {
       <div className="space-y-4">
         {/* Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <Activity className="w-5 h-5 text-primary" />
             </div>
@@ -630,7 +630,7 @@ export default function AttendanceDashboard() {
               </Button>
             )}
 
-            <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-[180px]" />
+            <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-[150px] sm:w-[180px]" />
             <div className="hidden md:flex items-center gap-4 text-sm">
               <div className="flex items-center gap-1.5">
                 <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
@@ -993,8 +993,8 @@ export default function AttendanceDashboard() {
                     )) : memberAttendanceError ? (
                       <TableRow><TableCell colSpan={6} className="py-12 text-center text-destructive">Could not load member attendance.</TableCell></TableRow>
                     ) : filteredMemberAttendance.map((attendance) => (
-                      <>
-                      <TableRow key={attendance.id} className="transition-colors duration-150 hover:bg-slate-50">
+                      <Fragment key={attendance.id}>
+                      <TableRow className="transition-colors duration-150 hover:bg-slate-50">
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10">
@@ -1019,7 +1019,7 @@ export default function AttendanceDashboard() {
                         </TableCell>
                       </TableRow>
                       {expandedMemberId === attendance.member_id && attendance.scanCount > 1 && <TableRow key={`${attendance.id}-details`} className="bg-muted/30 hover:bg-muted/30"><TableCell colSpan={6} className="px-6 py-4"><div className="ml-12 grid gap-2 lg:grid-cols-3">{attendance.entries.map((entry, index) => <div key={entry.id} className="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-xs shadow-sm"><span className="font-semibold">Entry {index + 1}</span><span className="text-muted-foreground">{fmtTime(entry.check_in)} – {entry.check_out ? fmtTime(entry.check_out) : 'Active'}</span>{getSourceBadge(entry)}</div>)}</div></TableCell></TableRow>}
-                      </>
+                      </Fragment>
                     ))}
                     {!memberAttendanceLoading && !memberAttendanceError && filteredMemberAttendance.length === 0 && (
                       <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">No member attendance records</TableCell></TableRow>
