@@ -31,7 +31,7 @@ export function RecoveryTray({ memberId, disabled }: { memberId: string; disable
               const total = b.isUnlimited ? null : (b.limit_count ?? 0) + (b.compTotal ?? 0);
               const pct = total ? Math.min(100, Math.round(((left ?? 0) / total) * 100)) : 100;
               return (
-                <Link key={`${b.benefit_type}-${b.benefit_type_id ?? ''}`} to={disabled ? '/member-app' : '/book?type=recovery'} aria-disabled={disabled}
+                <Link key={`${b.benefit_type}-${b.benefit_type_id ?? ''}`} to={disabled ? '/member-dashboard' : '/book?type=recovery'} aria-disabled={disabled}
                   className="group min-w-[9.5rem] snap-start rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:shadow-none">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden /></span>
                   <p className="mt-3 truncate text-sm font-semibold text-foreground">{b.label}</p>

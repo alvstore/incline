@@ -29,7 +29,6 @@ export const memberMenuConfig: MenuSection[] = [
     title: 'My Account',
     items: [
       { label: 'Dashboard', href: '/member-dashboard', icon: LayoutDashboard, roles: ['member'] },
-      { label: 'Member App', href: '/member-app', icon: Heart, roles: ['member'] },
       { label: 'My Plans', href: '/my-plans', icon: CreditCard, roles: ['member'] },
       { label: 'My Attendance', href: '/my-attendance', icon: Clock, roles: ['member'] },
       { label: 'My Progress', href: '/my-progress', icon: TrendingUp, roles: ['member'] },

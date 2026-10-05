@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { CalendarDays, Dumbbell, Home, ShoppingBag, UserRound } from 'lucide-react';
 
 const items = [
-  { label: 'Home', href: '/member-app', icon: Home },
+  { label: 'Home', href: '/member-dashboard', icon: Home },
   { label: 'Classes', href: '/book?type=classes', icon: CalendarDays },
   { label: 'Workout', href: '/my-workout', icon: Dumbbell },
   { label: 'Store', href: '/member-store', icon: ShoppingBag },
@@ -17,7 +17,7 @@ export function MemberMobileNav() {
         {items.map(({ label, href, icon: Icon }) => {
           const active = href === '/book?type=classes'
             ? location.pathname === '/book'
-            : location.pathname === href || (href === '/member-app' && location.pathname === '/member-dashboard');
+            : location.pathname === href || false;
           return (
             <Link key={label} to={href} aria-current={active ? 'page' : undefined}
               className={`flex min-h-12 min-w-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-primary'}`}>
