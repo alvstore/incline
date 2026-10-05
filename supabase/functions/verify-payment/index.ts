@@ -1,4 +1,4 @@
-// v1.0.0 — Verify Razorpay Standard Checkout handler response and settle the
+// v1.1.0 — order must match invoice (fail-closed). Verify Razorpay Standard Checkout handler response and settle the
 // invoice authoritatively via settle_payment with idempotency. Designed to be
 // called from the embedded checkout success handler in MemberCheckout.
 
@@ -96,6 +96,14 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    // Fail closed: the signed order must exist and belong to THIS invoice.
+    if (!txn) {
+      return jsonResponse({ error: "Payment order not found", code: "ORDER_NOT_FOUND" }, 404);
+    }
+    if (!txn.invoice_id || txn.invoice_id !== invoiceId) {
+      return jsonResponse({ error: "Payment order does not match this invoice", code: "ORDER_INVOICE_MISMATCH" }, 400);
+    }
+
     const { data: invoice } = await supabase
       .from("invoices")
       .select("id, member_id, branch_id, total_amount, amount_paid, status")
@@ -103,9 +111,14 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!invoice) return jsonResponse({ error: "Invoice not found", code: "INVOICE_NOT_FOUND" }, 404);
+    if (invoice.branch_id !== branchId) {
+      return jsonResponse({ error: "Invoice does not belong to this branch", code: "BRANCH_MISMATCH" }, 400);
+    }
 
-    const amountDue = Number(invoice.total_amount) - Number(invoice.amount_paid || 0);
-    const amount = Number(txn?.amount ?? amountDue);
+    const amount = Number(txn.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return jsonResponse({ error: "Invalid order amount", code: "INVALID_AMOUNT" }, 400);
+    }
 
     const idemKey = `verify:razorpay:${razorpay_payment_id}`;
 
@@ -123,7 +136,7 @@ serve(async (req) => {
       p_payment_source: "razorpay",
       p_idempotency_key: idemKey,
       p_gateway_payment_id: razorpay_payment_id,
-      p_payment_transaction_id: txn?.id ?? null,
+      p_payment_transaction_id: txn.id,
       p_metadata: { gateway: "razorpay", source: "verify-payment", razorpay_order_id },
     });
 
