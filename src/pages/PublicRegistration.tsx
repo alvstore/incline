@@ -14,6 +14,7 @@ import { GlassCard } from "@/components/registration/GlassCard";
 import { StepDots } from "@/components/registration/StepDots";
 import { OtpStep } from "@/components/registration/OtpStep";
 import { SignaturePad, type SignaturePadHandle } from "@/components/registration/SignaturePad";
+import { BiometricFaceCaptureSheet } from "@/components/registration/BiometricFaceCaptureSheet";
 import { toast } from "sonner";
 import {
   Loader2, ShieldCheck, ArrowRight, ArrowLeft,
@@ -142,6 +143,7 @@ export default function PublicRegistration() {
   const [showMoreGoals, setShowMoreGoals] = useState(false);
   const [draftRestored, setDraftRestored] = useState(!!initialDraft);
   const sigRef = useRef<SignaturePadHandle>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
 
   const { data: branches } = useQuery({
     queryKey: ["public-branches"],
@@ -788,13 +790,6 @@ export default function PublicRegistration() {
                 <div className="overflow-hidden rounded-2xl bg-card ring-1 ring-white/20">
                   <SignaturePad ref={sigRef} />
                 </div>
-                <button
-                  type="button"
-                  className="mt-2 flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
-                  onClick={() => sigRef.current?.clear()}
-                >
-                  <RefreshCw className="h-3 w-3" /> Clear & redo
-                </button>
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -865,12 +860,14 @@ export default function PublicRegistration() {
                     Look straight at the camera in good light, with only your face in frame. This is the
                     photo the entry gates will use, so we check it before saving.
                   </p>
-                  <Label
-                    htmlFor="register-photo"
-                    className="mt-3 inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl"
+                  <button
+                    type="button"
+                    onClick={() => setCaptureOpen(true)}
+                    disabled={photoState === "uploading"}
+                    className="mt-3 inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    {photoState === "uploading" ? "Checking photo…" : photoIssues.length ? "Retake photo" : "Take / upload photo"}
-                  </Label>
+                    {photoState === "uploading" ? "Checking photo…" : photoIssues.length ? "Retake photo" : "Take photo"}
+                  </button>
                   {photoIssues.length > 0 && (
                     <ul className="mt-3 space-y-1 rounded-xl bg-destructive/15 p-3 text-xs text-primary-foreground">
                       {photoIssues.map((r) => (
@@ -878,16 +875,12 @@ export default function PublicRegistration() {
                       ))}
                     </ul>
                   )}
-                  <input
-                    id="register-photo"
-                    type="file"
-                    accept="image/*"
-                    capture="user"
-                    className="hidden"
-                    disabled={photoState === "uploading"}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file || !newMember) return;
+                  <BiometricFaceCaptureSheet
+                    open={captureOpen}
+                    onOpenChange={setCaptureOpen}
+                    busy={photoState === "uploading"}
+                    onCapture={async (file) => {
+                      if (!newMember) return;
                       setPhotoState("uploading");
                       try {
                         setPhotoIssues([]);
@@ -906,8 +899,7 @@ export default function PublicRegistration() {
                         const msg = err instanceof Error ? err.message : "Could not upload photo";
                         setPhotoIssues(msg.split(" · "));
                         toast.error("Please retake your photo");
-                      } finally {
-                        e.target.value = "";
+                        throw err;
                       }
                     }}
                   />
