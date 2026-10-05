@@ -160,7 +160,7 @@ export default function MemberProfile() {
           <div className="relative flex flex-col items-center gap-3 text-center">
             <AvatarUpload />
             <div>
-              <h1 className="text-xl font-bold">{profile?.full_name}</h1>
+              <h1 className="sr-only">{profile?.full_name}</h1>
               <p className="text-xs text-white/80">{member.member_code} · {(member as any)?.branch?.name || 'The Incline'}</p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
