@@ -25,6 +25,7 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
     serial_number: "",
     branch_id: defaultBranchId || "",
     model: "",
+    door_role: "both" as "entry" | "exit" | "both",
   });
 
   const addMutation = useMutation({
@@ -47,6 +48,7 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
       serial_number: "",
       branch_id: defaultBranchId || "",
       model: "",
+      door_role: "both",
     });
   };
 
@@ -66,6 +68,7 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
       serial_number: formData.serial_number.trim().toUpperCase(),
       device_type: "face_terminal",
       model: formData.model.trim() || undefined,
+      door_role: formData.door_role,
     });
   };
 
@@ -97,6 +100,19 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
                 {branches.map((branch) => (<SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="door_role">Gate direction *</Label>
+            <Select value={formData.door_role} onValueChange={(value) => setFormData({ ...formData, door_role: value as "entry" | "exit" | "both" })}>
+              <SelectTrigger id="door_role"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entry">Entry — marks check-in</SelectItem>
+                <SelectItem value="exit">Exit — marks check-out</SelectItem>
+                <SelectItem value="both">Both — single door, toggles in/out</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Exit gates must be set to Exit, otherwise check-outs are not recorded.</p>
           </div>
 
           <div className="space-y-2">
