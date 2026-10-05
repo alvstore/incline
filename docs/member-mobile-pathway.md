@@ -1,29 +1,35 @@
-# Incline member mobile pathway
+# Incline native member app — pathway
 
-## What is live today
+The member app for Android and iOS is a **separate React Native (Expo) project**. This web repository has no native wrapper: Capacitor was removed, and `/member-app` and `/mobile-preview` redirect to `/member-dashboard`.
 
-`/member-app` is a responsive **web** member home, not an Android APK or iOS app. It reads the signed-in member's existing profile, membership, PT balance, upcoming class bookings and branch class schedule through the existing RLS-protected backend. The account photo, details and password controls use existing profile/auth flows. It sends members to existing live pages for classes, recovery slots, store/add-ons, workout and diet plans, progress, feedback and requests. `/mobile-preview` redirects to this member-only route; the simulated gate pass and sample workout/booking data are removed.
+## Technology
+- Expo SDK (latest) + React Native New Architecture (Fabric + TurboModules); screens use native iOS/Android views, not a WebView.
+- Reanimated v3 + Gesture Handler for 60/120fps motion on the UI thread.
+- Native bottom sheets (snap points, swipe-to-close) via `@gorhom/bottom-sheet` or `react-native-true-sheet`.
+- Haptics via `expo-haptics`: light tap on tab switch, success on class/set booked, warning when one spot is left.
+- Apple HealthKit (`react-native-health`) and Google Health Connect (`react-native-health-connect`): read steps, active calories, resting heart rate; write finished workouts.
+- Face ID / fingerprint via `expo-local-authentication`; session stored in `expo-secure-store` (Keychain / Keystore).
+- `@supabase/supabase-js` with the public key only, TanStack Query v5, `lucide-react-native`, theme tokens matching the web theme picker.
 
-## Live data and workflow map
+## Same backend, same rules (no new server)
+| Journey | Reuse |
+| --- | --- |
+| Login / reset | Email or +91 mobile (`resolve-login-identifier`), password reset deep link |
+| Home / membership | Same member-scoped queries as `useMemberData` |
+| Classes | `book_class`, `cancel_class_booking` RPCs, IST dates, capacity server-side |
+| Recovery | `book_facility_slot` RPC — advance-notice rules (Steam 12h, Sauna 24h, Ice Bath 24h) enforced by the server |
+| Store / add-ons | `create_pos_sale` → Razorpay native SDK → server verification; abandon on dismiss |
+| Workout / diet | `member_fitness_plans` (+ legacy diet fallback), PDF access |
+| Feedback / requests | `feedback`, `approval_requests`, `tasks` — maker-checker preserved |
+| Push | Only via `dispatch-communication` once a push channel + consent/token lifecycle exist |
 
-| Member journey | Current web implementation | Native implementation target |
-| --- | --- | --- |
-| Login and recovery | `/auth`, `/auth/forgot-password`, `/auth/reset-password` | Supabase session + secure device storage; configure verified email reset deep links to the native app |
-| Home and membership | `/member-app`, `useMemberData` | Same member-scoped queries and states (active, frozen, scheduled, none) |
-| Classes and recovery | `/book?type=classes`, `/book?type=recovery` | Same IST dates, capacity/advance-notice rules, and atomic booking/cancellation RPCs |
-| Store and add-ons | `/member-store`, `/renewal-center` | Same branch catalogue, stock and server-verified checkout; use supported native payment integration |
-| Training and nutrition | `/my-workout`, `/my-diet`, `/my-progress` | Same member plans, assigned coach, PDF access, empty states and protected measurements |
-| Support | `/member-feedback`, `/my-requests` | Same feedback categories and request approval timeline; do not bypass maker-checker workflow |
-| Account | `/member-profile` | Avatar upload, personal details, preferences, password change and sign-out |
+Never: direct writes that bypass RPCs, privileged keys in the app, price quoting in chat, gate/hardware controls.
 
-## Native delivery sequence (separate project)
+## Build order
+1. Login, bottom menu, theme colours
+2. Home, class booking, recovery booking
+3. Store and checkout, workout player with health sync
+4. Profile, feedback and requests, then push notifications
+5. Publish with EAS Build: Android APK (internal) / AAB (Play Store), iOS build → TestFlight → App Store
 
-1. Create a dedicated Expo/React Native app and define Android application ID and iOS bundle identifier, signing ownership, privacy policy and store accounts. Do not package the Vite site as if it were native.
-2. Establish navigation, theme tokens and accessible 375px-first components. Build a shared typed data layer against the existing Supabase project, TanStack Query v5, and secure session storage. Use only the public client key; never ship privileged service credentials.
-3. Implement sign-in, reset deep links and profile first. Confirm branch-scoped RLS and member-only access on every data query, storage object and RPC from a real device before adding transactional features.
-4. Ship home, class/recovery scheduling, plans/PDF viewing, store checkout, feedback and requests one workflow at a time. Reuse server-side booking and payment RPCs; no client-side capacity calculations or direct writes that bypass business rules. Keep money INR and protect member health data.
-5. Add push only after consent/token lifecycle and a supported `dispatch-communication` push channel exist. Do not send outbound messages directly from the app. No simulated gate QR or gate control.
-6. Run real-device Android/iOS QA: sign-in/forgot password, frozen and scheduled memberships, no-plan/empty states, capacity races, slot notice windows, cancellation, payment failure/retry, PDFs, slow/offline states, accessibility, and narrow screens. Review privacy permissions and deletion flow.
-7. Configure EAS preview Android **APK** for internal testing, production **AAB** for Google Play, and a signed iOS production build for TestFlight/App Store. Distribution needs developer accounts, certificates, store metadata and approval; these builds cannot be produced from this web repository.
-
-**Release gate:** No native launch until auth deep links, row-level security, payment verification, push dispatch, device QA and store compliance have been verified end to end. The web home is available independently of that native milestone.
+**Release gate:** real-device QA of login, RLS, payments, booking rules, health permissions, privacy and account deletion before store submission.
