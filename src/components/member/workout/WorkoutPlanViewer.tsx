@@ -94,7 +94,8 @@ export function WorkoutPlanViewer({
     setDoneKeys((prev) => {
       const next = new Set(prev);
       const key = `${dayId}:${index}`;
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       try {
         localStorage.setItem(storageKey(planId), JSON.stringify([...next]));
       } catch {
