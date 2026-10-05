@@ -363,11 +363,11 @@ export default function AttendanceDashboard() {
         date.setDate(date.getDate() - i);
         const start = startOfDay(date).toISOString();
         const end = endOfDay(date).toISOString();
-        let mq = supabase.from('member_attendance').select('id', { count: 'exact', head: true }).gte('check_in', start).lte('check_in', end);
+        let mq = supabase.from('member_attendance').select('member_id').gte('check_in', start).lte('check_in', end);
         let sq = supabase.from('staff_attendance').select('id', { count: 'exact', head: true }).gte('check_in', start).lte('check_in', end);
         if (branchFilter) { mq = mq.eq('branch_id', branchFilter); sq = sq.eq('branch_id', branchFilter); }
         const [mr, sr] = await Promise.all([mq, sq]);
-        days.push({ day: format(date, 'EEE'), members: mr.count || 0, staff: sr.count || 0 });
+        days.push({ day: format(date, 'EEE'), members: new Set((mr.data || []).map((row) => row.member_id)).size, staff: sr.count || 0 });
       }
       return days;
     },
@@ -590,7 +590,7 @@ export default function AttendanceDashboard() {
     <AppLayout>
       <div className="space-y-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <Activity className="w-5 h-5 text-primary" />
@@ -666,7 +666,7 @@ export default function AttendanceDashboard() {
         {/* Rapid-Entry Search Bar (Management Roles Only) */}
         {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
           <div className="space-y-2">
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <div className="relative flex-1">
               <Scan className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
@@ -681,12 +681,12 @@ export default function AttendanceDashboard() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                className="pl-12 h-14 text-lg border-2 focus:border-primary transition-colors"
+                className="h-14 min-w-0 pl-12 text-base transition-colors focus:border-primary sm:text-lg"
               />
             </div>
-            <Button onClick={handleMemberSearch} disabled={isSearching || activeTab === 'staff-record'} className="h-14 px-6" size="lg">
-              <Search className="w-5 h-5 mr-2" />
-              {isSearching ? 'Searching…' : 'Search'}
+            <Button onClick={handleMemberSearch} disabled={isSearching || activeTab === 'staff-record'} className="h-14 shrink-0 px-4 sm:px-6" size="lg">
+              <Search className="h-5 w-5 sm:mr-2" />
+              <span className="hidden sm:inline">{isSearching ? 'Searching…' : 'Search'}</span>
             </Button>
           </div>
         </div>
