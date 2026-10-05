@@ -18,7 +18,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useStaffAttendance } from '@/hooks/useStaffAttendance';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Users, UserCheck, UserMinus, Clock, Search, Calendar, TrendingUp, Activity, ShieldAlert, LogIn, LogOut, History, Scan, CheckCircle, XCircle, AlertCircle, Download, DoorOpen, Info, ChevronDown } from 'lucide-react';
+import { Users, UserCheck, UserMinus, Clock, Search, Calendar, TrendingUp, Activity, ShieldAlert, LogIn, LogOut, History, Scan, CheckCircle, XCircle, AlertCircle, Download, DoorOpen, Info, ChevronDown, ScanFace, Layers, Flame, Sparkles, Undo2, CalendarDays } from 'lucide-react';
 import { remoteOpenDoorByBranch } from '@/services/mipsService';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { exportToCSV } from '@/lib/csvExport';
@@ -446,7 +446,7 @@ export default function AttendanceDashboard() {
   }, [staffTodayAttendance.data]);
 
   const fmtTime = (iso?: string | null) =>
-    iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }) : '--:--';
+    iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : '--:--';
 
 
   const decisionFor = (staff: any) =>
@@ -498,6 +498,52 @@ export default function AttendanceDashboard() {
     [memberAttendance],
   );
 
+  const presentMemberIds = useMemo(() => consolidatedMemberAttendance.map((a) => a.member_id).sort(), [consolidatedMemberAttendance]);
+
+  // Streak + last previous visit for members seen on the selected day (IST calendar days).
+  const { data: memberStreaks = {} } = useQuery({
+    queryKey: ['member-attendance-streaks', branchFilter, dateFilter, presentMemberIds.join(',')],
+    enabled: presentMemberIds.length > 0,
+    queryFn: async () => {
+      const istKey = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
+      const end = endOfDay(new Date(dateFilter));
+      const from = new Date(end.getTime() - 90 * 86400000).toISOString();
+      const { data, error } = await supabase.from('member_attendance').select('member_id, check_in')
+        .in('member_id', presentMemberIds).gte('check_in', from).lte('check_in', end.toISOString()).limit(5000);
+      if (error) throw error;
+      const days = new Map<string, Set<string>>();
+      for (const r of data ?? []) {
+        const set = days.get(r.member_id) ?? new Set<string>();
+        set.add(istKey(new Date(r.check_in)));
+        days.set(r.member_id, set);
+      }
+      const result: Record<string, { streak: number; gapDays: number | null; lastVisit: string | null }> = {};
+      for (const id of presentMemberIds) {
+        const set = days.get(id) ?? new Set<string>();
+        let streak = 0;
+        const cursor = new Date(`${dateFilter}T00:00:00Z`);
+        while (set.has(cursor.toISOString().slice(0, 10))) { streak++; cursor.setUTCDate(cursor.getUTCDate() - 1); }
+        const prior = [...set].filter((k) => k < dateFilter).sort().pop() ?? null;
+        const gapDays = prior ? Math.round((new Date(`${dateFilter}T00:00:00Z`).getTime() - new Date(`${prior}T00:00:00Z`).getTime()) / 86400000) : null;
+        result[id] = { streak, gapDays, lastVisit: prior };
+      }
+      return result;
+    },
+  });
+
+  // Active members not seen for 3+ days (gate scans included server-side).
+  const { data: absentMembers = [], isLoading: absentLoading, isError: absentError } = useQuery({
+    queryKey: ['attendance-absent-members', effectiveBranchId],
+    enabled: !!effectiveBranchId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_inactive_members', { p_branch_id: effectiveBranchId!, p_days: 3, p_limit: 200 });
+      if (error) throw error;
+      return (data ?? []) as { member_id: string; member_code: string | null; full_name: string; avatar_url: string | null; last_visit: string | null; days_absent: number }[];
+    },
+  });
+
+  const filteredAbsentMembers = absentMembers.filter((m) => `${m.full_name} ${m.member_code ?? ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
+
   const filteredMemberAttendance = consolidatedMemberAttendance.filter((a) => {
     const name = a.members?.profiles?.full_name || '';
     const code = a.members?.member_code || '';
@@ -526,15 +572,34 @@ export default function AttendanceDashboard() {
     const duration = (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000;
     const hours = Math.floor(duration / 60);
     const mins = Math.round(duration % 60);
-    return `${hours}h ${mins}m`;
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
   const getSourceBadge = (att: ConsolidatedMemberVisit | MemberAttendanceRecord) => {
     const method = 'sourceLabel' in att ? att.sourceLabel : att.check_in_method || att.source || 'manual';
-    if (method === 'force_entry') return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 text-xs"><ShieldAlert className="h-3 w-3 mr-0.5" />Force</Badge>;
-    if (method === 'device' || method === 'biometric') return <Badge variant="outline" className="bg-info/10 text-info border-info/20 text-xs">Device</Badge>;
-    if (method === 'mixed') return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">Mixed</Badge>;
-    return <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">Manual</Badge>;
+    const base = 'gap-1 rounded-full border text-xs font-medium';
+    if (method === 'force_entry') return <Badge variant="outline" className={`${base} bg-amber-50 text-amber-700 border-amber-200`}><ShieldAlert className="h-3 w-3" />Force</Badge>;
+    if (method === 'device' || method === 'biometric') return <Badge variant="outline" className={`${base} bg-violet-50 text-violet-700 border-violet-200`}><ScanFace className="h-3 w-3" />Face gate</Badge>;
+    if (method === 'mixed') return <Badge variant="outline" className={`${base} bg-indigo-50 text-indigo-700 border-indigo-200`}><Layers className="h-3 w-3" />Mixed</Badge>;
+    return <Badge variant="outline" className={`${base} bg-blue-50 text-blue-700 border-blue-200`}><UserCheck className="h-3 w-3" />Front desk</Badge>;
+  };
+
+  const getStatusBadge = (att: ConsolidatedMemberVisit) => att.isActive
+    ? <Badge className="gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>In gym</Badge>
+    : <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100"><CheckCircle className="h-3 w-3" />Completed</Badge>;
+
+  const getStreakBadge = (memberId: string) => {
+    const s = memberStreaks[memberId];
+    if (!s) return null;
+    if (s.streak >= 2) return <Badge className="gap-1 rounded-full border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50"><Flame className="h-3 w-3" />{s.streak}-day streak</Badge>;
+    if (s.gapDays === null) return <Badge className="gap-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><Sparkles className="h-3 w-3" />First visit</Badge>;
+    if (s.gapDays >= 5) return <Badge className="gap-1 rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50"><Undo2 className="h-3 w-3" />Back after {s.gapDays}d</Badge>;
+    return <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-50"><CalendarDays className="h-3 w-3" />Last {format(new Date(s.lastVisit!), 'dd MMM')}</Badge>;
+  };
+
+  const absenceBadge = (days: number) => {
+    const cls = days >= 14 ? 'border-red-200 bg-red-50 text-red-700' : days >= 7 ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-amber-200 bg-amber-50 text-amber-700';
+    return <Badge className={`rounded-full border ${cls} hover:bg-transparent`}>{days}d absent</Badge>;
   };
 
   // History: per-staff summary. "Days elapsed" only counts days that have actually
