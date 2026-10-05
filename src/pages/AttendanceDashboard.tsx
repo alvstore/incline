@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,7 +18,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useStaffAttendance } from '@/hooks/useStaffAttendance';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Users, UserCheck, UserMinus, Clock, Search, Calendar, TrendingUp, Activity, ShieldAlert, LogIn, LogOut, History, Scan, CheckCircle, XCircle, AlertCircle, Download, DoorOpen, Info } from 'lucide-react';
+import { Users, UserCheck, UserMinus, Clock, Search, Calendar, TrendingUp, Activity, ShieldAlert, LogIn, LogOut, History, Scan, CheckCircle, XCircle, AlertCircle, Download, DoorOpen, Info, ChevronDown } from 'lucide-react';
 import { remoteOpenDoorByBranch } from '@/services/mipsService';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { exportToCSV } from '@/lib/csvExport';
@@ -35,6 +36,11 @@ import { StaffRosterBoard } from '@/components/attendance/StaffRosterBoard';
 import { StaffMonthHistory } from '@/components/attendance/StaffMonthHistory';
 import { MemberAttendanceHistory } from '@/components/attendance/MemberAttendanceHistory';
 import { BlockedEntryAttempts } from '@/components/attendance/BlockedEntryAttempts';
+import {
+  consolidateMemberAttendance,
+  type ConsolidatedMemberVisit,
+  type MemberAttendanceRecord,
+} from '@/lib/attendance/consolidateMemberAttendance';
 
 
 
@@ -88,6 +94,7 @@ export default function AttendanceDashboard() {
   const [selectedForceEntryMember, setSelectedForceEntryMember] = useState<any>(null);
   const [historyMonth, setHistoryMonth] = useState(getISTToday().substring(0, 7));
   const [historyScope, setHistoryScope] = useState<'staff' | 'members'>('staff');
+  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
 
   // Member attendance hook (rapid check-in)
   const {
@@ -237,7 +244,7 @@ export default function AttendanceDashboard() {
   };
 
   // Fetch member attendance for date
-  const { data: memberAttendance = [] } = useQuery({
+  const { data: memberAttendance = [], isLoading: memberAttendanceLoading, isError: memberAttendanceError } = useQuery({
     queryKey: ['member-attendance-dashboard', branchFilter, dateFilter],
     queryFn: async () => {
       const start = startOfDay(new Date(dateFilter)).toISOString();
@@ -486,7 +493,12 @@ export default function AttendanceDashboard() {
     });
   };
 
-  const filteredMemberAttendance = memberAttendance.filter((a: any) => {
+  const consolidatedMemberAttendance = useMemo(
+    () => consolidateMemberAttendance(memberAttendance as unknown as MemberAttendanceRecord[]),
+    [memberAttendance],
+  );
+
+  const filteredMemberAttendance = consolidatedMemberAttendance.filter((a) => {
     const name = a.members?.profiles?.full_name || '';
     const code = a.members?.member_code || '';
     return name.toLowerCase().includes(searchTerm.toLowerCase()) || code.toLowerCase().includes(searchTerm.toLowerCase());
@@ -498,8 +510,8 @@ export default function AttendanceDashboard() {
   });
 
   const stats = {
-    totalMemberCheckIns: memberAttendance.length,
-    activeMemberCheckIns: memberAttendance.filter((a: any) => !a.check_out).length,
+    totalMemberCheckIns: consolidatedMemberAttendance.length,
+    activeMemberCheckIns: consolidatedMemberAttendance.filter((a) => a.isActive).length,
     totalStaffCheckIns: staffAttendance.length,
     activeStaffCheckIns: staffAttendance.filter((a: any) => !a.check_out).length,
   };
@@ -517,10 +529,11 @@ export default function AttendanceDashboard() {
     return `${hours}h ${mins}m`;
   };
 
-  const getSourceBadge = (att: any) => {
-    const method = att.check_in_method || att.source || 'manual';
+  const getSourceBadge = (att: ConsolidatedMemberVisit | MemberAttendanceRecord) => {
+    const method = 'sourceLabel' in att ? att.sourceLabel : att.check_in_method || att.source || 'manual';
     if (method === 'force_entry') return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 text-xs"><ShieldAlert className="h-3 w-3 mr-0.5" />Force</Badge>;
     if (method === 'device' || method === 'biometric') return <Badge variant="outline" className="bg-info/10 text-info border-info/20 text-xs">Device</Badge>;
+    if (method === 'mixed') return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">Mixed</Badge>;
     return <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">Manual</Badge>;
   };
 
