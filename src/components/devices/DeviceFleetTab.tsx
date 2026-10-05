@@ -120,6 +120,12 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
     }
     setRegisteringSN(serial);
     try {
+      const lower = (name || "").toLowerCase();
+      const doorRole: "entry" | "exit" | "both" = /\b(exit|out)\b/.test(lower)
+        ? "exit"
+        : /\b(entry|entrance|in)\b/.test(lower)
+          ? "entry"
+          : "both";
       const { error } = await supabase.from("access_devices").insert({
         branch_id: branchId,
         serial_number: serial,
@@ -127,10 +133,12 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
         ip_address: ip || "0.0.0.0",
         mips_device_id: mipsId,
         is_online: online,
-        door_role: "both",
+        door_role: doorRole,
       });
       if (error) throw error;
-      toast.success(`${name} registered in the CRM`);
+      toast.success(`${name} registered as ${doorRole === "both" ? "entry & exit" : `${doorRole} gate`}`, {
+        description: doorRole === "both" ? "Set the gate direction on its card if this is an entry-only or exit-only gate." : undefined,
+      });
       qc.invalidateQueries({ queryKey: ["access-devices-sns"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to register device");
