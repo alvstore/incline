@@ -1,4 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,11 @@ interface Props {
   branchId?: string;
 }
 
-const stateBadge = (state: string) => {
+const stateBadge = (state: string, reason?: string | null) => {
   const base = "rounded-full px-2.5 py-0.5 text-xs font-medium";
+  if (/timed out|timeout|gateway connection/i.test(reason || "") && state !== "enrolled") {
+    return <Badge className={`${base} bg-amber-100 text-amber-700 hover:bg-amber-100`}>Network retry</Badge>;
+  }
   if (state === "enrolled") {
     return <Badge className={`${base} bg-emerald-100 text-emerald-700 hover:bg-emerald-100`}>Verified</Badge>;
   }
@@ -79,6 +83,31 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
     ledgerLoading,
     ledgerError,
   } = useMipsFleet(branchId);
+
+  const waitingIds = [...new Set(gates.flatMap((g) => [...g.awaiting, ...g.rejected]).map((r) => r.person_id).filter(Boolean))] as string[];
+  const { data: serverErrors = {} } = useQuery({
+    queryKey: ["mips-person-errors", branchId, waitingIds.join(",")],
+    enabled: waitingIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("mips_sync_attempts")
+        .select("entity_id, operation, last_error, response_code, created_at")
+        .in("entity_id", waitingIds)
+        .eq("status", "failed")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      const map: Record<string, { op: string; error: string; at: string; count: number }> = {};
+      for (const r of data ?? []) {
+        if (!r.entity_id) continue;
+        const m = map[r.entity_id];
+        if (m) { m.count++; continue; }
+        map[r.entity_id] = { op: r.operation, error: r.last_error || `HTTP ${r.response_code ?? "error"}`, at: r.created_at, count: 1 };
+      }
+      return map;
+    },
+    staleTime: 60_000,
+  });
 
   const runSweep = async () => {
     setSweeping(true);
@@ -291,10 +320,20 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                                   {r.attempts === 1 ? "" : "s"}
                                 </p>
                               </div>
-                              {stateBadge(r.state)}
+                              {stateBadge(r.state, r.reason)}
                             </div>
                             {r.reason && (
                               <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{r.reason}</p>
+                            )}
+                            {r.person_id && serverErrors[r.person_id] && (
+                              <p className="mt-1 rounded-md bg-red-50 p-1.5 font-mono text-[10px] leading-relaxed text-red-700">
+                                MIPS server: {serverErrors[r.person_id].error}
+                                <span className="block font-sans text-red-600/80">
+                                  {serverErrors[r.person_id].op} · {serverErrors[r.person_id].count} failure
+                                  {serverErrors[r.person_id].count === 1 ? "" : "s"} · last{" "}
+                                  {formatDistanceToNow(new Date(serverErrors[r.person_id].at), { addSuffix: true })}
+                                </span>
+                              </p>
                             )}
                           </div>
                         ))}
