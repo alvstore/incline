@@ -113,7 +113,6 @@ const MealCatalogPage = lazy(() => import("./pages/MealCatalog"));
 const StaffDashboard = lazy(() => import("./pages/StaffDashboard"));
 const FollowUpCenter = lazy(() => import("./pages/FollowUpCenter"));
 const RenewalCenter = lazy(() => import("./pages/RenewalCenter"));
-const MemberAppHome = lazy(() => import("./pages/MemberAppHome"));
 
 // Admin pages
 const AdminRoles = lazy(() => import("./pages/AdminRoles"));
