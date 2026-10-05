@@ -218,8 +218,12 @@ export function useMipsFleet(branchId?: string) {
   const serverTotal = serverTruthQuery.data?.total ?? 0;
   const target = serverWithFace > 0 ? serverWithFace : maxFaces;
 
-  const ledgerDeviceIds = [...new Set(ledger.map((r) => r.mips_device_id))];
-  const gateIds = [...new Set([...devices.map((d) => d.id), ...ledgerDeviceIds])];
+  // Only real terminals the MIPS server reports today. Ledger rows for retired
+  // device ids (e.g. an old "Gate 1" registration) must never become ghost gates.
+  const gateIds = devices.map((d) => d.id);
+
+  // A push that failed only because the network timed out is not a bad photo.
+  const isTimeoutOnly = (r: FaceLedgerRow) => /timed out|timeout/i.test(r.reason || "");
 
   const gates: GateTruth[] = gateIds.map((deviceId) => {
     const live = devices.find((d) => d.id === deviceId);
@@ -232,8 +236,10 @@ export function useMipsFleet(branchId?: string) {
     // anything above the gate's own counter is stale bookkeeping, not truth.
     const verified = faces !== null ? Math.min(enrolled, faces) : enrolled;
     const counted = faces !== null ? Math.max(faces - verified, 0) : 0;
-    const awaiting = rows.filter((r) => r.state === "pending" || r.state === "missing");
-    const rejected = rows.filter((r) => r.state === "rejected");
+    const awaiting = rows.filter(
+      (r) => r.state === "pending" || r.state === "missing" || (r.state === "rejected" && isTimeoutOnly(r)),
+    );
+    const rejected = rows.filter((r) => r.state === "rejected" && !isTimeoutOnly(r));
 
     // Only report people we can actually name from the sync ledger. The raw
     // counter delta includes archived/legacy server records the gates never
