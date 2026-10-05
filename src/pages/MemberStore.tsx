@@ -703,7 +703,7 @@ export default function MemberStore() {
 
       {/* Mobile sticky cart bar */}
       {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card/95 p-3 pb-safe backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+max(env(safe-area-inset-bottom),0.5rem))] z-40 border-t border-border/60 bg-card/95 p-3 backdrop-blur lg:hidden">
           <Button className="h-12 w-full rounded-xl" onClick={() => setCartOpen(true)}>
             <ShoppingCart className="mr-2 h-4 w-4" />
             View cart • {cartCount} item{cartCount === 1 ? '' : 's'} • ₹{cartTotal.toLocaleString()}
