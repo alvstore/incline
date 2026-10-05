@@ -130,16 +130,20 @@ export async function markAttempt(
   reason: string,
 ): Promise<void> {
   const next = attempts + 1;
-  const rejected = next >= REJECT_AFTER_ATTEMPTS;
+  // Network/transport failures say nothing about the photo — never reject on them.
+  const transport = /timed out|timeout|ECONN|network|fetch failed|socket|503|502|504/i.test(reason);
+  const rejected = !transport && next >= REJECT_AFTER_ATTEMPTS;
   await supabase
     .from("mips_device_face_state")
     .update({
-      attempts: next,
+      attempts: transport ? Math.min(next, REJECT_AFTER_ATTEMPTS - 1) : next,
       last_attempt_at: new Date().toISOString(),
       state: rejected ? "rejected" : "pending",
       reason: rejected
         ? `Device did not accept this photo after ${next} attempts — no usable face template. Ask the member for a new photo. (${reason})`
-        : reason,
+        : transport
+          ? `Gateway connection problem — will retry automatically. (${reason})`
+          : reason,
     })
     .eq("branch_id", branchId)
     .eq("mips_device_id", mipsDeviceId)
