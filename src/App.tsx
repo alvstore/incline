@@ -247,8 +247,8 @@ function RoutedContent() {
           <Route path="/staff-dashboard" element={<ProtectedRoute requiredRoles={['staff']}><StaffDashboard /></ProtectedRoute>} />
           <Route path="/follow-up-center" element={<ProtectedRoute requiredRoles={['staff', 'manager', 'admin', 'owner']}><FollowUpCenter /></ProtectedRoute>} />
           <Route path="/renewal-center" element={<ProtectedRoute requiredRoles={['staff', 'manager', 'admin', 'owner', 'member']}><RenewalCenter /></ProtectedRoute>} />
-          <Route path="/mobile-preview" element={<Navigate to="/member-app" replace />} />
-          <Route path="/member-app" element={<ProtectedRoute requiredRoles={['member']}><MemberAppHome /></ProtectedRoute>} />
+          <Route path="/mobile-preview" element={<Navigate to="/member-dashboard" replace />} />
+          <Route path="/member-app" element={<Navigate to="/member-dashboard" replace />} />
 
           {/* ==================== ADMIN/MANAGER/OWNER ROUTES ==================== */}
           <Route path="/dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><DashboardPage /></ProtectedRoute>} />
