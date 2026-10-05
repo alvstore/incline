@@ -1,4 +1,4 @@
-// _shared/mipsFaceState.ts v1.0.0
+// _shared/mipsFaceState.ts v1.1.0
 // Per-device, per-person face enrolment ledger helpers.
 //
 // This firmware (1.42.x) exposes exactly one face metric over HTTP —

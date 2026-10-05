@@ -22,6 +22,7 @@ export interface FaceLedgerRow {
   mips_device_id: number;
   device_name: string | null;
   person_sn: string;
+  person_id: string | null;
   person_name: string | null;
   person_type: string;
   state: string;
@@ -172,7 +173,7 @@ export function useMipsFleet(branchId?: string) {
       let q = supabase
         .from("mips_device_face_state")
         .select(
-          "mips_device_id, device_name, person_sn, person_name, person_type, state, reason, attempts, last_attempt_at",
+          "mips_device_id, device_name, person_sn, person_id, person_name, person_type, state, reason, attempts, last_attempt_at",
         )
         .order("state", { ascending: true })
         .limit(2000);
