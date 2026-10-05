@@ -109,7 +109,7 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
   };
 
   if (devices.length === 0) return null;
-  if (offline.length === 0 && laggingGates.length === 0 && unmapped.length === 0) return null;
+  if (offline.length === 0 && unmapped.length === 0) return null;
 
   const canResync = actionableDevices.length > 0;
 
@@ -124,67 +124,6 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
               <strong>{offline.length} terminal(s) offline</strong> — {offline.map((d) => d.name || d.deviceKey).join(", ")}.
               Access events and syncs will queue until they reconnect.
             </>
-          }
-        />
-      )}
-
-      {laggingGates.length > 0 && (
-        <AlertRow
-          tone="warning"
-          icon={<AlertTriangle className="h-4 w-4" />}
-          message={
-            <>
-              <strong>Face photos not yet on every gate.</strong>{" "}
-              {laggingGates.map((g) => {
-                const parts: string[] = [];
-                if (g.gapWaiting > 0) parts.push(`${g.gapWaiting} waiting to be sent`);
-                if (g.gapRejected > 0) parts.push(`${g.gapRejected} need a clearer photo`);
-                return (
-                  <span key={g.deviceId} className="block">
-                    {g.name}: {g.gapWaiting + g.gapRejected} {g.gapWaiting + g.gapRejected === 1 ? "person" : "people"} missing
-                    {parts.length > 0 ? ` — ${parts.join(", ")}` : ""}.
-                  </span>
-                );
-              })}
-              {retakeNeeded > 0 && (
-                <span className="block pt-1">
-                  Re-syncing cannot fix a rejected photo — those {retakeNeeded}{" "}
-                  {retakeNeeded === 1 ? "person needs" : "people need"} a new close-up photo in Personnel Sync.
-                </span>
-              )}
-              {lastResync && <span className="block pt-1 font-medium">{lastResync}</span>}
-            </>
-          }
-          action={
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  size="sm"
-                  disabled={resyncing || !canResync}
-                  title={canResync ? undefined : "Nothing is waiting to be sent to these gates"}
-                  className="min-h-[36px] cursor-pointer rounded-xl focus:ring-2 focus:ring-indigo-500"
-                >
-                  <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${resyncing ? "animate-pulse" : ""}`} />
-                  {resyncing ? "Pushing faces…" : "Re-sync faces"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Re-send face photos to these gates?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Each photo makes the terminal rebuild a face record, so they are sent slowly —
-                    roughly one every 1–2 seconds. A large batch can take 10–20 minutes to finish.
-                    Only start this when the gates are not busy.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
-                  <AlertDialogAction className="cursor-pointer" onClick={handleResync}>
-                    Start re-sync
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           }
         />
       )}
