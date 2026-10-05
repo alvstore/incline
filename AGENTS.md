@@ -1,0 +1,1 @@
+Attendance operations views consolidate same-day member attendance rows by member while retaining raw rows as expandable audit detail, because turnstile bounce scans must not inflate visit counts.
