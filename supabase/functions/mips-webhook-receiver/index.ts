@@ -1,3 +1,4 @@
+// v2.9.0 - Re-entry guard: an entry scan within 3 min of an exit check-out is ignored (no phantom visit).
 // v2.8.0 - face_1 (terminal refused) on entry → member_denied + front-desk alert, never attendance.
 // v2.7.0 - Entry/exit aware attendance: the scanning gate's door_role decides whether a
 //           scan opens (entry) or closes (exit) the visit/shift, using the hardware scan time.
@@ -288,6 +289,20 @@ async function handleMemberCheckin(
   let message = `Member ${personName} checked in via ${passType}`;
 
   try {
+    // Re-entry guard: someone walking out often gets caught by the entry camera
+    // seconds later. Ignore entry scans within 3 min of a gate check-out.
+    const { data: recentExit } = await supabase
+      .from("member_attendance")
+      .select("id, check_out")
+      .eq("member_id", memberId)
+      .not("check_out", "is", null)
+      .gte("check_out", new Date(Date.now() - 3 * 60_000).toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (recentExit) {
+      return { result: "member", message: `${personName} entry scan ignored (just checked out)` };
+    }
+
     const { data: checkinResult } = await supabase.rpc("member_check_in", {
       _member_id: memberId,
       _branch_id: branchId,
