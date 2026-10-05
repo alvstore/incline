@@ -81,6 +81,7 @@ export const addDevice = async (device: {
   serial_number?: string;
   device_type?: string;
   model?: string;
+  door_role?: 'entry' | 'exit' | 'both';
 }): Promise<AccessDevice> => {
   const { data, error } = await supabase
     .from('access_devices')
@@ -91,6 +92,7 @@ export const addDevice = async (device: {
       device_type: device.device_type || 'face_terminal',
       model: device.model,
       serial_number: device.serial_number,
+      door_role: device.door_role || 'both',
     })
     .select()
     .single();

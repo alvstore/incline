@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Monitor, RefreshCw, GitCompare, ShieldOff, UploadCloud, DatabaseBackup } from "lucide-react";
+import { Monitor, RefreshCw, GitCompare, ShieldOff, DatabaseBackup } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +27,7 @@ interface DeviceFleetTabProps {
 const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTabProps) => {
   const qc = useQueryClient();
   const { devices, bySerial, isLoading, isConnected, connection, refetch } = useMipsFleet(branchId);
-  const [busy, setBusy] = useState<"sync" | "reconcile" | "revoke" | "full" | null>(null);
+  const [busy, setBusy] = useState<"reconcile" | "revoke" | "full" | null>(null);
   const [confirmFull, setConfirmFull] = useState(false);
   const [registeringSN, setRegisteringSN] = useState<string | null>(null);
 
@@ -62,39 +62,33 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
   };
 
 
-  const handleFleetSync = async () => {
-    setBusy("sync");
-    try {
-      // Fleet-wide healing is owned by mips-reconcile-devices; sync-to-mips only
-      // accepts a single person and 400s on a fleet payload.
-      const { error } = await supabase.functions.invoke("mips-reconcile-devices", {
-        body: { branch_id: branchId },
-      });
-      if (error) throw error;
-      toast.success("Fleet sync started — personnel are being pushed to the MIPS server");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Fleet sync failed");
-    } finally {
-      setBusy(null);
-    }
-  };
-
+  // Fleet sync and Reconcile used to be two buttons calling the same worker.
+  // One action, honest result: how many people drifted and how many were pushed.
   const handleReconcile = async () => {
     setBusy("reconcile");
     try {
       const { data, error } = await supabase.functions.invoke("mips-reconcile-devices", {
-        body: { branch_id: branchId },
+        body: { branch_id: branchId, force: true },
       });
       if (error) throw error;
-      const branches = ((data as { branches?: Array<{ ok?: number; failed?: number; persons?: number }> })?.branches) || [];
-      const totals = branches.reduce(
-        (a, b) => ({ ok: a.ok + (b.ok || 0), failed: a.failed + (b.failed || 0), persons: a.persons + (b.persons || 0) }),
-        { ok: 0, failed: 0, persons: 0 }
+      type BranchRun = { drifted?: number; processed?: number; ok?: number; failed?: number; scanned?: number };
+      const runs = ((data as { branches?: BranchRun[] })?.branches) || [];
+      const t = runs.reduce(
+        (a, b) => ({
+          scanned: a.scanned + (b.scanned || 0),
+          drifted: a.drifted + (b.drifted || 0),
+          ok: a.ok + (b.ok || 0),
+          failed: a.failed + (b.failed || 0),
+        }),
+        { scanned: 0, drifted: 0, ok: 0, failed: 0 }
       );
-      toast.success(
-        `Reconciled ${totals.persons} persons across ${branches.length} branch(es) — ${totals.ok} ok / ${totals.failed} failed`
-      );
+      if (t.drifted === 0) toast.success(`All ${t.scanned} checked people are already on every gate`);
+      else
+        toast.success(
+          `${t.drifted} of ${t.scanned} checked people were missing on a gate — pushed ${t.ok}, failed ${t.failed}. The rest follow on the next run.`
+        );
       qc.invalidateQueries({ queryKey: ["mips-devices"] });
+      qc.invalidateQueries({ queryKey: ["mips-face-ledger"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Reconcile failed");
     } finally {
@@ -156,27 +150,17 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
             <Button
               variant="outline"
               size="sm"
-              className="min-h-[36px] rounded-xl"
-              onClick={handleFleetSync}
-              disabled={busy !== null}
-            >
-              <UploadCloud className={`mr-1.5 h-3.5 w-3.5 ${busy === "sync" ? "animate-pulse" : ""}`} />
-              {busy === "sync" ? "Syncing…" : "Fleet sync"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="min-h-[36px] rounded-xl"
+              className="min-h-[44px] rounded-xl"
               onClick={handleReconcile}
               disabled={busy !== null}
             >
               <GitCompare className={`mr-1.5 h-3.5 w-3.5 ${busy === "reconcile" ? "animate-pulse" : ""}`} />
-              {busy === "reconcile" ? "Reconciling…" : "Reconcile devices"}
+              {busy === "reconcile" ? "Reconciling…" : "Reconcile drift"}
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="min-h-[36px] rounded-xl"
+              className="min-h-[44px] rounded-xl"
               onClick={handleRevokeExpired}
               disabled={busy !== null}
             >
@@ -186,7 +170,7 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
             <Button
               variant="outline"
               size="sm"
-              className="min-h-[36px] rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50"
+              className="min-h-[44px] rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50"
               onClick={() => setConfirmFull(true)}
               disabled={busy !== null}
             >
