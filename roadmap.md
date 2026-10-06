@@ -82,6 +82,7 @@ Status: survey started (file sizes + policy reference map collected). No code ch
 - [ ] Optional: mips-access sweep could pace per-member evaluates across the roster (currently per-gate slot throttle only).
 
 ## Browser notifications + Team WhatsApp Inbox — 2026-10-06
-- [ ] Add secure opt-in Web Push subscriptions and event-driven delivery for existing in-app alerts.
-- [ ] Add enable/disable and test controls with iPhone home-screen and permission states.
-- [ ] Verify signed-in subscription, test delivery, privacy boundaries, and current Team Inbox capabilities.
+- [x] Add secure opt-in Web Push subscriptions and event-driven delivery for existing in-app alerts.
+- [x] Add enable/disable and test controls with iPhone home-screen and permission states.
+- [x] Verify signed-in configuration, permission-blocked UI, service-only delivery controls and live Team Inbox access; adoption guide: `docs/browser-notifications.md`.
+- [ ] Verify real phone subscription and OS test delivery; sandbox Chromium denies notification permission.
