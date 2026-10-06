@@ -1,3 +1,6 @@
+# Body scan studio — 2026-10-06
+- [ ] Improve model contrast, full-width stage, controls and below-stage progress summary; verify Azad’s real report.
+
 # AI Lead-Enquiry Architecture — Full Audit & Fix (NO DEPLOY)
 
 ## Member mobile experience (2026-10-04)
