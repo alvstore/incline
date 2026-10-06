@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Bell, MessageSquare, Mail, Smartphone, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BrowserNotifications } from '@/components/member/BrowserNotifications';
 import {
   getMemberCommPreferences,
   upsertMemberCommPreferences,
@@ -87,6 +88,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
+        <BrowserNotifications branchId={branchId} />
         {/* Channel kill switches */}
         <section>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Channels</h3>
