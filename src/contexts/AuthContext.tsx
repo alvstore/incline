@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Database } from '@/integrations/supabase/types';
 import { reportError } from '@/lib/errorReporter';
+import { disablePush } from '@/services/webPushService';
 
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -392,6 +393,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     clearAllTimers();
+    // Remove this account's device subscription before ending the session.
+    try { await disablePush(); } catch {
+      const worker = await navigator.serviceWorker?.getRegistration('/');
+      const subscription = await worker?.pushManager.getSubscription();
+      await subscription?.unsubscribe();
+    }
     await supabase.auth.signOut();
     queryClient.clear();
     setUser(null);

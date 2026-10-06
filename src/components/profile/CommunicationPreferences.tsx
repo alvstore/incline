@@ -77,6 +77,8 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
     setDraft((d) => ({ ...d, [k]: v }));
 
   return (
+    <div className="space-y-4">
+    <BrowserNotifications branchId={branchId} />
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">
@@ -88,7 +90,6 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
-        <BrowserNotifications branchId={branchId} />
         {/* Channel kill switches */}
         <section>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Channels</h3>
@@ -168,6 +169,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 

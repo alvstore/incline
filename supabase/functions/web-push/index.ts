@@ -1,6 +1,7 @@
 // v1.0.0 — opt-in browser delivery of existing in-app notifications.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import webpush from 'npm:web-push@3.6.7';
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 const allowedOrigins = new Set(['https://theincline.in', 'https://www.theincline.in', 'https://incline.lovable.app', 'http://localhost:8080']);
 function headers(req: Request) {
@@ -94,6 +95,10 @@ Deno.serve(async req => {
             }
           }
         }));
+      }
+      if (rows.length === 30) {
+        // Drain bursts in bounded batches; never permanently poll an empty queue.
+        EdgeRuntime.waitUntil(db.functions.invoke('web-push', { body: { action: 'deliver' } }));
       }
       return respond(200, { processed: rows.length, sent });
     }
