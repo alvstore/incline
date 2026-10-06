@@ -80,3 +80,8 @@ Status: survey started (file sizes + policy reference map collected). No code ch
 - [ ] Rotate the MIPS server SSH password (shared in chat during the incident).
 - [ ] MIPS MySQL: 61 authorization jobs stuck at push_status=1 today — confirm with vendor whether stuck jobs keep the terminal busy; consider clearing via MIPS UI.
 - [ ] Optional: mips-access sweep could pace per-member evaluates across the roster (currently per-gate slot throttle only).
+
+## Browser notifications + Team WhatsApp Inbox — 2026-10-06
+- [ ] Add secure opt-in Web Push subscriptions and event-driven delivery for existing in-app alerts.
+- [ ] Add enable/disable and test controls with iPhone home-screen and permission states.
+- [ ] Verify signed-in subscription, test delivery, privacy boundaries, and current Team Inbox capabilities.
