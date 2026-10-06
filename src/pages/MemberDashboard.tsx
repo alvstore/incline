@@ -22,6 +22,7 @@ import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AddToHomeScreen } from '@/components/member/AddToHomeScreen';
+import { BrowserNotifications } from '@/components/member/BrowserNotifications';
 
 export default function MemberDashboard() {
   const { profile } = useAuth();
@@ -268,6 +269,7 @@ export default function MemberDashboard() {
     <AppLayout>
       <div className="min-w-0 space-y-6">
         <AddToHomeScreen />
+        <BrowserNotifications branchId={member.branch_id} />
         {/* Hero pass */}
         <section className="relative overflow-hidden min-w-0 rounded-2xl bg-theme-gradient p-4 sm:p-6 md:p-8 text-white shadow-xl shadow-primary/20">
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-2xl" />

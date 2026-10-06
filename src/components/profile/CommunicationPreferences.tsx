@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Bell, MessageSquare, Mail, Smartphone, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BrowserNotifications } from '@/components/member/BrowserNotifications';
 import {
   getMemberCommPreferences,
   upsertMemberCommPreferences,
@@ -76,6 +77,8 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
     setDraft((d) => ({ ...d, [k]: v }));
 
   return (
+    <div className="space-y-4">
+    <BrowserNotifications branchId={branchId} />
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">
@@ -166,6 +169,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 
