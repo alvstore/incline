@@ -30,14 +30,7 @@ export function MemberBodyAvatarSvg({ measurement, label, memberGender }: Member
   const hipScale = 0.85 + (snapshot.morphs.hipWidth || 0.5) * 0.3;
 
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-border/40 bg-gradient-to-br from-muted via-muted to-muted shadow-xl shadow-primary/10">
-      {/* Subtle grid backdrop */}
-      <div className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-          backgroundSize: '14px 14px',
-        }} />
-
+    <Card className="relative overflow-hidden rounded-2xl border-border/40 bg-muted">
       {/* Corner brackets */}
       <BracketCorner className="top-3 left-3" rotate={0} />
       <BracketCorner className="top-3 right-3" rotate={90} />
@@ -46,10 +39,10 @@ export function MemberBodyAvatarSvg({ measurement, label, memberGender }: Member
 
       <div className="relative z-10 flex items-start justify-between p-4">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.32em] text-primary-foreground/50">Body view</p>
-          <h3 className="text-base font-semibold text-primary-foreground mt-0.5">{label}</h3>
+          <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground">Body view</p>
+          <h3 className="text-base font-semibold text-foreground mt-0.5">{label}</h3>
         </div>
-        <Badge className="bg-card/10 text-primary-foreground/80 border-primary-foreground/10 text-[10px] uppercase tracking-wider">
+        <Badge className="bg-card/10 text-muted-foreground border-border text-[10px] uppercase tracking-wider">
           {isFemale ? 'Female silhouette' : 'Male silhouette'}
         </Badge>
       </div>
@@ -70,9 +63,9 @@ export function MemberBodyAvatarSvg({ measurement, label, memberGender }: Member
           </g>
 
           {/* Measurement bands */}
-          <MeasurementBand y={130} value={m?.chest_cm ? `${m.chest_cm}"` : '—'} label="Chest" />
-          <MeasurementBand y={185} value={m?.waist_cm ? `${m.waist_cm}"` : '—'} label="Waist" />
-          <MeasurementBand y={235} value={m?.hips_cm ? `${m.hips_cm}"` : '—'} label="Hips" />
+          <MeasurementBand y={130} value={m?.chest_cm ? `${m.chest_cm.toFixed(1)} cm` : '—'} label="Chest" />
+          <MeasurementBand y={185} value={m?.waist_cm ? `${m.waist_cm.toFixed(1)} cm` : '—'} label="Waist" />
+          <MeasurementBand y={235} value={m?.hips_cm ? `${m.hips_cm.toFixed(1)} cm` : '—'} label="Hips" />
         </svg>
       </div>
     </Card>
@@ -133,12 +126,12 @@ function FemaleSilhouette({ waistScale, hipScale }: { waistScale: number; hipSca
 function MeasurementBand({ y, value, label }: { y: number; value: string; label: string }) {
   return (
     <g>
-      <line x1="6" y1={y} x2="194" y2={y} stroke="white" strokeOpacity="0.25" strokeDasharray="3 3" strokeWidth="1" />
-      <g transform={`translate(155, ${y - 10})`}>
-        <rect x="0" y="0" rx="9" ry="9" width="44" height="20" fill="rgba(255,255,255,0.92)" />
-        <text x="22" y="14" textAnchor="middle" fontSize="10" fill="#0f172a" fontWeight="600">{value}</text>
+      <line x1="6" y1={y} x2="194" y2={y} stroke="hsl(var(--muted-foreground))" strokeOpacity="0.25" strokeDasharray="3 3" strokeWidth="1" />
+      <g transform={`translate(140, ${y - 10})`}>
+        <rect x="0" y="0" rx="9" ry="9" width="60" height="20" fill="hsl(var(--card))" />
+        <text x="30" y="14" textAnchor="middle" fontSize="10" fill="hsl(var(--foreground))" fontWeight="600">{value}</text>
       </g>
-      <text x="10" y={y - 4} fontSize="9" fill="white" opacity="0.6" letterSpacing="1.5">{label.toUpperCase()}</text>
+      <text x="10" y={y - 4} fontSize="9" fill="hsl(var(--muted-foreground))" opacity="0.6" letterSpacing="1.5">{label.toUpperCase()}</text>
     </g>
   );
 }
