@@ -1,0 +1,2 @@
+CREATE POLICY server_only_push_config ON public.web_push_config FOR ALL TO service_role USING(true) WITH CHECK(true);
+CREATE POLICY server_only_push_deliveries ON public.web_push_deliveries FOR ALL TO service_role USING(true) WITH CHECK(true);
