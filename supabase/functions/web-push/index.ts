@@ -65,11 +65,12 @@ Deno.serve(async req => {
           if (!sub || !notice || notice.user_id !== sub.user_id || (notice.branch_id && notice.branch_id !== sub.branch_id) || !endpointAllowed(sub.endpoint) || Date.now() - Date.parse(notice.created_at) > 86400000) {
             await finish('suppressed', 'Unavailable or stale notification'); return;
           }
-          const { data: member } = await db.from('members').select('id').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).maybeSingle();
+          const { data: member } = await db.from('members').select('id,do_not_contact').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).maybeSingle();
           if (member) {
             const { data: prefs } = await db.from('member_communication_preferences').select('*').eq('member_id', member.id).eq('branch_id', sub.branch_id).maybeSingle();
             const topics: Record<string, string> = { membership_reminder: 'membership_reminders', payment_receipt: 'payment_receipts', class_notification: 'class_notifications', announcement: 'announcements', retention_nudge: 'retention_nudges', review_request: 'review_requests', marketing: 'marketing' };
             const category = notice.category || 'transactional';
+            if (member.do_not_contact && ['marketing', 'retention_nudge', 'review_request', 'announcement'].includes(category)) { await finish('suppressed', 'Do not contact'); return; }
             const topic = topics[category];
             if (prefs && topic && (prefs as Record<string, unknown>)[topic] === false) { await finish('suppressed', 'Topic disabled'); return; }
             // Respect quiet hours without sending an unexpected delayed lock-screen alert.
