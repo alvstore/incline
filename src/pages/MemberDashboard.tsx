@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { AddToHomeScreen } from '@/components/member/AddToHomeScreen';
 
 export default function MemberDashboard() {
   const { profile } = useAuth();
@@ -265,12 +266,13 @@ export default function MemberDashboard() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
+        <AddToHomeScreen />
         {/* Hero pass */}
-        <section className="relative overflow-hidden rounded-2xl bg-theme-gradient p-6 md:p-8 text-white shadow-xl shadow-primary/20">
+        <section className="relative overflow-hidden min-w-0 rounded-2xl bg-theme-gradient p-4 sm:p-6 md:p-8 text-white shadow-xl shadow-primary/20">
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
-          <div className="relative grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
-            <div className="space-y-4">
+          <div className="relative grid min-w-0 gap-5 sm:gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+            <div className="min-w-0 space-y-4">
               <div>
                 <p className="text-sm text-white/80">Welcome back</p>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
@@ -280,18 +282,18 @@ export default function MemberDashboard() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {quickActions.map(({ to, label: l, Icon, disabled }) => disabled ? (
-                  <span key={to} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/10 px-4 text-sm text-white/60 cursor-not-allowed">
+                  <span key={to} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/10 px-3 text-xs sm:px-4 sm:text-sm text-white/60 cursor-not-allowed">
                     <Icon className="h-4 w-4" />{l}
                   </span>
                 ) : (
-                  <Link key={to} to={to} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/15 px-4 text-sm font-medium backdrop-blur transition-colors duration-200 hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white cursor-pointer">
+                  <Link key={to} to={to} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/15 px-3 text-xs sm:px-4 sm:text-sm font-medium backdrop-blur transition-colors duration-200 hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white cursor-pointer">
                     <Icon className="h-4 w-4" />{l}
                   </Link>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white/10 p-5 backdrop-blur ring-1 ring-white/20">
+            <div className="min-w-0 rounded-2xl bg-white/10 p-3.5 sm:p-5 backdrop-blur ring-1 ring-white/20">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Your plan</p>
@@ -303,7 +305,7 @@ export default function MemberDashboard() {
               </div>
               {activeMembership ? (
                 <div className="mt-4 space-y-2">
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <span className="text-3xl font-bold">{isFrozen ? '—' : daysRemaining}</span>
                     <span className="text-xs text-white/80">
                       {isFrozen ? 'Paused' : 'days left'} · ends {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}
