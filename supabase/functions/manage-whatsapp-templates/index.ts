@@ -590,6 +590,10 @@ serve(async (req) => {
         referee_name: "Priya", reward_details: "₹500 wallet credit",
         days_absent: "7", reference_id: "REF-2604-001", payment_method: "UPI",
         reason: "Annual maintenance", closure_date: "01-May-2026", resume_date: "02-May-2026",
+        announcement_text: "Please note that external outdoor shoes are strictly not allowed inside the Pilates and Yoga studios to maintain hygiene. Kindly use the provided digital lockers before entering.",
+        update_text: "Please note that external outdoor shoes are strictly not allowed inside the Pilates and Yoga studios to maintain hygiene. Kindly use the provided digital lockers before entering.",
+        operational_update: "The Steam Room will be closed for maintenance today from 2 PM to 4 PM.",
+        message: "The facility will close early at 6:00 PM tomorrow for Diwali.",
       };
       
       if (namedVars.length > 0) {
