@@ -14205,6 +14205,122 @@ export type Database = {
           },
         ]
       }
+      web_push_config: {
+        Row: {
+          created_at: string
+          id: boolean
+          private_key: string
+          public_key: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: boolean
+          private_key: string
+          public_key: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: boolean
+          private_key?: string
+          public_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      web_push_deliveries: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          notification_id: string
+          status: string
+          subscription_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          notification_id: string
+          status?: string
+          subscription_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          notification_id?: string
+          status?: string
+          subscription_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_push_deliveries_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "web_push_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "web_push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      web_push_subscriptions: {
+        Row: {
+          auth_key: string
+          branch_id: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          branch_id: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          branch_id?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_push_subscriptions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_failures: {
         Row: {
           branch_id: string | null
@@ -15823,6 +15939,26 @@ export type Database = {
           p_reward_id: string
         }
         Returns: Json
+      }
+      claim_web_push_deliveries: {
+        Args: never
+        Returns: {
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          notification_id: string
+          status: string
+          subscription_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "web_push_deliveries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       class_shift_for_time: {
         Args: { p_time: string }
