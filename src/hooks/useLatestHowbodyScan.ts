@@ -65,6 +65,8 @@ export function useLatestHowbodyScan(memberId: string | null | undefined) {
           .limit(1)
           .maybeSingle(),
       ]);
+      if (bodyRes.error) throw bodyRes.error;
+      if (postureRes.error) throw postureRes.error;
       return {
         body: (bodyRes.data as HowbodyBodyReport | null) || null,
         posture: (postureRes.data as HowbodyPostureReport | null) || null,

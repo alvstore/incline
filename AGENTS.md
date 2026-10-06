@@ -1,3 +1,4 @@
 Attendance operations views consolidate same-day member attendance rows by member while retaining raw rows as expandable audit detail, because turnstile bounce scans must not inflate visit counts.
 Browser push mirrors existing in-app notifications through an event-driven queue; all new notification creation uses dispatchCommunication, keeping existing paid delivery channels unchanged.
 Web Push signing keys are stored in a service-role-only table; endpoints are provider-allowlisted and lock-screen payloads contain no personal, financial, or health data.
+Body progress places the render before a full-width summary; historical measurement silhouettes never fetch the latest scanner model, avoiding false before/after comparisons.
