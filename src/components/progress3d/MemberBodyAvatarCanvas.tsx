@@ -64,6 +64,7 @@ export function MemberBodyAvatarCanvas({ memberId, measurement, previousMeasurem
         ) : view === '3d' ? <div className="flex h-full flex-col items-center justify-center gap-2 p-5 text-center text-muted-foreground"><Activity className="h-10 w-10" /><p className="text-sm">No 3D model available for this scan</p></div> : <PhotoGrid posture={scan?.posture ?? null} />}
       </div>
       {view === '3d' && modelUrl && <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border px-4 py-2">
+        <p className="mr-auto text-xs text-muted-foreground">Drag to turn · Pinch or scroll to zoom</p>
         <Button variant="ghost" className="min-h-11 gap-2 text-xs" aria-pressed={rotating} onClick={() => setRotating(r => !r)}>{rotating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{rotating ? 'Pause rotation' : 'Rotate'}</Button>
         <Button variant="ghost" className="min-h-11 gap-2 text-xs" onClick={() => { setReset(r => r + 1); setRotating(false); }}><RotateCcw className="h-4 w-4" />Reset view</Button>
       </div>}

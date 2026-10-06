@@ -73,7 +73,7 @@ export function BodyComparisonView({ latest, previous, memberGender, memberId }:
                 );
               })
             ) : (
-              <div className="rounded-2xl bg-secondary/70 p-4 text-sm text-muted-foreground">
+              <div className="rounded-2xl bg-secondary/70 p-4 text-sm text-muted-foreground sm:col-span-2 xl:col-span-4">
                 Your latest check-in is saved. Progress changes will appear after your next measurement.
               </div>
             )}
