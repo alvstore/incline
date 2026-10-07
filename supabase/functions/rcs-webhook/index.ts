@@ -20,6 +20,14 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const url = new URL(req.url);
+  // v0.5.0 — Require the private webhook token (?token=… or x-webhook-token header).
+  {
+    const sent = url.searchParams.get('token') || req.headers.get('x-webhook-token') || '';
+    const { data: expected } = await supabase.rpc('get_rcs_webhook_token');
+    if (!sent || !expected || sent !== expected) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+  }
   // Parse suffix: /rcs-webhook[/webhook][/{provider}][/{event}]
   const raw = url.pathname.replace(/^.*\/rcs-webhook/i, '').replace(/^\/webhook/i, '').toLowerCase();
   const parts = raw.split('/').filter(Boolean);

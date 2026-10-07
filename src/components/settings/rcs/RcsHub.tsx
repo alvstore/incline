@@ -648,13 +648,24 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
     navigator.clipboard.writeText(s);
     toast.success(`${label} URL copied`);
   };
+  // Private token appended to every webhook link — calls without it are rejected.
+  const { data: token } = useQuery({
+    queryKey: ['rcs-webhook-token'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_rcs_webhook_token');
+      if (error) throw error;
+      return data as string;
+    },
+    staleTime: Infinity,
+  });
+  const withToken = (u: string) => (token ? `${u}?token=${token}` : u);
   const allRows: Array<[string, string, string, 'telinfy' | 'smartping']> = [
-    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL', 'telinfy'],
-    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards', 'telinfy'],
-    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain', 'telinfy'],
-    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery', 'smartping'],
-    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards', 'smartping'],
-    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping', 'smartping'],
+    ['Telinfy — Delivery (DLR)', withToken(WEBHOOK_URLS.telinfyDelivery), 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL', 'telinfy'],
+    ['Telinfy — User Action', withToken(WEBHOOK_URLS.telinfyAction), 'Button-click events from Telinfy rich cards', 'telinfy'],
+    ['Telinfy — User Message', withToken(WEBHOOK_URLS.telinfyMessage), 'Inbound MO from Telinfy; STOP/opt-out + AI brain', 'telinfy'],
+    ['Smartping — Delivery (DLR)', withToken(WEBHOOK_URLS.smartpingDelivery), 'Register in Smartping panel → Webhooks → Delivery', 'smartping'],
+    ['Smartping — User Action', withToken(WEBHOOK_URLS.smartpingAction), 'Button-click events from Smartping cards', 'smartping'],
+    ['Smartping — User Message', withToken(WEBHOOK_URLS.smartpingMessage), 'Inbound MO from Smartping', 'smartping'],
   ];
   const rows = allRows.filter((r) => r[3] === activeProvider);
 

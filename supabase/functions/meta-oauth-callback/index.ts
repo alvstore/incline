@@ -14,6 +14,8 @@
 //   GET  https://graph.instagram.com/access_token       (long-lived swap)
 //   GET  https://graph.instagram.com/v25.0/me           (fetch user_id+username)
 
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
+import { signOAuthState, verifyOAuthState } from "../_shared/oauthState.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { IG_API_BASE, metaFetchWithFallback } from "../_shared/meta-config.ts";
 
@@ -43,6 +45,30 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // POST { action: "start", branch_id } — signed-in owner/admin/manager gets a one-time,
+    // signed Instagram authorize link for a branch they manage.
+    if (req.method === "POST") {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"], allowInternal: false });
+      if (!caller.ok) return caller.response;
+      const body = await req.json().catch(() => ({}));
+      const bId = typeof body?.branch_id === "string" ? body.branch_id : "";
+      const jsonRes = (o: unknown, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (body?.action !== "start" || !bId) return jsonRes({ error: "action=start and branch_id required" }, 400);
+      if (!(await canActOnBranch(caller, bId))) return jsonRes({ error: "Forbidden for this branch" }, 403);
+      const { data: cfgRow } = await caller.admin.from("integration_settings").select("credentials")
+        .eq("branch_id", bId).eq("provider", "instagram_login").maybeSingle();
+      const appIdStart = (cfgRow?.credentials as any)?.app_id || Deno.env.get("META_APP_ID");
+      if (!appIdStart) return jsonRes({ error: "Save the Meta App ID for this branch first" }, 400);
+      const redirect = `${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-oauth-callback`;
+      const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+      authUrl.searchParams.set("client_id", String(appIdStart));
+      authUrl.searchParams.set("redirect_uri", redirect);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("scope", "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments");
+      authUrl.searchParams.set("state", await signOAuthState(bId));
+      return jsonRes({ url: authUrl.toString() });
+    }
+
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state"); // expected: branch_id
@@ -72,7 +98,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    const branchId = state.trim();
+    const branchId = await verifyOAuthState(state.trim());
+    if (!branchId) {
+      return htmlResponse(
+        "Link expired or invalid",
+        `<h1>Connect link expired or invalid</h1>
+         <p>Please start again from Settings → Integrations → Instagram using the <b>Connect Instagram</b> button.</p>
+         <p><a href="${APP_BASE}/settings?tab=integrations">← Back to Integrations</a></p>`,
+        400,
+      );
+    }
 
     // Look up Meta App ID + Secret for this branch (stored in integration_settings).
     const supabase = createClient(

@@ -100,7 +100,6 @@ const MESSENGER_PROVIDERS = [
 
 const SUPABASE_FUNCTION_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const WHATSAPP_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/whatsapp-webhook`;
-const RCS_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/rcs-webhook`;
 
 export function IntegrationSettings() {
   const { selectedBranch, branchFilter } = useBranchContext();
@@ -417,21 +416,9 @@ export function IntegrationSettings() {
                             <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
                             <span className="text-xs font-semibold">Inbound webhook URL</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
-                              {`${RCS_WEBHOOK_URL}?provider=${provider.id}`}
-                            </code>
-                            <Button
-                              variant="outline" size="sm" className="cursor-pointer shrink-0"
-                              aria-label={`Copy ${provider.name} webhook URL`}
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${RCS_WEBHOOK_URL}?provider=${provider.id}`);
-                                toast.success(`${provider.name} webhook URL copied`);
-                              }}
-                            >
-                              <Copy className="h-3.5 w-3.5" aria-hidden />
-                            </Button>
-                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Webhook links now include a private token. Copy them from <b>Settings → RCS Hub → Webhooks</b>.
+                          </p>
                         </div>
                         <Button className="w-full mt-4 cursor-pointer" variant={isActive ? 'outline' : 'default'} onClick={() => openConfig('rcs', provider.id)}>
                           <Settings className="h-4 w-4 mr-2" />{config ? 'Configure' : 'Setup'}
@@ -1020,6 +1007,30 @@ export function IntegrationSettings() {
                             <Copy className="h-3 w-3" />
                           </Button>
                         </div>
+                      </div>
+                      <div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          disabled={selectedBranch === 'all'}
+                          onClick={async () => {
+                            const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>(
+                              'meta-oauth-callback',
+                              { body: { action: 'start', branch_id: selectedBranch } },
+                            );
+                            if (error || !data?.url) {
+                              toast.error(data?.error || 'Could not create the Instagram connect link');
+                              return;
+                            }
+                            window.open(data.url, '_blank', 'noopener');
+                          }}
+                        >
+                          Connect Instagram
+                        </Button>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {selectedBranch === 'all' ? 'Select a branch first. ' : ''}Opens a one-time signed link (valid 15 minutes) for this branch.
+                        </p>
                       </div>
                       <div>
                         <p className="text-[11px] text-warning mb-1"><b>Data Deletion URL</b> — paste in Meta Dashboard → Settings → Basic:</p>

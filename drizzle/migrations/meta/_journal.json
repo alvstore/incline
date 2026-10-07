@@ -29,6 +29,20 @@
       "when": 1791383581592,
       "tag": "0003_internal_token_for_triggers_and_crons",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791384351991,
+      "tag": "0004_rcs_webhook_token",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791384445554,
+      "tag": "0005_restrict_public_bucket_listing",
+      "breakpoints": true
     }
   ]
 }
