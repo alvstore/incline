@@ -741,9 +741,9 @@ Deno.serve(async (req) => {
       if (!isSelf && input.category === 'task_reminder' && typeof taskId === 'string' && input.user_id
           && ['whatsapp', 'email'].includes(input.channel)) {
         const { data: task } = await authz.from('tasks')
-          .select('created_by, assigned_to, branch_id, created_at').eq('id', taskId).maybeSingle();
+          .select('assigned_by, assigned_to, branch_id, created_at').eq('id', taskId).maybeSingle();
         const fresh = task && Date.now() - new Date(task.created_at).getTime() < 15 * 60_000;
-        if (task && fresh && task.created_by === uid && task.branch_id === input.branch_id) {
+        if (task && fresh && task.assigned_by === uid && task.branch_id === input.branch_id) {
           let allowedUser = task.assigned_to === input.user_id;
           if (!allowedUser) {
             const { data: rl } = await authz.from('user_roles').select('role')
