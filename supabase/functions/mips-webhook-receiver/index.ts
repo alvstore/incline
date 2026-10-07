@@ -394,11 +394,14 @@ async function resolveDoorRole(
   deviceName: string,
 ): Promise<"entry" | "exit" | "both"> {
   const keys = [deviceKey, deviceName].filter((k) => k && k !== "unknown");
-  for (const key of keys) {
+  for (const rawKey of keys) {
+    // Only plain device identifiers — never PostgREST filter syntax.
+    const key = String(rawKey).trim();
+    if (!/^[A-Za-z0-9 _.\-]{1,64}$/.test(key)) continue;
     const { data } = await supabase
       .from("access_devices")
       .select("door_role")
-      .or(`serial_number.eq.${key},device_name.eq.${key}`)
+      .or(`serial_number.eq."${key}",device_name.eq."${key}"`)
       .limit(1)
       .maybeSingle();
     const role = data?.door_role;
@@ -480,12 +483,16 @@ async function handleImgRegCallback(supabase: any, payload: Record<string, unkno
     return;
   }
 
-  if (imgBase64 && imgBase64.length > 100) {
+  if (imgBase64 && imgBase64.length > 100 && imgBase64.length <= 2_800_000) {
     try {
       const binaryStr = atob(imgBase64);
       const bytes = new Uint8Array(binaryStr.length);
       for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
+      // Only accept real JPEG/PNG images (magic bytes) up to ~2 MB.
+      const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
+      const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+      if (!isJpeg && !isPng) throw new Error("ImgReg payload is not a JPEG/PNG image");
       const filePath = `${person.id}_capture.jpg`;
       await supabase.storage.from("member-photos").upload(filePath, bytes, { upsert: true, contentType: "image/jpeg" });
 

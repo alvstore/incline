@@ -15,6 +15,7 @@
 // v3.1.0 — Resolve team-alert template by trigger_event='lead_created' first.
 // v3.0.0 — Full SSOT cutover — all channels route via dispatch-communication.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +34,7 @@ interface DispatchSummary {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
 
   try {
     const { lead_id, branch_id } = await req.json();

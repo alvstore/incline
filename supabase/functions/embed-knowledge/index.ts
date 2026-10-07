@@ -11,6 +11,7 @@
 // Uses Lovable AI Gateway (google/gemini-embedding-001, dim=1536).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,6 +57,7 @@ function flattenSourceData(d: unknown): string {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
 
   try {
     // v1.1.0 — Tiered auth gate:

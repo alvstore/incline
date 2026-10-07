@@ -5,6 +5,7 @@
 // the canonical dispatch-communication funnel). Dedupe is handled downstream by
 // the dedupe_key `facility_slot_reminder:<booking_id>:<channel>`.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,7 @@ const DEFAULT_LEAD_HOURS = 3;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
 
   const started = Date.now();
   try {

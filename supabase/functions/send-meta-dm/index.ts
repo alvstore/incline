@@ -9,6 +9,7 @@
 //          two parallel webhook invocations from sending the same DM twice.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_GRAPH_VERSION, detectMetaHost, metaFetchWithFallback } from "../_shared/meta-config.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,6 +85,7 @@ function resolveAccessToken(integration: any): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

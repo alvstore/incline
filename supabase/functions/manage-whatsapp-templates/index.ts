@@ -15,6 +15,7 @@
 //           Falls back to text-only if upload fails (preserves v2.3.0 behavior).
 // v2.3.0 — Adds `bulk_create` (array of template_data, per-row results) and `mark_stale`
 // (flags whatsapp_templates rows whose meta_template_id is no longer present after a list sync).
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_GRAPH_VERSION, META_API_BASE } from "../_shared/meta-config.ts";
 
@@ -1154,11 +1155,19 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "Missing ids[]" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      const { error: e1 } = await supabase.from("whatsapp_templates").delete().in("id", ids);
+      {
+        const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"] });
+        if (!caller.ok) return caller.response;
+        if (!(await canActOnBranch(caller, branch_id))) {
+          return new Response(JSON.stringify({ error: "Forbidden for this branch" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+      const { error: e1 } = await supabase.from("whatsapp_templates").delete().in("id", ids).eq("branch_id", branch_id);
       // Also clear meta_* metadata on legacy templates rows so they appear unsynced again.
       await supabase.from("templates").update({
         meta_template_name: null, meta_template_id: null, meta_template_status: null, meta_rejection_reason: null,
-      }).in("id", ids);
+      }).in("id", ids).eq("branch_id", branch_id);
       return new Response(JSON.stringify({ success: !e1, error: e1?.message || null }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

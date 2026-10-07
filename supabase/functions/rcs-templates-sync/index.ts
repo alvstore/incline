@@ -5,6 +5,7 @@
 //   • Smartping: authorize → GET /rcs/api/template/list; normalizes into
 //     rcs_templates rows with provider='smartping' and external_template_id=<UUID>.
 //   POST /rcs-templates-sync { branch_id?: string }
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resolveRcsProvider } from '../_shared/rcsProviders.ts';
 
@@ -42,6 +43,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const body = await req.json().catch(() => ({}));
     const branchId: string | null = body?.branch_id || null;
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"] });
+      if (!caller.ok) return caller.response;
+      if (!caller.internal && !(await canActOnBranch(caller, branchId))) return json(403, { ok: false, reason: 'Forbidden for this branch' });
+    }
 
     const cfg = await resolveRcsProvider(supabase, branchId);
     if (!cfg.is_active) return json(200, { ok: false, provider: cfg.provider, reason: `${cfg.provider} integration is disabled` });

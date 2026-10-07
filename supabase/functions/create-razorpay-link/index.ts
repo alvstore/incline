@@ -117,6 +117,34 @@ serve(async (req: Request) => {
       );
     }
 
+    // Caller authority: staff/internal, or the member who owns this invoice.
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff"] });
+      if (!caller.ok) {
+        const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        const { data: ures } = await supabase.auth.getUser(tok);
+        const uid = ures?.user?.id;
+        let owns = false;
+        if (uid && invoice.member_id) {
+          const { data: m } = await supabase.from("members").select("user_id").eq("id", invoice.member_id).maybeSingle();
+          owns = m?.user_id === uid;
+        }
+        if (!owns) {
+          return new Response(JSON.stringify({ error: "Forbidden", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+      if (invoice.branch_id !== branchId) {
+        return new Response(JSON.stringify({ error: "Branch mismatch", code: "BRANCH_MISMATCH" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const due = Math.round((Number(invoice.total_amount ?? 0) - Number(invoice.amount_paid ?? 0)) * 100) / 100;
+      if (amount > due + 0.01) {
+        return new Response(JSON.stringify({ error: "Amount exceeds the outstanding balance", code: "AMOUNT_EXCEEDS_DUE" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // Get member profile
     let customerName = "Member";
     let customerPhone = "";

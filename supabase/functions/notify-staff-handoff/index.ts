@@ -1,6 +1,7 @@
 // v1.1.0 — Notify staff on personal WhatsApp when a chat handoff is requested.
 // Supports targeted (staff_user_id) or broadcast (omit staff_user_id → all available staff in branch).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,7 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
   try {
     const { staff_user_id, member_phone, reason, branch_id, skip_notification } = await req.json();
     if (!member_phone) return json({ error: "member_phone required" }, 400);

@@ -189,6 +189,24 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
+    // Caller check: internal jobs and staff/trainers may deliver any report;
+    // a member may only prepare their own report.
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff", "trainer"] });
+      if (!caller.ok) {
+        const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        const { data: ures } = await supabase.auth.getUser(tok);
+        const uid = ures?.user?.id;
+        if (!uid) return jr({ error: "Unauthorized" }, 401);
+        const ownTable = kind === "body" ? "howbody_body_reports" : "howbody_posture_reports";
+        const { data: ownRep } = await supabase.from(ownTable).select("member_id").eq("id", report_id).maybeSingle();
+        const { data: ownMem } = ownRep
+          ? await supabase.from("members").select("user_id").eq("id", ownRep.member_id).maybeSingle()
+          : { data: null };
+        if (!ownMem || ownMem.user_id !== uid) return jr({ error: "Forbidden" }, 403);
+      }
+    }
+
     // A re-send pushes a fresh message to the member, so it needs an
     // authenticated staff caller with owner/admin/manager/staff rights.
     if (isResend) {

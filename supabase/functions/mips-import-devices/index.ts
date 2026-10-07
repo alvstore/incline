@@ -2,6 +2,7 @@
 // Safe to run repeatedly (cron-friendly). Never overwrites branch_id/door_role/public_ip
 // if already set by an admin. Called by MIPSDevicesTab "Import all" button.
 
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
@@ -33,6 +34,11 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const branchId: string | undefined = body.branch_id;
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff"] });
+      if (!caller.ok) return caller.response;
+      if (!caller.internal && !(await canActOnBranch(caller, branchId))) return json({ error: "Forbidden for this branch" }, 403);
+    }
 
     // Resolve per-branch MIPS connection
     let serverUrl = Deno.env.get("MIPS_SERVER_URL")!;

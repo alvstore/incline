@@ -547,6 +547,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (!isServiceJwt && !isSharedSecret && !isOwnerUser) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const drServiceKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
     if (!drServiceKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
     const dr = createClient(DR_URL, drServiceKey, { auth: { persistSession: false } });

@@ -4,6 +4,7 @@
 // finance reports show the true cost of online collection.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
@@ -19,6 +20,7 @@ const json = (body: unknown, status = 200) =>
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin"] }); if (!__caller.ok) return __caller.response; }
 
   try {
     const supabase = createClient(

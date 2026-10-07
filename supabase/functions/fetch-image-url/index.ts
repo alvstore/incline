@@ -29,6 +29,7 @@ function isBlockedHost(hostname: string): boolean {
     if (a === 10) return true;
     if (a === 127) return true;
     if (a === 0) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
     if (a === 169 && b === 254) return true; // link-local + AWS/GCP metadata 169.254.169.254
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
@@ -77,6 +78,15 @@ Deno.serve(async (req) => {
     try { parsed = new URL(imageUrl); } catch { return json({ error: "Invalid URL" }, 400); }
     if (!["http:", "https:"].includes(parsed.protocol)) return json({ error: "Only http/https URLs allowed" }, 400);
     if (isBlockedHost(parsed.hostname)) return json({ error: "Host not allowed" }, 400);
+    // Resolve DNS and reject hosts that point at private/internal addresses.
+    try {
+      const v4 = await Deno.resolveDns(parsed.hostname, "A").catch(() => [] as string[]);
+      const v6 = await Deno.resolveDns(parsed.hostname, "AAAA").catch(() => [] as string[]);
+      if (v4.length === 0 && v6.length === 0) return json({ error: "Host could not be resolved" }, 400);
+      if (v4.some((ip) => isBlockedHost(ip)) || v6.some((ip) => /^(::1?$|::ffff:|f[cd]|fe[89ab])/i.test(ip))) return json({ error: "Host not allowed" }, 400);
+    } catch {
+      return json({ error: "Host could not be resolved" }, 400);
+    }
 
     // Fetch (no redirect-following so the destination can't bounce to an internal host)
     const resp = await fetch(parsed.toString(), { redirect: "manual" });

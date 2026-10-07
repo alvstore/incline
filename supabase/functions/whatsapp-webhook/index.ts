@@ -38,6 +38,7 @@
 // v5.2.0 — Variant-aware phone matching, member-first dedupe guard.
 // v5.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
 // v5.0.0 — Transactional AI Agent: 25+ self-service tools, payments, IG/FB parity
+import { maskPhone } from "../_shared/requireCaller.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
@@ -456,7 +457,7 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
               })
               .eq("phone", message.from)
               .is("ad_id", null);
-            console.log("Meta ad attribution captured:", { phone: message.from, adId, campaignName });
+            console.log("Meta ad attribution captured:", { phone: maskPhone(message.from), adId, campaignName });
           }
         } catch (refErr) {
           console.warn("Failed to extract Meta referral data:", refErr);
@@ -661,7 +662,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     const { detectOptOut, OPT_OUT_CONFIRMATION } = await import("../_shared/optOutDetector.ts");
     const detection = detectOptOut(inboundMsg.content);
     if (detection.optOut) {
-      console.log(`[whatsapp-webhook] opt-out detected (${detection.reason}) for ${phoneNumber}`);
+      console.log(`[whatsapp-webhook] opt-out detected (${detection.reason}) for ${maskPhone(phoneNumber)}`);
       await supabase.rpc("mark_do_not_contact", {
         p_phone: phoneNumber,
         p_branch_id: branchId,
@@ -1553,7 +1554,16 @@ async function resolveInboundMedia(
       console.error("Meta media binary download failed", binRes.status);
       return { storage_path: mediaId, meta: { ...baseMeta, error: `download_${binRes.status}` } };
     }
+    const declaredLen = Number(binRes.headers.get("content-length") || 0);
+    const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+    const ALLOWED_MEDIA = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|3gpp)|audio\/(aac|mp4|mpeg|amr|ogg|opus)|application\/pdf|application\/(msword|vnd\.openxmlformats-officedocument\.[a-z.]+|vnd\.ms-excel|vnd\.ms-powerpoint)|text\/plain)/i;
+    if (declaredLen > MAX_MEDIA_BYTES) {
+      return { storage_path: mediaId, meta: { ...baseMeta, error: "too_large" } };
+    }
     const blob = await binRes.blob();
+    if (blob.size > MAX_MEDIA_BYTES || (blob.type && !ALLOWED_MEDIA.test(blob.type))) {
+      return { storage_path: mediaId, meta: { ...baseMeta, error: blob.size > MAX_MEDIA_BYTES ? "too_large" : "type_not_allowed" } };
+    }
 
     // Step 3: Upload into our storage bucket.
     const now = new Date();

@@ -14,6 +14,7 @@
 // v2.7.0: Meta acceptance ≠ delivery. WhatsApp retries park in
 //          `awaiting_confirmation` until a webhook callback promotes them to
 //          `succeeded` or marks them `terminal` (131049/failure).
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 
 // v2.6.0: Meta 131049 pacing failures are terminal for the current message.
@@ -90,6 +91,7 @@ function isTerminalReason(reason: string | null | undefined, retryCount = 0): bo
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

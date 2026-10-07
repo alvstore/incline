@@ -10,6 +10,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { sendBirthdayGreeting, istToday } from "../_shared/birthday-greeting.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -255,6 +256,7 @@ async function processRule(rule: any) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
 
   // v2.3.0 — Auth gate: accepts any of
   //   1. Authorization: Bearer SERVICE_KEY (admin invoke)

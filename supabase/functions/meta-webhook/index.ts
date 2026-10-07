@@ -985,7 +985,7 @@ async function ingestInstagramMention(value: any, igAccountId: string) {
     console.error("[IG] mention insert failed:", error.message);
     return;
   }
-  console.log(`[IG] stored mention id=${commentId} from=${fromUsername || fromId}`);
+  console.log(`[IG] stored mention id=${commentId} from=${fromUsername || fromId ? 'redacted' : '-'}`);
 }
 
 // ─── F4: Instagram sender profile resolution ──────────────────────────────────

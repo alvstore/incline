@@ -1117,7 +1117,7 @@ Deno.serve(async (req) => {
     ctxBranchId = effectiveBranchId ?? ctxBranchId;
 
     const mipsPersonSn = stripHyphens(personNo);
-    console.log(`Syncing ${person_type}: ${name} (${personNo} → ${mipsPersonSn}) gender=${gender} dob=${birthday || "-"} dept=${deptName}`);
+    console.log(`Syncing ${person_type}: (${personNo} → ${mipsPersonSn}) dept=${deptName}`);
 
     // Step 2: Check if person already exists in MIPS
     const existing = await lookupPerson(baseUrl, token, mipsPersonSn);
