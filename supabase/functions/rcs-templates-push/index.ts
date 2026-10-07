@@ -10,6 +10,7 @@
 // On success writes back { external_template_id, provider, status: 'pending_approval' }.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resolveRcsProvider } from '../_shared/rcsProviders.ts';
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,6 +82,7 @@ async function pushToSmartping(baseUrl: string, token: string, t: LocalTemplate)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager"] }); if (!__caller.ok) return __caller.response; }
   try {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const body = await req.json().catch(() => ({}));

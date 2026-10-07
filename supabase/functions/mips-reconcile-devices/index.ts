@@ -14,6 +14,7 @@
 // Invoked by the automation-brain cron every ~15 min (rule
 // `mips_reconcile_devices`).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +44,7 @@ const ts = (v: unknown): number => (v ? Date.parse(String(v)) : 0);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager"] }); if (!__caller.ok) return __caller.response; }
 
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

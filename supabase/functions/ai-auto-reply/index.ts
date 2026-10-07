@@ -2,6 +2,7 @@
 // Used by WhatsAppChat "AI Suggest" button. Does NOT mutate state — just returns a draft.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +20,7 @@ interface Body {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
   try {
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,

@@ -2,6 +2,7 @@
 // Daily cron: flips expired batches → status='expired', notifies branch managers
 // of batches expiring in 30/15/7 days and of newly-expired batches.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +43,7 @@ async function dispatchInApp(supa: any, branch_id: string, title: string, body: 
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
   const startedAt = new Date().toISOString();
   try {
     const supa = createClient(SUPABASE_URL, SERVICE_KEY);

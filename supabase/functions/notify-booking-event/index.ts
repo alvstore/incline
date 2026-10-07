@@ -10,6 +10,7 @@
 // a class template (which produced "your booking for the class on at").
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,6 +42,7 @@ const CHANNELS = ["whatsapp", "email", "sms"] as const;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
 
   try {
     const { event, booking_id } = await req.json();

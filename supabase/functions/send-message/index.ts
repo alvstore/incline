@@ -1,3 +1,4 @@
+import { requireCaller } from "../_shared/requireCaller.ts";
 // v1.0.0 — Backward-compat router. Forwards to send-meta-dm or send-whatsapp.
 // Older code paths may still POST to /functions/v1/send-message; this keeps
 // them working without re-deploying every caller.
@@ -12,6 +13,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
   try {
     const body = await req.json().catch(() => ({}));
     const platform = String(body.platform || "whatsapp").toLowerCase();

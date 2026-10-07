@@ -17,6 +17,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { buildSystemPrompt } from "../_shared/ai-prompt.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
@@ -187,6 +188,7 @@ async function generateNurture(opts: {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
