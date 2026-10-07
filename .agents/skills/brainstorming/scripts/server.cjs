@@ -167,6 +167,18 @@ const clients = new Set();
 function handleUpgrade(req, socket) {
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
+  // Only accept sockets opened by the companion page itself (same host:port origin).
+  const origin = req.headers['origin'];
+  const allowed = new Set([
+    'http://' + URL_HOST + ':' + PORT,
+    'http://localhost:' + PORT,
+    'http://127.0.0.1:' + PORT,
+  ]);
+  if (!origin || !allowed.has(origin)) {
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+    socket.destroy();
+    return;
+  }
 
   const accept = computeAcceptKey(key);
   socket.write(
