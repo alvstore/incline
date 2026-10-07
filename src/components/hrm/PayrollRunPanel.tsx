@@ -210,13 +210,14 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     (acc: any, it: any) => {
       acc.base += Number(it.final_base || 0);
       acc.pt += Number(it.final_pt_commission || 0);
+      acc.ot += Number(it.final_ot || 0);
       acc.bonus += Number(it.final_bonus || 0);
       acc.advance += Number(it.final_advance || 0);
       acc.deductions += Number(it.final_deductions || 0) + Number(it.final_penalty || 0);
       acc.net += Number(it.final_net || 0);
       return acc;
     },
-    { base: 0, pt: 0, bonus: 0, advance: 0, deductions: 0, net: 0 },
+    { base: 0, pt: 0, ot: 0, bonus: 0, advance: 0, deductions: 0, net: 0 },
   );
 
   const exportCsv = () => {
@@ -234,6 +235,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         'Base Salary': a.monthly_salary ?? '',
         'Salary Earned': Number(it.final_base || 0),
         'PT Commission': Number(it.final_pt_commission || 0),
+        'OT Hours': a.ot_hours ?? '',
+        'Overtime Pay': Number(it.final_ot || 0),
         Bonus: Number(it.final_bonus || 0),
         Deductions: Number(it.final_deductions || 0) + Number(it.final_penalty || 0),
         Advance: Number(it.final_advance || 0),
@@ -313,6 +316,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                     <TableHead className="text-right">Payable days</TableHead>
                     <TableHead className="text-right">Salary earned</TableHead>
                     <TableHead className="text-right">PT</TableHead>
+                    <TableHead className="text-right">Overtime</TableHead>
                     <TableHead className="text-right">Bonus</TableHead>
                     <TableHead className="text-right">Deductions</TableHead>
                     <TableHead className="text-right">Advance</TableHead>
@@ -357,6 +361,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_base))}</TableCell>
                         <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_pt_commission))}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_ot))}{Number(att(it).ot_hours) > 0 && <div className="text-[10px] text-muted-foreground">{att(it).ot_hours}h</div>}</TableCell>
                         <TableCell className="text-right font-mono text-sm">{inr(Number(it.final_bonus))}</TableCell>
                         <TableCell className="text-right font-mono text-sm text-destructive">
                           {Number(it.final_deductions) + Number(it.final_penalty) > 0
@@ -402,6 +407,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                     <TableCell colSpan={5} className="text-right text-xs uppercase tracking-wider text-slate-500">Total</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.base)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.pt)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{inr(totals.ot)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.bonus)}</TableCell>
                     <TableCell className="text-right font-mono text-sm text-destructive">
                       {totals.deductions > 0 ? `-${inr(totals.deductions)}` : '—'}

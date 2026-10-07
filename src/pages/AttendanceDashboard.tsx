@@ -248,8 +248,8 @@ export default function AttendanceDashboard() {
   const { data: memberAttendance = [], isLoading: memberAttendanceLoading, isError: memberAttendanceError } = useQuery({
     queryKey: ['member-attendance-dashboard', branchFilter, dateFilter],
     queryFn: async () => {
-      const start = startOfDay(new Date(dateFilter)).toISOString();
-      const end = endOfDay(new Date(dateFilter)).toISOString();
+      const start = `${dateFilter}T00:00:00+05:30`;
+      const end = `${dateFilter}T23:59:59.999+05:30`;
       let query = supabase
         .from('member_attendance')
         .select(`*, members(member_code, profiles:user_id(full_name, avatar_url))`)
@@ -267,8 +267,8 @@ export default function AttendanceDashboard() {
   const { data: staffAttendance = [] } = useQuery({
     queryKey: ['staff-attendance-dashboard', branchFilter, dateFilter],
     queryFn: async () => {
-      const start = startOfDay(new Date(dateFilter)).toISOString();
-      const end = endOfDay(new Date(dateFilter)).toISOString();
+      const start = `${dateFilter}T00:00:00+05:30`;
+      const end = `${dateFilter}T23:59:59.999+05:30`;
       let query = supabase
         .from('staff_attendance')
         .select(`*, profiles:user_id(full_name, email, avatar_url)`)

@@ -23,11 +23,7 @@ export function getISTNow(): Date {
  * Returns the current YYYY-MM-DD in IST.
  */
 export function getISTToday(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: IST_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
 /** Format as IST (e.g. "12 Jun 2026, 8:25 PM"). */
