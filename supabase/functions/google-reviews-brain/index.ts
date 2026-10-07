@@ -16,6 +16,25 @@ import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 
+// Signed OAuth state: "<branchId>.<expiryMs>.<hmac>" — prevents forged callbacks.
+async function oauthHmac(msg: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function signOAuthState(branchId: string): Promise<string> {
+  const exp = Date.now() + 15 * 60 * 1000;
+  return `${branchId}.${exp}.${await oauthHmac(`${branchId}.${exp}`)}`;
+}
+async function verifyOAuthState(state: string | null): Promise<string | null> {
+  if (!state) return null;
+  const [b, e, sig] = state.split(".");
+  if (!b || !e || !sig || Number(e) < Date.now()) return null;
+  return (await oauthHmac(`${b}.${e}`)) === sig ? b : null;
+}
+
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -146,7 +165,7 @@ async function startGoogleOAuth(branch_id: string) {
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
-    state: branch_id,
+    state: await signOAuthState(branch_id),
   });
   const cidStr = String(cfg.client_id || "");
   const masked_client_id = cidStr.length > 14
@@ -162,7 +181,7 @@ async function startGoogleOAuth(branch_id: string) {
 
 async function handleGoogleOAuthCallback(url: URL) {
   const code = url.searchParams.get("code");
-  const branchId = url.searchParams.get("state");
+  const branchId = await verifyOAuthState(url.searchParams.get("state"));
   const error = url.searchParams.get("error");
   if (error) {
     return htmlResponse("Google authorization failed", `<h1>Authorization failed</h1><p>${error}</p><p><a href="${APP_BASE}/settings?tab=integrations">Back to Integrations</a></p>`, 400);
