@@ -417,21 +417,9 @@ export function IntegrationSettings() {
                             <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
                             <span className="text-xs font-semibold">Inbound webhook URL</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
-                              {`${RCS_WEBHOOK_URL}?provider=${provider.id}`}
-                            </code>
-                            <Button
-                              variant="outline" size="sm" className="cursor-pointer shrink-0"
-                              aria-label={`Copy ${provider.name} webhook URL`}
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${RCS_WEBHOOK_URL}?provider=${provider.id}`);
-                                toast.success(`${provider.name} webhook URL copied`);
-                              }}
-                            >
-                              <Copy className="h-3.5 w-3.5" aria-hidden />
-                            </Button>
-                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Webhook links now include a private token. Copy them from <b>Settings → RCS Hub → Webhooks</b>.
+                          </p>
                         </div>
                         <Button className="w-full mt-4 cursor-pointer" variant={isActive ? 'outline' : 'default'} onClick={() => openConfig('rcs', provider.id)}>
                           <Settings className="h-4 w-4 mr-2" />{config ? 'Configure' : 'Setup'}
