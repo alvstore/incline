@@ -2,6 +2,7 @@
 // Stores the official HOWBODY PDF exported from the scanner console against an
 // existing body/posture report, so every future view/download/re-send uses the
 // vendor document instead of our generated telemetry summary.
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -69,6 +70,11 @@ Deno.serve(async (req) => {
       .eq("id", report.member_id)
       .maybeSingle();
 
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff"] });
+      if (!caller.ok) return caller.response;
+      if (!(await canActOnBranch(caller, member?.branch_id))) return json({ error: "Not allowed for this branch" }, 403);
+    }
     const path = `scans/${report.member_id}/original/${kind}-${report_id}.pdf`;
     const { error: upErr } = await supabase.storage
       .from("attachments")
