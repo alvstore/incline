@@ -28,9 +28,10 @@ export interface PaymentOrderError extends Error {
  * (branch-scoped first, then global fallback).
  */
 export async function fetchActiveGateway(branchId: string): Promise<PaymentGatewayConfig | null> {
+  // Only non-secret columns; gateway credentials never reach the browser.
   const { data, error } = await supabase
     .from('integration_settings')
-    .select('*')
+    .select('provider, is_active')
     .eq('integration_type', 'payment_gateway')
     .eq('is_active', true)
     .or(`branch_id.is.null,branch_id.eq.${branchId}`)
@@ -43,7 +44,7 @@ export async function fetchActiveGateway(branchId: string): Promise<PaymentGatew
   return {
     provider: data.provider as PaymentGatewayConfig['provider'],
     isActive: data.is_active ?? false,
-    config: (data.config as Record<string, any>) || {},
+    config: {},
   };
 }
 
