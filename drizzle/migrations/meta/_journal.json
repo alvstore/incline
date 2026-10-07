@@ -8,6 +8,13 @@
       "when": 1791379783824,
       "tag": "0000_harden_member_payment_bypass",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791382754244,
+      "tag": "0001_harden_coupon_group_bonus_ig_counters",
+      "breakpoints": true
     }
   ]
 }
