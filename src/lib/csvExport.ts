@@ -5,7 +5,7 @@ export function exportToCSV(data: Record<string, any>[], filename: string, colum
   const escapeCSV = (val: any) => {
     let str = val == null ? '' : String(val);
     // Neutralise spreadsheet formulas (CSV injection) in user-entered text.
-    if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`;
+    if (/^[=+\-@\t\r]/.test(str) && !/^-?\d+(\.\d+)?$/.test(str)) str = `'${str}`;
     return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str.replace(/"/g, '""')}"` : str;
   };
 
