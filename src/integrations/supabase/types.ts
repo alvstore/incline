@@ -16761,6 +16761,7 @@ export type Database = {
       is_in_quiet_hours: { Args: { p_member_id: string }; Returns: boolean }
       is_pure_trainer: { Args: { _user_id: string }; Returns: boolean }
       is_staff_offboarded: { Args: { _user_id: string }; Returns: boolean }
+      is_staff_or_system: { Args: never; Returns: boolean }
       issue_referral_reward: {
         Args: {
           p_actor_user_id?: string
