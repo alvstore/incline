@@ -16610,6 +16610,7 @@ export type Database = {
           name: string
         }[]
       }
+      get_rcs_webhook_token: { Args: never; Returns: string }
       get_setting_numeric: {
         Args: { p_branch_id: string; p_default: number; p_key: string }
         Returns: number
