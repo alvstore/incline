@@ -226,7 +226,7 @@ export function useSetRenewalEngineConfig() {
       }
       const { error } = await supabase
         .from('renewal_engine_config')
-        .update(patch)
+        .update(patch as never)
         .eq('id', input.id);
       if (error) throw error;
     },

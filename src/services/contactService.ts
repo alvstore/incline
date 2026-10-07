@@ -79,7 +79,7 @@ export async function updateContact(id: string, patch: Partial<ContactInput>): P
   if (patch.phone) payload.phone = normalizePhone(patch.phone);
   const { data, error } = await supabase
     .from('contacts')
-    .update(payload)
+    .update(payload as never)
     .eq('id', id)
     .select('*')
     .single();

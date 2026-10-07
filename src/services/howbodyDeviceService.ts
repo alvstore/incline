@@ -74,7 +74,7 @@ export async function updateHowbodyDevice(id: string, input: Partial<HowbodyDevi
   if (input.is_active !== undefined) patch.is_active = input.is_active;
   const { data, error } = await supabase
     .from("howbody_devices")
-    .update(patch)
+    .update(patch as never)
     .eq("id", id)
     .select()
     .single();
