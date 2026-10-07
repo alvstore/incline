@@ -17129,6 +17129,23 @@ export type Database = {
         }
         Returns: string
       }
+      payroll_item_pt_breakdown: {
+        Args: { p_item_id: string }
+        Returns: {
+          amount: number
+          installment_id: string
+          installment_index: number
+          member_code: string
+          member_id: string
+          member_name: string
+          package_name: string
+          payout_month: string
+          plan_months: number
+          sale_date: string
+          settled: boolean
+          status: string
+        }[]
+      }
       payroll_mark_full_present: {
         Args: { p_item_id: string; p_reason: string }
         Returns: undefined
@@ -17159,6 +17176,17 @@ export type Database = {
       payroll_review_items: {
         Args: { p_item_ids: string[] }
         Returns: undefined
+      }
+      payroll_settle_item: {
+        Args: {
+          p_adjustment: number
+          p_installment_ids: string[]
+          p_item_id: string
+          p_method: string
+          p_reason: string
+          p_reference: string
+        }
+        Returns: Json
       }
       payroll_statutory_deductions: {
         Args: { p_branch_id: string; p_gross: number }
