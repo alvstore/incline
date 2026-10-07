@@ -43,6 +43,13 @@
       "when": 1791384445554,
       "tag": "0005_restrict_public_bucket_listing",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791390150879,
+      "tag": "0006_book_facility_slot_caller_binding",
+      "breakpoints": true
     }
   ]
 }
