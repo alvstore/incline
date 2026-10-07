@@ -14,6 +14,7 @@
 // v6.0.0 — SSOT from ai_purposes.ops_config.
 // v5.0.0 — persona/brain via buildSystemPrompt().
 
+import { maskPhone } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { buildSystemPrompt } from "../_shared/ai-prompt.ts";
@@ -321,7 +322,7 @@ serve(async (req) => {
       const { data: lead } = await supabase
         .from("leads")
         .select("id, full_name, status")
-        .or(`phone.eq.${chat.phone_number},phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
+        .or(`phone.eq.${maskPhone(chat.phone_number)},phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
         .eq("branch_id", chat.branch_id)
         .limit(1)
         .maybeSingle();
@@ -491,7 +492,7 @@ serve(async (req) => {
           .select()
           .single();
         if (msgErr) {
-          console.error(`[lead-nurture] insert failed for ${chat.phone_number}:`, msgErr.message);
+          console.error(`[lead-nurture] insert failed for ${maskPhone(chat.phone_number)}:`, msgErr.message);
           continue;
         }
         const sendUrl = chatPlatform === "whatsapp"
@@ -505,9 +506,9 @@ serve(async (req) => {
           headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!sendRes.ok) console.error(`[lead-nurture] send failed for ${chat.phone_number}: ${sendRes.status}`);
+        if (!sendRes.ok) console.error(`[lead-nurture] send failed for ${maskPhone(chat.phone_number)}: ${sendRes.status}`);
       } catch (sendErr) {
-        console.error(`[lead-nurture] send error for ${chat.phone_number}:`, (sendErr as Error).message);
+        console.error(`[lead-nurture] send error for ${maskPhone(chat.phone_number)}:`, (sendErr as Error).message);
         continue;
       }
 

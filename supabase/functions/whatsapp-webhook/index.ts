@@ -38,6 +38,7 @@
 // v5.2.0 — Variant-aware phone matching, member-first dedupe guard.
 // v5.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
 // v5.0.0 — Transactional AI Agent: 25+ self-service tools, payments, IG/FB parity
+import { maskPhone } from "../_shared/requireCaller.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
@@ -456,7 +457,7 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
               })
               .eq("phone", message.from)
               .is("ad_id", null);
-            console.log("Meta ad attribution captured:", { phone: message.from, adId, campaignName });
+            console.log("Meta ad attribution captured:", { phone: maskPhone(message.from), adId, campaignName });
           }
         } catch (refErr) {
           console.warn("Failed to extract Meta referral data:", refErr);
@@ -661,7 +662,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     const { detectOptOut, OPT_OUT_CONFIRMATION } = await import("../_shared/optOutDetector.ts");
     const detection = detectOptOut(inboundMsg.content);
     if (detection.optOut) {
-      console.log(`[whatsapp-webhook] opt-out detected (${detection.reason}) for ${phoneNumber}`);
+      console.log(`[whatsapp-webhook] opt-out detected (${detection.reason}) for ${maskPhone(phoneNumber)}`);
       await supabase.rpc("mark_do_not_contact", {
         p_phone: phoneNumber,
         p_branch_id: branchId,

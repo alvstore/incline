@@ -16,6 +16,7 @@
 //                          for IG contacts where contact_name/contact_avatar_url is NULL.
 //   refresh_all_ig_avatars:{ branch_id?, limit? } — re-resolves and persists IG
 //                          avatars whose source is meta_cdn / missing / stale.
+import { maskPhone } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   META_API_BASE,
@@ -494,7 +495,7 @@ async function handleBackfillIgProfiles(body: any) {
       });
       results.resolved++;
     } catch (e) {
-      console.warn(`[backfill] upsert failed for ${row.phone_number}:`, e instanceof Error ? e.message : e);
+      console.warn(`[backfill] upsert failed for ${maskPhone(row.phone_number)}:`, e instanceof Error ? e.message : e);
       results.failed++;
     }
   }
@@ -598,7 +599,7 @@ async function handleRefreshAllIgAvatars(body: any) {
       });
       results.upgraded++;
     } catch (e) {
-      console.warn(`[refresh_all] upsert failed ${row.phone_number}:`, e instanceof Error ? e.message : e);
+      console.warn(`[refresh_all] upsert failed ${maskPhone(row.phone_number)}:`, e instanceof Error ? e.message : e);
       results.failed++;
     }
   }
