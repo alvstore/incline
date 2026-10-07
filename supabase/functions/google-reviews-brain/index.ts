@@ -12,6 +12,7 @@
 // v2.0.0 — SSOT: classification/draft routed via ai-runtime (purpose='review_reply')
 // v1.3.0 — Adds masked client_id diagnostic to oauth_start
 // Actions: test_connection | list_accounts | list_locations | fetch_reviews | classify | reply | request_member_review
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 
@@ -1496,6 +1497,18 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as Body;
     const action = body.action;
     if (!action) return json({ error: "action required" }, 400);
+
+    // Caller check: scheduled jobs (internal) or owner/admin/manager scoped to the branch.
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"] });
+      if (!caller.ok) return caller.response;
+      if (!caller.internal && body.branch_id && !(await canActOnBranch(caller, body.branch_id))) {
+        return json({ error: "Forbidden" }, 403);
+      }
+      if (!caller.internal && !body.branch_id && !caller.roles.some((r) => r === "owner" || r === "admin")) {
+        return json({ error: "branch_id required" }, 400);
+      }
+    }
 
     // Optional caller user id (for replied_by stamp)
     let userId: string | undefined;
