@@ -322,7 +322,7 @@ serve(async (req) => {
       const { data: lead } = await supabase
         .from("leads")
         .select("id, full_name, status")
-        .or(`phone.eq.${maskPhone(chat.phone_number)},phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
+        .or(`phone.eq.${chat.phone_number},phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
         .eq("branch_id", chat.branch_id)
         .limit(1)
         .maybeSingle();
