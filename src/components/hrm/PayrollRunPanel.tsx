@@ -18,6 +18,7 @@ import { exportToCSV } from '@/lib/csvExport';
 
 import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
 import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
+import { GeneratePayrollSheet } from './GeneratePayrollSheet';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
@@ -48,6 +49,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const [previewItem, setPreviewItem] = useState<any | null>(null);
   const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
   
+  const [settleItem, setSettleItem] = useState<any | null>(null);
+  const [settleOpen, setSettleOpen] = useState(false);
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [payRef, setPayRef] = useState('');
   const [payOpen, setPayOpen] = useState(false);
@@ -391,6 +394,12 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" /> Preview
                             </Button>
+                            <Button size="sm" variant="default"
+                              disabled={it.status === 'paid' || !hasAnyRole(['owner', 'admin'])}
+                              onClick={() => { setSettleItem(it); setSettleOpen(true); }}
+                            >
+                              <Banknote className="h-3.5 w-3.5 mr-1" /> Process Salary
+                            </Button>
                             <Button size="sm" variant="ghost" aria-label="Adjust payroll item"
                               disabled={['processed','paid'].includes(it.status) || !isAdmin}
                               onClick={() => { setAdjustItem(it); setAdjustDrawerOpen(true); }}
@@ -431,6 +440,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         onOpenChange={setAdjustDrawerOpen} 
         item={adjustItem} 
       />
+
+      <GeneratePayrollSheet open={settleOpen} onOpenChange={setSettleOpen} item={settleItem} periodStart={periodStart} />
 
       <PayrollProcessPreviewDrawer
         open={previewDrawerOpen}
