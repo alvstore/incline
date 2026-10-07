@@ -50,6 +50,13 @@
       "when": 1791390150879,
       "tag": "0006_book_facility_slot_caller_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791391682329,
+      "tag": "0007_fix_member_addon_and_store_checkout",
+      "breakpoints": true
     }
   ]
 }
