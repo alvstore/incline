@@ -278,7 +278,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       setLivePulse((p) => p + 1);
     };
     const ch = supabase
-      .channel('comm-live-feed-rt')
+      .channel(`comm-live-feed-rt-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'communication_logs' }, invalidate)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'communication_delivery_events' }, () => invalidate())
       .subscribe();

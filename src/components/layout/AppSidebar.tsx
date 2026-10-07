@@ -21,7 +21,7 @@ function useWhatsAppUnreadCount() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('sidebar-unread')
+      .channel(`sidebar-unread-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_chat_settings' }, () => {
         queryClient.invalidateQueries({ queryKey: ['whatsapp-unread-count'] });
       })

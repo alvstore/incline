@@ -122,7 +122,7 @@ export default function ApprovalQueuePage() {
   // Subscribe to realtime updates
   useEffect(() => {
     const channel = supabase
-      .channel('approval-queue')
+      .channel(`approval-queue-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, () => {
         queryClient.invalidateQueries({ queryKey: ['approval-queue'] });
         queryClient.invalidateQueries({ queryKey: ['approval-stats'] });

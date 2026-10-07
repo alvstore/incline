@@ -200,7 +200,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
 
   useEffect(() => {
     const channel = supabase
-      .channel("access-logs-realtime-" + (branchId || "all"))
+      .channel(`access-logs-realtime-${branchId || "all"}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {

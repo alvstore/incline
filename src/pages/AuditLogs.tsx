@@ -48,7 +48,7 @@ export default function AuditLogsPage() {
   // Realtime tail — softly highlight any new audit row
   useEffect(() => {
     const ch = supabase
-      .channel('audit-logs-tail')
+      .channel(`audit-logs-tail-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, (payload) => {
         const id = (payload.new as any)?.id;
         if (id) {
