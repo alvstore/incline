@@ -9,6 +9,7 @@
 // v1.1.0 — Retry only currently failed recipients; do not retry contacts that
 // already have a successful send log for the same campaign/source key.
 // v1.0.0 — Retry only the failed recipients of a campaign.
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { retryEligibility } from '../_shared/whatsappPolicy.ts';
 
@@ -55,6 +56,11 @@ Deno.serve(async (req) => {
       .eq('id', campaign_id)
       .maybeSingle();
     if (cErr || !campaign) return json(404, { error: 'Campaign not found' });
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager', 'staff'] });
+      if (!caller.ok) return caller.response;
+      if (!(await canActOnBranch(caller, campaign.branch_id))) return json(403, { error: 'Forbidden for this branch' });
+    }
     // v1.2.0 — a campaign that says "sending" but hasn't written progress in
     // 5+ minutes has a dead chunk isolate; allow the retry instead of a 409.
     const lastProgressMs = new Date(

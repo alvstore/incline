@@ -1,4 +1,5 @@
 // v2.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='dashboard_insight').
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { captureEdgeError } from '../_shared/capture-edge-error.ts'
 import { generateOnce } from '../_shared/ai-runtime.ts'
@@ -56,6 +57,14 @@ Deno.serve(async (req) => {
     }
 
     const { branch_id } = await req.json();
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager'] });
+      if (!caller.ok) return caller.response;
+      const isGlobal = caller.roles.includes('owner') || caller.roles.includes('admin');
+      if (!isGlobal && (!branch_id || !(await canActOnBranch(caller, branch_id)))) {
+        return new Response(JSON.stringify({ error: 'Forbidden for this branch' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
 
     // Gather metrics
     const today = new Date().toISOString().split('T')[0];
