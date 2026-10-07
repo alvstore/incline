@@ -178,6 +178,9 @@ export function GeneratePayrollSheet({ open, onOpenChange, item, periodStart }: 
                     <p className="text-sm font-medium truncate">
                       {format(parseISO(r.payout_month), 'MMM yyyy')} — {r.member_name}
                       {r.member_code && <span className="text-muted-foreground font-normal"> · {r.member_code}</span>}
+                      {!r.settled && periodStart && r.payout_month < periodStart.slice(0, 7) + '-01' && (
+                        <Badge variant="outline" className="ml-2 bg-amber-500/10 text-amber-500 border-amber-500/20">Carried over</Badge>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {r.package_name || 'PT package'} · month {r.installment_index} of {r.plan_months}
