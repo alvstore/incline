@@ -16752,6 +16752,7 @@ export type Database = {
         Args: { _equipment_no: string }
         Returns: undefined
       }
+      internal_fn_token: { Args: never; Returns: string }
       is_bot_paused: {
         Args: { p_branch_id: string; p_phone: string }
         Returns: boolean
@@ -18278,6 +18279,7 @@ export type Database = {
         Args: { _branch_id: string; _member_id: string }
         Returns: Json
       }
+      verify_internal_fn_token: { Args: { p_token: string }; Returns: boolean }
       voice_automation_claim_run: {
         Args: { _lease_minutes?: number }
         Returns: string

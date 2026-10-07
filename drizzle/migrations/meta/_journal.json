@@ -15,6 +15,13 @@
       "when": 1791382754244,
       "tag": "0001_harden_coupon_group_bonus_ig_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791383353904,
+      "tag": "0002_internal_function_token",
+      "breakpoints": true
     }
   ]
 }
