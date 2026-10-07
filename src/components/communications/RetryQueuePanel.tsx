@@ -62,7 +62,7 @@ export function RetryQueuePanel() {
 
   useEffect(() => {
     const ch = supabase
-      .channel('retry-queue-rt')
+      .channel(`retry-queue-rt-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'communication_retry_queue' },
         () => qc.invalidateQueries({ queryKey: ['retry-queue'] }))
       .subscribe();

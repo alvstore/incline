@@ -291,7 +291,7 @@ export default function MembersPage() {
   // Realtime: refresh list when self-onboarded members appear / change lifecycle.
   useEffect(() => {
     const channel = supabase
-      .channel('members-lifecycle')
+      .channel(`members-lifecycle-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => {
         queryClient.invalidateQueries({ queryKey: ['members'] });
       })

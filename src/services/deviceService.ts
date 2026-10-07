@@ -213,7 +213,7 @@ export const subscribeToAccessLogs = (
   callback: (event: AccessLogEntry) => void
 ) => {
   const channel = supabase
-    .channel('access_logs_realtime')
+    .channel(`access_logs_realtime-${Math.random().toString(36).slice(2)}`)
     .on(
       'postgres_changes',
       {

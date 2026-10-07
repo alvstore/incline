@@ -315,7 +315,7 @@ export default function WhatsAppChatPage() {
   // Realtime subscription: refresh messages + contacts + chat settings on any change
   useEffect(() => {
     const channel = supabase
-      .channel('whatsapp-realtime')
+      .channel(`whatsapp-realtime-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, () => {
         queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
         queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });

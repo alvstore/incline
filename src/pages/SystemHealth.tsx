@@ -109,7 +109,7 @@ export default function SystemHealth() {
   // Live updates: subscribe to error_logs changes so new edge errors stream in.
   useEffect(() => {
     const channel = supabase
-      .channel('error-logs-live')
+      .channel(`error-logs-live-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'error_logs' },

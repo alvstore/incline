@@ -175,7 +175,7 @@ export function WebhookActivityPanel() {
   // Realtime subscription for live updates
   useEffect(() => {
     const ch = supabase
-      .channel('webhook-activity-rt')
+      .channel(`webhook-activity-rt-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_transactions' }, () => {
         qc.invalidateQueries({ queryKey: ['webhook-activity'] });
         qc.invalidateQueries({ queryKey: ['gateway-last-received'] });

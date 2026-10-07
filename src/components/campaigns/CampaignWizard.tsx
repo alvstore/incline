@@ -412,7 +412,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   useEffect(() => {
     if (!open || channel !== 'whatsapp') return;
     const ch = supabase
-      .channel('campaign-wizard-templates')
+      .channel(`campaign-wizard-templates-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => refetchTemplates())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'templates' }, () => refetchTemplates())
       .subscribe();

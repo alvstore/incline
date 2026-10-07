@@ -21,7 +21,7 @@ export function AutomationActivityRail({ runs, rules, filterRuleId, onClearFilte
   // Realtime subscription so the rail updates as runs land.
   useEffect(() => {
     const ch = supabase
-      .channel('automation-runs-rail')
+      .channel(`automation-runs-rail-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_runs' }, () => {
         qc.invalidateQueries({ queryKey: ['automation-runs-recent'] });
         qc.invalidateQueries({ queryKey: ['automation-rules'] });

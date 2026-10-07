@@ -111,7 +111,7 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
   // Realtime — attendance tables are published; refresh on any change.
   useEffect(() => {
     const ch = supabase
-      .channel('todays-checkins')
+      .channel(`todays-checkins-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_attendance' }, () =>
         qc.invalidateQueries({ queryKey: ['todays-checkins'] }),
       )

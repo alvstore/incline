@@ -150,7 +150,7 @@ export function ReconciliationFindingsCard() {
   // Live updates — findings clear themselves as soon as an invoice is corrected
   useEffect(() => {
     const channel = supabase
-      .channel("reconciliation-findings-live")
+      .channel(`reconciliation-findings-live-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "reconciliation_findings" },

@@ -67,7 +67,7 @@ export default function InvoicesPage() {
   useEffect(() => {
     if (!branchFilter) return;
     const channel = supabase
-      .channel('invoices-realtime')
+      .channel(`invoices-realtime-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
