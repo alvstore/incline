@@ -127,7 +127,7 @@ export const updateDevice = async (id: string, updates: {
   
   const { data, error } = await supabase
     .from('access_devices')
-    .update(updateData)
+    .update(updateData as never)
     .eq('id', id)
     .select()
     .single();

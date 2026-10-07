@@ -323,7 +323,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
         if (fitnessGoals && fitnessGoals !== (data.fitnessGoals || '')) memberUpdates.fitness_goals = fitnessGoals;
         if (medicalConditions && medicalConditions !== (data.medicalConditions || '')) memberUpdates.health_conditions = medicalConditions;
         if (Object.keys(memberUpdates).length) {
-          await supabase.from('members').update(memberUpdates).eq('id', data.memberId);
+          await supabase.from('members').update(memberUpdates as never).eq('id', data.memberId);
         }
         const profileUpdates: Record<string, string> = {};
         if (govIdType && govIdType !== (data.governmentIdType || 'aadhaar')) profileUpdates.government_id_type = govIdType;

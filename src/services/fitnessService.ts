@@ -123,7 +123,7 @@ export async function updateTemplateTargeting(
 ): Promise<void> {
   const { error } = await supabase
     .from('fitness_plan_templates')
-    .update(patch as Record<string, unknown>)
+    .update(patch as never)
     .eq('id', id);
   if (error) throw error;
 }
@@ -271,7 +271,7 @@ export async function updatePlanTemplate(
   if ('difficulty' in patch) dbPatch.difficulty = normalizeDifficulty(patch.difficulty);
   const { data, error } = await supabase
     .from('fitness_plan_templates')
-    .update(dbPatch)
+    .update(dbPatch as never)
     .eq('id', id)
     .select()
     .single();
