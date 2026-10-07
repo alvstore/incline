@@ -154,6 +154,7 @@
 //   2. member channel + category preferences
 //   3. quiet hours (deferred to communication_retry_queue)
 //   4. provider routing (whatsapp / sms / email / in_app)
+import { requireCaller } from "../_shared/requireCaller.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import {
   classifyOutcome,
@@ -713,6 +714,33 @@ Deno.serve(async (req) => {
       return bad(400, { error: 'invalid_recipient_phone', details: input.recipient });
     }
     input.recipient = digits;
+  }
+
+  // ── caller authorization ──
+  // Internal jobs and staff/trainers may dispatch. A member may only send to
+  // their own phone / email / account (e.g. sharing their plan to themselves).
+  {
+    const caller = await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager', 'staff', 'trainer'] });
+    if (!caller.ok) {
+      const authz = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      const tok = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+      const { data: ures } = await authz.auth.getUser(tok);
+      const uid = ures?.user?.id;
+      if (!uid) return bad(401, { error: 'unauthorized' });
+      const { data: prof } = await authz.from('profiles').select('phone, email').eq('id', uid).maybeSingle();
+      const ownPhone = normalizePhoneDigits(String(prof?.phone ?? ''));
+      const ownEmail = String(prof?.email ?? ures.user?.email ?? '').toLowerCase();
+      const r = String(input.recipient).toLowerCase();
+      const isSelf = (input.channel === 'email' && !!ownEmail && r === ownEmail)
+        || (input.channel === 'in_app' && (r === uid) && (!input.user_id || input.user_id === uid))
+        || (['whatsapp', 'sms', 'rcs'].includes(input.channel) && !!ownPhone && r === ownPhone);
+      if (!isSelf) return bad(403, { error: 'forbidden' });
+      if (input.member_id) {
+        const { data: m } = await authz.from('members').select('user_id').eq('id', input.member_id).maybeSingle();
+        if (!m || m.user_id !== uid) return bad(403, { error: 'forbidden' });
+      }
+      (input as { force?: boolean }).force = false;
+    }
   }
 
   const ttl = Math.max(60, Math.min(input.ttl_seconds ?? 86400, 7 * 86400));
