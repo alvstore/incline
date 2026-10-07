@@ -77,6 +77,15 @@ Deno.serve(async (req) => {
     try { parsed = new URL(imageUrl); } catch { return json({ error: "Invalid URL" }, 400); }
     if (!["http:", "https:"].includes(parsed.protocol)) return json({ error: "Only http/https URLs allowed" }, 400);
     if (isBlockedHost(parsed.hostname)) return json({ error: "Host not allowed" }, 400);
+    // Resolve DNS and reject hosts that point at private/internal addresses.
+    try {
+      const v4 = await Deno.resolveDns(parsed.hostname, "A").catch(() => [] as string[]);
+      const v6 = await Deno.resolveDns(parsed.hostname, "AAAA").catch(() => [] as string[]);
+      if (v4.length === 0 && v6.length === 0) return json({ error: "Host could not be resolved" }, 400);
+      if (v6.length > 0 || v4.some((ip) => isBlockedHost(ip))) return json({ error: "Host not allowed" }, 400);
+    } catch {
+      return json({ error: "Host could not be resolved" }, 400);
+    }
 
     // Fetch (no redirect-following so the destination can't bounce to an internal host)
     const resp = await fetch(parsed.toString(), { redirect: "manual" });
