@@ -27,6 +27,23 @@ function mapResendEvent(t: string): string | null {
   }
 }
 
+
+async function verifySvix(req: Request, body: string): Promise<boolean> {
+  const secret = Deno.env.get('RESEND_WEBHOOK_SECRET') ?? '';
+  const id = req.headers.get('svix-id');
+  const ts = req.headers.get('svix-timestamp');
+  const sigHeader = req.headers.get('svix-signature');
+  if (!secret || !id || !ts || !sigHeader) return false;
+  if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
+  const keyB64 = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+  let keyBytes: Uint8Array;
+  try { keyBytes = Uint8Array.from(atob(keyB64), (c) => c.charCodeAt(0)); } catch { return false; }
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${ts}.${body}`));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
+  return sigHeader.split(' ').some((part) => part.split(',')[1] === expected);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') {
@@ -39,7 +56,14 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const payload = await req.json().catch(() => ({}));
+    // v1.1.0 — Verify the provider (Svix) signature; fail closed when missing/invalid.
+    const rawBody = await req.text();
+    if (!(await verifySvix(req, rawBody))) {
+      return new Response(JSON.stringify({ error: 'invalid_signature' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const payload = (() => { try { return JSON.parse(rawBody); } catch { return {}; } })();
     // Resend posts one event per request: { type, created_at, data: { email_id, to, ... } }
     const events = Array.isArray(payload?.events) ? payload.events : [payload];
 
