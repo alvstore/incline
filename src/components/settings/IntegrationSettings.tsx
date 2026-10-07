@@ -1022,6 +1022,30 @@ export function IntegrationSettings() {
                         </div>
                       </div>
                       <div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          disabled={selectedBranch === 'all'}
+                          onClick={async () => {
+                            const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>(
+                              'meta-oauth-callback',
+                              { body: { action: 'start', branch_id: selectedBranch } },
+                            );
+                            if (error || !data?.url) {
+                              toast.error(data?.error || 'Could not create the Instagram connect link');
+                              return;
+                            }
+                            window.open(data.url, '_blank', 'noopener');
+                          }}
+                        >
+                          Connect Instagram
+                        </Button>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {selectedBranch === 'all' ? 'Select a branch first. ' : ''}Opens a one-time signed link (valid 15 minutes) for this branch.
+                        </p>
+                      </div>
+                      <div>
                         <p className="text-[11px] text-warning mb-1"><b>Data Deletion URL</b> — paste in Meta Dashboard → Settings → Basic:</p>
                         <div className="flex items-center gap-1.5">
                           <code className="flex-1 text-[10px] bg-muted px-2 py-1 rounded font-mono break-all">
