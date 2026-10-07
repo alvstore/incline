@@ -64,9 +64,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // v2.3.0 — App Key is mandatory; the device allowlist is an extra check, not a fallback.
-    if (!keyOk) {
-      await logWebhook("posture", thirdUid, dataKey, 401, "appkey missing or mismatch", {
+    // v2.3.1 — App Key OR an allowlisted registered scanner (vendor cloud omits the key).
+    if (!keyOk && deviceOk !== true) {
+      await logWebhook("posture", thirdUid, dataKey, 401, "appkey mismatch and device not allowlisted", {
         header_names: [...req.headers.keys()],
         appkey_present: sentKey !== null,
         expected_key_configured: Boolean(expectedKey),
