@@ -436,6 +436,7 @@ async function generateWaiverPdf(input: {
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const m = dataUrl.match(/^data:image\/(?:png|jpeg|jpg);base64,(.+)$/);
   if (!m) throw new Error("invalid_signature_data_url");
+  if (m[1].length > 700_000) throw new Error("signature_too_large");
   const bin = atob(m[1]);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

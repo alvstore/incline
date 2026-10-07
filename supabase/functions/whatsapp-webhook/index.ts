@@ -1553,7 +1553,16 @@ async function resolveInboundMedia(
       console.error("Meta media binary download failed", binRes.status);
       return { storage_path: mediaId, meta: { ...baseMeta, error: `download_${binRes.status}` } };
     }
+    const declaredLen = Number(binRes.headers.get("content-length") || 0);
+    const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+    const ALLOWED_MEDIA = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|3gpp)|audio\/(aac|mp4|mpeg|amr|ogg|opus)|application\/pdf|application\/(msword|vnd\.openxmlformats-officedocument\.[a-z.]+|vnd\.ms-excel|vnd\.ms-powerpoint)|text\/plain)/i;
+    if (declaredLen > MAX_MEDIA_BYTES) {
+      return { storage_path: mediaId, meta: { ...baseMeta, error: "too_large" } };
+    }
     const blob = await binRes.blob();
+    if (blob.size > MAX_MEDIA_BYTES || (blob.type && !ALLOWED_MEDIA.test(blob.type))) {
+      return { storage_path: mediaId, meta: { ...baseMeta, error: blob.size > MAX_MEDIA_BYTES ? "too_large" : "type_not_allowed" } };
+    }
 
     // Step 3: Upload into our storage bucket.
     const now = new Date();

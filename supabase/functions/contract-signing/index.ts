@@ -523,6 +523,9 @@ async function signContract(req: Request, body: any) {
 
   // Upload drawn signature
   let signatureImagePath: string | null = null;
+  if (signatureImageBase64 && (signatureImageBase64.length > 700_000 || !/^data:image\/(png|jpeg|jpg);base64,/.test(signatureImageBase64))) {
+    return json({ error: "Signature image must be a PNG/JPEG under 500 KB" }, 400);
+  }
   if (signatureImageBase64 && signatureImageBase64.startsWith("data:image/")) {
     try {
       const base64Body = signatureImageBase64.split(",")[1];
