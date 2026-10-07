@@ -14,6 +14,7 @@
 // v2.7.0: Meta acceptance ≠ delivery. WhatsApp retries park in
 //          `awaiting_confirmation` until a webhook callback promotes them to
 //          `succeeded` or marks them `terminal` (131049/failure).
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 
 // v2.6.0: Meta 131049 pacing failures are terminal for the current message.
@@ -39,7 +40,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-import { requireCaller } from "../_shared/requireCaller.ts";
   BACKOFF_MINUTES,
   classifyMetaError,
   extractMetaCode,

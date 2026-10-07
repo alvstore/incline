@@ -1,7 +1,7 @@
-import { requireCaller } from "../_shared/requireCaller.ts";
 // v1.0.0 — Backward-compat router. Forwards to send-meta-dm or send-whatsapp.
 // Older code paths may still POST to /functions/v1/send-message; this keeps
 // them working without re-deploying every caller.
+import { requireCaller } from "../_shared/requireCaller.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":

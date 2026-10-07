@@ -11,9 +11,9 @@
 // Invoked by the automation-brain cron every ~5 min under rule
 // `process_biometric_sync_queue`, and on-demand from the "Heal drift" button
 // on the Device Command Center dashboard.
+import { requireCaller } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-import { requireCaller } from "../_shared/requireCaller.ts";
   classifyFailure,
   isTripped,
   readBreaker,
