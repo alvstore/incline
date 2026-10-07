@@ -734,7 +734,31 @@ Deno.serve(async (req) => {
       const isSelf = (input.channel === 'email' && !!ownEmail && r === ownEmail)
         || (input.channel === 'in_app' && (r === uid) && (!input.user_id || input.user_id === uid))
         || (['whatsapp', 'sms', 'rcs'].includes(input.channel) && !!ownPhone && r === ownPhone);
-      if (!isSelf) return bad(403, { error: 'forbidden' });
+      // v1.31.0: a member may alert staff about a request task they just raised
+      // (task assignee or branch management), verified entirely server-side.
+      let isTaskAlert = false;
+      const taskId = (input.payload as { variables?: Record<string, unknown> })?.variables?.task_id;
+      if (!isSelf && input.category === 'task_reminder' && typeof taskId === 'string' && input.user_id
+          && ['whatsapp', 'email'].includes(input.channel)) {
+        const { data: task } = await authz.from('tasks')
+          .select('created_by, assigned_to, branch_id, created_at').eq('id', taskId).maybeSingle();
+        const fresh = task && Date.now() - new Date(task.created_at).getTime() < 15 * 60_000;
+        if (task && fresh && task.created_by === uid && task.branch_id === input.branch_id) {
+          let allowedUser = task.assigned_to === input.user_id;
+          if (!allowedUser) {
+            const { data: rl } = await authz.from('user_roles').select('role')
+              .eq('user_id', input.user_id).in('role', ['owner', 'admin', 'manager']);
+            allowedUser = (rl?.length ?? 0) > 0;
+          }
+          if (allowedUser) {
+            const { data: tp } = await authz.from('profiles').select('phone, email').eq('id', input.user_id).maybeSingle();
+            isTaskAlert = input.channel === 'email'
+              ? !!tp?.email && r === String(tp.email).toLowerCase()
+              : !!tp?.phone && r === normalizePhoneDigits(String(tp.phone));
+          }
+        }
+      }
+      if (!isSelf && !isTaskAlert) return bad(403, { error: 'forbidden' });
       if (input.member_id) {
         const { data: m } = await authz.from('members').select('user_id').eq('id', input.member_id).maybeSingle();
         if (!m || m.user_id !== uid) return bad(403, { error: 'forbidden' });
