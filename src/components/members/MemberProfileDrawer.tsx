@@ -1858,13 +1858,16 @@ export function MemberProfileDrawer({
                 </Card>
               )}
 
-              {/* Onboarding Waiver (self-registration signed record) */}
+              {/* Membership Registration & Agreement — the ONE signed document */}
               {onboardingSig && (
                 <Card className="border-emerald-200 bg-emerald-50/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
                       <FileText className="h-4 w-4 text-emerald-600" />
-                      Onboarding & Waiver
+                      Membership Agreement
+                      <Badge variant="outline" className="ml-auto font-mono text-[10px] tracking-wide">
+                        {agreementReference(memberDetails?.member_code ?? member?.member_code, member?.id)}
+                      </Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm space-y-2">
@@ -1876,28 +1879,26 @@ export function MemberProfileDrawer({
                           {onboardingSig.signer_ip ? ` · IP ${onboardingSig.signer_ip}` : ''}
                         </p>
                       </div>
-                      {onboardingSig.waiver_pdf_path && (
+                      <div className="flex flex-wrap gap-1.5">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={async () => {
-                            try {
-                              // Self-registration waivers live in
-                              // `member-onboarding`; staff-form waivers live in
-                              // `documents`. The helper resolves both.
-                              const url = await signOnboardingDocument(
-                                onboardingSig.waiver_pdf_path!,
-                                60,
-                              );
-                              window.open(url, '_blank');
-                            } catch (e: any) {
-                              toast.error(e?.message || 'Could not open waiver');
-                            }
-                          }}
+                          disabled={agreementBusy !== null}
+                          onClick={() => runAgreementAction('view')}
                         >
-                          <FileText className="h-3.5 w-3.5 mr-1.5" />View Waiver PDF
+                          <FileText className="h-3.5 w-3.5 mr-1.5" />
+                          {agreementBusy === 'view' ? 'Opening…' : 'View signed agreement'}
                         </Button>
-                      )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={agreementBusy !== null}
+                          onClick={() => runAgreementAction('download')}
+                          aria-label="Download signed agreement"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     {onboardingSig.par_q && typeof onboardingSig.par_q === 'object' && (
                       <details className="text-xs">
