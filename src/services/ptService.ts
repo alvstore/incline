@@ -227,7 +227,7 @@ export async function fetchActiveMemberPackages(
     .select(`
       *,
       package:pt_packages(name),
-      trainer:trainers(user_id),
+      trainer:trainers(user_id, is_active),
       member:members(member_code, user_id)
     `)
     .in("status", statuses as any)
@@ -245,7 +245,20 @@ export async function fetchActiveMemberPackages(
 
   if (error) throw error;
 
-  const packages = data || [];
+  // Expired packages are only useful for renewal follow-up, so keep the last 30 days.
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const packages = (data || []).filter((p) => p.status !== 'expired' || (p.expiry_date ?? '') >= cutoff);
+  const invoiceIds = [...new Set(packages.map((p) => p.invoice_id).filter(Boolean))] as string[];
+  const invoiceMap: Record<string, { status: string; total_amount: number; amount_paid: number; invoice_number: string | null }> = {};
+  if (invoiceIds.length > 0) {
+    const { data: invs } = await supabase
+      .from("invoices")
+      .select("id, status, total_amount, amount_paid, invoice_number")
+      .in("id", invoiceIds);
+    for (const i of invs || []) {
+      invoiceMap[i.id] = { status: String(i.status), total_amount: Number(i.total_amount || 0), amount_paid: Number(i.amount_paid || 0), invoice_number: i.invoice_number ?? null };
+    }
+  }
   const userIds = [
     ...packages.map((p) => (p.trainer as any)?.user_id),
     ...packages.map((p) => (p.member as any)?.user_id),
@@ -295,6 +308,14 @@ export async function fetchActiveMemberPackages(
     member_name: (p.member as any)?.user_id ? names[(p.member as any).user_id] : (p.member as any)?.member_code,
     member_avatar_url: (p.member as any)?.user_id ? avatars[(p.member as any).user_id] ?? null : null,
     dues_amount: p.member_id ? dues[p.member_id] || 0 : 0,
+    trainer_active: (p.trainer as any)?.is_active !== false,
+    invoice_status: p.invoice_id ? invoiceMap[p.invoice_id]?.status ?? null : null,
+    invoice_number: p.invoice_id ? invoiceMap[p.invoice_id]?.invoice_number ?? null : null,
+    invoice_total: p.invoice_id ? invoiceMap[p.invoice_id]?.total_amount ?? null : null,
+    invoice_paid: p.invoice_id ? invoiceMap[p.invoice_id]?.amount_paid ?? null : null,
+    due: p.invoice_id && invoiceMap[p.invoice_id] && ['pending', 'partial', 'overdue'].includes(invoiceMap[p.invoice_id].status)
+      ? Math.max(0, invoiceMap[p.invoice_id].total_amount - invoiceMap[p.invoice_id].amount_paid)
+      : 0,
   }));
 }
 
