@@ -78,6 +78,13 @@
       "when": 1791435370581,
       "tag": "0010_phase1_lock_internal_definer_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791436466158,
+      "tag": "0011_phase1b_rpc_entrypoint_guards",
+      "breakpoints": true
     }
   ]
 }

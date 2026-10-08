@@ -15635,6 +15635,14 @@ export type Database = {
         Returns: Json
       }
       archive_approval_audit_log: { Args: never; Returns: Json }
+      assert_branch_staff: {
+        Args: {
+          p_action?: string
+          p_branch_id: string
+          p_include_trainers?: boolean
+        }
+        Returns: undefined
+      }
       assert_can_manage_staff_attendance: {
         Args: { p_target_user: string }
         Returns: string
@@ -16761,9 +16769,15 @@ export type Database = {
         Returns: boolean
       }
       is_branch_member: { Args: { p_branch_id: string }; Returns: boolean }
+      is_branch_staff: {
+        Args: { p_branch_id: string; p_include_trainers?: boolean }
+        Returns: boolean
+      }
       is_dr_readonly: { Args: never; Returns: boolean }
       is_in_quiet_hours: { Args: { p_member_id: string }; Returns: boolean }
+      is_own_member: { Args: { p_member_id: string }; Returns: boolean }
       is_pure_trainer: { Args: { _user_id: string }; Returns: boolean }
+      is_service_request: { Args: never; Returns: boolean }
       is_staff_offboarded: { Args: { _user_id: string }; Returns: boolean }
       is_staff_or_system: { Args: never; Returns: boolean }
       issue_referral_reward: {
@@ -17835,6 +17849,7 @@ export type Database = {
         Args: { p_free_days_id: string }
         Returns: Json
       }
+      rpc_guard_applies: { Args: { p_fn: string }; Returns: boolean }
       safe_benefit_enum: {
         Args: { p_code: string }
         Returns: Database["public"]["Enums"]["benefit_type"]
