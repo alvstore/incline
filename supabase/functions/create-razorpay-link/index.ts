@@ -2,6 +2,7 @@
 // v2.0.0 — Convenience fee is quoted and charged at the gateway only; the invoice is never mutated.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

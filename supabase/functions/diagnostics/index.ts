@@ -201,7 +201,7 @@ async function testSMS(provider: string, config: any, credentials: any) {
       const url = `${base}${endpoint}?user=${encodeURIComponent(credentials?.username || "")}&pass=${encodeURIComponent(credentials?.password || "")}`;
       try {
         if (!isAllowedProviderUrl(url, ["roundsms.co", "roundsms.com", "roundsms.in"], true)) {
-          return json({ success: false, error: "RoundSMS URL must point to a RoundSMS host" }, 400);
+          return { success: false, error: "RoundSMS URL must point to a RoundSMS host" };
         }
         const resp = await fetch(url);
         const text = await resp.text();
@@ -325,7 +325,7 @@ async function testWhatsApp(provider: string, config: any, credentials: any) {
       }
       try {
         if (!isAllowedProviderUrl(String(config.api_endpoint_url), ["wati.io"])) {
-          return json({ success: false, error: "WATI endpoint must be an https://*.wati.io address" }, 400);
+          return { success: false, error: "WATI endpoint must be an https://*.wati.io address" };
         }
         const resp = await fetch(`${config.api_endpoint_url}/api/v1/getTemplates`, {
           headers: { Authorization: `Bearer ${credentials.access_token}` },
