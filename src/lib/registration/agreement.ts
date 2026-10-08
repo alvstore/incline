@@ -276,7 +276,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
 ];
 
 export function acknowledgementsForPart(part: AgreementPartId): AgreementAcknowledgement[] {
-  return AGREEMENT_ACKNOWLEDGEMENTS.filter((a) => a.key && a.part === part);
+  return AGREEMENT_ACKNOWLEDGEMENTS.filter((a) => a.part === part);
 }
 
 export function acknowledgementLabel(key: string): string {
