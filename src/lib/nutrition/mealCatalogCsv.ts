@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/csvSafe';
 import type { MealCatalogEntry, MealType } from '@/services/mealCatalogService';
 
 export const MEAL_CSV_COLUMNS = [
@@ -34,8 +35,7 @@ export type ParsedMealRow = {
 /* ------------------------------------------------------------------ */
 
 function escapeCell(value: unknown): string {
-  const s = value === null || value === undefined ? '' : String(value);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return csvCell(value);
 }
 
 /** Quote-aware CSV reader — handles embedded commas, quotes and newlines. */

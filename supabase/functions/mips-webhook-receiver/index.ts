@@ -654,7 +654,6 @@ Deno.serve(async (req) => {
       payload_keys: Object.keys(payload),
       timestamp: new Date().toISOString(),
     }));
-    console.log("Full payload:", JSON.stringify(payload));
 
     // Person-registration callback (`?event=regPerson`): the device tells us,
     // per person, whether it actually built a face template. This is the only

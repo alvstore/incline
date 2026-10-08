@@ -5,6 +5,7 @@
 //   POST /rcs-wallet { branch_id?: string }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resolveRcsProvider } from '../_shared/rcsProviders.ts';
+import { requireCaller, canActOnBranch } from '../_shared/requireCaller.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,8 +24,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const caller = await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager'] });
+    if (!caller.ok) return caller.response;
     const body = await req.json().catch(() => ({}));
     const branchId: string | null = body?.branch_id || null;
+    if (!(await canActOnBranch(caller, branchId)) || (!branchId && !caller.internal && !caller.roles.some((r) => r === 'owner' || r === 'admin'))) {
+      return json(403, { ok: false, error: 'Forbidden' });
+    }
 
     const cfg = await resolveRcsProvider(supabase, branchId);
     if (!cfg.is_active) return json(200, { ok: false, reason: `${cfg.provider} integration is disabled`, provider: cfg.provider });

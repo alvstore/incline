@@ -24,6 +24,8 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") || "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "");
     const isService = bearer && bearer === serviceKey;
+    let __uid: string | null = null;
+    let __global = !!isService;
     if (!isService) {
       if (!bearer) return json({ ok: false, error: "Unauthorized" }, 401);
       const { data: userRes } = await admin.auth.getUser(bearer);
@@ -34,6 +36,8 @@ Deno.serve(async (req) => {
       const allowed = new Set(["owner", "admin", "manager"]);
       const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
       if (!hasRole) return json({ ok: false, error: "Forbidden" }, 403);
+      __uid = uid;
+      __global = (roles || []).some((r: any) => r.role === "owner" || r.role === "admin");
     }
 
 
@@ -50,6 +54,11 @@ Deno.serve(async (req) => {
       .eq("id", campaignId)
       .maybeSingle();
     if (cErr || !c) return json({ ok: false, error: "Campaign not found" }, 404);
+    if (!__global) {
+      const { data: bm } = await admin.from("branch_managers").select("branch_id").eq("user_id", __uid!).eq("branch_id", c.branch_id).limit(1);
+      const { data: sbr } = await admin.from("staff_branches").select("branch_id").eq("user_id", __uid!).eq("branch_id", c.branch_id).limit(1);
+      if (!c.branch_id || !(bm?.length || sbr?.length)) return json({ ok: false, error: "Forbidden" }, 403);
+    }
 
     // Resolve audience fresh
     const filter = (c.audience_filter || {}) as any;

@@ -15,6 +15,9 @@ Deno.serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: claims } = await sb.auth.getClaims(token);
     if (!claims?.claims?.sub) return json({ ok: false, error: "Unauthorized" }, 401);
+    const { data: roleRows } = await sb.from("user_roles").select("role").eq("user_id", claims.claims.sub);
+    const isAdmin = (roleRows ?? []).some((r: { role: string }) => r.role === "owner" || r.role === "admin");
+    if (!isAdmin) return json({ ok: false, error: "Forbidden" }, 403);
 
     const t = await getCachedToken();
     return json({ ok: true, token_preview: t.token.slice(0, 16) + "…", expires_at: t.expires_at });

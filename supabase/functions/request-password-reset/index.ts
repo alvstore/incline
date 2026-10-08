@@ -28,7 +28,14 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const email = String(body?.email ?? "").trim().toLowerCase();
-    const redirectTo = String(body?.redirect_to ?? `${APP_BASE}/auth/reset-password`);
+    const fallbackRedirect = `${APP_BASE}/auth/reset-password`;
+    let redirectTo = fallbackRedirect;
+    try {
+      const u = new URL(String(body?.redirect_to ?? fallbackRedirect));
+      const okHost = ["theincline.in", "www.theincline.in", "incline.lovable.app", "localhost"].includes(u.hostname)
+        || /^[a-z0-9-]+\.lovable\.app$/.test(u.hostname) || /^[a-z0-9-]+\.lovableproject\.com$/.test(u.hostname);
+      if (okHost && (u.protocol === "https:" || u.hostname === "localhost")) redirectTo = u.toString();
+    } catch { /* keep fallback */ }
 
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return json({ error: "invalid_email" }, 400);
