@@ -3,7 +3,7 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 
 - [x] Phase 1a — lock 51 internal-only privileged functions to background jobs (migration 0010)
 - [x] Phase 1b — in-function permission checks for the 26 app-called functions (migrations 0011–0013; verified live as member + owner: 47 checks)
-- [ ] Phase 2 — close read-function data leaks; recheck the 5 visitor-open functions (public body-scan link token, password setup token)
+- [x] Phase 2 — read-function leaks closed (migration 0014): 15 locked to background, 6 helpers self-or-staff, audit reports owner/admin; 5 visitor-open functions rechecked (body-scan token fn locked; share links never issued)
 - [ ] Phase 3 — review remaining ~178 signed-in-callable privileged functions; default-deny for new functions
 - [ ] Phase 4 — move 3 extensions out of public; CI check failing migrations that add an unprotected SECURITY DEFINER function
 - [ ] Phase 5 — clear 38 lint warnings
