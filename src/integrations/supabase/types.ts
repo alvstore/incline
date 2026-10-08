@@ -16299,6 +16299,7 @@ export type Database = {
         Args: { _path: string }
         Returns: string
       }
+      forbid: { Args: { p_action: string }; Returns: string }
       force_mips_reconcile: { Args: { _member_id: string }; Returns: Json }
       freeze_membership: {
         Args: {
