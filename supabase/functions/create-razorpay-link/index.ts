@@ -118,9 +118,11 @@ serve(async (req: Request) => {
     }
 
     // Caller authority: staff/internal, or the member who owns this invoice.
+    let memberSelfPay = false;
     {
       const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff"] });
       if (!caller.ok) {
+        memberSelfPay = true;
         const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
         const { data: ures } = await supabase.auth.getUser(tok);
         const uid = ures?.user?.id;
@@ -139,6 +141,10 @@ serve(async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       const due = Math.round((Number(invoice.total_amount ?? 0) - Number(invoice.amount_paid ?? 0)) * 100) / 100;
+      if (memberSelfPay && Math.abs(amount - due) > 0.01) {
+        return new Response(JSON.stringify({ error: "Online payment must cover the full outstanding balance", code: "FULL_AMOUNT_REQUIRED" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       if (amount > due + 0.01) {
         return new Response(JSON.stringify({ error: "Amount exceeds the outstanding balance", code: "AMOUNT_EXCEEDS_DUE" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
