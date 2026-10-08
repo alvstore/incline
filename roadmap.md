@@ -8,8 +8,10 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] Phase 4 — pg_trgm + vector moved to `extensions` (0017; pg_net not relocatable — its objects already live in `net`); new functions closed by default (0018); CI step `scripts/check-definer-guards.ts` fails unprotected SECURITY DEFINER functions
 - [x] Phase 3 follow-ups — `match_common_plans` re-tested live as Mohit: own member 200, two other members 403 (earlier alarm was a false positive); `resolve_mips_person_alias` callers (mips-webhook-receiver, reconcile-mips-pass-records) both use service-role clients
 - [x] Member PT add-on: server is staff-only by design (`_purchase_pt_package_impl` → "Not authorized") but the drawer toasted "activated" — member mode now files a front-desk task (same path as Renewal Concierge), trainer optional; staff mode honours `success:false`
-- [ ] Phase 5 — clear 38 lint warnings
-- [ ] Phase 6 — verify as member + front-desk after each phase; update audit doc status
+- [x] Phase 5 — 38 lint warnings → 0 (previewAuthStorage.ts excluded from lint: platform-generated)
+- [x] Phase 6 — verified live after Phase 4/5: member (14 pages, 0 failed calls), front-desk manager (15 pages, 10/10 RPC allow/deny), visitor (6 public pages); audit doc updated as `Incline_Security_Lint_Audit_v2.md`
+- [x] Dual-role fix — manager+trainer accounts saw "No Branch Assigned" everywhere (BranchContext precedence manager > staff/trainer > member)
+- [ ] Members page: pre-existing "Function components cannot be given refs" console warning (Primitive.button.Slot) — cosmetic
 
 # Earlier open items
 - [ ] Member app: native Android/iOS requires a separate Expo project (web only here)
