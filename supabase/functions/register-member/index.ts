@@ -466,8 +466,11 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // contract and persisted so staff reprints match exactly.
   const customTerms = body.custom_terms ? String(body.custom_terms).slice(0, 4000) : null;
   const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : AGREEMENT_VERSION;
-  if (!consents.dpdp || !consents.whatsapp || !consents.waiver) {
-    return json(400, { error: "required_consents_missing" });
+  // Every mandatory acknowledgement is a condition of membership; the /register
+  // page blocks submission without them, and the server must agree.
+  const missingRequired = REQUIRED_ACKNOWLEDGEMENT_KEYS.filter((k) => consents[k] !== true);
+  if (missingRequired.length) {
+    return json(400, { error: "required_consents_missing", missing: missingRequired });
   }
 
   // 1) Find latest unconsumed OTP
