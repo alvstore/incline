@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Printer, Save, FileSignature, Eraser, Dumbbell, Shield, HeartPulse, User, Calendar, MapPin, ChevronDown, CheckCircle2, Download, Eye, Pencil } from 'lucide-react';
+import { Printer, Save, FileSignature, Eraser, Dumbbell, Shield, HeartPulse, User, Calendar, MapPin, ChevronDown, CheckCircle2, Download, Eye, Pencil, ListChecks, MinusCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
@@ -24,6 +24,8 @@ import {
   FINAL_DECLARATION,
   REQUIRED_ACKNOWLEDGEMENT_KEYS,
   acknowledgementsForPart,
+  acknowledgementsFromSignedRecord,
+  acknowledgementsWereBackfilled,
 } from '@/lib/registration/agreement';
 import {
   PARQ_QUESTIONS,
@@ -96,6 +98,8 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     source: string | null;
     bucket: 'documents' | 'member-onboarding';
     acks: Record<string, boolean>;
+    /** Mandatory ticks were confirmed by data backfill (older sign-up form never asked). */
+    backfilled: boolean;
   } | null>(null);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -146,13 +150,21 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
         setCustomTerms((row as any).custom_terms);
       }
       const consents = (row?.consents as Record<string, unknown> | null) ?? null;
-      const storedAcks: Record<string, boolean> = {};
-      AGREEMENT_ACKNOWLEDGEMENTS.forEach((a) => {
-        if (consents && typeof consents[a.key] === 'boolean') storedAcks[a.key] = consents[a.key] as boolean;
-      });
+      const isSigned = Boolean(row?.waiver_pdf_path || row?.signature_path);
+      // A signed record covers every mandatory acknowledgement (one signature,
+      // Parts A–I); optional ones keep the member's own choice. Unsigned rows
+      // only prefill what was explicitly stored.
+      const storedAcks: Record<string, boolean> = isSigned
+        ? acknowledgementsFromSignedRecord(consents)
+        : {};
+      if (!isSigned) {
+        AGREEMENT_ACKNOWLEDGEMENTS.forEach((a) => {
+          if (consents && typeof consents[a.key] === 'boolean') storedAcks[a.key] = consents[a.key] as boolean;
+        });
+      }
       if (Object.keys(storedAcks).length) setAcks(storedAcks);
 
-      if (row?.waiver_pdf_path || row?.signature_path) {
+      if (isSigned) {
         const source = (consents?.source as string | undefined) ?? null;
         const bucket = ((consents?.pdf_bucket as string | undefined) ?? 'member-onboarding') as
           | 'documents'
@@ -164,6 +176,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
           source,
           bucket,
           acks: storedAcks,
+          backfilled: acknowledgementsWereBackfilled(consents),
         });
         setEditMode(false);
         if (row?.signature_path) {
