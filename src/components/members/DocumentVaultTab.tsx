@@ -11,14 +11,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { downloadMemberDocument, openMemberDocument } from '@/lib/documents/memberDocumentUrls';
+import { downloadMemberDocument, isMembershipAgreementDocument, openMemberDocument } from '@/lib/documents/memberDocumentUrls';
 
 interface DocumentVaultTabProps {
   memberId: string;
 }
 
 const DOC_TYPE_LABELS: Record<string, string> = {
-  registration_form: 'Registration Form',
+  registration_form: 'Membership Agreement',
   contract: 'Signed Contract',
   id_proof: 'ID Proof',
   medical: 'Medical Certificate',
@@ -44,27 +44,19 @@ export function DocumentVaultTab({ memberId }: DocumentVaultTabProps) {
     },
   });
 
-  // Block duplicate registration-form uploads from any path on the member profile.
-  const hasRegistrationForm = (documents as any[]).some(
-    (d) => d.document_type === 'registration_form',
-  );
-
-  // Reset to a still-allowed type if the user previously selected registration_form
-  // and one already exists.
-  if (docType === 'registration_form' && hasRegistrationForm) {
+  // The Membership Agreement is never uploaded by hand — it is generated and
+  // signed through the agreement flow (one document, one signature).
+  if (docType === 'registration_form') {
     setDocType('contract');
   }
-
-  const docTypeOptions = Object.entries(DOC_TYPE_LABELS).filter(
-    ([k]) => !(k === 'registration_form' && hasRegistrationForm),
-  );
+  const docTypeOptions = Object.entries(DOC_TYPE_LABELS).filter(([k]) => k !== 'registration_form');
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (docType === 'registration_form' && hasRegistrationForm) {
-      toast.error('A registration form has already been uploaded for this member.');
+    if (docType === 'registration_form') {
+      toast.error('The Membership Agreement is signed through the agreement flow, not uploaded.');
       e.target.value = '';
       return;
     }
@@ -214,9 +206,12 @@ export function DocumentVaultTab({ memberId }: DocumentVaultTabProps) {
                     }}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(doc.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {/* The signed Membership Agreement is the member's legal record — managed by the agreement flow, never deleted here. */}
+                    {!isMembershipAgreementDocument(doc) && doc.document_type !== 'registration_form' && (
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(doc.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

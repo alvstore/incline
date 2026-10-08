@@ -26,8 +26,9 @@ import {
   AGREEMENT_ACKNOWLEDGEMENTS,
   acknowledgementsFromSignedRecord,
   acknowledgementsWereBackfilled,
+  agreementReference,
 } from '@/lib/registration/agreement';
-
+import { downloadAgreement, openAgreement } from '@/lib/registration/agreementDocument';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +37,6 @@ import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { differenceInDays, format } from 'date-fns';
 import { daysRemaining } from '@/lib/memberships/duration';
 import { toast } from 'sonner';
-import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
 import { UnfreezeMembershipDrawer } from './UnfreezeMembershipDrawer';
 import { AssignTrainerDrawer } from './AssignTrainerDrawer';
@@ -846,7 +846,7 @@ export function MemberProfileDrawer({
   }, [refetchMemberCore, refetchMemberPlans]);
 
 
-  // Onboarding waiver (only present for self-registered members)
+  // Membership Registration & Agreement — the ONE signed record per member
   const { data: onboardingSig } = useQuery({
     queryKey: ['member-onboarding-sig', member?.id],
     queryFn: async () => {
@@ -862,6 +862,22 @@ export function MemberProfileDrawer({
     },
     enabled: !!member?.id && open,
   });
+
+  // View/download always go through the agreement service so staff only ever
+  // see the ONE canonical document (legacy waivers are regenerated on demand).
+  const [agreementBusy, setAgreementBusy] = useState<'view' | 'download' | null>(null);
+  const runAgreementAction = async (kind: 'view' | 'download') => {
+    if (!member?.id) return;
+    setAgreementBusy(kind);
+    try {
+      if (kind === 'view') await openAgreement(member.id);
+      else await downloadAgreement(member.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open the agreement');
+    } finally {
+      setAgreementBusy(null);
+    }
+  };
 
 
   // Fetch referrer name from profile
@@ -1858,13 +1874,16 @@ export function MemberProfileDrawer({
                 </Card>
               )}
 
-              {/* Onboarding Waiver (self-registration signed record) */}
+              {/* Membership Registration & Agreement — the ONE signed document */}
               {onboardingSig && (
                 <Card className="border-emerald-200 bg-emerald-50/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
                       <FileText className="h-4 w-4 text-emerald-600" />
-                      Onboarding & Waiver
+                      Membership Agreement
+                      <Badge variant="outline" className="ml-auto font-mono text-[10px] tracking-wide">
+                        {agreementReference(memberDetails?.member_code ?? member?.member_code, member?.id)}
+                      </Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm space-y-2">
@@ -1876,28 +1895,26 @@ export function MemberProfileDrawer({
                           {onboardingSig.signer_ip ? ` · IP ${onboardingSig.signer_ip}` : ''}
                         </p>
                       </div>
-                      {onboardingSig.waiver_pdf_path && (
+                      <div className="flex flex-wrap gap-1.5">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={async () => {
-                            try {
-                              // Self-registration waivers live in
-                              // `member-onboarding`; staff-form waivers live in
-                              // `documents`. The helper resolves both.
-                              const url = await signOnboardingDocument(
-                                onboardingSig.waiver_pdf_path!,
-                                60,
-                              );
-                              window.open(url, '_blank');
-                            } catch (e: any) {
-                              toast.error(e?.message || 'Could not open waiver');
-                            }
-                          }}
+                          disabled={agreementBusy !== null}
+                          onClick={() => runAgreementAction('view')}
                         >
-                          <FileText className="h-3.5 w-3.5 mr-1.5" />View Waiver PDF
+                          <FileText className="h-3.5 w-3.5 mr-1.5" />
+                          {agreementBusy === 'view' ? 'Opening…' : 'View signed agreement'}
                         </Button>
-                      )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={agreementBusy !== null}
+                          onClick={() => runAgreementAction('download')}
+                          aria-label="Download signed agreement"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     {onboardingSig.par_q && typeof onboardingSig.par_q === 'object' && (
                       <details className="text-xs">

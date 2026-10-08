@@ -200,7 +200,7 @@ export async function renderMembershipAgreementPdf(input: AgreementRenderInput):
   const website = input.brand?.website || "theincline.in";
   const supportEmail = input.brand?.supportEmail || "info@theinclinelife.com";
   const ref = agreementReference(input.member.code, input.member.memberId);
-  const isDraft = !input.signature || !input.signature.pngBytes;
+  const isDraft = !input.signature;
   const signedAt = input.signature?.signedAt ?? null;
   const generatedAt = input.generatedAt ?? new Date();
 
@@ -302,9 +302,9 @@ export async function renderMembershipAgreementPdf(input: AgreementRenderInput):
 
   const drawDraftWatermark = (p: PDFPage) => {
     p.drawText("DRAFT  -  NOT SIGNED", {
-      x: 90,
-      y: 300,
-      size: 54,
+      x: 110,
+      y: 290,
+      size: 44,
       font: bold,
       color: AMBER,
       opacity: 0.08,
@@ -406,7 +406,7 @@ export async function renderMembershipAgreementPdf(input: AgreementRenderInput):
       const granted = input.acknowledgements[a.key] === true;
       const lines = wrapText(a.label, font, 8.2, CONTENT_W - 28);
       const h = lines.length * 10.2 + 4;
-      ensure(h + 4);
+      ensure(h + 14);
       const boxSize = 9;
       const boxTop = y - 1;
       page.drawRectangle({
@@ -508,6 +508,15 @@ export async function renderMembershipAgreementPdf(input: AgreementRenderInput):
       if (sigImg) {
         const w = (sigH / sigImg.height) * sigImg.width;
         page.drawImage(sigImg, { x: leftX + 4, y: y - sigH, width: w, height: sigH });
+      } else if (!isDraft) {
+        page.drawRectangle({
+          x: leftX, y: y - sigH, width: colW, height: sigH,
+          borderColor: GREEN, borderWidth: 0.8, color: rgb(240 / 255, 253 / 255, 244 / 255),
+        });
+        text("Signed digitally", leftX + colW / 2, y - sigH / 2 + 3, { font: bold, size: 9, color: GREEN, align: "center" });
+        text("(signature image on file could not be reproduced)", leftX + colW / 2, y - sigH / 2 - 8, {
+          font: italic, size: 7, color: MUTED, align: "center",
+        });
       } else {
         page.drawRectangle({
           x: leftX, y: y - sigH, width: colW, height: sigH,

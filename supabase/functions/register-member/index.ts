@@ -1,4 +1,7 @@
-// v1.3.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// v1.4.0 — Public self-registration with WhatsApp OTP and the unified agreement.
+// 1.4.0: the agreement PDF is rendered by the ONE shared renderer
+//        (_shared/membershipAgreementPdf.ts) — same document as the staff
+//        drawer, prints and downloads. No local PDF code, no version branding.
 // 1.3.0: every mandatory acknowledgement (REQUIRED_ACKNOWLEDGEMENT_KEYS) is
 //        enforced server-side, not just dpdp/whatsapp/waiver.
 // Two modes:
@@ -11,17 +14,18 @@
 // Reuses existing dispatch-communication, send-whatsapp + send-sms fallback,
 // phoneVariants() identity helper, captureEdgeError, and signMemberDocument.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
+import { renderMembershipAgreementPdf } from "../_shared/membershipAgreementPdf.ts";
 import { phoneVariants, normalizePhone } from "../_shared/phone.ts";
 import {
-  AGREEMENT_PARTS,
   AGREEMENT_ACKNOWLEDGEMENTS,
-  AGREEMENT_TITLE,
   AGREEMENT_VERSION,
-  FINAL_DECLARATION,
   REQUIRED_ACKNOWLEDGEMENT_KEYS,
 } from "../_shared/agreement.ts";
+
+/** Must match `membership-agreement` so its self-heal check recognises fresh documents. */
+const AGREEMENT_RENDERER = "membershipAgreementPdf/1.0.0";
+const AGREEMENT_BUCKET = "member-onboarding";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -247,196 +251,6 @@ async function sendOtpHandler(req: Request, body: Record<string, unknown>): Prom
   });
 }
 
-async function generateWaiverPdf(input: {
-  member_code: string;
-  full_name: string;
-  email: string;
-  phone: string;
-  branch_name: string;
-  registration: RegistrationPayload;
-  custom_terms?: string | null;
-  terms_version?: string | null;
-  par_q: Record<string, string>;
-  consents: Record<string, boolean>;
-  ip: string | null;
-  ua: string | null;
-  signed_at: string;
-  signature_png_bytes: Uint8Array;
-}): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  const margin = 50;
-  const pageW = 595, pageH = 842; // A4
-  let page = pdf.addPage([pageW, pageH]);
-  let y = pageH - 42;
-
-  const ensure = (needed: number) => {
-    if (y - needed < 60) {
-      page = pdf.addPage([pageW, pageH]);
-      y = pageH - 42;
-    }
-  };
-
-  // pdf-lib standard fonts are WinAnsi-only: "₹" and other non-Latin-1 glyphs throw.
-  const win = (s: unknown): string =>
-    String(s ?? "")
-      .replace(/\u20b9/g, "Rs.")
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201c\u201d]/g, '"')
-      .replace(/[\u2013\u2014]/g, "-")
-      .replace(/\u2022/g, "-")
-      .replace(/\u00a0/g, " ")
-      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
-
-  const draw = (text: string, opts: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb>; indent?: number } = {}) => {
-    const size = opts.size ?? 10;
-    ensure(size + 6);
-    page.drawText(win(text), {
-      x: margin + (opts.indent ?? 0),
-      y,
-      size,
-      font: opts.bold ? fontBold : font,
-      color: opts.color ?? rgb(0.1, 0.1, 0.15),
-    });
-    y -= size + 4;
-  };
-
-  // Word-wrap helper so long addresses / custom terms never overflow the page.
-  const drawWrapped = (text: string, opts: { size?: number; bold?: boolean; indent?: number } = {}) => {
-    const size = opts.size ?? 9;
-    const f = opts.bold ? fontBold : font;
-    const maxW = pageW - margin * 2 - (opts.indent ?? 0);
-    const words = win(text).split(/\s+/).filter(Boolean);
-
-    let line = "";
-    for (const w of words) {
-      const candidate = line ? `${line} ${w}` : w;
-      if (f.widthOfTextAtSize(candidate, size) > maxW) {
-        if (line) draw(line, { ...opts, size });
-        line = w;
-      } else {
-        line = candidate;
-      }
-    }
-    if (line) draw(line, { ...opts, size });
-  };
-
-  const section = (title: string) => {
-    ensure(26);
-    y -= 6;
-    draw(title.toUpperCase(), { size: 11, bold: true, color: rgb(0.28, 0.24, 0.72) });
-  };
-
-  const field = (label: string, value?: string | null) => {
-    drawWrapped(`${label}: ${value && String(value).trim() ? value : "—"}`, { size: 9 });
-  };
-
-  const reg = input.registration;
-
-  // ---- Branded header band (mirrors the in-app branded PDF chrome) --------
-  page.drawRectangle({ x: 0, y: pageH - 92, width: pageW, height: 92, color: rgb(0.31, 0.27, 0.9) });
-  page.drawText(win("THE INCLINE LIFE BY INCLINE"), {
-    x: margin, y: pageH - 40, size: 16, font: fontBold, color: rgb(1, 1, 1),
-  });
-  page.drawText(win(AGREEMENT_TITLE), {
-    x: margin, y: pageH - 58, size: 12, font: fontBold, color: rgb(0.92, 0.94, 1),
-  });
-  page.drawText(
-    win(`${input.branch_name}  |  AGR-${input.member_code}  |  v${input.terms_version || AGREEMENT_VERSION}`),
-    { x: margin, y: pageH - 74, size: 9, font, color: rgb(0.88, 0.9, 1) },
-  );
-  y = pageH - 110;
-
-  const partHeading = (id: string, title: string, intro?: string) => {
-    section(`Part ${id} — ${title}`);
-    if (intro) drawWrapped(intro, { size: 8 });
-  };
-
-  const acksForPart = (id: string) => {
-    const items = AGREEMENT_ACKNOWLEDGEMENTS.filter((a) => a.part === id);
-    for (const a of items) {
-      const granted = input.consents[a.key] === true;
-      drawWrapped(`[${granted ? "X" : " "}] ${a.label}`, { size: 8.5 });
-    }
-  };
-
-  for (const part of AGREEMENT_PARTS) {
-    partHeading(part.id, part.title, part.intro);
-
-    if (part.id === "A") {
-      field("Full Name", input.full_name);
-      field("Member Code", input.member_code);
-      field("Email", input.email);
-      field("Phone", input.phone);
-      field("Gender", reg.gender);
-      field("Date of Birth", reg.date_of_birth);
-      field("Address", [reg.address, reg.city, reg.state, reg.postal_code].filter(Boolean).join(", "));
-      field(
-        "Government ID",
-        [reg.government_id_type ? reg.government_id_type.toUpperCase() : null, reg.government_id_number]
-          .filter(Boolean).join(" / "),
-      );
-      field(
-        "Emergency Contact",
-        [reg.emergency_contact_name, reg.emergency_contact_phone].filter(Boolean).join(" / "),
-      );
-    }
-
-    if (part.id === "B") {
-      field("Branch", input.branch_name);
-      field("Plan Interest", (reg as unknown as { pending_plan?: string }).pending_plan ?? null);
-      field("Registered On", input.signed_at);
-    }
-
-    if (part.id === "C") {
-      field("Primary Fitness Goal", reg.fitness_goals);
-      field("Health Conditions / Injuries", reg.health_conditions || "None declared");
-      let qi = 1;
-      for (const [q, a] of Object.entries(input.par_q)) {
-        drawWrapped(`${qi}. ${q} — ${String(a).toUpperCase()}`, { size: 9 });
-        qi++;
-      }
-    }
-
-    let ci = 1;
-    for (const clause of part.clauses) {
-      drawWrapped(`${ci}. ${clause.title}`, { size: 9, bold: true });
-      drawWrapped(clause.body, { size: 8 });
-      ci++;
-    }
-
-    if (part.id === "E" && input.custom_terms && input.custom_terms.trim()) {
-      drawWrapped("Member-Specific Addendum", { size: 9, bold: true });
-      drawWrapped(input.custom_terms.trim(), { size: 8 });
-    }
-
-    acksForPart(part.id);
-  }
-
-  drawWrapped(FINAL_DECLARATION, { size: 9 });
-
-  try {
-    const sigImg = await pdf.embedPng(input.signature_png_bytes);
-    const sigDims = sigImg.scale(0.4);
-    const sigW = Math.min(sigDims.width, 240);
-    const sigH = (sigW / sigDims.width) * sigDims.height;
-    ensure(sigH + 30);
-    y -= sigH;
-    page.drawImage(sigImg, { x: margin, y, width: sigW, height: sigH });
-    y -= 8;
-  } catch {
-    draw("(signature image unavailable)");
-  }
-
-  draw(`Signed by: ${input.full_name}`, { size: 9 });
-  draw(`Signed at: ${input.signed_at}`, { size: 9 });
-  draw(`IP: ${input.ip ?? "unknown"}   UA: ${(input.ua ?? "unknown").slice(0, 90)}`, { size: 8 });
-
-  return await pdf.save();
-}
-
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const m = dataUrl.match(/^data:image\/(?:png|jpeg|jpg);base64,(.+)$/);
   if (!m) throw new Error("invalid_signature_data_url");
@@ -505,7 +319,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // 3) Validate branch
   const { data: branch } = await admin
     .from("branches")
-    .select("id, name")
+    .select("id, name, phone, email")
     .eq("id", reg.branch_id)
     .eq("is_active", true)
     .maybeSingle();
@@ -597,7 +411,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   const pdfPath = `${member.id}/membership-agreement.pdf`;
 
   const { error: sigUpErr } = await admin.storage
-    .from("member-onboarding")
+    .from(AGREEMENT_BUCKET)
     .upload(sigPath, signatureBytes, { contentType: "image/png", upsert: true });
   if (sigUpErr) {
     await captureEdgeError("register-member", sigUpErr, { route: "sig_upload" });
@@ -606,12 +420,23 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
 
   // 8) Insert the consent/signature row immediately — it is the legal record.
   //    The waiver PDF is rendered and uploaded in the background right after.
+  const pendingPlan = (reg as unknown as { pending_plan?: string | null }).pending_plan ?? null;
+  const acks: Record<string, boolean> = Object.fromEntries(
+    AGREEMENT_ACKNOWLEDGEMENTS.map((a) => [a.key, consents[a.key] === true]),
+  );
   const { error: sigRowErr } = await admin.from("member_onboarding_signatures").insert({
     member_id: member.id,
     signature_path: sigPath,
     waiver_pdf_path: pdfPath,
     par_q,
-    consents: { ...consents, source: "self_register", pdf_bucket: "member-onboarding" },
+    consents: {
+      ...acks,
+      source: "self_register",
+      pdf_bucket: AGREEMENT_BUCKET,
+      pending_plan: pendingPlan,
+      agreement_renderer: AGREEMENT_RENDERER,
+      agreement_rendered_at: signedAt,
+    },
     custom_terms: customTerms,
     terms_version: termsVersion,
     signer_ip: ip,
@@ -621,26 +446,49 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   if (sigRowErr) await captureEdgeError("register-member", sigRowErr, { route: "sig_row_insert" });
 
   backgroundTask((async () => {
-    const pdfBytes = await generateWaiverPdf({
-      member_code: member.member_code ?? member.id,
-      full_name: reg.full_name,
-      email: reg.email,
-      phone,
-      branch_name: branch.name,
-      registration: reg,
-      custom_terms: customTerms,
-      terms_version: termsVersion,
-      par_q,
-      consents,
-      ip,
-      ua,
-      signed_at: signedAt,
-      signature_png_bytes: signatureBytes,
+    const pdfBytes = await renderMembershipAgreementPdf({
+      member: {
+        name: reg.full_name,
+        code: member.member_code ?? null,
+        memberId: member.id,
+        email: reg.email,
+        phone,
+        gender: reg.gender,
+        dateOfBirth: reg.date_of_birth,
+        address: reg.address,
+        city: reg.city,
+        state: reg.state,
+        postalCode: reg.postal_code,
+        emergencyContactName: reg.emergency_contact_name,
+        emergencyContactPhone: reg.emergency_contact_phone,
+        governmentIdType: reg.government_id_type,
+        governmentIdNumber: reg.government_id_number,
+        fitnessGoals: reg.fitness_goals,
+        healthConditions: reg.health_conditions,
+      },
+      membership: { planInterest: pendingPlan, registeredOn: signedAt },
+      branch: { name: branch.name, phone: branch.phone, email: branch.email },
+      parq: par_q,
+      acknowledgements: acks,
+      customTerms,
+      signature: { pngBytes: signatureBytes, signedAt, ip },
     });
     const { error: pdfUpErr } = await admin.storage
-      .from("member-onboarding")
+      .from(AGREEMENT_BUCKET)
       .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
-    if (pdfUpErr) await captureEdgeError("register-member", pdfUpErr, { route: "pdf_upload" });
+    if (pdfUpErr) {
+      await captureEdgeError("register-member", pdfUpErr, { route: "pdf_upload" });
+      return;
+    }
+    // Document vault entry — the ONE "Membership Agreement" per member.
+    const { error: docErr } = await admin.from("member_documents").insert({
+      member_id: member.id,
+      document_type: "registration_form",
+      file_url: "",
+      storage_path: pdfPath,
+      file_name: `Membership-Agreement-${(member.member_code ?? member.id.slice(0, 8)).replace(/[^A-Za-z0-9-]/g, "")}.pdf`,
+    });
+    if (docErr) await captureEdgeError("register-member", docErr, { route: "doc_row_insert" });
   })());
 
 

@@ -15,18 +15,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { format } from 'date-fns';
-import { buildMembershipAgreementPdf, printBlob, downloadBlob } from '@/utils/pdfBlob';
-import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { printBlob } from '@/utils/pdfBlob';
 import {
   AGREEMENT_PARTS,
   AGREEMENT_ACKNOWLEDGEMENTS,
-  AGREEMENT_VERSION,
   FINAL_DECLARATION,
   REQUIRED_ACKNOWLEDGEMENT_KEYS,
   acknowledgementsForPart,
   acknowledgementsFromSignedRecord,
   acknowledgementsWereBackfilled,
+  agreementReference,
 } from '@/lib/registration/agreement';
+import {
+  downloadAgreement,
+  openAgreement,
+  previewAgreementBlob,
+  printAgreement,
+  signAgreement,
+  type AgreementDraft,
+} from '@/lib/registration/agreementDocument';
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
@@ -36,8 +43,6 @@ import {
   joinHealthConditions,
 } from '@/lib/registration/healthQuestions';
 
-/** Canonical single document — one per member, upserted on re-sign. */
-const AGREEMENT_FILENAME = 'membership-agreement.pdf';
 const partTitle = (id: string) => {
   const p = AGREEMENT_PARTS.find((x) => x.id === id);
   return p ? `Part ${p.id} — ${p.title}` : id;
@@ -76,7 +81,7 @@ interface MemberRegistrationFormProps {
 
 export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: MemberRegistrationFormProps) {
   const queryClient = useQueryClient();
-  const { data: brand } = useBrandContext(null);
+  const agreementRef = agreementReference(data.memberCode, data.memberId);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSigned, setHasSigned] = useState(false);
@@ -268,24 +273,23 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
       return next;
     });
 
-  const buildAgreementBlob = async (signatureDataUrl: string | null, signedAt: string) => {
-    const parqMap: Record<string, string> = {};
-    PARQ_QUESTIONS.forEach((q, i) => { parqMap[q] = parq[`q${i}`] || 'no'; });
-    const blob = await buildMembershipAgreementPdf({
-      data,
-      govIdType,
-      govIdNumber,
-      fitnessGoals,
-      medicalConditions,
-      parq: parqMap,
-      parqQuestions: [...PARQ_QUESTIONS],
-      customTerms,
-      acknowledgements: acks,
-      signatureDataUrl,
-      signedAt,
-    }, brand);
-    return { blob, parqMap };
+  /** PAR-Q keyed by question text — the shape the agreement stores and prints. */
+  const parqByQuestion = (): Record<string, string> => {
+    const map: Record<string, string> = {};
+    PARQ_QUESTIONS.forEach((q, i) => { map[q] = parq[`q${i}`] || 'no'; });
+    return map;
   };
+
+  /** Everything the staff member may have edited in the drawer, for the server renderer. */
+  const draftPayload = (): AgreementDraft => ({
+    government_id_type: govIdType,
+    government_id_number: govIdNumber,
+    fitness_goals: fitnessGoals,
+    health_conditions: medicalConditions,
+    par_q: parqByQuestion(),
+    acknowledgements: acks,
+    custom_terms: customTerms,
+  });
 
   const handleSaveDigital = async () => {
     if (!hasSigned) {
@@ -306,140 +310,80 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
       const canvas = canvasRef.current;
       if (!canvas) throw new Error('Canvas not found');
       const signatureDataUrl = canvas.toDataURL('image/png');
-      const signedAt = new Date().toISOString();
 
-      const { blob: pdfBlob, parqMap } = await buildAgreementBlob(signatureDataUrl, signedAt);
-
-      // ONE canonical document per member — re-signing overwrites in place.
-      const fileName = `${data.memberId}/${AGREEMENT_FILENAME}`;
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
-      if (uploadError) throw uploadError;
-
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: existingDoc } = await supabase
-        .from('member_documents')
-        .select('id')
-        .eq('member_id', data.memberId)
-        .eq('document_type', 'registration_form')
-        .maybeSingle();
-
-      const docRow = {
+      // ONE call: the server stores the signature, the legal record and the
+      // ONE agreement PDF (same renderer as /register, print and download).
+      const result = await signAgreement({
         member_id: data.memberId,
-        document_type: 'registration_form',
-        file_url: '',
-        storage_path: fileName,
-        file_name: `Membership-Agreement-${data.memberCode}.pdf`,
-        uploaded_by: user?.id,
-      };
-      const { error: docError } = existingDoc
-        ? await supabase.from('member_documents').update(docRow).eq('id', existingDoc.id)
-        : await supabase.from('member_documents').insert(docRow);
-      if (docError) throw docError;
+        signature_data_url: signatureDataUrl,
+        consents: { ...acks, waiver: true },
+        ...draftPayload(),
+      });
 
-      // Sync edits back to canonical records (best-effort, non-blocking)
-      try {
-        const memberUpdates: Record<string, string> = {};
-        if (fitnessGoals && fitnessGoals !== (data.fitnessGoals || '')) memberUpdates.fitness_goals = fitnessGoals;
-        if (medicalConditions && medicalConditions !== (data.medicalConditions || '')) memberUpdates.health_conditions = medicalConditions;
-        if (Object.keys(memberUpdates).length) {
-          await supabase.from('members').update(memberUpdates as never).eq('id', data.memberId);
-        }
-        const profileUpdates: Record<string, string> = {};
-        if (govIdType && govIdType !== (data.governmentIdType || 'aadhaar')) profileUpdates.government_id_type = govIdType;
-        if (govIdNumber && govIdNumber !== (data.governmentIdNumber || '')) profileUpdates.government_id_number = govIdNumber;
-        if (Object.keys(profileUpdates).length) {
-          const { data: m } = await supabase.from('members').select('user_id').eq('id', data.memberId).maybeSingle();
-          if (m?.user_id) await (supabase.from('profiles') as any).update(profileUpdates).eq('user_id', m.user_id);
-        }
-      } catch (syncErr) {
-        console.warn('[RegistrationForm] profile sync failed', syncErr);
-      }
-
-      // ONE signature record for the ONE document.
-      try {
-        await supabase.from('member_onboarding_signatures').insert({
-          member_id: data.memberId,
-          signature_path: fileName,
-          waiver_pdf_path: fileName,
-          par_q: parqMap,
-          custom_terms: customTerms || null,
-          terms_version: AGREEMENT_VERSION,
-          consents: {
-            ...acks,
-            waiver: true,
-            source: 'staff_registration_form',
-            pdf_bucket: 'documents',
-          },
-          signed_at: signedAt,
-        });
-      } catch (sigErr) {
-        console.warn('[RegistrationForm] signature snapshot failed', sigErr);
-      }
-
-      toast.success('Membership agreement signed and stored');
+      toast.success(`Membership agreement ${result.reference} signed and stored`);
       queryClient.invalidateQueries({ queryKey: ['member-documents', data.memberId] });
+      queryClient.invalidateQueries({ queryKey: ['member-onboarding-sig', data.memberId] });
+      queryClient.invalidateQueries({ queryKey: ['member-details', data.memberId] });
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
   };
 
-  // Resolve the ONE signature for the combined agreement: a fresh canvas
-  // signature wins; otherwise reuse the member's stored digital signature
-  // (e.g. from /register) together with its original signed date.
-  const resolveSignature = async (): Promise<{ dataUrl: string | null; signedAt: string }> => {
-    if (hasSigned && canvasRef.current) {
-      return { dataUrl: canvasRef.current.toDataURL('image/png'), signedAt: new Date().toISOString() };
-    }
-    const signedAt = existingSignature?.signed_at ?? new Date().toISOString();
-    const sigPath = existingSignature?.signature_path;
-    if (!sigPath || sigPath.toLowerCase().endsWith('.pdf')) return { dataUrl: null, signedAt };
-    try {
-      const url = signatureUrl ?? (await signAgreementDoc(sigPath, existingSignature!.bucket));
-      if (!url) return { dataUrl: null, signedAt };
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`signature fetch ${res.status}`);
-      const imgBlob = await res.blob();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.onerror = () => reject(r.error);
-        r.readAsDataURL(imgBlob);
-      });
-      return { dataUrl, signedAt };
-    } catch (e) {
-      console.warn('[RegistrationForm] could not load stored signature', e);
-      toast.error('Could not load the stored signature');
-      return { dataUrl: null, signedAt };
-    }
-  };
-
   const [preparing, setPreparing] = useState(false);
+  const signedAndLocked = Boolean(existingSignature) && !editMode;
+
+  /**
+   * Print: a signed member gets the stored agreement (exactly what they signed);
+   * an unsigned or re-signing member gets a watermarked DRAFT with the current
+   * drawer edits, so staff can review on paper before collecting the signature.
+   */
   const handlePrint = async () => {
+    if (!data.memberId) {
+      toast.error('Member ID missing');
+      return;
+    }
     setPreparing(true);
     try {
-      const { dataUrl, signedAt } = await resolveSignature();
-      const { blob } = await buildAgreementBlob(dataUrl, signedAt);
-      printBlob(blob);
+      if (signedAndLocked) {
+        await printAgreement(data.memberId);
+      } else {
+        const { blob } = await previewAgreementBlob(data.memberId, draftPayload());
+        printBlob(blob);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not prepare the agreement');
     } finally {
       setPreparing(false);
     }
   };
 
   const handleDownloadSigned = async () => {
+    if (!data.memberId) return;
     setPreparing(true);
     try {
-      const { dataUrl, signedAt } = await resolveSignature();
-      const { blob } = await buildAgreementBlob(dataUrl, signedAt);
-      downloadBlob(blob, `Membership-Agreement-${data.memberCode}.pdf`);
+      await downloadAgreement(data.memberId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not download the agreement');
     } finally {
       setPreparing(false);
     }
   };
+
+  const handleViewSigned = async () => {
+    if (!data.memberId) return;
+    setPreparing(true);
+    try {
+      await openAgreement(data.memberId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not open the agreement');
+    } finally {
+      setPreparing(false);
+    }
+  };
+
 
 
   return (
@@ -448,10 +392,11 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <FileSignature className="h-5 w-5 text-primary" />
-            Membership Registration Form
+            Membership Registration &amp; Agreement
           </SheetTitle>
-          <SheetDescription>
-            Complete the form below and collect the member's digital signature
+          <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>One document, one digital signature — Parts A to I.</span>
+            <Badge variant="outline" className="font-mono text-[10px] tracking-wide">{agreementRef}</Badge>
           </SheetDescription>
         </SheetHeader>
 
@@ -831,18 +776,9 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 />
               )}
               <div className="flex flex-wrap gap-2 pt-1">
-                {existingSignature.waiver_pdf_path && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      const url = await signAgreementDoc(existingSignature.waiver_pdf_path!, existingSignature.bucket);
-                      if (url) window.open(url, '_blank', 'noopener');
-                    }}
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> View signed agreement
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" onClick={handleViewSigned} disabled={preparing}>
+                  <Eye className="h-3.5 w-3.5 mr-1" /> View signed agreement
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setEditMode(true)}>
                   <Pencil className="h-3.5 w-3.5 mr-1" /> Re-sign
                 </Button>

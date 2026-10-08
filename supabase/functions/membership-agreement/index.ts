@@ -13,7 +13,7 @@
 //   sign     { member_id, ... }       staff only. Stores signature + legal record + PDF.
 //   backfill { limit, dry_run, force } owner/admin only. Regenerates legacy agreements
 //                                     into the unified document (idempotent, batched).
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import {
   canActOnBranch,
@@ -323,13 +323,12 @@ async function renderAndStore(
 ): Promise<{ path: string; bytes: number; hadSignature: boolean }> {
   if (!b.sigRow) throw new Error("no_signature_record");
   const sigBytes = await loadSignatureBytes(admin, b.member.id, b.sigRow);
+  // A signed record without a recoverable signature image is still a signed
+  // record — the renderer prints a "signed digitally" block, never a draft.
   const input = await buildRenderInput(admin, b, {
     signature: { pngBytes: sigBytes, signedAt: b.sigRow.signed_at, ip: b.sigRow.signer_ip },
   });
-  // A signed record without a recoverable signature image is still a signed
-  // record — never print it as a draft. Render the typed signature line instead.
-  if (!sigBytes) input.signature = { pngBytes: null, signedAt: b.sigRow.signed_at, ip: b.sigRow.signer_ip };
-  const pdf = await renderMembershipAgreementPdf({ ...input, signature: input.signature, generatedAt: new Date() });
+  const pdf = await renderMembershipAgreementPdf({ ...input, generatedAt: new Date() });
 
   const path = canonicalPath(b.member.id);
   const { error: upErr } = await admin.storage
@@ -546,7 +545,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
   }
   if (Object.keys(memberUpdates).length) {
     const { error } = await caller.admin.from("members").update(memberUpdates).eq("id", memberId);
-    if (error) await captureEdgeError(FN, error, { route: "sign_member_update", member_id: memberId });
+    if (error) await captureEdgeError(FN, error, { route: "sign_member_update", context: { member_id: memberId } });
   }
   if (b.member.user_id) {
     const profileUpdates: Record<string, string> = {};
@@ -558,7 +557,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     }
     if (Object.keys(profileUpdates).length) {
       const { error } = await caller.admin.from("profiles").update(profileUpdates).eq("id", b.member.user_id);
-      if (error) await captureEdgeError(FN, error, { route: "sign_profile_update", member_id: memberId });
+      if (error) await captureEdgeError(FN, error, { route: "sign_profile_update", context: { member_id: memberId } });
     }
   }
 
@@ -569,7 +568,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     .from(BUCKET)
     .upload(sigPath, signatureBytes, { contentType: "image/png", upsert: true });
   if (sigUpErr) {
-    await captureEdgeError(FN, sigUpErr, { route: "sign_sig_upload", member_id: memberId });
+    await captureEdgeError(FN, sigUpErr, { route: "sign_sig_upload", context: { member_id: memberId } });
     return json(500, { error: "signature_upload_failed" });
   }
 
@@ -595,7 +594,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     .select("id")
     .single();
   if (rowErr || !row) {
-    await captureEdgeError(FN, rowErr, { route: "sign_row_insert", member_id: memberId });
+    await captureEdgeError(FN, rowErr, { route: "sign_row_insert", context: { member_id: memberId } });
     return json(500, { error: "signature_record_failed" });
   }
 
@@ -605,7 +604,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
   try {
     await renderAndStore(caller.admin, fresh, "sign", caller.userId);
   } catch (e) {
-    await captureEdgeError(FN, e, { route: "sign_render", member_id: memberId });
+    await captureEdgeError(FN, e, { route: "sign_render", context: { member_id: memberId } });
     return json(500, { error: "agreement_render_failed", detail: (e as Error).message });
   }
   const path = canonicalPath(memberId);
@@ -652,7 +651,7 @@ async function handleBackfill(req: Request, body: Record<string, unknown>): Prom
         const out = await renderAndStore(caller.admin, b, "backfill", caller.userId);
         results.push({ member_id: r.member_id, code: b.member.member_code, status: "done", bytes: out.bytes, signature: out.hadSignature });
       } catch (e) {
-        await captureEdgeError(FN, e, { route: "backfill_member", member_id: r.member_id });
+        await captureEdgeError(FN, e, { route: "backfill_member", context: { member_id: r.member_id } });
         results.push({ member_id: r.member_id, status: "error", error: (e as Error).message });
       }
     }
@@ -691,7 +690,3 @@ Deno.serve(async (req) => {
     return json(500, { error: "internal_error", detail: (e as Error)?.message ?? String(e) });
   }
 });
-
-// Keep the type import referenced for editors that tree-shake unused imports.
-export type { SupabaseClient };
-void createClient;
