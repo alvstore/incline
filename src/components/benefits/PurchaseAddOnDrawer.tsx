@@ -16,7 +16,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { useTrainers } from '@/hooks/useTrainers';
+import { useAuth } from '@/contexts/AuthContext';
+import { createTask } from '@/services/taskService';
 import { initializePayment, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/paymentService';
+
+type PtPurchaseResult = { success?: boolean; error?: string; code?: string };
 
 
 interface PurchaseAddOnDrawerProps {
