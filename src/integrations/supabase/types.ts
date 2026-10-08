@@ -15503,6 +15503,8 @@ export type Database = {
           m_start: string
         }[]
       }
+      _tmp_ctx_probe: { Args: never; Returns: Json }
+      _tmp_ctx_probe_outer: { Args: never; Returns: Json }
       abandon_online_addon_invoice: {
         Args: { _invoice_id: string }
         Returns: Json
