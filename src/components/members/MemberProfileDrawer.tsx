@@ -37,7 +37,6 @@ import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { differenceInDays, format } from 'date-fns';
 import { daysRemaining } from '@/lib/memberships/duration';
 import { toast } from 'sonner';
-import { signMemberDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
 import { UnfreezeMembershipDrawer } from './UnfreezeMembershipDrawer';
 import { AssignTrainerDrawer } from './AssignTrainerDrawer';

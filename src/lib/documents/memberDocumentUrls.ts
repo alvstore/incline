@@ -1,6 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 
 const DOCUMENT_BUCKET = 'documents';
+/** The ONE Membership Registration & Agreement per member lives here (see `membership-agreement` edge fn). */
+const AGREEMENT_BUCKET = 'member-onboarding';
+const AGREEMENT_FILE = 'membership-agreement.pdf';
 const SIGNED_URL_TTL_SECONDS = 60 * 30;
 
 export interface MemberDocumentLike {
@@ -8,6 +11,16 @@ export interface MemberDocumentLike {
   storage_path?: string | null;
   file_url?: string | null;
   file_name?: string | null;
+  document_type?: string | null;
+}
+
+/** True for the canonical signed agreement — managed by the agreement flow, never deleted from the vault. */
+export function isMembershipAgreementDocument(document: MemberDocumentLike): boolean {
+  return Boolean(document.storage_path && document.storage_path.endsWith(`/${AGREEMENT_FILE}`));
+}
+
+export function bucketForMemberDocument(document: MemberDocumentLike): string {
+  return isMembershipAgreementDocument(document) ? AGREEMENT_BUCKET : DOCUMENT_BUCKET;
 }
 
 function normalizeSignedUrl(url: string) {
@@ -19,7 +32,7 @@ function normalizeSignedUrl(url: string) {
 export async function resolveMemberDocumentUrl(document: MemberDocumentLike) {
   if (document.storage_path) {
     const { data, error } = await supabase.storage
-      .from(DOCUMENT_BUCKET)
+      .from(bucketForMemberDocument(document))
       .createSignedUrl(document.storage_path, SIGNED_URL_TTL_SECONDS);
 
     if (!error && data?.signedUrl) {
