@@ -1,9 +1,10 @@
-// v2.1.0 — Convenience fee quoted at gateway only (invoice never mutated). Hardened payment order creation with branch-then-global gateway lookup.
+// v2.2.0 — Convenience fee quoted at gateway only (invoice never mutated). Hardened payment order creation with branch-then-global gateway lookup.
 // Returns enough data for embedded checkout (Razorpay Standard Checkout modal /
 // PhonePe IFRAME PayPage). Records the canonical payment_transactions row with
 // source='order' so payment-webhook can match and settle it idempotently.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
@@ -63,6 +64,23 @@ serve(async (req) => {
 
     if (invoiceError || !invoice) {
       return jsonResponse({ error: "Invoice not found", code: "INVOICE_NOT_FOUND" }, 404);
+    }
+
+    // Caller authority: branch staff/internal, or the member who owns the invoice.
+    {
+      const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff"] });
+      let allowed = caller.ok && (await canActOnBranch(caller, invoice.branch_id));
+      if (!caller.ok) {
+        const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        const { data: ures } = tok ? await supabase.auth.getUser(tok) : { data: null as any };
+        const uid = ures?.user?.id;
+        if (uid && invoice.member_id) {
+          const { data: m } = await supabase.from("members").select("user_id").eq("id", invoice.member_id).maybeSingle();
+          allowed = m?.user_id === uid;
+        }
+      }
+      if (!allowed) return jsonResponse({ error: "Forbidden", code: "FORBIDDEN" }, 403);
+      if (invoice.branch_id !== branchId) return jsonResponse({ error: "Branch mismatch", code: "BRANCH_MISMATCH" }, 400);
     }
 
     const amountDue = Number(invoice.total_amount) - Number(invoice.amount_paid || 0);
