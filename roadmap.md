@@ -28,3 +28,11 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [ ] Google Business Profile OAuth expired — owner must reconnect under Settings → Integrations
 - [ ] Live checks pending: first October payroll settlement; one small real purchase as Mohit Gurjar
 - [ ] TanStack Start migration: deferred — prepare browser-only 3D/PDF modules with dynamic imports first (see audit)
+
+## Membership agreement — one renderer, one document (8 Oct 2026)
+- [ ] Server-side canonical agreement PDF renderer (`_shared/membershipAgreementPdf.ts`): header "THE INCLINE LIFE BY INCLINE · MEMBERSHIP REGISTRATION & AGREEMENT · <Branch> | AGR-<code> | signed date", no version label
+- [ ] `membership-agreement` edge fn: render (view/print/download), sign (staff drawer), backfill (owner)
+- [ ] register-member uses the shared renderer
+- [ ] Staff drawer + profile drawer + member profile: single "View signed agreement", no old waiver link, no client-side jsPDF agreement
+- [ ] Backfill all 182 signed members to the unified agreement PDF (terms_version unified, legacy kept in audit fields)
+- [ ] Verify as staff + member; update memory
