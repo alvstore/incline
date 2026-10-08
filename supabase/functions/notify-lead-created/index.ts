@@ -201,6 +201,10 @@ Deno.serve(async (req) => {
     };
     const render = (tpl: string): string =>
       String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => vars[k] ?? "");
+    // HTML-safe variant for email bodies: visitor-supplied values are escaped.
+    const escHtml = (v: string) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const renderHtml = (tpl: string): string =>
+      String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => escHtml(vars[k] ?? ""));
 
     // Auto-render a rich HTML email body when the configured body is blank,
     // so admins/managers never receive a context-less alert.
@@ -343,7 +347,7 @@ Deno.serve(async (req) => {
         category: "transactional",
         recipient: lead.email,
         subject: render(rules.lead_welcome_email_subject || "Welcome to {{branch_name}}"),
-        body: render(rules.lead_welcome_email_body || ""),
+        body: renderHtml(rules.lead_welcome_email_body || ""),
         dedupe_suffix: `welcome:${lead.email}`,
       });
     }
@@ -357,7 +361,7 @@ Deno.serve(async (req) => {
     ).replace(/\s+—\s+$/, "").replace(/:\s+—/, ":");
     const configuredEmailBody = (rules.team_alert_email_body || "").trim();
     const teamAlertEmailBody = configuredEmailBody
-      ? render(configuredEmailBody)
+      ? renderHtml(configuredEmailBody)
       : buildAutoEmailBody();
 
     const sendTeamBundle = async (
