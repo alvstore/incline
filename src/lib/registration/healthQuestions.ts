@@ -1,19 +1,12 @@
 import { Flame, Trophy, Activity, Heart, type LucideIcon } from "lucide-react";
+import { AGREEMENT_PARQ_QUESTIONS } from "./agreement";
 
 /**
  * Canonical PAR-Q (Physical Activity Readiness Questionnaire) — 7 questions.
- * Used by both the public self-onboarding flow (/register) and the staff
- * Member Registration drawer. DO NOT fork this list.
+ * Owned by the agreement spec (Part C) so the server-side PDF renderer prints
+ * exactly the questions the forms asked. DO NOT fork this list.
  */
-export const PARQ_QUESTIONS: readonly string[] = [
-  "Has a doctor ever said you have a heart condition?",
-  "Do you feel chest pain when you do physical activity?",
-  "Have you had chest pain when not doing physical activity in the last month?",
-  "Do you lose balance because of dizziness or lose consciousness?",
-  "Do you have a bone or joint problem worsened by exercise?",
-  "Are you currently on prescribed medication for blood pressure or heart?",
-  "Do you know any other reason you should not do physical activity?",
-] as const;
+export const PARQ_QUESTIONS: readonly string[] = AGREEMENT_PARQ_QUESTIONS;
 
 export const PRIMARY_GOALS: readonly { key: string; icon: LucideIcon }[] = [
   { key: "Weight Loss", icon: Flame },

@@ -5,18 +5,62 @@
  * registration form, waiver, terms sheet, health declaration, PAR-Q form or
  * consent form — every one of those is a Part of this agreement.
  *
- * Rendered identically by:
- *  - `/register` (public self-onboarding)  → `register-member` edge function PDF
- *  - Staff "Membership Registration & Agreement" drawer → `buildMembershipAgreementPdf`
+ * Rendered by ONE renderer only — `supabase/functions/_shared/membershipAgreementPdf.ts`
+ * (server-side), used by:
+ *  - `/register` (public self-onboarding)  → `register-member` edge function
+ *  - Staff drawer sign / print / download   → `membership-agreement` edge function
+ *  - Backfill / regenerate                  → `membership-agreement` edge function
+ * The browser never builds this document itself, so every copy — stored,
+ * printed, downloaded — is byte-for-byte the same design.
  *
  * Mirrored at `supabase/functions/_shared/agreement.ts` — keep both in sync.
  * Bump `AGREEMENT_VERSION` whenever a clause changes; the version is stored
- * with every signature so we can prove which revision a member accepted.
+ * with every signature so we can prove which revision a member accepted. It is
+ * recorded in the database and PDF metadata only — never printed as visible
+ * branding on the document.
  */
 
 export const AGREEMENT_VERSION = '2026.09-incline-unified-v1';
 
+/** Legal brand line printed at the top of every agreement. */
+export const AGREEMENT_LEGAL_NAME = 'THE INCLINE LIFE BY INCLINE';
+
 export const AGREEMENT_TITLE = 'MEMBERSHIP REGISTRATION & AGREEMENT';
+
+/** Human reference printed on the document: `AGR-<member code>` (e.g. AGR-INC-26-0200). */
+export function agreementReference(memberCode: string | null | undefined, fallbackId?: string | null): string {
+  const code = (memberCode || '').trim();
+  if (code) return `AGR-${code}`;
+  return `AGR-${(fallbackId || '').replace(/-/g, '').slice(0, 8).toUpperCase() || 'PENDING'}`;
+}
+
+/**
+ * Canonical PAR-Q (Physical Activity Readiness Questionnaire) — 7 questions,
+ * printed in Part C. `src/lib/registration/healthQuestions.ts` re-exports this
+ * list for the forms; DO NOT fork it.
+ */
+export const AGREEMENT_PARQ_QUESTIONS: readonly string[] = [
+  'Has a doctor ever said you have a heart condition?',
+  'Do you feel chest pain when you do physical activity?',
+  'Have you had chest pain when not doing physical activity in the last month?',
+  'Do you lose balance because of dizziness or lose consciousness?',
+  'Do you have a bone or joint problem worsened by exercise?',
+  'Are you currently on prescribed medication for blood pressure or heart?',
+  'Do you know any other reason you should not do physical activity?',
+] as const;
+
+/**
+ * Normalise a stored PAR-Q snapshot (keyed either by question text or by
+ * `q0..q6`) into a question → 'yes' | 'no' map in canonical order.
+ */
+export function normaliseParq(raw: Record<string, unknown> | null | undefined): Record<string, 'yes' | 'no'> {
+  const out: Record<string, 'yes' | 'no'> = {};
+  AGREEMENT_PARQ_QUESTIONS.forEach((q, i) => {
+    const v = raw?.[q] ?? raw?.[`q${i}`];
+    out[q] = v === 'yes' || v === true || v === 'true' ? 'yes' : 'no';
+  });
+  return out;
+}
 
 export const FINAL_DECLARATION =
   'I confirm that I have read and understood this Membership Registration & Agreement in its entirety, ' +
