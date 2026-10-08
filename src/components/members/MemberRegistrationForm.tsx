@@ -259,6 +259,14 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
   };
 
   const missingAcks = REQUIRED_ACKNOWLEDGEMENT_KEYS.filter((k) => acks[k] !== true);
+  const acceptedRequired = REQUIRED_ACKNOWLEDGEMENT_KEYS.length - missingAcks.length;
+  const acksReadOnly = Boolean(existingSignature) && !editMode;
+  const acceptAllMandatory = () =>
+    setAcks((prev) => {
+      const next = { ...prev };
+      REQUIRED_ACKNOWLEDGEMENT_KEYS.forEach((k) => { next[k] = true; });
+      return next;
+    });
 
   const buildAgreementBlob = async (signatureDataUrl: string | null, signedAt: string) => {
     const parqMap: Record<string, string> = {};
@@ -666,40 +674,136 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           {/* Acknowledgements — one signature, multiple acknowledgements */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-              <Label className="font-semibold">{partTitle('I')} — Acknowledgements</Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              One signature covers the whole agreement. Tick each acknowledgement below — mandatory ones are required.
-            </p>
-            {AGREEMENT_PARTS.filter((p) => acknowledgementsForPart(p.id).length).map((p) => (
-              <div key={p.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {partTitle(p.id)}
-                </p>
-                {acknowledgementsForPart(p.id).map((a) => (
-                  <label key={a.key} className="flex items-start gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={acks[a.key] === true}
-                      onCheckedChange={(v) => setAcks((prev) => ({ ...prev, [a.key]: v === true }))}
-                      className="mt-0.5"
-                      aria-label={a.label}
-                    />
-                    <span className="text-xs leading-relaxed text-foreground">
-                      {a.label}
-                      {a.required && <span className="text-destructive"> *</span>}
-                    </span>
-                  </label>
-                ))}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-primary" />
+                <Label className="font-semibold">{partTitle('I')} — Acknowledgements</Label>
               </div>
-            ))}
-            <p className="text-xs italic text-muted-foreground">{FINAL_DECLARATION}</p>
-            {missingAcks.length > 0 && (
-              <p className="text-xs font-medium text-destructive">
-                {missingAcks.length} mandatory acknowledgement{missingAcks.length > 1 ? 's' : ''} pending.
-              </p>
+              {acksReadOnly ? (
+                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/10">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> All mandatory accepted
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className={
+                    missingAcks.length
+                      ? 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                      : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                  }
+                >
+                  {acceptedRequired}/{REQUIRED_ACKNOWLEDGEMENT_KEYS.length} mandatory accepted
+                </Badge>
+              )}
+            </div>
+
+            {acksReadOnly ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Every mandatory acknowledgement is a condition of membership and is covered by the member&apos;s
+                  single digital signature
+                  {existingSignature?.signed_at
+                    ? ` on ${format(new Date(existingSignature.signed_at), 'dd MMM yyyy')}`
+                    : ''}
+                  . Use <span className="font-medium text-foreground">Re-sign</span> below to collect a fresh signature.
+                </p>
+                <div className="rounded-xl border border-border bg-card divide-y divide-border">
+                  {AGREEMENT_ACKNOWLEDGEMENTS.map((a) => {
+                    const accepted = acks[a.key] === true;
+                    return (
+                      <div key={a.key} className="flex items-start gap-3 px-3 py-2.5">
+                        {accepted ? (
+                          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" aria-hidden />
+                        ) : (
+                          <MinusCircle className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground/60" aria-hidden />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-foreground">
+                              {a.short}
+                              <span className="ml-1.5 font-normal text-muted-foreground">· Part {a.part}</span>
+                            </p>
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                accepted
+                                  ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                  : 'bg-muted text-muted-foreground border border-border'
+                              }`}
+                            >
+                              {accepted ? 'Accepted' : a.required ? 'Pending' : 'Not given'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">{a.label}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {existingSignature?.backfilled && (
+                  <p className="text-[11px] text-muted-foreground">
+                    This member signed on an earlier version of the form; the mandatory acknowledgements were confirmed
+                    from that signature and will print as accepted.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <p className="text-xs text-muted-foreground">
+                    One signature covers the whole agreement. Every acknowledgement marked
+                    <span className="text-destructive"> *</span> is a mandatory condition of membership.
+                  </p>
+                  {missingAcks.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={acceptAllMandatory}>
+                      <ListChecks className="h-3.5 w-3.5 mr-1.5" /> Accept all mandatory
+                    </Button>
+                  )}
+                </div>
+                {AGREEMENT_PARTS.filter((p) => acknowledgementsForPart(p.id).length).map((p) => (
+                  <div key={p.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {partTitle(p.id)}
+                    </p>
+                    {acknowledgementsForPart(p.id).map((a) => {
+                      const accepted = acks[a.key] === true;
+                      return (
+                        <label
+                          key={a.key}
+                          className={`flex items-start gap-2 rounded-lg px-2 py-1.5 -mx-2 cursor-pointer transition-colors duration-150 hover:bg-secondary ${
+                            a.required && !accepted ? 'bg-amber-500/5' : ''
+                          }`}
+                        >
+                          <Checkbox
+                            checked={accepted}
+                            onCheckedChange={(v) => setAcks((prev) => ({ ...prev, [a.key]: v === true }))}
+                            className="mt-0.5"
+                            aria-label={a.label}
+                          />
+                          <span className="text-xs leading-relaxed text-foreground">
+                            {a.label}
+                            {a.required ? (
+                              <span className="text-destructive"> *</span>
+                            ) : (
+                              <span className="ml-1 text-muted-foreground">(optional)</span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
+                {missingAcks.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+                    <p>
+                      {missingAcks.length} mandatory acknowledgement{missingAcks.length > 1 ? 's' : ''} pending — the
+                      agreement cannot be signed until every mandatory box is ticked.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
+            <p className="text-xs italic text-muted-foreground">{FINAL_DECLARATION}</p>
           </div>
 
 
