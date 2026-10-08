@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/csvSafe';
 import { AppLayout } from '@/components/layout/AppLayout';
 
 
@@ -322,7 +323,7 @@ export default function PaymentsPage() {
   const hasActiveFilters = searchTerm || methodFilter !== 'all' || statusFilter !== 'all' || dateRange;
 
   const downloadCsv = (headers: string[], rows: (string | number)[][], name: string) => {
-    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => csvCell(c, true)).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `${name}-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();

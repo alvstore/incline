@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/csvSafe';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -39,8 +40,7 @@ function statusPill(status: string) {
 
 function csvEscape(v: any): string {
   if (v === null || v === undefined) return '';
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return csvCell(v);
 }
 
 function downloadCsv(name: string, rows: CampaignRecipientRow[]) {

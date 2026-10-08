@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/csvSafe';
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -289,7 +290,7 @@ export default function FinancePage() {
     const headers = ['Type', 'Date', 'Description', 'Category', 'Amount'];
     const csv = [
       headers.join(','),
-      ...allRows.map(r => headers.map(h => `"${r[h as keyof typeof r]}"`).join(',')),
+      ...allRows.map(r => headers.map(h => csvCell(r[h as keyof typeof r], true)).join(',')),
       '',
       `"Net Profit","","","","${netProfit}"`,
     ].join('\n');

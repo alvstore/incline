@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/csvSafe';
 import { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -181,7 +182,7 @@ export default function AuditLogsPage() {
       log.action_description || '',
       log.record_id || '',
     ]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => csvCell(v, true)).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
