@@ -56,6 +56,9 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
       setSettlement('leave_due');
       setLineDesc('');
     }
+    // Deliberately re-initialise only when a *different* invoice is opened,
+    // not on every re-render of the `invoice` prop object (e.g. parent refetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, invoice?.id]);
 
   const totalNum = Number(total) || 0;

@@ -61,7 +61,7 @@ export function WorkoutPlanViewer({
     () => normalizeWorkoutPlan(rotated.data, { offsetDays: offset }),
     [rotated.data, offset],
   );
-  const days: WorkoutDay[] = plan?.days ?? [];
+  const days: WorkoutDay[] = useMemo(() => plan?.days ?? [], [plan]);
 
   const nextSwitchIn = daysUntilNextVariant({
     intervalDays: rotationIntervalDays,

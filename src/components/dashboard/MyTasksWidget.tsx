@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -112,14 +112,19 @@ export function MyTasksWidget({ branchFilter, className }: Props) {
     },
   });
 
-  const tasks = data || [];
+  const tasks = useMemo(() => data || [], [data]);
   const { startISO, endISO } = getISTDayRange();
   const todayKey = startISO.slice(0, 10);
   const endKey = endISO.slice(0, 10);
 
-  const isDueToday = (t: any) => !!t.due_date && t.due_date >= todayKey && t.due_date <= endKey;
-  const isOverdue = (t: any) =>
-    !!t.due_date && new Date(t.due_date).getTime() < new Date(startISO).getTime();
+  const isDueToday = useCallback(
+    (t: any) => !!t.due_date && t.due_date >= todayKey && t.due_date <= endKey,
+    [todayKey, endKey],
+  );
+  const isOverdue = useCallback(
+    (t: any) => !!t.due_date && new Date(t.due_date).getTime() < new Date(startISO).getTime(),
+    [startISO],
+  );
 
   const dueToday = tasks.filter(isDueToday).length;
   const overdue = tasks.filter(isOverdue).length;
@@ -136,7 +141,7 @@ export function MyTasksWidget({ branchFilter, className }: Props) {
       default:
         return tasks;
     }
-  }, [tasks, filter, todayKey, endKey, startISO]);
+  }, [tasks, filter, isDueToday, isOverdue]);
 
   const filters: { key: FilterKey; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: tasks.length },

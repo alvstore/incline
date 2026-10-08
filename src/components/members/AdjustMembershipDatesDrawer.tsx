@@ -38,6 +38,9 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
       setEndDate(membership.end_date?.slice(0, 10) ?? '');
       setReason('');
     }
+    // Deliberately re-initialise only when a *different* membership is opened,
+    // not on every re-render of the `membership` prop object (e.g. parent refetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, membership?.id]);
 
   const baseEnd = membership?.original_end_date || membership?.end_date || '';
@@ -48,7 +51,7 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
     const shift = membership ? differenceInCalendarDays(new Date(startDate), new Date(membership.start_date)) : 0;
     const shiftedBase = baseEnd ? differenceInCalendarDays(new Date(endDate), new Date(baseEnd)) - shift : 0;
     return { lengthDays: len, extraDays: shiftedBase };
-  }, [startDate, endDate, baseEnd, membership?.start_date]);
+  }, [startDate, endDate, baseEnd, membership]);
 
   const mutation = useMutation({
     mutationFn: async () => {

@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return /load failed|failed to fetch|network|aborted/i.test(String(error.message || ''));
   };
 
-  const withRetry = async <T,>(
+  const withRetry = useCallback(async <T,>(
     label: string,
     run: () => Promise<{ data: T | null; error: any }>,
   ): Promise<T | null> => {
@@ -100,9 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await new Promise((r) => setTimeout(r, delays[attempt]));
     }
     return null;
-  };
+  }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
     const data = await withRetry<UserProfile>('Error fetching profile', () =>
       supabase
         .from('profiles')
@@ -111,9 +111,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single() as any,
     );
     return data;
-  };
+  }, [withRetry]);
 
-  const fetchRoles = async (userId: string) => {
+  const fetchRoles = useCallback(async (userId: string) => {
     const data = await withRetry<{ role: AppRole }[]>('Error fetching roles', () =>
       supabase
         .from('user_roles')
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', userId) as any,
     );
     return (data || []).map((r) => ({ role: r.role as AppRole }));
-  };
+  }, [withRetry]);
 
 
   const refreshProfile = async () => {
@@ -279,7 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
       clearTimeout(safetyTimeout);
     };
-  }, []);
+  }, [fetchProfile, fetchRoles]);
 
   // Offboarded staff / trainers must never reach the dashboard, even if a
   // stale session survives. People who are also members keep member access.
@@ -330,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [user?.id]);
+  }, [user?.id, fetchProfile]);
 
   const signInWithOtp = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({ email });

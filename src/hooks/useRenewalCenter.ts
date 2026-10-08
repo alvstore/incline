@@ -104,7 +104,6 @@ export function useRenewalQueueCounts(branchId: string | undefined) {
   return useQuery({
     queryKey: ['renewal-queue-counts', branchId ?? 'all'],
     queryFn: async (): Promise<RenewalQueueCounts> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any).rpc('renewal_queue_counts', {
         _branch_id: branchId ?? undefined,
       });
@@ -133,7 +132,6 @@ export function useRenewalCaseVoiceCalls(caseId: string | null | undefined) {
     queryKey: ['renewal-case-voice-calls', caseId],
     enabled: Boolean(caseId),
     queryFn: async (): Promise<RenewalVoiceCall[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any).rpc('renewal_case_voice_calls', { _case_id: caseId });
       if (error) throw error;
       return (data ?? []) as RenewalVoiceCall[];
@@ -163,7 +161,6 @@ export function useRenewalVoiceCall() {
       const res = (data ?? {}) as { ok?: boolean; error?: string; call_record_id?: string };
       if (res.ok === false) throw new Error(res.error || 'Voice AI could not start the call');
       if (res.call_record_id) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: linkError } = await (supabase as any).rpc('renewal_link_voice_call', {
           _case_id: input.caseId,
           _attempt_id: res.call_record_id,

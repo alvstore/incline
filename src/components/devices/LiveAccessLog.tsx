@@ -301,7 +301,6 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
     mutationFn: async (profileId: string) => {
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
       // staff_attendance has no `date` column — the day is derived from check_in (IST).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: existing, error: fetchErr } = await (supabase.from("staff_attendance") as any)
         .select("id, check_out")
         .eq("user_id", profileId)
