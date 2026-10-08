@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { format } from 'date-fns';
-import { buildMembershipAgreementPdf, printBlob } from '@/utils/pdfBlob';
+import { buildMembershipAgreementPdf, printBlob, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
 import {
   AGREEMENT_PARTS,
@@ -367,10 +367,57 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     }
   };
 
+  // Resolve the ONE signature for the combined agreement: a fresh canvas
+  // signature wins; otherwise reuse the member's stored digital signature
+  // (e.g. from /register) together with its original signed date.
+  const resolveSignature = async (): Promise<{ dataUrl: string | null; signedAt: string }> => {
+    if (hasSigned && canvasRef.current) {
+      return { dataUrl: canvasRef.current.toDataURL('image/png'), signedAt: new Date().toISOString() };
+    }
+    const signedAt = existingSignature?.signed_at ?? new Date().toISOString();
+    const sigPath = existingSignature?.signature_path;
+    if (!sigPath || sigPath.toLowerCase().endsWith('.pdf')) return { dataUrl: null, signedAt };
+    try {
+      const url = signatureUrl ?? (await signAgreementDoc(sigPath, existingSignature!.bucket));
+      if (!url) return { dataUrl: null, signedAt };
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`signature fetch ${res.status}`);
+      const imgBlob = await res.blob();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(imgBlob);
+      });
+      return { dataUrl, signedAt };
+    } catch (e) {
+      console.warn('[RegistrationForm] could not load stored signature', e);
+      toast.error('Could not load the stored signature');
+      return { dataUrl: null, signedAt };
+    }
+  };
+
+  const [preparing, setPreparing] = useState(false);
   const handlePrint = async () => {
-    const signatureDataUrl = hasSigned ? canvasRef.current?.toDataURL('image/png') ?? null : null;
-    const { blob } = await buildAgreementBlob(signatureDataUrl, new Date().toISOString());
-    printBlob(blob);
+    setPreparing(true);
+    try {
+      const { dataUrl, signedAt } = await resolveSignature();
+      const { blob } = await buildAgreementBlob(dataUrl, signedAt);
+      printBlob(blob);
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const handleDownloadSigned = async () => {
+    setPreparing(true);
+    try {
+      const { dataUrl, signedAt } = await resolveSignature();
+      const { blob } = await buildAgreementBlob(dataUrl, signedAt);
+      downloadBlob(blob, `Membership-Agreement-${data.memberCode}.pdf`);
+    } finally {
+      setPreparing(false);
+    }
   };
 
 
@@ -721,19 +768,15 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           {/* Actions */}
           <div className="flex gap-3 pt-2 pb-4">
-            <Button variant="outline" className="flex-1" onClick={handlePrint}>
-              <Printer className="h-4 w-4 mr-2" /> Print
+            <Button variant="outline" className="flex-1" onClick={handlePrint} disabled={preparing}>
+              <Printer className="h-4 w-4 mr-2" /> {preparing ? 'Preparing…' : 'Print'}
             </Button>
             {existingSignature && !editMode ? (
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={async () => {
-                  const path = existingSignature.waiver_pdf_path || existingSignature.signature_path;
-                  if (!path) return;
-                  const url = await signAgreementDoc(path, existingSignature.bucket);
-                  if (url) window.open(url, '_blank', 'noopener');
-                }}
+                disabled={preparing}
+                onClick={handleDownloadSigned}
               >
                 <Download className="h-4 w-4 mr-2" /> Download signed copy
               </Button>
