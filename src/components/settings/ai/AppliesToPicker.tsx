@@ -22,7 +22,7 @@ interface Props {
 export function AppliesToPicker({ value, onChange }: Props) {
   const { data: registry = [], isLoading } = useAiPurposes();
 
-  const selected = value.length ? value : ['all'];
+  const selected = useMemo(() => (value.length ? value : ['all']), [value]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const knownKeys = useMemo(() => new Set(registry.map((p) => p.key)), [registry]);

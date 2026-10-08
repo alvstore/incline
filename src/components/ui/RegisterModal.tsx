@@ -14,7 +14,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { CheckCircle, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
-import { CommConsentCheckbox, buildConsentPayload } from "@/components/consent/CommConsentCheckbox";
+import { CommConsentCheckbox } from "@/components/consent/CommConsentCheckbox";
+import { buildConsentPayload } from "@/components/consent/commConsent.constants";
 import { getFirstTouch, captureFirstTouch } from "@/lib/leads/firstTouch";
 
 const leadSchema = z.object({

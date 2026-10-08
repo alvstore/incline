@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ExternalLink, FileText } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { isDocumentUrl } from './chatMessageBodyUtils';
 
 export interface ChatMessageBodyProps {
   content: string;
@@ -14,24 +15,6 @@ interface DocLink {
 }
 
 const URL_RE = /https?:\/\/[^\s<>"')]+/gi;
-
-/** True when a URL points to a document (short doc link or PDF in storage). */
-export function isDocumentUrl(url: string): boolean {
-  if (/\/functions\/v1\/doc\?c=/i.test(url)) return true;
-  if (/\/storage\/v1\/object\//i.test(url) && /\.pdf/i.test(url)) return true;
-  if (/\.pdf(\?|$)/i.test(url)) return true;
-  // Signed storage links hide the path inside the JWT payload.
-  const token = url.match(/[?&]token=([^&]+)/)?.[1];
-  if (token && /\/storage\/v1\/object\/sign\//i.test(url)) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return typeof payload?.url === 'string' && /\.pdf$/i.test(payload.url);
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
 
 function labelFor(url: string, context: string): string {
   const lower = context.toLowerCase();

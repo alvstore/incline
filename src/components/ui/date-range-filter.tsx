@@ -38,9 +38,11 @@ export function DateRangeFilter({ value, onChange, className }: DateRangeFilterP
   );
 
   // Keep the calendar in sync when the range is changed from outside (or cleared)
+  const valueFromTime = value?.from?.getTime();
+  const valueToTime = value?.to?.getTime();
   useEffect(() => {
     setDateRange(value ? { from: value.from, to: value.to } : undefined);
-  }, [value?.from?.getTime(), value?.to?.getTime()]);
+  }, [value, valueFromTime, valueToTime]);
 
   const handlePresetClick = (preset: typeof presets[0]) => {
     const range = preset.getValue();

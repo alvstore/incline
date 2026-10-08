@@ -163,7 +163,6 @@ export interface VoiceFeedFilters {
 }
 
 /** Generic RPC caller — the RPCs are new, so cast through the untyped client. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rpc = (name: string, args: Record<string, unknown>) => (supabase as any).rpc(name, args);
 
 export function useVoiceOpsSummary(branchId?: string | null) {

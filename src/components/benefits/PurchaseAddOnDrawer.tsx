@@ -768,7 +768,7 @@ export function PurchaseAddOnDrawer({
               ) : (
                 <Button
                   onClick={buyPT}
-                  disabled={submitting || !selectedPtPkg || !selectedTrainer}
+                  disabled={submitting || !selectedPtPkg || (!isMember && !selectedTrainer)}
                 >
                   {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                   {isMember ? 'Send request' : 'Confirm Purchase'}

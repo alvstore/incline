@@ -134,7 +134,7 @@ export const EVENT_VARIABLE_ORDER: Record<string, string[]> = {
 
 const KEYWORD_HINTS: Array<[RegExp, string]> = [
   [/\b(hi|hello|hey|dear)\s*$/i, 'member_name'],
-  [/\b(name)\s*[:\-]?\s*$/i, 'member_name'],
+  [/\b(name)\s*[:-]?\s*$/i, 'member_name'],
   [/\b(sauna|steam|ice bath|facility|benefit|recovery)\b/i, 'benefit_name'],
   [/\b(class|session)\b/i, 'class_name'],
   [/\b(trainer|coach)\b/i, 'trainer_name'],

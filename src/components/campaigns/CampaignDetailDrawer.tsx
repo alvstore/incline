@@ -202,7 +202,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
 
       };
     });
-  }, [recipients, logs, campaign?.id]);
+  }, [recipients, logs, campaign]);
 
   const counts = useMemo(() => deriveCampaignDeliveryCounts(merged), [merged]);
 

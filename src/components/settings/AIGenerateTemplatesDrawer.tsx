@@ -152,7 +152,7 @@ export function AIGenerateTemplatesDrawer({
     enabled: open,
   });
 
-  const coveredEvents = coverage?.covered ?? new Set<string>();
+  const coveredEvents = useMemo(() => coverage?.covered ?? new Set<string>(), [coverage]);
   const brokenTemplates = coverage?.broken ?? [];
 
   const channelEvents = useMemo(

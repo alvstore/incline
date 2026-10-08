@@ -33,7 +33,9 @@ export function TodaySessionsPanel({
   onCancel,
   onSchedule,
 }: Props) {
-  const now = new Date();
+  // Re-read the clock whenever the session list refreshes so the today/upcoming split stays current.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessions` is the intended refresh trigger
+  const now = useMemo(() => new Date(), [sessions]);
 
   const { today, upcoming } = useMemo(() => {
     const sorted = [...sessions].sort(
@@ -45,7 +47,6 @@ export function TodaySessionsPanel({
         (s) => !isSameDay(new Date(s.scheduled_at), now) && isAfter(new Date(s.scheduled_at), now),
       ),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, now]);
 
 

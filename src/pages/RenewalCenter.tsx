@@ -151,7 +151,7 @@ export default function RenewalCenter() {
   const engineConfig = useRenewalEngineConfig(branchFilter);
   const engineSave = useSetRenewalEngineConfig();
 
-  const stats = funnel.data ?? {};
+  const stats = useMemo(() => funnel.data ?? {}, [funnel.data]);
   const rows = cases.data ?? [];
   const total = rows[0]?.total_count ?? 0;
   const tabCounts = counts.data ?? {};

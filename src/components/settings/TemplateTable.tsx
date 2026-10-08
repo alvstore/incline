@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -98,7 +98,7 @@ export function TemplateTable({
   const [search, setSearch] = useState('');
   const [alignment, setAlignment] = useState<'all' | 'ready' | 'missing' | 'mismatch' | 'pending'>('all');
 
-  const alignmentState = (t: TemplateRow) => {
+  const alignmentState = useCallback((t: TemplateRow) => {
     if (channel !== 'whatsapp') return 'ready';
     // APPROVED local status but Missing in Meta (stale)
     if (!t.meta_template_name || !t.live_meta_status || t.live_meta_stale || t.live_meta_status === 'PENDING_DELETION') return 'missing';
@@ -107,7 +107,7 @@ export function TemplateTable({
     // Header format mismatch between local config and Meta
     if (t.header_type && t.live_meta_header_type && t.header_type !== t.live_meta_header_type) return 'mismatch';
     return 'ready';
-  };
+  }, [channel]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -118,7 +118,7 @@ export function TemplateTable({
         String(v || '').toLowerCase().includes(q),
       );
     });
-  }, [templates, search, alignment, channel]);
+  }, [templates, search, alignment, alignmentState]);
 
   if (isLoading) {
     return (

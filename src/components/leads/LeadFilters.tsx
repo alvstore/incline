@@ -117,5 +117,4 @@ export function LeadFilterBar({
   );
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export { STATUS_CONFIG, LEAD_STATUSES, TEMP_CONFIG };
