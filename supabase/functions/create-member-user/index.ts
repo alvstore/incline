@@ -138,8 +138,20 @@ Deno.serve(async (req) => {
       console.log('Reusing orphaned auth user:', existingUser.id)
       userId = existingUser.id
 
-      // Update their profile (include avatar if provided)
-      await supabaseAdmin
+      // Never take over an account that is in use: staff/admin accounts and
+      // accounts that have ever signed in keep their password and profile.
+      const { data: existingRoles } = await supabaseAdmin.from('user_roles').select('role').eq('user_id', userId)
+      const hasPrivilegedRole = (existingRoles ?? []).some((r: { role: string }) => r.role !== 'member')
+      if (hasPrivilegedRole) {
+        return new Response(
+          JSON.stringify({ error: 'This email belongs to a staff account. Use a different email for the member.', code: 'email_in_use' }),
+          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      const accountInUse = !!(existingUser as { last_sign_in_at?: string | null }).last_sign_in_at
+
+      // Update their profile (include avatar if provided) — only for never-used accounts
+      if (!accountInUse) await supabaseAdmin
         .from('profiles')
         .update({
           full_name: fullName,
@@ -163,7 +175,7 @@ Deno.serve(async (req) => {
         )
 
       // If admin supplied a password, reset it on the orphan auth user too
-      if (suppliedPassword) {
+      if (suppliedPassword && !accountInUse) {
         await supabaseAdmin.auth.admin.updateUserById(userId, { password: suppliedPassword })
         createdTempPassword = suppliedPassword
       }
