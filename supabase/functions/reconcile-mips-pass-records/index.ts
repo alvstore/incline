@@ -663,7 +663,7 @@ Deno.serve(async (req) => {
         message,
         captured_at: scanTime,
         payload: {
-          ...record,
+          ...stripScanMedia(record).payload,
           source: "mips_record_reconcile",
           mips_record_id: recordKey,
           person_no: personNo,
