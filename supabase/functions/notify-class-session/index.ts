@@ -1,4 +1,4 @@
-// notify-class-session v1.0.1
+// notify-class-session v1.1.0
 // v1.0.1: member deep-link → /book (member booking route); dispatcher provenance fields.
 // Tells booked members when a class session is cancelled or changed (trainer /
 // time / venue). Everything goes through the canonical `dispatch-communication`
@@ -113,6 +113,13 @@ Deno.serve(async (req) => {
 
     // ---- recipients ---------------------------------------------------------
     let memberIds: string[] = explicitMembers ?? [];
+    // v1.1.0 — explicit recipients must actually be booked on this class.
+    if (memberIds.length) {
+      const { data: bk } = await admin.from("class_bookings").select("member_id").eq("class_id", classId).in("member_id", memberIds);
+      const okIds = new Set((bk ?? []).map((r) => r.member_id));
+      memberIds = memberIds.filter((m) => okIds.has(m));
+      if (memberIds.length === 0) return json({ success: false, error: "Selected members are not booked on this class" }, 400);
+    }
     if (memberIds.length === 0) {
       if (event === "session_cancelled") {
         const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
