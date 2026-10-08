@@ -546,7 +546,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
   }
   if (Object.keys(memberUpdates).length) {
     const { error } = await caller.admin.from("members").update(memberUpdates).eq("id", memberId);
-    if (error) await captureEdgeError(FN, error, { route: "sign_member_update", member_id: memberId });
+    if (error) await captureEdgeError(FN, error, { route: "sign_member_update", context: { member_id: memberId } });
   }
   if (b.member.user_id) {
     const profileUpdates: Record<string, string> = {};
@@ -558,7 +558,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     }
     if (Object.keys(profileUpdates).length) {
       const { error } = await caller.admin.from("profiles").update(profileUpdates).eq("id", b.member.user_id);
-      if (error) await captureEdgeError(FN, error, { route: "sign_profile_update", member_id: memberId });
+      if (error) await captureEdgeError(FN, error, { route: "sign_profile_update", context: { member_id: memberId } });
     }
   }
 
@@ -569,7 +569,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     .from(BUCKET)
     .upload(sigPath, signatureBytes, { contentType: "image/png", upsert: true });
   if (sigUpErr) {
-    await captureEdgeError(FN, sigUpErr, { route: "sign_sig_upload", member_id: memberId });
+    await captureEdgeError(FN, sigUpErr, { route: "sign_sig_upload", context: { member_id: memberId } });
     return json(500, { error: "signature_upload_failed" });
   }
 
@@ -595,7 +595,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     .select("id")
     .single();
   if (rowErr || !row) {
-    await captureEdgeError(FN, rowErr, { route: "sign_row_insert", member_id: memberId });
+    await captureEdgeError(FN, rowErr, { route: "sign_row_insert", context: { member_id: memberId } });
     return json(500, { error: "signature_record_failed" });
   }
 
@@ -605,7 +605,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
   try {
     await renderAndStore(caller.admin, fresh, "sign", caller.userId);
   } catch (e) {
-    await captureEdgeError(FN, e, { route: "sign_render", member_id: memberId });
+    await captureEdgeError(FN, e, { route: "sign_render", context: { member_id: memberId } });
     return json(500, { error: "agreement_render_failed", detail: (e as Error).message });
   }
   const path = canonicalPath(memberId);
