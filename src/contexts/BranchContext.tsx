@@ -156,11 +156,17 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     if (hasAnyRole(['member']) && !isOwnerOrAdmin && !isManager && !hasAnyRole(['staff', 'trainer']) && memberResolving) return 'loading';
 
     // 5. Assignment Check: If we are fully resolved but have no branches, they are unassigned.
-    // Owners/Admins are never unassigned (they see all).
+    // Owners/Admins are never unassigned (they see all). Each check mirrors the role
+    // precedence of the queries above (manager > staff/trainer > member), so a manager
+    // who also holds the trainer role is judged by the manager lookup only.
     if (!isOwnerOrAdmin) {
-      if (isManager && managerBranches.length === 0) return 'no_branch_assigned';
-      if (hasAnyRole(['staff', 'trainer']) && !staffBranch) return 'no_branch_assigned';
-      if (hasAnyRole(['member']) && !memberBranch && !hasAnyRole(['staff', 'trainer'])) return 'no_branch_assigned';
+      if (isManager) {
+        if (managerBranches.length === 0) return 'no_branch_assigned';
+      } else if (hasAnyRole(['staff', 'trainer'])) {
+        if (!staffBranch) return 'no_branch_assigned';
+      } else if (hasAnyRole(['member']) && !memberBranch) {
+        return 'no_branch_assigned';
+      }
     }
 
     return 'ready';
