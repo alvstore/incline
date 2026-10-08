@@ -92,6 +92,13 @@
       "when": 1791436517794,
       "tag": "0012_phase1b_helper_grants_tighten",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791436653423,
+      "tag": "0013_fix_check_trainer_slot_available_column",
+      "breakpoints": true
     }
   ]
 }
