@@ -627,7 +627,7 @@ async function shortenDocumentLink(
   if (!base) return url;
   if (url.includes('/functions/v1/doc?c=')) return url;
   try {
-    const code = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(12)))
       .map((b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32])
       .join('');
     const { error } = await supabase.from('short_links').insert({
