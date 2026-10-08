@@ -1311,12 +1311,12 @@ Deno.serve(async (req) => {
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const syncSecret = req.headers.get("x-hardware-sync-secret") || "";
-  const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "HARDCODED_SYNC_SECRET_PLACEHOLDER";
+  const ENV_SYNC_SECRET = Deno.env.get("HARDWARE_SYNC_SECRET") || "";
 
   let isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apikey === SERVICE_KEY && sysCall === "automation-brain") ||
-    (syncSecret && syncSecret === ENV_SYNC_SECRET);
+    (!!syncSecret && ENV_SYNC_SECRET.length >= 16 && syncSecret === ENV_SYNC_SECRET);
 
   // v2.11.0 — DB-backed secret now lives in the service-role-only table
   // branch_sync_secrets (moved out of branch_settings so branch managers can

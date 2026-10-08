@@ -400,7 +400,7 @@ async function requestOtp(body: any) {
     .gte("created_at", tenMinAgo);
   if ((recent || 0) >= 3) return json({ error: "Too many OTP requests. Please try again in a few minutes." }, 429);
 
-  const codeStr = String(Math.floor(100000 + Math.random() * 900000));
+  const codeStr = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   const codeHash = await sha256(codeStr);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
