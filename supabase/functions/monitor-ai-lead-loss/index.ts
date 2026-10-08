@@ -18,6 +18,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -276,6 +277,7 @@ async function sendHoldingLine(row: StuckRow): Promise<{ ok: boolean; reason: st
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const _c = await requireCaller(req, corsHeaders, { roles: [] }); if (!_c.ok) return _c.response; }
   const started = Date.now();
   try {
     const stuck = await findStuckInbounds();

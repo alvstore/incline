@@ -15,6 +15,7 @@ import {
   generateAiReplyEphemeral,
 } from "../_shared/ig-comment-automation.ts";
 import { META_GRAPH_VERSION } from "../_shared/meta-config.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -364,6 +365,7 @@ async function tick() {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _c = await requireCaller(req, corsHeaders, { roles: [] }); if (!_c.ok) return _c.response; }
   try {
     const result = await tick();
     return new Response(JSON.stringify({ ok: true, ...result }), {

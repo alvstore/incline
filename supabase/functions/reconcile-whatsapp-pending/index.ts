@@ -13,6 +13,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
 import { classifyMetaError } from "../_shared/metaErrorPolicy.ts";
+import { requireCaller } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -248,6 +249,7 @@ async function expireStale() {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  { const _c = await requireCaller(req, corsHeaders, { roles: [] }); if (!_c.ok) return _c.response; }
 
   const startedAt = Date.now();
   try {
