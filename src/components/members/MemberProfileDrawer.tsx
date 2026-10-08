@@ -26,8 +26,9 @@ import {
   AGREEMENT_ACKNOWLEDGEMENTS,
   acknowledgementsFromSignedRecord,
   acknowledgementsWereBackfilled,
+  agreementReference,
 } from '@/lib/registration/agreement';
-
+import { downloadAgreement, openAgreement } from '@/lib/registration/agreementDocument';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +37,7 @@ import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { differenceInDays, format } from 'date-fns';
 import { daysRemaining } from '@/lib/memberships/duration';
 import { toast } from 'sonner';
-import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
+import { signMemberDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
 import { UnfreezeMembershipDrawer } from './UnfreezeMembershipDrawer';
 import { AssignTrainerDrawer } from './AssignTrainerDrawer';
@@ -846,7 +847,7 @@ export function MemberProfileDrawer({
   }, [refetchMemberCore, refetchMemberPlans]);
 
 
-  // Onboarding waiver (only present for self-registered members)
+  // Membership Registration & Agreement — the ONE signed record per member
   const { data: onboardingSig } = useQuery({
     queryKey: ['member-onboarding-sig', member?.id],
     queryFn: async () => {
@@ -862,6 +863,22 @@ export function MemberProfileDrawer({
     },
     enabled: !!member?.id && open,
   });
+
+  // View/download always go through the agreement service so staff only ever
+  // see the ONE canonical document (legacy waivers are regenerated on demand).
+  const [agreementBusy, setAgreementBusy] = useState<'view' | 'download' | null>(null);
+  const runAgreementAction = async (kind: 'view' | 'download') => {
+    if (!member?.id) return;
+    setAgreementBusy(kind);
+    try {
+      if (kind === 'view') await openAgreement(member.id);
+      else await downloadAgreement(member.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open the agreement');
+    } finally {
+      setAgreementBusy(null);
+    }
+  };
 
 
   // Fetch referrer name from profile
