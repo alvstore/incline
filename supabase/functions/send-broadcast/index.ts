@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
       (apikeyHeader === supabaseServiceKey && sysCall.length > 0);
 
     let userId: string | null = null;
+    let callerIsGlobal = false;
 
     if (!isSystem) {
       if (!authHeader?.startsWith("Bearer ")) {
@@ -97,15 +98,22 @@ Deno.serve(async (req) => {
         .from("user_roles")
         .select("role")
         .eq("user_id", userId)
-        .in("role", ["owner", "admin", "manager", "staff"]);
+        .in("role", ["owner", "admin", "manager"]);
       if (!roleData || roleData.length === 0) {
-        return new Response(JSON.stringify({ error: "Forbidden: Staff access required" }), { status: 403, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: "Forbidden: Manager access required" }), { status: 403, headers: corsHeaders });
       }
+      callerIsGlobal = roleData.some((r: { role: string }) => r.role === "owner" || r.role === "admin");
     }
 
     const body = await req.json();
     const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, attachment_url, attachment_kind, attachment_filename, retry } = body;
     let variables = body.variables;
+    if (!isSystem && !callerIsGlobal) {
+      if (!branch_id) return new Response(JSON.stringify({ error: "branch_id required" }), { status: 400, headers: corsHeaders });
+      const { data: bm } = await adminClient.from("branch_managers").select("branch_id").eq("user_id", userId!).eq("branch_id", branch_id).limit(1);
+      const { data: sb } = await adminClient.from("staff_branches").select("branch_id").eq("user_id", userId!).eq("branch_id", branch_id).limit(1);
+      if (!(bm?.length || sb?.length)) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+    }
     // v5.1.0: retries / re-runs invoked from the UI only pass campaign_id.
     // Without the campaign's fixed slot values ({{2}}, {{3}}, …) the dispatcher
     // pre-flight blocks the send with `template_param_empty` — hydrate them here.

@@ -34,7 +34,7 @@ serve(async (req: Request) => {
       if (!uid) return json({ error: "Unauthorized" }, 401);
       const { data: roles } = await supabase
         .from("user_roles").select("role").eq("user_id", uid);
-      const allowed = new Set(["owner", "admin", "manager", "staff"]);
+      const allowed = new Set(["owner", "admin", "manager"]);
       const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
       if (!hasRole) return json({ error: "Forbidden" }, 403);
     }
