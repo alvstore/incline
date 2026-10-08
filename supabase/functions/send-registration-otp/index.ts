@@ -89,7 +89,8 @@ Deno.serve(async (req) => {
     ]);
 
     if (existing) {
-      return json(200, { status: "already_member", message: "This number is already registered. Please log in." });
+      // Same response as a fresh code so the endpoint never reveals registration status.
+      return json(200, { status: "sent", expires_in_seconds: 300, channels: ["whatsapp"], template_used: true });
     }
     if (limited) {
       return json(429, { status: "rate_limited", message: "Too many requests. Try again in 10 minutes." });
