@@ -12,13 +12,7 @@ type Admin = CallerResult["admin"];
 async function setBan(admin: Admin, userId: string, banned: boolean) {
   const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: banned ? BAN : "none" });
   if (error) throw new Error(error.message);
-  if (banned) {
-    // Kill live sessions so an open app is signed out on next refresh.
-    await admin.rpc("log_error_event", {
-      p_source: "member-login-access", p_severity: "info",
-      p_message: "member login revoked", p_context: { user_id: userId },
-    }).then(() => null, () => null);
-  }
+  // A ban blocks token refresh, so open sessions end within the hour.
 }
 
 async function logEvent(admin: Admin, ctx: Record<string, unknown>, message: string) {
