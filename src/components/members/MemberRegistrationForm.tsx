@@ -392,10 +392,11 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <FileSignature className="h-5 w-5 text-primary" />
-            Membership Registration Form
+            Membership Registration &amp; Agreement
           </SheetTitle>
-          <SheetDescription>
-            Complete the form below and collect the member's digital signature
+          <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>One document, one digital signature — Parts A to I.</span>
+            <Badge variant="outline" className="font-mono text-[10px] tracking-wide">{agreementRef}</Badge>
           </SheetDescription>
         </SheetHeader>
 
@@ -775,18 +776,9 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 />
               )}
               <div className="flex flex-wrap gap-2 pt-1">
-                {existingSignature.waiver_pdf_path && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      const url = await signAgreementDoc(existingSignature.waiver_pdf_path!, existingSignature.bucket);
-                      if (url) window.open(url, '_blank', 'noopener');
-                    }}
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> View signed agreement
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" onClick={handleViewSigned} disabled={preparing}>
+                  <Eye className="h-3.5 w-3.5 mr-1" /> View signed agreement
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setEditMode(true)}>
                   <Pencil className="h-3.5 w-3.5 mr-1" /> Re-sign
                 </Button>
