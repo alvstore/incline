@@ -716,6 +716,14 @@ export function PurchaseAddOnDrawer({
                     </SelectContent>
                   </Select>
                 </div>
+              ) : tab === 'pt' ? (
+                <div className="mt-4 space-y-1 rounded-2xl bg-muted p-4">
+                  <p className="text-sm font-semibold text-foreground">Confirmed with the front desk</p>
+                  <p className="text-xs text-muted-foreground">
+                    Personal training is set up by the front desk so your trainer and schedule are confirmed first.
+                    Send the request and you will receive a payment link.
+                  </p>
+                </div>
               ) : (
                 <div className="mt-4 space-y-1 rounded-2xl bg-indigo-50 p-4 dark:bg-indigo-950/30">
                   <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Pay online to confirm</p>
@@ -754,7 +762,7 @@ export function PurchaseAddOnDrawer({
                   disabled={submitting || !selectedPtPkg || !selectedTrainer}
                 >
                   {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                  Confirm Purchase
+                  {isMember ? 'Send request' : 'Confirm Purchase'}
                 </Button>
               )}
             </SheetFooter>
