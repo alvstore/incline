@@ -821,6 +821,12 @@ export default function PublicRegistration() {
               onChangeNumber={() => { setOtp(""); setOtpError(null); setStep("details"); }}
             />
           )}
+          {step === "otp" && (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Already a member? No code is sent to registered numbers —{" "}
+              <a href="/auth" className="underline">log in instead</a>.
+            </p>
+          )}
 
 
           {step === "done" && (
