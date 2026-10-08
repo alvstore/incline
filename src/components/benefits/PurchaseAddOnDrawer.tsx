@@ -213,6 +213,11 @@ export function PurchaseAddOnDrawer({
   });
 
   const { data: trainers = [] } = useTrainers(branchId, true);
+  type TrainerOption = { id: string; is_active?: boolean | null; profile_name?: string | null; profile_email?: string | null };
+  const activeTrainers = useMemo(
+    () => (trainers as TrainerOption[]).filter((t) => t.is_active !== false),
+    [trainers],
+  );
 
   const grouped = useMemo(() => {
     const out: Record<string, BenefitPackage[]> = {};
