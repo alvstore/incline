@@ -264,6 +264,7 @@ export function PurchaseAddOnDrawer({
     setSelectedTrainer('');
     setAcknowledged(false);
     setDone(false);
+    setPtRequested(false);
     setLastPurchase(null);
     setPaymentMethod(mode === 'member' ? 'online' : 'cash');
   };
