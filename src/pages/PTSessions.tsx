@@ -30,6 +30,11 @@ import { PendingPaymentsAlert } from "@/components/pt/PendingPaymentsAlert";
 import { TodaySessionsPanel } from "@/components/pt/TodaySessionsPanel";
 import { PtAttendanceTabContent } from "@/components/pt/PtAttendanceTabContent";
 import { ClientsTable } from "@/components/pt/ClientsTable";
+import { TransferPTClientsDrawer } from "@/components/pt/TransferPTClientsDrawer";
+import { RecordPaymentDrawer } from "@/components/invoices/RecordPaymentDrawer";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { InsightsPanel } from "@/components/pt/InsightsPanel";
 import { PackageCard } from "@/components/pt/PackageCard";
 import { CommissionLedger } from "@/components/pt/CommissionLedger";
@@ -71,6 +76,22 @@ export default function PTSessionsPage() {
   const { data: activePackages, isLoading: activeLoading } = useActiveMemberPackages(queryBranchId, { 
     trainerId: roles.some(r => r.role === 'trainer') && !canManage ? user?.id : undefined 
   });
+  const clientsQuery = useActiveMemberPackages(queryBranchId, { statuses: ['active', 'expired'] });
+  const navigate = useNavigate();
+  const [transferPkgs, setTransferPkgs] = useState<PTMemberPackageRow[] | null>(null);
+  const [collectInvoice, setCollectInvoice] = useState<{ invoice: Record<string, unknown>; memberId?: string | null; branchId: string } | null>(null);
+  useRealtimeInvalidate({
+    channel: 'page-pt-clients',
+    tables: ['member_pt_packages', 'pt_sessions', 'invoices'],
+    invalidateKeys: [['active-member-packages'], ['member-pt-packages'], ['trainer-sessions']],
+    enabled: !!branchId || !!queryBranchId,
+  });
+  const openCollect = async (pkg: PTMemberPackageRow) => {
+    if (!pkg.invoice_id) return;
+    const { data, error } = await supabase.from('invoices').select('*').eq('id', pkg.invoice_id).maybeSingle();
+    if (error || !data) { toast.error('Could not load the bill'); return; }
+    setCollectInvoice({ invoice: data, memberId: pkg.member_id, branchId: pkg.branch_id || branchId });
+  };
   const { data: pendingPackages } = useActiveMemberPackages(queryBranchId, { statuses: ['pending_payment'] });
   const scheduleSession = useSchedulePTSession();
   const completeSession = useCompletePTSession();
@@ -345,20 +366,26 @@ export default function PTSessionsPage() {
 
           <TabsContent value="clients">
             <ClientsTable
-              rows={(activePackages || []) as PTMemberPackageRow[]}
-              loading={activeLoading}
+              rows={(clientsQuery.data || []) as PTMemberPackageRow[]}
+              loading={clientsQuery.isLoading}
+              isError={clientsQuery.isError}
+              onRetry={() => clientsQuery.refetch()}
               renewingId={renewingId}
               renewPending={renewPackage.isPending}
               canCancelInvoice={canCancelInvoice}
-              onSchedule={() => setIsScheduleOpen(true)}
+              canManage={canManage}
+              onSchedule={(pkg) => { if (pkg) setSelectedPackageForSession(pkg.id); setIsScheduleOpen(true); }}
               onRenew={handleRenewPackage}
+              onCollect={openCollect}
+              onTransfer={(pkgs) => setTransferPkgs(pkgs)}
+              onView={(pkg) => pkg.member_id && navigate(`/members?member=${pkg.member_id}`)}
               onCancelInvoice={(pkg) =>
                 setCancelInvoiceTarget({
                   id: pkg.invoice_id,
                   invoice_number: pkg.invoice_number ?? null,
-                  total_amount: pkg.price_paid,
-                  amount_paid: 0,
-                  status: 'pending',
+                  total_amount: pkg.invoice_total ?? pkg.price_paid,
+                  amount_paid: pkg.invoice_paid ?? 0,
+                  status: pkg.invoice_status ?? 'pending',
                 })
               }
             />
@@ -520,6 +547,29 @@ export default function PTSessionsPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {transferPkgs && (
+        <TransferPTClientsDrawer
+          open={!!transferPkgs}
+          onOpenChange={(o) => !o && setTransferPkgs(null)}
+          branchId={transferPkgs[0]?.branch_id || branchId}
+          packageIds={transferPkgs.map((p) => p.id)}
+        />
+      )}
+      {collectInvoice && (
+        <RecordPaymentDrawer
+          open={!!collectInvoice}
+          onOpenChange={(o) => {
+            if (!o) {
+              setCollectInvoice(null);
+              clientsQuery.refetch();
+            }
+          }}
+          invoice={collectInvoice.invoice}
+          memberId={collectInvoice.memberId ?? undefined}
+          branchId={collectInvoice.branchId}
+        />
+      )}
 
       <CancelInvoiceDrawer
         open={!!cancelInvoiceTarget}
