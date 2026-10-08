@@ -374,15 +374,19 @@ export function PurchaseAddOnDrawer({
    */
   const requestPT = async (pkg: PtPackage) => {
     if (!user?.id) throw new Error('Please sign in again to send this request.');
-    const trainer = trainers.find((t: { id: string }) => t.id === selectedTrainer) as
-      | { profile_name?: string | null; profile_email?: string | null }
-      | undefined;
-    const trainerLabel = trainer?.profile_name || trainer?.profile_email || 'any available trainer';
+    const trainer = activeTrainers.find((t) => t.id === selectedTrainer);
+    const trainerLabel = trainer?.profile_name || trainer?.profile_email || 'no trainer preference';
     const requester = memberName || 'Member';
+    const scope = [
+      pkg.total_sessions > 0 ? `${pkg.total_sessions} sessions` : null,
+      `${pkg.validity_days} days`,
+    ]
+      .filter(Boolean)
+      .join(', ');
     await createTask({
       branchId,
       title: `PT package request from ${requester}`,
-      description: `${requester} requested ${pkg.name} (${pkg.total_sessions} sessions, ${pkg.validity_days} days) with ${trainerLabel} from the Add-ons drawer. Raise the invoice and send the payment link.`,
+      description: `${requester} requested ${pkg.name} (${scope}) — ${trainerLabel} — from the Add-ons drawer. Confirm the trainer, raise the invoice and send the payment link.`,
       priority: 'high',
       slaHours: 4,
       memberCreated: true,
@@ -396,7 +400,7 @@ export function PurchaseAddOnDrawer({
   };
 
   const buyPT = async () => {
-    if (!selectedPtPkg || !selectedTrainer) {
+    if (!selectedPtPkg || (!selectedTrainer && mode !== 'member')) {
       toast.error('Pick a package and a trainer');
       return;
     }
