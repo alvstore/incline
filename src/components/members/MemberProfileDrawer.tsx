@@ -20,7 +20,7 @@ import {
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
   ChevronLeft, ChevronRight, Pencil, KeyRound, Library, PhoneCall
-} from 'lucide-react';
+, ArrowRightLeft } from 'lucide-react';
 import { MemberVoiceAIHistory } from '@/components/voice/MemberVoiceAIHistory';
 import {
   AGREEMENT_ACKNOWLEDGEMENTS,
@@ -29,6 +29,8 @@ import {
   agreementReference,
 } from '@/lib/registration/agreement';
 import { downloadAgreement, openAgreement } from '@/lib/registration/agreementDocument';
+import { MemberLoginAccessCard } from '@/components/members/MemberLoginAccessCard';
+import { TransferPTClientsDrawer } from '@/components/pt/TransferPTClientsDrawer';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -699,6 +701,7 @@ export function MemberProfileDrawer({
 
   const { hasAnyRole } = useAuth();
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
+  const [ptTransferOpen, setPtTransferOpen] = useState(false);
   const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
   const [invoicesOpen, setInvoicesOpen] = useState(false);
   const [createLoginOpen, setCreateLoginOpen] = useState(false);
@@ -2132,6 +2135,16 @@ export function MemberProfileDrawer({
                 </Card>
               )}
 
+              {member?.id && <MemberLoginAccessCard memberId={member.id} />}
+              {ptTransferOpen && activePTPackage && (
+                <TransferPTClientsDrawer
+                  open={ptTransferOpen}
+                  onOpenChange={setPtTransferOpen}
+                  branchId={activePTPackage.branch_id ?? member?.branch_id ?? ''}
+                  packageId={activePTPackage.id}
+                />
+              )}
+
               {/* Active PT Package */}
               {activePTPackage && (
                 <Card>
@@ -2156,6 +2169,11 @@ export function MemberProfileDrawer({
                       </div>
                       <div>Expires: {format(new Date(activePTPackage.expiry_date), 'dd MMM yyyy')}</div>
                     </div>
+                    {isManagerOrAbove && (
+                      <Button size="sm" variant="outline" className="min-h-11" onClick={() => setPtTransferOpen(true)}>
+                        <ArrowRightLeft className="h-3.5 w-3.5 mr-1.5" />Change trainer
+                      </Button>
+                    )}
 
                   </CardContent>
                 </Card>
