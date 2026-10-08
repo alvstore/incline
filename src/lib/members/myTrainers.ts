@@ -16,8 +16,11 @@ export interface MyTrainer {
 }
 
 export async function fetchMyTrainers(): Promise<MyTrainer[]> {
-  const { data, error } = await (supabase as any).rpc('get_my_trainers');
+  const { data, error } = await supabase.rpc('get_my_trainers');
   if (error) {
+    // Safari "Load failed" / "Failed to fetch" = dropped connection (tab switch, sleep,
+    // network blip). Throw so React Query retries instead of logging a false error.
+    if (/load failed|failed to fetch|network/i.test(error.message)) throw new Error(error.message);
     console.error('get_my_trainers failed:', error.message);
     return [];
   }
