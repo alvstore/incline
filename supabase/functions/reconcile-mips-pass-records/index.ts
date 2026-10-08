@@ -1,4 +1,4 @@
-// v2.5.0 — Paginated MIPS pass-record backfill (body.pages) + outage-safe skips.
+// v2.6.0 — Paginated MIPS pass-record backfill (body.pages) + outage-safe skips.
 // v2.3 fixes: staff attendance now goes through the canonical `staff_record_punch`
 // RPC (same path as the live webhook), so roster-block resolution, grace and
 // per-block idempotency are identical no matter which path imports the scan.
@@ -487,8 +487,18 @@ async function authorize(req: Request, supabase: ReturnType<typeof createClient>
 
   const { data: roles, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   if (error) return jsonResponse({ error: "Unable to verify permissions" }, 403);
-  const isAllowed = (roles ?? []).some((row) => ALLOWED_ROLES.has((row as { role: Role }).role));
-  return isAllowed ? null : jsonResponse({ error: "Forbidden" }, 403);
+  const roleList = (roles ?? []).map((row) => (row as { role: Role }).role);
+  if (!roleList.some((r) => ALLOWED_ROLES.has(r))) return jsonResponse({ error: "Forbidden" }, 403);
+  if (roleList.includes("owner") || roleList.includes("admin")) return null;
+  // v2.6.0 — branch staff may only reconcile their own branch.
+  const body = await req.clone().json().catch(() => ({})) as { branch_id?: string };
+  const branchId = typeof body.branch_id === "string" ? body.branch_id.trim() : "";
+  if (!branchId) return jsonResponse({ error: "branch_id required" }, 400);
+  const [{ data: bm }, { data: sb }] = await Promise.all([
+    supabase.from("branch_managers").select("branch_id").eq("user_id", userId).eq("branch_id", branchId),
+    supabase.from("staff_branches").select("branch_id").eq("user_id", userId).eq("branch_id", branchId),
+  ]);
+  return (bm?.length || sb?.length) ? null : jsonResponse({ error: "Forbidden" }, 403);
 }
 
 Deno.serve(async (req) => {

@@ -1,4 +1,4 @@
-// mips-face-parity v2.0.0
+// mips-face-parity v2.1.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
 // Problem it solves: the MIPS server holds N persons with photos, but each
@@ -59,7 +59,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
     const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    let __uid = ""; let __global = true;
     if (bearer !== SERVICE_KEY) {
+      __global = false;
       if (!bearer) return json({ error: "Unauthorized" }, 401);
       const { data: userRes } = await supabase.auth.getUser(bearer);
       const uid = userRes?.user?.id;
@@ -67,6 +69,8 @@ Deno.serve(async (req) => {
       const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
       const allowed = new Set(["owner", "admin", "manager"]);
       if (!(roles || []).some((r: any) => allowed.has(r.role))) return json({ error: "Forbidden" }, 403);
+      __uid = uid;
+      __global = (roles || []).some((r: any) => r.role === "owner" || r.role === "admin");
     }
 
     const body = await req.json().catch(() => ({}));
@@ -78,6 +82,21 @@ Deno.serve(async (req) => {
       person_id?: string;
     };
 
+
+    // v2.1.0 — managers: own branch only, and only that branch's devices.
+    if (!__global) {
+      if (!branch_id) return json({ error: "branch_id required" }, 400);
+      const [{ data: bm }, { data: sb }] = await Promise.all([
+        supabase.from("branch_managers").select("branch_id").eq("user_id", __uid).eq("branch_id", branch_id),
+        supabase.from("staff_branches").select("branch_id").eq("user_id", __uid).eq("branch_id", branch_id),
+      ]);
+      if (!(bm?.length || sb?.length)) return json({ error: "Forbidden" }, 403);
+      if (Array.isArray(device_ids) && device_ids.length) {
+        const { data: devs } = await supabase.from("access_devices").select("mips_device_id").eq("branch_id", branch_id);
+        const okIds = new Set((devs || []).map((d: any) => Number(d.mips_device_id)));
+        if (device_ids.some((id) => !okIds.has(Number(id)))) return json({ error: "Device not in your branch" }, 403);
+      }
+    }
 
     // Resolve MIPS connection (branch-scoped, env fallback)
     let serverUrl = Deno.env.get("MIPS_SERVER_URL") || "";
