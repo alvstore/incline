@@ -652,7 +652,7 @@ async function handleBackfill(req: Request, body: Record<string, unknown>): Prom
         const out = await renderAndStore(caller.admin, b, "backfill", caller.userId);
         results.push({ member_id: r.member_id, code: b.member.member_code, status: "done", bytes: out.bytes, signature: out.hadSignature });
       } catch (e) {
-        await captureEdgeError(FN, e, { route: "backfill_member", member_id: r.member_id });
+        await captureEdgeError(FN, e, { route: "backfill_member", context: { member_id: r.member_id } });
         results.push({ member_id: r.member_id, status: "error", error: (e as Error).message });
       }
     }
