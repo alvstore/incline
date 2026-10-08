@@ -323,13 +323,12 @@ async function renderAndStore(
 ): Promise<{ path: string; bytes: number; hadSignature: boolean }> {
   if (!b.sigRow) throw new Error("no_signature_record");
   const sigBytes = await loadSignatureBytes(admin, b.member.id, b.sigRow);
+  // A signed record without a recoverable signature image is still a signed
+  // record — the renderer prints a "signed digitally" block, never a draft.
   const input = await buildRenderInput(admin, b, {
     signature: { pngBytes: sigBytes, signedAt: b.sigRow.signed_at, ip: b.sigRow.signer_ip },
   });
-  // A signed record without a recoverable signature image is still a signed
-  // record — never print it as a draft. Render the typed signature line instead.
-  if (!sigBytes) input.signature = { pngBytes: null, signedAt: b.sigRow.signed_at, ip: b.sigRow.signer_ip };
-  const pdf = await renderMembershipAgreementPdf({ ...input, signature: input.signature, generatedAt: new Date() });
+  const pdf = await renderMembershipAgreementPdf({ ...input, generatedAt: new Date() });
 
   const path = canonicalPath(b.member.id);
   const { error: upErr } = await admin.storage
