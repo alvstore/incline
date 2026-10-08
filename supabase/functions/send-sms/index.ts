@@ -1,4 +1,5 @@
-// v2.0.0 — Multi-provider SMS Edge Function with RoundSMS full API
+// v2.2.0 — Multi-provider SMS Edge Function with RoundSMS full API
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -19,28 +20,14 @@ serve(async (req: Request) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ---- AUTH GATE (v2.1.0) ----
-    // Allow internal service-role callers (dispatch-communication, send-broadcast, etc.)
-    // OR authenticated staff/manager/admin/owner JWTs.
-    const authHeader = req.headers.get("Authorization") || "";
-    const bearer = authHeader.replace(/^Bearer\s+/i, "");
-    const isService = bearer && bearer === SUPABASE_SERVICE_ROLE_KEY;
-    if (!isService) {
-      if (!bearer) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-      const { data: userRes } = await supabase.auth.getUser(bearer);
-      const uid = userRes?.user?.id;
-      if (!uid) return json({ error: "Unauthorized" }, 401);
-      const { data: roles } = await supabase
-        .from("user_roles").select("role").eq("user_id", uid);
-      const allowed = new Set(["owner", "admin", "manager"]);
-      const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
-      if (!hasRole) return json({ error: "Forbidden" }, 403);
-    }
-
+    // ---- AUTH GATE (v2.2.0) — internal, or owner/admin/manager acting on their own branch ----
+    const __caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"] });
+    if (!__caller.ok) return __caller.response;
     const body = await req.json();
     const { action = "send", phone, message, branch_id, provider: providerOverride } = body;
+    if (!__caller.internal && !(await canActOnBranch(__caller, branch_id)) ) {
+      return json({ error: "Forbidden" }, 403);
+    }
 
 
     // Get active SMS integration
