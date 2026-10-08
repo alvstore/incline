@@ -15,18 +15,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { format } from 'date-fns';
-import { buildMembershipAgreementPdf, printBlob, downloadBlob } from '@/utils/pdfBlob';
-import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { printBlob } from '@/utils/pdfBlob';
 import {
   AGREEMENT_PARTS,
   AGREEMENT_ACKNOWLEDGEMENTS,
-  AGREEMENT_VERSION,
   FINAL_DECLARATION,
   REQUIRED_ACKNOWLEDGEMENT_KEYS,
   acknowledgementsForPart,
   acknowledgementsFromSignedRecord,
   acknowledgementsWereBackfilled,
+  agreementReference,
 } from '@/lib/registration/agreement';
+import {
+  downloadAgreement,
+  openAgreement,
+  previewAgreementBlob,
+  printAgreement,
+  signAgreement,
+  type AgreementDraft,
+} from '@/lib/registration/agreementDocument';
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
@@ -36,8 +43,6 @@ import {
   joinHealthConditions,
 } from '@/lib/registration/healthQuestions';
 
-/** Canonical single document — one per member, upserted on re-sign. */
-const AGREEMENT_FILENAME = 'membership-agreement.pdf';
 const partTitle = (id: string) => {
   const p = AGREEMENT_PARTS.find((x) => x.id === id);
   return p ? `Part ${p.id} — ${p.title}` : id;
