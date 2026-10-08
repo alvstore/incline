@@ -678,15 +678,15 @@ export function PurchaseAddOnDrawer({
               ) : (
                 <>
                   <div className="grid gap-2">{ptPackages.map(renderPtCard)}</div>
-                  {selectedPtPkg && (
+                  {selectedPtPkg && (isMember ? activeTrainers.length > 0 : true) && (
                     <div className="space-y-2 pt-2">
-                      <Label htmlFor="addon-trainer">Trainer</Label>
+                      <Label htmlFor="addon-trainer">{isMember ? 'Preferred trainer (optional)' : 'Trainer'}</Label>
                       <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
                         <SelectTrigger id="addon-trainer">
-                          <SelectValue placeholder="Select a trainer" />
+                          <SelectValue placeholder={isMember ? 'No preference' : 'Select a trainer'} />
                         </SelectTrigger>
                         <SelectContent>
-                          {trainers.filter((t: any) => t.is_active).map((t: any) => (
+                          {activeTrainers.map((t) => (
                             <SelectItem key={t.id} value={t.id}>
                               {t.profile_name || t.profile_email}
                             </SelectItem>
