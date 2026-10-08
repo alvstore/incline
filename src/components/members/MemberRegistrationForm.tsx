@@ -768,19 +768,15 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           {/* Actions */}
           <div className="flex gap-3 pt-2 pb-4">
-            <Button variant="outline" className="flex-1" onClick={handlePrint}>
-              <Printer className="h-4 w-4 mr-2" /> Print
+            <Button variant="outline" className="flex-1" onClick={handlePrint} disabled={preparing}>
+              <Printer className="h-4 w-4 mr-2" /> {preparing ? 'Preparing…' : 'Print'}
             </Button>
             {existingSignature && !editMode ? (
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={async () => {
-                  const path = existingSignature.waiver_pdf_path || existingSignature.signature_path;
-                  if (!path) return;
-                  const url = await signAgreementDoc(path, existingSignature.bucket);
-                  if (url) window.open(url, '_blank', 'noopener');
-                }}
+                disabled={preparing}
+                onClick={handleDownloadSigned}
               >
                 <Download className="h-4 w-4 mr-2" /> Download signed copy
               </Button>
