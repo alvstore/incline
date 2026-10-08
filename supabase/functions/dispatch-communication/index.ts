@@ -525,7 +525,7 @@ function safeFallbackForKey(key: string, index: number): string {
 /** Strip active content from email markup (scripts, frames, forms, event handlers, js: URLs). */
 export function sanitizeEmailHtml(html: string): string {
   return html
-    .replace(/<\s*(script|style|iframe|object|embed|form|input|button|textarea|select|meta|link|base|svg|math)\b[\s\S]*?(<\s*\/\s*\1\s*>|\/?>)/gi, '')
+    .replace(/<\s*(script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|svg|math)\b[\s\S]*?(<\s*\/\s*\1\s*>|\/?>)/gi, '')
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/(href|src|action|formaction|background)\s*=\s*(["']?)\s*(javascript|vbscript|data):[^"'\s>]*\2/gi, '$1="#"');
 }
