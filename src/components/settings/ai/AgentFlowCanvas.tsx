@@ -2,7 +2,7 @@
 // the two-agent router (lead vs member), which tools each side may use, and
 // where a human takes over. Reads real config from ai_purposes so the diagram
 // always reflects what the system will actually do.
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -63,7 +63,7 @@ export function AgentFlowCanvas() {
   });
 
   const channels = ((purpose?.ops_config as any)?.channels ?? {}) as Record<string, boolean>;
-  const channelOn = (key: string) => channels[key] !== false;
+  const channelOn = useCallback((key: string) => channels[key] !== false, [channels]);
   const toolCount = ((purpose?.tools_allowed as string[] | null) ?? []).length;
   const toolLabel = toolCount === 0 ? 'All tools available' : `${toolCount} tools allowed`;
   const agentLive = purpose?.enabled !== false;
@@ -235,7 +235,7 @@ export function AgentFlowCanvas() {
         icon: CheckCircle2,
       },
     ];
-  }, [journey, agentLive, toolLabel, channels]);
+  }, [journey, agentLive, toolLabel, channelOn]);
 
   if (isLoading) {
     return (
