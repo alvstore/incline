@@ -1,4 +1,6 @@
-// v1.2.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// v1.3.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// 1.3.0: every mandatory acknowledgement (REQUIRED_ACKNOWLEDGEMENT_KEYS) is
+//        enforced server-side, not just dpdp/whatsapp/waiver.
 // Two modes:
 //   { mode: 'send_otp', phone }
 //   { mode: 'verify_and_register', phone, code, registration:{...}, par_q, consents, signature_data_url }
@@ -18,6 +20,7 @@ import {
   AGREEMENT_TITLE,
   AGREEMENT_VERSION,
   FINAL_DECLARATION,
+  REQUIRED_ACKNOWLEDGEMENT_KEYS,
 } from "../_shared/agreement.ts";
 
 const corsHeaders = {
