@@ -16,7 +16,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { useTrainers } from '@/hooks/useTrainers';
+import { useAuth } from '@/contexts/AuthContext';
+import { createTask } from '@/services/taskService';
 import { initializePayment, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/paymentService';
+
+type PtPurchaseResult = { success?: boolean; error?: string; code?: string };
 
 
 interface PurchaseAddOnDrawerProps {
@@ -111,7 +115,9 @@ export function PurchaseAddOnDrawer({
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [ptRequested, setPtRequested] = useState(false);
   const [lastPurchase, setLastPurchase] = useState<{ credits: number; validityDays: number } | null>(null);
+  const { user } = useAuth();
 
   // Upsell deep-link: preselect the package the member tapped on.
   useEffect(() => {
@@ -207,6 +213,11 @@ export function PurchaseAddOnDrawer({
   });
 
   const { data: trainers = [] } = useTrainers(branchId, true);
+  type TrainerOption = { id: string; is_active?: boolean | null; profile_name?: string | null; profile_email?: string | null };
+  const activeTrainers = useMemo(
+    () => (trainers as TrainerOption[]).filter((t) => t.is_active !== false),
+    [trainers],
+  );
 
   const grouped = useMemo(() => {
     const out: Record<string, BenefitPackage[]> = {};
@@ -258,6 +269,7 @@ export function PurchaseAddOnDrawer({
     setSelectedTrainer('');
     setAcknowledged(false);
     setDone(false);
+    setPtRequested(false);
     setLastPurchase(null);
     setPaymentMethod(mode === 'member' ? 'online' : 'cash');
   };
@@ -354,8 +366,41 @@ export function PurchaseAddOnDrawer({
     }
   };
 
+  /**
+   * Members cannot sell themselves a PT package — the server only lets branch staff
+   * run purchase_pt_package. In member mode the selection becomes a high-priority
+   * front-desk task (same path as the Renewal Concierge) so the desk raises the bill
+   * and sends a payment link.
+   */
+  const requestPT = async (pkg: PtPackage) => {
+    if (!user?.id) throw new Error('Please sign in again to send this request.');
+    const trainer = activeTrainers.find((t) => t.id === selectedTrainer);
+    const trainerLabel = trainer?.profile_name || trainer?.profile_email || 'no trainer preference';
+    const requester = memberName || 'Member';
+    const scope = [
+      pkg.total_sessions > 0 ? `${pkg.total_sessions} sessions` : null,
+      `${pkg.validity_days} days`,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    await createTask({
+      branchId,
+      title: `PT package request from ${requester}`,
+      description: `${requester} requested ${pkg.name} (${scope}) — ${trainerLabel} — from the Add-ons drawer. Confirm the trainer, raise the invoice and send the payment link.`,
+      priority: 'high',
+      slaHours: 4,
+      memberCreated: true,
+      assignedBy: user.id,
+      linkedEntityType: 'member',
+      linkedEntityId: memberId,
+    });
+    setPtRequested(true);
+    queryClient.invalidateQueries({ queryKey: ['my-plan-requests'] });
+    queryClient.invalidateQueries({ queryKey: ['my-requests'] });
+  };
+
   const buyPT = async () => {
-    if (!selectedPtPkg || !selectedTrainer) {
+    if (!selectedPtPkg || (!selectedTrainer && mode !== 'member')) {
       toast.error('Pick a package and a trainer');
       return;
     }
@@ -363,6 +408,13 @@ export function PurchaseAddOnDrawer({
     if (!pkg) return;
     setSubmitting(true);
     try {
+      if (mode === 'member') {
+        await requestPT(pkg);
+        toast.success('Request sent to the front desk');
+        setDone(true);
+        return;
+      }
+
       const { data, error } = await supabase.rpc('purchase_pt_package', {
         _member_id: memberId,
         _package_id: selectedPtPkg,
@@ -370,20 +422,24 @@ export function PurchaseAddOnDrawer({
         _branch_id: branchId,
         _price_paid: pkg.price,
         _gst_rate: 5,
-        _payment_method: mode === 'member' ? 'pending' : paymentMethod,
+        _payment_method: paymentMethod,
         _payment_source: 'in_person',
         _idempotency_key: ptIdemKey,
       });
 
       if (error) throw error;
+      const result = (data ?? {}) as PtPurchaseResult;
+      if (result.success === false) {
+        throw new Error(result.error || 'The PT package could not be activated.');
+      }
       toast.success('PT package activated');
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['member-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['my-pending-invoices'] });
       setDone(true);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to purchase PT package');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to purchase PT package');
     } finally {
       setSubmitting(false);
     }
@@ -492,7 +548,7 @@ export function PurchaseAddOnDrawer({
           </SheetTitle>
           <SheetDescription>
             {isMember
-              ? 'Top up recovery sessions or personal training. Your invoice is created instantly.'
+              ? 'Top up recovery sessions instantly, or ask the front desk for a personal training package.'
               : 'Add extra benefit credits or a PT package. Invoice and payment are recorded atomically.'}
           </SheetDescription>
         </SheetHeader>
@@ -503,15 +559,19 @@ export function PurchaseAddOnDrawer({
               <CheckCircle className="h-8 w-8 text-success" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Add-on activated</h3>
+              <h3 className="text-lg font-semibold">{ptRequested ? 'Request sent' : 'Add-on activated'}</h3>
               <p className="text-sm text-muted-foreground">
-                {lastPurchase
+                {ptRequested
+                  ? 'The front desk will raise your bill and send a payment link shortly. Track it under My Requests.'
+                  : lastPurchase
                   ? `${lastPurchase.credits} credit${lastPurchase.credits > 1 ? 's' : ''} added — valid for ${lastPurchase.validityDays} days. Your invoice is in Invoices.`
                   : 'Invoice has been generated and credits are live.'}
               </p>
             </div>
             <div className="flex gap-2">
-              {isMember ? (
+              {isMember && ptRequested ? (
+                <Button className="flex-1 rounded-xl" onClick={handleClose}>Done</Button>
+              ) : isMember ? (
                 <>
                   <Button variant="outline" className="flex-1 rounded-xl" onClick={handleClose}>Done</Button>
                   <Button
@@ -627,15 +687,15 @@ export function PurchaseAddOnDrawer({
               ) : (
                 <>
                   <div className="grid gap-2">{ptPackages.map(renderPtCard)}</div>
-                  {selectedPtPkg && (
+                  {selectedPtPkg && (isMember ? activeTrainers.length > 0 : true) && (
                     <div className="space-y-2 pt-2">
-                      <Label htmlFor="addon-trainer">Trainer</Label>
+                      <Label htmlFor="addon-trainer">{isMember ? 'Preferred trainer (optional)' : 'Trainer'}</Label>
                       <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
                         <SelectTrigger id="addon-trainer">
-                          <SelectValue placeholder="Select a trainer" />
+                          <SelectValue placeholder={isMember ? 'No preference' : 'Select a trainer'} />
                         </SelectTrigger>
                         <SelectContent>
-                          {trainers.filter((t: any) => t.is_active).map((t: any) => (
+                          {activeTrainers.map((t) => (
                             <SelectItem key={t.id} value={t.id}>
                               {t.profile_name || t.profile_email}
                             </SelectItem>
@@ -664,6 +724,14 @@ export function PurchaseAddOnDrawer({
                       <SelectItem value="pending">Pending (invoice only)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              ) : tab === 'pt' ? (
+                <div className="mt-4 space-y-1 rounded-2xl bg-muted p-4">
+                  <p className="text-sm font-semibold text-foreground">Confirmed with the front desk</p>
+                  <p className="text-xs text-muted-foreground">
+                    Personal training is set up by the front desk so your trainer and schedule are confirmed first.
+                    Send the request and you will receive a payment link.
+                  </p>
                 </div>
               ) : (
                 <div className="mt-4 space-y-1 rounded-2xl bg-indigo-50 p-4 dark:bg-indigo-950/30">
@@ -703,7 +771,7 @@ export function PurchaseAddOnDrawer({
                   disabled={submitting || !selectedPtPkg || !selectedTrainer}
                 >
                   {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                  Confirm Purchase
+                  {isMember ? 'Send request' : 'Confirm Purchase'}
                 </Button>
               )}
             </SheetFooter>
