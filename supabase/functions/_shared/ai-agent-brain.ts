@@ -538,9 +538,9 @@ export async function runUnifiedAgent(
     _setDynMemSnapshot(dynMem);
     const matched = dynMem.classify(ctx.messageContent || "");
     console.log("[AI Tool Call Attempt] dynamic_memory_match", JSON.stringify({
-      sender: ctx.senderId,
+      sender: `***${String(ctx.senderId ?? "").slice(-4)}`,
       platform: ctx.platform,
-      raw: (ctx.messageContent || "").slice(0, 120),
+      msg_len: (ctx.messageContent || "").length,
       matched_rule_id: matched?.id ?? null,
       intent_category: matched?.intent_category ?? null,
       rules_loaded: dynMem.rows.length,
@@ -2637,7 +2637,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
       if (memberErr) console.error(`[AI:${platform}] member lookup failed:`, memberErr.message);
       
       if (member) {
-        console.log(`[AI:${platform}] member resolved via profiles.phone check for ${senderId}`);
+        console.log(`[AI:${platform}] member resolved via profiles.phone check for ***${String(senderId).slice(-4)}`);
         memberMatch = member;
         if (!(memberMatch as any).profiles) {
           (memberMatch as any).profiles = { full_name: profile.full_name, phone: profile.phone, email: profile.email };
@@ -2665,7 +2665,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         .eq("id", link.linked_member_id)
         .maybeSingle();
       if (member) {
-        console.log(`[AI:${platform}] member resolved via linked alt number for ${senderId}`);
+        console.log(`[AI:${platform}] member resolved via linked alt number for ***${String(senderId).slice(-4)}`);
         memberMatch = member;
         memberPhone = (member as any).profiles?.phone || undefined;
         memberEmail = (member as any).profiles?.email || undefined;
@@ -2693,7 +2693,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
           ? "trainer"
           : (privileged[0] || (employeeRow as any)?.position || "staff");
         const staffName = directoryProfile.full_name || "Team member";
-        console.log(`[AI:${platform}] internal team resolved (${staffRole}) for ${senderId}`);
+        console.log(`[AI:${platform}] internal team resolved (${staffRole}) for ***${String(senderId).slice(-4)}`);
         return {
           isMember: false,
           isStaff: true,

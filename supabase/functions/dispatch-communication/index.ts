@@ -522,6 +522,14 @@ function safeFallbackForKey(key: string, index: number): string {
  *  4+ consecutive spaces (error 132018 / 132012). Class announcements build
  *  multi-line "class_details" values, which is exactly this case — so every
  *  parameter is flattened to a single line before it leaves this worker. */
+/** Strip active content from email markup (scripts, frames, forms, event handlers, js: URLs). */
+export function sanitizeEmailHtml(html: string): string {
+  return html
+    .replace(/<\s*(script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|svg|math)\b[\s\S]*?(<\s*\/\s*\1\s*>|\/?>)/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(href|src|action|formaction|background)\s*=\s*(["']?)\s*(javascript|vbscript|data):[^"'\s>]*\2/gi, '$1="#"');
+}
+
 export function sanitizeParamText(input: string): string {
   return String(input ?? '')
     .replace(/\r\n|\r|\n/g, ' • ')
@@ -627,7 +635,7 @@ async function shortenDocumentLink(
   if (!base) return url;
   if (url.includes('/functions/v1/doc?c=')) return url;
   try {
-    const code = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(12)))
       .map((b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32])
       .join('');
     const { error } = await supabase.from('short_links').insert({
@@ -1883,7 +1891,7 @@ Deno.serve(async (req) => {
           // sequences (as stored in lead_notification_rules etc.) into real newlines,
           // then convert newlines to <br> so they render correctly inside the
           // branded shell. HTML markup already in the body is preserved.
-          const rawBody = String(input.payload.body || '');
+          const rawBody = sanitizeEmailHtml(String(input.payload.body || ''));
           const emailHtml = (/<\s*(br|p|div|table|html)\b/i.test(rawBody)
             ? rawBody.replace(/\\r\\n|\\n/g, '<br>')
             : rawBody.replace(/\\r\\n|\\n/g, '\n').replace(/\r?\n/g, '<br>')) + attachmentHtml;

@@ -1,8 +1,8 @@
-// v2.1.0 — Reuses an existing active link for the invoice; unique reference_id per attempt.
+// v2.2.0 — Reuses an existing active link for the invoice; unique reference_id per attempt.
 // v2.0.0 — Convenience fee is quoted and charged at the gateway only; the invoice is never mutated.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireCaller } from "../_shared/requireCaller.ts";
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,6 +136,10 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Forbidden", code: "FORBIDDEN" }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
+      }
+      if (caller.ok && !(await canActOnBranch(caller, invoice.branch_id))) {
+        return new Response(JSON.stringify({ error: "Forbidden", code: "FORBIDDEN" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       if (invoice.branch_id !== branchId) {
         return new Response(JSON.stringify({ error: "Branch mismatch", code: "BRANCH_MISMATCH" }),

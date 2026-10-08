@@ -1518,9 +1518,11 @@ Deno.serve(async (req) => {
     if (!action) return json({ error: "action required" }, 400);
 
     // Caller check: scheduled jobs (internal) or owner/admin/manager scoped to the branch.
+    let __caller: any = null;
     {
       const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"] });
       if (!caller.ok) return caller.response;
+      __caller = caller;
       if (!caller.internal && body.branch_id && !(await canActOnBranch(caller, body.branch_id))) {
         return json({ error: "Forbidden" }, 403);
       }
@@ -1716,6 +1718,12 @@ Deno.serve(async (req) => {
       case "reply":
         if (!body.inbound_id || !body.reply_text)
           return json({ error: "inbound_id and reply_text required" }, 400);
+        {
+          // Managers may only reply to reviews of a branch they manage.
+          const { data: rv } = await supa().from("google_reviews_inbound").select("branch_id").eq("id", body.inbound_id).maybeSingle();
+          if (!rv) return json({ ok: false, error: "not_found" }, 404);
+          if (!(await canActOnBranch(__caller, rv.branch_id))) return json({ error: "Forbidden" }, 403);
+        }
         return await replyToReview(body.inbound_id, body.reply_text, userId);
       case "request_member_review":
         if (!body.feedback_id) return json({ error: "feedback_id required" }, 400);

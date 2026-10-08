@@ -1,4 +1,4 @@
-// mips-proxy v1.5.0
+// mips-proxy v1.6.0
 // v1.5.0 — LOAD SHEDDING. The browser Device Command Center hit this proxy every
 // 30s per open tab, and each call logged in to Tomcat and pulled the heavy
 // /through/device/list. Now: auth comes from the shared cross-worker token cache
@@ -263,6 +263,21 @@ Deno.serve(async (req) => {
       data?: Record<string, unknown>;
       branch_id?: string;
     };
+
+    // v1.6.0 — branch + method authorization for the generic relay path.
+    if (!isService && !roleNames.some((r) => r === "owner" || r === "admin")) {
+      if (!branch_id) return jsonResponse({ error: "Select a branch first." }, 400);
+      const { data: { user: __u } } = await authClient.auth.getUser(bearer);
+      const __uid = __u?.id || "";
+      const [{ data: __bm }, { data: __sb }] = await Promise.all([
+        authClient.from("branch_managers").select("branch_id").eq("user_id", __uid).eq("branch_id", branch_id),
+        authClient.from("staff_branches").select("branch_id").eq("user_id", __uid).eq("branch_id", branch_id),
+      ]);
+      if (!(__bm?.length || __sb?.length)) return jsonResponse({ error: "Forbidden" }, 403);
+      if (String(method).toUpperCase() !== "GET" && !roleNames.includes("manager")) {
+        return jsonResponse({ error: "Only managers can change gate-system records." }, 403);
+      }
+    }
 
     if (!endpoint) {
       return new Response(JSON.stringify({ error: "Missing endpoint" }), {

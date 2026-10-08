@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const confirmationCode = `del-${crypto.randomUUID().slice(0, 8)}`;
+    const confirmationCode = `del-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
     const statusUrl = `${APP_BASE}/data-deletion/status?code=${confirmationCode}`;
 
     // ── Path A: Meta-signed callback ──
