@@ -32,6 +32,11 @@ export interface PTMemberPackageRow {
   price_paid?: number | null;
   invoice_id?: string | null;
   invoice_number?: string | null;
+  trainer_active?: boolean;
+  invoice_status?: string | null;
+  invoice_total?: number | null;
+  invoice_paid?: number | null;
+  due?: number;
 }
 
 

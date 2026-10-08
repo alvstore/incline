@@ -21,6 +21,7 @@ interface Props {
   branchId: string;
   fromTrainerId?: string;
   packageId?: string;
+  packageIds?: string[];
   fromTrainerName?: string;
 }
 
@@ -37,7 +38,7 @@ interface PkgRow {
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
-export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrainerId, packageId, fromTrainerName }: Props) {
+export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrainerId, packageId, packageIds, fromTrainerName }: Props) {
   const qc = useQueryClient();
   const today = typeof getISTToday === 'function' ? format(getISTToday(), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
   const [selected, setSelected] = useState<string[]>([]);
@@ -47,13 +48,13 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
   const [reason, setReason] = useState('');
 
   const pkgs = useQuery({
-    queryKey: ['pt-transfer-packages', fromTrainerId ?? null, packageId ?? null],
-    enabled: open && !!(fromTrainerId || packageId),
+    queryKey: ['pt-transfer-packages', fromTrainerId ?? null, packageId ?? null, (packageIds ?? []).join(',')],
+    enabled: open && !!(fromTrainerId || packageId || packageIds?.length),
     queryFn: async (): Promise<PkgRow[]> => {
       let q = supabase.from('member_pt_packages')
         .select('id, member_id, trainer_id, sessions_total, sessions_remaining, expiry_date, status')
         .in('status', ['active', 'pending_payment']);
-      q = packageId ? q.eq('id', packageId) : q.eq('trainer_id', fromTrainerId!);
+      q = packageIds?.length ? q.in('id', packageIds) : packageId ? q.eq('id', packageId) : q.eq('trainer_id', fromTrainerId!);
       const { data, error } = await q;
       if (error) throw error;
       const rows = data ?? [];
@@ -98,8 +99,8 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
     return { move, stay };
   }, [pkgs.data, selected, effMonth]);
 
-  const sourceTrainer = fromTrainerId ?? pkgs.data?.[0]?.trainer_id;
-  const options = (trainers.data ?? []).filter((t) => t.id !== sourceTrainer);
+  const sourceTrainers = new Set(fromTrainerId ? [fromTrainerId] : (pkgs.data ?? []).map((p) => p.trainer_id));
+  const options = (trainers.data ?? []).filter((t) => !sourceTrainers.has(t.id));
   const toName = options.find((t) => t.id === toTrainer)?.profile_name ?? 'new trainer';
 
   const mutation = useMutation({
@@ -113,7 +114,7 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
     },
     onSuccess: (d) => {
       toast.success(`${d.transferred} PT client(s) moved to ${toName}`);
-      ['member-pt-packages', 'active-member-packages', 'trainer-sessions', 'pt-transfer-packages', 'member-details', 'payroll']
+      ['member-pt-packages', 'active-member-packages', 'trainer-sessions', 'pt-transfer-packages', 'member-details', 'payroll', 'pt-commissions']
         .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       onOpenChange(false);
     },
