@@ -62,7 +62,10 @@ export function AgentFlowCanvas() {
     },
   });
 
-  const channels = ((purpose?.ops_config as any)?.channels ?? {}) as Record<string, boolean>;
+  const channels = useMemo(
+    () => ((purpose?.ops_config as { channels?: Record<string, boolean> } | null)?.channels ?? {}),
+    [purpose?.ops_config],
+  );
   const channelOn = useCallback((key: string) => channels[key] !== false, [channels]);
   const toolCount = ((purpose?.tools_allowed as string[] | null) ?? []).length;
   const toolLabel = toolCount === 0 ? 'All tools available' : `${toolCount} tools allowed`;
