@@ -1,4 +1,6 @@
-// v1.2.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// v1.3.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// 1.3.0: every mandatory acknowledgement (REQUIRED_ACKNOWLEDGEMENT_KEYS) is
+//        enforced server-side, not just dpdp/whatsapp/waiver.
 // Two modes:
 //   { mode: 'send_otp', phone }
 //   { mode: 'verify_and_register', phone, code, registration:{...}, par_q, consents, signature_data_url }
@@ -18,6 +20,7 @@ import {
   AGREEMENT_TITLE,
   AGREEMENT_VERSION,
   FINAL_DECLARATION,
+  REQUIRED_ACKNOWLEDGEMENT_KEYS,
 } from "../_shared/agreement.ts";
 
 const corsHeaders = {
@@ -463,8 +466,11 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // contract and persisted so staff reprints match exactly.
   const customTerms = body.custom_terms ? String(body.custom_terms).slice(0, 4000) : null;
   const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : AGREEMENT_VERSION;
-  if (!consents.dpdp || !consents.whatsapp || !consents.waiver) {
-    return json(400, { error: "required_consents_missing" });
+  // Every mandatory acknowledgement is a condition of membership; the /register
+  // page blocks submission without them, and the server must agree.
+  const missingRequired = REQUIRED_ACKNOWLEDGEMENT_KEYS.filter((k) => consents[k] !== true);
+  if (missingRequired.length) {
+    return json(400, { error: "required_consents_missing", missing: missingRequired });
   }
 
   // 1) Find latest unconsumed OTP

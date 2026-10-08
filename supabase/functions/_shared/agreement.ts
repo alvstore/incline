@@ -46,6 +46,8 @@ export interface AgreementAcknowledgement {
   key: string;
   part: AgreementPartId;
   label: string;
+  /** Compact label for chips/summaries (profile drawer, signed-state view). */
+  short: string;
   required: boolean;
 }
 
@@ -228,6 +230,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     part: 'C',
     label:
       'I declare that my health information and PAR-Q answers above are true and complete.',
+    short: 'Health declaration',
     required: true,
   },
   {
@@ -235,6 +238,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     part: 'D',
     label:
       'I accept the assumption of risk, 24/7 unstaffed-hours access, emergency medical consent and indemnity in Part D.',
+    short: 'Risk waiver & indemnity',
     required: true,
   },
   {
@@ -242,6 +246,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     part: 'E',
     label:
       'I have read and accept the facility rules and membership conditions in Part E (turnstile, footwear, lockers, parking, conduct).',
+    short: 'Facility rules',
     required: true,
   },
   {
@@ -249,6 +254,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     part: 'F',
     label:
       'I consent to processing of my personal data, including CCTV recording, per the DPDP Act, 2023.',
+    short: 'Data protection (DPDP)',
     required: true,
   },
   {
@@ -256,6 +262,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     part: 'G',
     label:
       'I consent to receiving membership updates over WhatsApp, SMS and email.',
+    short: 'WhatsApp / SMS / email updates',
     required: true,
   },
   {
@@ -263,6 +270,7 @@ export const AGREEMENT_ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     part: 'H',
     label:
       'I consent to my photo being used for member identification (optional: marketing/social media use).',
+    short: 'Photo / media use',
     required: false,
   },
 ];
@@ -278,3 +286,31 @@ export function acknowledgementLabel(key: string): string {
 export const REQUIRED_ACKNOWLEDGEMENT_KEYS = AGREEMENT_ACKNOWLEDGEMENTS
   .filter((a) => a.required)
   .map((a) => a.key);
+
+/**
+ * Resolve the acknowledgement state of a SIGNED agreement record.
+ *
+ * Every mandatory acknowledgement is a condition of membership and is covered
+ * by the member's single signature (see FINAL_DECLARATION), so once a signed
+ * record exists the mandatory keys are always accepted — regardless of whether
+ * an older sign-up form happened to collect that tick individually. Optional
+ * acknowledgements (photo / marketing) keep exactly what the member chose.
+ *
+ * Use this for display, printing and re-sign prefill of an existing signature.
+ * Never use it to decide whether a NEW signature may be stored — that path
+ * must still require every mandatory tick explicitly.
+ */
+export function acknowledgementsFromSignedRecord(
+  consents: Record<string, unknown> | null | undefined,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  AGREEMENT_ACKNOWLEDGEMENTS.forEach((a) => {
+    out[a.key] = a.required ? true : consents?.[a.key] === true;
+  });
+  return out;
+}
+
+/** True when the mandatory ticks on a record were confirmed by data backfill rather than collected individually. */
+export function acknowledgementsWereBackfilled(consents: Record<string, unknown> | null | undefined): boolean {
+  return typeof consents?.required_acks_backfilled_at === 'string';
+}

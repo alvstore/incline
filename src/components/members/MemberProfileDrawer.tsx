@@ -22,6 +22,11 @@ import {
   ChevronLeft, ChevronRight, Pencil, KeyRound, Library, PhoneCall
 } from 'lucide-react';
 import { MemberVoiceAIHistory } from '@/components/voice/MemberVoiceAIHistory';
+import {
+  AGREEMENT_ACKNOWLEDGEMENTS,
+  acknowledgementsFromSignedRecord,
+  acknowledgementsWereBackfilled,
+} from '@/lib/registration/agreement';
 
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -1916,31 +1921,43 @@ export function MemberProfileDrawer({
                         </ul>
                       </details>
                     )}
-                    {onboardingSig.consents && typeof onboardingSig.consents === 'object' && (
-                      <details className="text-xs">
-                        <summary className="cursor-pointer text-muted-foreground">Consents</summary>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {Object.entries(onboardingSig.consents as Record<string, unknown>).map(([k, v]) => {
-                            const label = k
-                              .replace(/_/g, ' ')
-                              .replace(/\bdpdp\b/i, 'DPDP')
-                              .replace(/\bwhatsapp\b/i, 'WhatsApp')
-                              .replace(/^\w/, (c) => c.toUpperCase());
-                            const on = v === true || String(v).toLowerCase() === 'true';
-                            return (
-                              <span
-                                key={k}
-                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium ${
-                                  on ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                {label}: {on ? 'Granted' : 'Declined'}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </details>
-                    )}
+                    {onboardingSig.consents && typeof onboardingSig.consents === 'object' && (() => {
+                      // A signed record covers every mandatory acknowledgement
+                      // (one signature, Parts A–I); optional ones show the
+                      // member's own choice. Bookkeeping keys are never shown.
+                      const consents = onboardingSig.consents as Record<string, unknown>;
+                      const resolved = acknowledgementsFromSignedRecord(consents);
+                      return (
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-muted-foreground">
+                            Acknowledgements · all mandatory accepted
+                          </summary>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {AGREEMENT_ACKNOWLEDGEMENTS.map((a) => {
+                              const on = resolved[a.key];
+                              return (
+                                <span
+                                  key={a.key}
+                                  title={a.label}
+                                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium border ${
+                                    on
+                                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                      : 'bg-muted text-muted-foreground border-border'
+                                  }`}
+                                >
+                                  {a.short}: {on ? 'Accepted' : 'Not given'}
+                                </span>
+                              );
+                            })}
+                          </div>
+                          {acknowledgementsWereBackfilled(consents) && (
+                            <p className="mt-1.5 text-[10px] text-muted-foreground">
+                              Signed on an earlier form version — mandatory acknowledgements confirmed from the signature.
+                            </p>
+                          )}
+                        </details>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               )}
