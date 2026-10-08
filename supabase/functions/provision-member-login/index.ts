@@ -14,7 +14,7 @@
 //   - leadService.convertToMember (best-effort, right after conversion)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireCaller } from "../_shared/requireCaller.ts";
+import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +23,8 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
+  const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] });
+  if (!__caller.ok) return __caller.response;
 
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
@@ -60,6 +61,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (mErr) throw mErr;
     if (!member) return json({ error: "member_not_found", message: "Member not found" }, 404);
+    if (!(await canActOnBranch(__caller, member.branch_id))) {
+      return json({ error: "forbidden", message: "You cannot manage members of this branch" }, 403);
+    }
     if (member.user_id) {
       return json({ success: true, user_id: member.user_id, action: "already_linked" });
     }
@@ -110,6 +114,21 @@ Deno.serve(async (req) => {
       if (users.length < 200) break;
     }
 
+    // Guard: never attach an existing account found via a caller-typed identity
+    // that differs from the member's record, and never attach staff accounts.
+    if (userId) {
+      const leadEmail = normalizeEmail(lead?.email);
+      const leadPhone = normalizePhone(lead?.phone);
+      const fromRecord = matchedBy === "email" ? (!!leadEmail && leadEmail === email) : (!!leadPhone && leadPhone === phone);
+      const { data: uRoles } = await admin.from("user_roles").select("role").eq("user_id", userId);
+      const privileged = (uRoles ?? []).some((r: { role: string }) => r.role !== "member");
+      if (privileged || (!fromRecord && !__caller.internal)) {
+        return json({
+          error: "identity_taken",
+          message: `That ${matchedBy === "phone" ? "phone" : "email"} already has an account. Update the member's record with it first, or use a different one.`,
+        }, 409);
+      }
+    }
     // Guard: the matched auth user must not already belong to another member.
     if (userId) {
       const { data: clash } = await admin
