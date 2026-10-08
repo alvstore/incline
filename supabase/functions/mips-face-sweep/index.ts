@@ -52,7 +52,7 @@ import {
   seedLedger,
 } from "../_shared/mipsFaceState.ts";
 import { fetchPushLedger, latestLedgerState } from "../_shared/mipsDispatch.ts";
-import { requireCaller } from "../_shared/requireCaller.ts";
+import { requireCaller, callerBranchIds } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -235,7 +235,9 @@ async function verifyByRecognition(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager"] }); if (!__caller.ok) return __caller.response; }
+  const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager"] });
+  if (!__caller.ok) return __caller.response;
+  const __allowed = await callerBranchIds(__caller);
 
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -257,7 +259,8 @@ Deno.serve(async (req) => {
     if (devErr) throw devErr;
 
     const branchIds = [...new Set((devices || []).map((d: any) => d.branch_id))]
-      .filter((b) => !onlyBranch || b === onlyBranch);
+      .filter((b) => !onlyBranch || b === onlyBranch)
+      .filter((b) => __allowed === null || __allowed.includes(b as string));
 
     const summary: Array<Record<string, unknown>> = [];
 

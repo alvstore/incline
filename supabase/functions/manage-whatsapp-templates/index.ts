@@ -181,6 +181,19 @@ serve(async (req) => {
       );
     }
 
+    if (!isSystemWorker) {
+      const { data: globalRole } = await supabase.from("user_roles").select("role")
+        .eq("user_id", user?.id).in("role", ["owner", "admin"]).limit(1);
+      if (!globalRole?.length) {
+        const { data: bm } = await supabase.from("branch_managers").select("branch_id").eq("user_id", user?.id).eq("branch_id", branch_id).limit(1);
+        const { data: sbr } = await supabase.from("staff_branches").select("branch_id").eq("user_id", user?.id).eq("branch_id", branch_id).limit(1);
+        if (!(bm?.length || sbr?.length)) {
+          return new Response(JSON.stringify({ error: "Forbidden — no access to this branch" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+    }
+
     // Fetch WhatsApp integration settings
     let activeIntegration: any = null;
     const { data: branchIntegration } = await supabase
