@@ -81,7 +81,7 @@ interface MemberRegistrationFormProps {
 
 export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: MemberRegistrationFormProps) {
   const queryClient = useQueryClient();
-  const { data: brand } = useBrandContext(null);
+  const agreementRef = agreementReference(data.memberCode, data.memberId);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSigned, setHasSigned] = useState(false);
