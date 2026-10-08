@@ -9,6 +9,20 @@ import {
   metaFetchWithFallback,
 } from "../_shared/meta-config.ts";
 
+
+// v-ssrf — outbound URLs built from caller-supplied config must hit a known provider host.
+function isAllowedProviderUrl(raw: string, hostSuffixes: string[], allowHttp = false): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && !(allowHttp && u.protocol === "http:")) return false;
+    if (u.username || u.password) return false;
+    const h = u.hostname.toLowerCase();
+    return hostSuffixes.some((sfx) => h === sfx || h.endsWith("." + sfx));
+  } catch { return false; }
+}
+const AI_HOSTS = ["ai.gateway.lovable.dev", "openrouter.ai", "api.deepseek.com", "generativelanguage.googleapis.com",
+  "api.groq.com", "api.together.xyz", "api.mistral.ai", "api.openai.com", "api.anthropic.com", "api.x.ai", "api.perplexity.ai", "api.sarvam.ai"];
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -186,6 +200,9 @@ async function testSMS(provider: string, config: any, credentials: any) {
       const endpoint = config?.balance_endpoint || "/checkbalance.php";
       const url = `${base}${endpoint}?user=${encodeURIComponent(credentials?.username || "")}&pass=${encodeURIComponent(credentials?.password || "")}`;
       try {
+        if (!isAllowedProviderUrl(url, ["roundsms.co", "roundsms.com", "roundsms.in"], true)) {
+          return json({ success: false, error: "RoundSMS URL must point to a RoundSMS host" }, 400);
+        }
         const resp = await fetch(url);
         const text = await resp.text();
         if (text.toLowerCase().includes("error") || text.toLowerCase().includes("invalid")) {
@@ -307,6 +324,9 @@ async function testWhatsApp(provider: string, config: any, credentials: any) {
         return { success: false, error: "API Endpoint and Access Token are required" };
       }
       try {
+        if (!isAllowedProviderUrl(String(config.api_endpoint_url), ["wati.io"])) {
+          return json({ success: false, error: "WATI endpoint must be an https://*.wati.io address" }, 400);
+        }
         const resp = await fetch(`${config.api_endpoint_url}/api/v1/getTemplates`, {
           headers: { Authorization: `Bearer ${credentials.access_token}` },
         });
@@ -509,6 +529,10 @@ async function handleAiProvider(authHeader: string, body: any) {
       case "mistral": endpoint = "https://api.mistral.ai/v1/chat/completions"; break;
       default: return json({ error: "base_url is required for this provider" }, 400);
     }
+  }
+
+  if (!isAllowedProviderUrl(String(endpoint), AI_HOSTS)) {
+    return json({ error: "base_url must be an https address of a supported AI provider" }, 400);
   }
 
   let apiKey: string | null = null;
