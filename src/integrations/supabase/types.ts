@@ -16902,6 +16902,7 @@ export type Database = {
         Returns: string
       }
       maintain_log_sizes: { Args: never; Returns: undefined }
+      managed_branch_ids: { Args: { _user_id: string }; Returns: string[] }
       manages_branch: {
         Args: { _branch_id: string; _user_id: string }
         Returns: boolean
@@ -17244,6 +17245,14 @@ export type Database = {
       promote_announcement_to_campaign: {
         Args: { p_announcement_id: string }
         Returns: Json
+      }
+      prune_access_log_media: {
+        Args: {
+          p_batch?: number
+          p_max_batches?: number
+          p_older_than?: string
+        }
+        Returns: number
       }
       prune_off_schedule_slots: {
         Args: { p_facility_id?: string }

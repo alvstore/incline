@@ -1,3 +1,11 @@
+# Database performance & storage (2026-10-08 audit follow-up)
+- [ ] access_logs: stop storing gate camera base64 captures (write-time strip in mips-webhook-receiver + reconcile-mips-pass-records)
+- [ ] access_logs: nightly `prune_access_log_media()` safety net wired into `maintain_log_sizes()`; one-time backfill of the 38k historic rows; reclaim disk
+- [ ] RLS hot paths: hoist per-row `has_any_role/get_user_branch/manages_branch` calls into `(SELECT …)` on member_attendance, whatsapp_chat_settings, access_logs (same semantics, evaluated once per statement)
+- [ ] Unread-chat badge: partial index on whatsapp_chat_settings(is_unread) + covering index for member_attendance day/branch counts
+- [ ] Cron: gate the 4 reconcile pollers (whatsapp, rcs, campaign-stats, razorpay) on real pending work so no-op ticks never spin up a function
+- [ ] Verify live: slow-query means before/after, access feed loads, gates still log scans, cron ticks still fire when work exists
+
 # Security & Lint Audit — phased fixes (2026-10-08)
 Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 
@@ -18,3 +26,4 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [ ] MIPS restart incident: cold-standby parity; re-enable workers one at a time
 - [ ] Google Business Profile OAuth expired — owner must reconnect under Settings → Integrations
 - [ ] Live checks pending: first October payroll settlement; one small real purchase as Mohit Gurjar
+- [ ] TanStack Start migration: deferred — prepare browser-only 3D/PDF modules with dynamic imports first (see audit)
