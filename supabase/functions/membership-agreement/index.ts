@@ -13,7 +13,7 @@
 //   sign     { member_id, ... }       staff only. Stores signature + legal record + PDF.
 //   backfill { limit, dry_run, force } owner/admin only. Regenerates legacy agreements
 //                                     into the unified document (idempotent, batched).
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import {
   canActOnBranch,
@@ -691,7 +691,3 @@ Deno.serve(async (req) => {
     return json(500, { error: "internal_error", detail: (e as Error)?.message ?? String(e) });
   }
 });
-
-// Keep the type import referenced for editors that tree-shake unused imports.
-export type { SupabaseClient };
-void createClient;
