@@ -539,7 +539,7 @@ export function PurchaseAddOnDrawer({
           </SheetTitle>
           <SheetDescription>
             {isMember
-              ? 'Top up recovery sessions or personal training. Your invoice is created instantly.'
+              ? 'Top up recovery sessions instantly, or ask the front desk for a personal training package.'
               : 'Add extra benefit credits or a PT package. Invoice and payment are recorded atomically.'}
           </SheetDescription>
         </SheetHeader>
@@ -550,15 +550,19 @@ export function PurchaseAddOnDrawer({
               <CheckCircle className="h-8 w-8 text-success" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Add-on activated</h3>
+              <h3 className="text-lg font-semibold">{ptRequested ? 'Request sent' : 'Add-on activated'}</h3>
               <p className="text-sm text-muted-foreground">
-                {lastPurchase
+                {ptRequested
+                  ? 'The front desk will raise your bill and send a payment link shortly. Track it under My Requests.'
+                  : lastPurchase
                   ? `${lastPurchase.credits} credit${lastPurchase.credits > 1 ? 's' : ''} added — valid for ${lastPurchase.validityDays} days. Your invoice is in Invoices.`
                   : 'Invoice has been generated and credits are live.'}
               </p>
             </div>
             <div className="flex gap-2">
-              {isMember ? (
+              {isMember && ptRequested ? (
+                <Button className="flex-1 rounded-xl" onClick={handleClose}>Done</Button>
+              ) : isMember ? (
                 <>
                   <Button variant="outline" className="flex-1 rounded-xl" onClick={handleClose}>Done</Button>
                   <Button
