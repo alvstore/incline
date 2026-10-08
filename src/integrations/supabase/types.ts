@@ -18033,8 +18033,6 @@ export type Database = {
               reason: string
             }[]
           }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       staff_can_write_avatar: {
         Args: { _path: string; _user_id: string }
         Returns: boolean

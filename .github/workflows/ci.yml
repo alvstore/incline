@@ -100,3 +100,8 @@ jobs:
             exit 1
           fi
           echo "Direct-write guard passed."
+
+      - name: Privileged DB function guard
+        # Fails when a migration adds/changes a SECURITY DEFINER function that has no
+        # permission check inside and is not revoked from signed-in users.
+        run: bunx tsx scripts/check-definer-guards.ts
