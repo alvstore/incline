@@ -17,8 +17,11 @@ import { readdirSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 
 const FOLDERS = ["drizzle/migrations", "supabase/migrations"];
-// Migrations before this prefix predate the guard framework and were audited by hand.
+// Migrations before this prefix predate the guard framework and were audited by hand
+// (phases 1–3 locked or guarded them in the live database via migrations 0010–0016).
 const DEFAULT_SINCE = "0011";
+// Legacy timestamped folder is frozen at this file; anything newer is checked.
+const LEGACY_BASELINE = "20261007145921";
 
 const GUARD_MARKERS = [
   /rpc_guard_applies\s*\(/i,
