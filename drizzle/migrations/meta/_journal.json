@@ -134,6 +134,13 @@
       "when": 1791444899204,
       "tag": "0018_phase4_functions_closed_by_default",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791465433887,
+      "tag": "0019_db_perf_access_log_media_rls_hoisting",
+      "breakpoints": true
     }
   ]
 }
