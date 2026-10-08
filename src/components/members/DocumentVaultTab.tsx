@@ -44,17 +44,11 @@ export function DocumentVaultTab({ memberId }: DocumentVaultTabProps) {
     },
   });
 
-  // Block duplicate registration-form uploads from any path on the member profile.
-  const hasRegistrationForm = (documents as any[]).some(
-    (d) => d.document_type === 'registration_form',
-  );
-
+  // The Membership Agreement is never uploaded by hand — it is generated and
+  // signed through the agreement flow (one document, one signature).
   if (docType === 'registration_form') {
     setDocType('contract');
   }
-
-  // The Membership Agreement is never uploaded by hand — it is generated and
-  // signed through the agreement flow (one document, one signature).
   const docTypeOptions = Object.entries(DOC_TYPE_LABELS).filter(([k]) => k !== 'registration_form');
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

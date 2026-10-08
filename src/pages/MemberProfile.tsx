@@ -214,6 +214,27 @@ export default function MemberProfile() {
                 {row(MapPin, 'Home branch', (member as any)?.branch?.name || 'Main Branch')}
               </div>
             </section>
+            {healthData?.signed_at && (
+              <section className={`${cardCls} p-4`}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"><FileText className="h-4 w-4" aria-hidden /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">Membership Agreement</p>
+                    <p className="text-xs text-muted-foreground">
+                      {agreementReference(member.member_code, member.id)} · signed {format(parseISO(healthData.signed_at), 'dd MMM yyyy')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="min-h-9" disabled={agreementBusy !== null} onClick={() => void runAgreementAction('view')}>
+                      {agreementBusy === 'view' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Eye className="mr-1.5 h-3.5 w-3.5" />}View
+                    </Button>
+                    <Button size="sm" variant="ghost" className="min-h-9" disabled={agreementBusy !== null} onClick={() => void runAgreementAction('download')} aria-label="Download agreement">
+                      {agreementBusy === 'download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            )}
             <p className="px-1 text-xs text-muted-foreground">To change your name or email, please contact reception.</p>
           </TabsContent>
 
