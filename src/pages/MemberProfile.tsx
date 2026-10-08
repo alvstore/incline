@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AvatarUpload } from '@/components/auth/AvatarUpload';
 import { useMemberData } from '@/hooks/useMemberData';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Loader2, KeyRound, HeartPulse, Pencil, CreditCard, LogOut, FileText, Eye, Download } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Loader2, KeyRound, HeartPulse, Pencil, CreditCard, LogOut, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO } from 'date-fns';
 import { getISTNow, getISTToday } from '@/lib/utils/datetime';
