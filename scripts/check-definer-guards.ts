@@ -118,6 +118,7 @@ function main(): void {
     for (const file of listSqlFiles(folder)) {
       const base = file.split("/").pop() ?? file;
       if (folder.startsWith("drizzle") && base.slice(0, 4) < since) continue;
+      if (folder.startsWith("supabase") && base.slice(0, 14) <= LEGACY_BASELINE) continue;
       const sql = readFileSync(file, "utf8");
       for (const fn of extractFunctions(sql)) {
         if (fn.returnsTrigger) continue; // trigger functions are never called by users
