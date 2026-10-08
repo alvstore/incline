@@ -1,10 +1,11 @@
 # Database performance & storage (2026-10-08 audit follow-up)
-- [ ] access_logs: stop storing gate camera base64 captures (write-time strip in mips-webhook-receiver + reconcile-mips-pass-records)
-- [ ] access_logs: nightly `prune_access_log_media()` safety net wired into `maintain_log_sizes()`; one-time backfill of the 38k historic rows; reclaim disk
-- [ ] RLS hot paths: hoist per-row `has_any_role/get_user_branch/manages_branch` calls into `(SELECT …)` on member_attendance, whatsapp_chat_settings, access_logs (same semantics, evaluated once per statement)
-- [ ] Unread-chat badge: partial index on whatsapp_chat_settings(is_unread) + covering index for member_attendance day/branch counts
-- [ ] Cron: gate the 4 reconcile pollers (whatsapp, rcs, campaign-stats, razorpay) on real pending work so no-op ticks never spin up a function
-- [ ] Verify live: slow-query means before/after, access feed loads, gates still log scans, cron ticks still fire when work exists
+- [x] access_logs: gate camera captures no longer stored (`_shared/mipsPayload.ts#stripScanMedia` in mips-webhook-receiver v2.10.0 + reconcile-mips-pass-records v2.7.0, deployed; live scan payload 176 KB → 0.5 KB)
+- [x] access_logs: `prune_access_log_media()` safety net in `maintain_log_sizes()` (migration 0019); all 45k historic rows backfilled + VACUUM FULL — database 3.06 GB → 396 MB, access_logs 2.6 GB → 59 MB, zero rows deleted
+- [x] RLS hot paths hoisted (0019): member_attendance 30-day count 1326 ms → 89 ms; new `managed_branch_ids()` helper
+- [x] Unread-chat badge partial index `idx_wcs_unread_branch` (attendance day/branch index already existed)
+- [x] Cron pollers gated on real pending work (0020): whatsapp/rcs/campaign-stats/razorpay/automation-brain — verified "0 rows" (no function spin-up) on idle ticks and "1 row" + successful runs when work exists
+- [x] Verified live as owner: dashboard, attendance, devices (Fleet + Live Feed), WhatsApp pages load with 0 failed calls; gates still logging scans
+- [ ] Follow-up (optional): `maintain_log_sizes` still has no row-retention for access_logs older than ~1 year — decide a retention window with the owner before adding one
 
 # Security & Lint Audit — phased fixes (2026-10-08)
 Source doc: /mnt/documents/Incline_Security_Lint_Audit.md

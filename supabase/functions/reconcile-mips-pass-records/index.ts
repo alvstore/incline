@@ -1,3 +1,5 @@
+// v2.7.0 — Imported pass records are stored without inline camera frames / tokens
+//           (shared stripScanMedia helper; same rule as the live webhook v2.10.0).
 // v2.6.0 — Paginated MIPS pass-record backfill (body.pages) + outage-safe skips.
 // v2.3 fixes: staff attendance now goes through the canonical `staff_record_punch`
 // RPC (same path as the live webhook), so roster-block resolution, grace and
@@ -8,6 +10,7 @@
 // terminal webhooks are not landing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeScanTime } from "../_shared/mipsTime.ts";
+import { stripScanMedia } from "../_shared/mipsPayload.ts";
 
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import {
@@ -660,7 +663,7 @@ Deno.serve(async (req) => {
         message,
         captured_at: scanTime,
         payload: {
-          ...record,
+          ...stripScanMedia(record).payload,
           source: "mips_record_reconcile",
           mips_record_id: recordKey,
           person_no: personNo,
