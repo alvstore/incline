@@ -733,7 +733,7 @@ Deno.serve(async (req) => {
         status = ok ? 'sent' : 'failed';
         if (!ok) errorReason = dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed';
       } catch (e: any) {
-        console.error(`Broadcast dispatch error for ${recipient}:`, e);
+        console.error(`Broadcast dispatch error for ***${String(recipient ?? "").slice(-4)}:`, e);
         status = 'failed';
         errorReason = e?.message || 'exception';
       }

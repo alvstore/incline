@@ -1312,7 +1312,7 @@ async function triggerAiReply(
       p_inbound_message_id: messageId,
     });
     if (claimed === false) {
-      console.log(`[AI:${platform}] reply claim already held for ${senderId} — skipping duplicate`);
+      console.log(`[AI:${platform}] reply claim already held for ***${String(senderId).slice(-4)} — skipping duplicate`);
       return;
     }
   } catch (claimErr) {
