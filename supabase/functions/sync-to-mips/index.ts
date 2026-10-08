@@ -737,6 +737,8 @@ Deno.serve(async (req) => {
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
     (apiKeyHeader === SERVICE_KEY && systemCall.length > 0);
+  let __callerUid: string | null = null;
+  let __callerGlobal = isService;
   if (!isService) {
     if (!bearer) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -759,6 +761,8 @@ Deno.serve(async (req) => {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    __callerUid = uid;
+    __callerGlobal = (roles || []).some((r: any) => r.role === "owner" || r.role === "admin");
   }
 
   // Outage bookkeeping — set as soon as we know who we were syncing so the
@@ -907,6 +911,18 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (!__callerGlobal) {
+      const tbl = person_type === "member" ? "members" : person_type === "employee" ? "employees" : person_type === "trainer" ? "trainers" : null;
+      if (!tbl) return new Response(JSON.stringify({ error: "Invalid person_type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const { data: tgt } = await supabase.from(tbl).select("branch_id").eq("id", person_id).maybeSingle();
+      const tb = (tgt as { branch_id?: string } | null)?.branch_id ?? null;
+      const { data: bm } = await supabase.from("branch_managers").select("branch_id").eq("user_id", __callerUid!).eq("branch_id", tb).limit(1);
+      const { data: sbr } = await supabase.from("staff_branches").select("branch_id").eq("user_id", __callerUid!).eq("branch_id", tb).limit(1);
+      if (!tb || !(bm?.length || sbr?.length)) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
     // Step 1: Fetch CRM data based on person type — merge every available source
