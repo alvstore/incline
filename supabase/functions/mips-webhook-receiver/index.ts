@@ -1,3 +1,8 @@
+// v2.10.0 - access_logs payload no longer stores the terminal's base64 frame (imgBase64 /
+//           inline img_uri / checkImgUri) nor the device token. Those blobs were ~110 kB per
+//           scan, 85% of the whole database, and made every Live Access Feed load 3-4 MB.
+//           The raw payload still goes to the MIPS relay untouched; only the stored copy
+//           is trimmed (shared helper _shared/mipsPayload.ts, nightly DB prune as backstop).
 // v2.9.0 - Re-entry guard: an entry scan within 3 min of an exit check-out is ignored (no phantom visit).
 // v2.8.0 - face_1 (terminal refused) on entry → member_denied + front-desk alert, never attendance.
 // v2.7.0 - Entry/exit aware attendance: the scanning gate's door_role decides whether a
@@ -11,6 +16,7 @@
 //           canonical parser also used by reconcile-mips-pass-records.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseScanTime } from "../_shared/mipsTime.ts";
+import { stripScanMedia, urlOnly } from "../_shared/mipsPayload.ts";
 
 
 const corsHeaders = {
@@ -824,7 +830,8 @@ Deno.serve(async (req) => {
       message = `Stranger detected at ${deviceName}`;
     }
 
-    // Log to access_logs
+    // Log to access_logs — v2.10.0: store the event metadata only, never the camera frame.
+    const stripped = stripScanMedia(payload);
     const { error: logError } = await supabase.from("access_logs").insert({
       device_sn: deviceKey,
       event_type: eventType,
@@ -835,9 +842,11 @@ Deno.serve(async (req) => {
       branch_id: branchId,
       captured_at: scanTime,
       payload: {
-        ...payload,
+        ...stripped.payload,
         temperature,
-        img_uri: imgUri,
+        img_uri: urlOnly(imgUri),
+        had_capture: stripped.hadCapture,
+        capture_bytes: stripped.mediaBytesRemoved || undefined,
         search_score: searchScore,
         liveness_score: livenessScore,
         source: "mips_webhook",
