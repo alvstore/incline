@@ -85,7 +85,7 @@ const META_ERROR_MAP: Record<number, { short: string; hint: string }> = {
 const CODE_PATTERNS: RegExp[] = [
   /\(#(\d{3,6})\)/, // "(#132001)"
   /"meta_code"\s*:\s*(\d{3,6})/, // JSON blob
-  /^(\d{3,6})\s*[:\-]/, // "132001: Template..."
+  /^(\d{3,6})\s*[:-]/, // "132001: Template..."
 ];
 
 export function parseCommError(raw: string | null | undefined): FriendlyCommError | null {

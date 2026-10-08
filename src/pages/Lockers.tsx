@@ -24,6 +24,7 @@ import { AssignLockerDrawer } from '@/components/lockers/AssignLockerDrawer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { exportToCSV } from '@/lib/csvExport';
+import { ZONE_OPTIONS, zoneLabel } from './lockersConstants';
 
 const createLockerSchema = z.object({
   locker_number: z.string().min(1, 'Locker number required'),
@@ -33,14 +34,6 @@ const createLockerSchema = z.object({
   notes: z.string().optional(),
 });
 
-export const ZONE_OPTIONS = [
-  { value: 'male', label: 'Male room' },
-  { value: 'female', label: 'Female room' },
-  { value: 'common', label: 'Common area' },
-] as const;
-
-export const zoneLabel = (z?: string | null) =>
-  ZONE_OPTIONS.find((o) => o.value === z)?.label ?? 'Common area';
 
 
 type CreateLockerData = z.infer<typeof createLockerSchema>;

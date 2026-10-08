@@ -28,7 +28,8 @@ export async function fetchTrainers(
     return query;
   };
 
-  let { data, error } = await runQuery("trainers");
+  const { data: initialData, error } = await runQuery("trainers");
+  let data = initialData;
   if (error) throw error;
 
   // Front-desk staff cannot read the trainers table directly (it holds

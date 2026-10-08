@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -105,8 +105,10 @@ export default function MemberRequests() {
     );
   }, [requests, planRequests]);
 
-  const hasPending = (kind: RequestKind) =>
-    timelineItems.some((i) => i.kind === kind && i.status === 'pending');
+  const hasPending = useCallback(
+    (kind: RequestKind) => timelineItems.some((i) => i.kind === kind && i.status === 'pending'),
+    [timelineItems],
+  );
 
   const options: RequestOption[] = useMemo(() => {
     const list: RequestOption[] = [];
@@ -172,7 +174,7 @@ export default function MemberRequests() {
     });
 
     return list;
-  }, [isFrozen, freezeAllowed, freezeDaysAllowance, activeMembership, member, timelineItems]);
+  }, [isFrozen, freezeAllowed, freezeDaysAllowance, activeMembership, member, hasPending]);
 
   const openComposer = (kind: RequestKind | null) => {
     setComposerKind(kind);

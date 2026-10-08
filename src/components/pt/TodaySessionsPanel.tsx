@@ -33,8 +33,9 @@ export function TodaySessionsPanel({
   onCancel,
   onSchedule,
 }: Props) {
+  const now = useMemo(() => new Date(), []);
+
   const { today, upcoming } = useMemo(() => {
-    const now = new Date();
     const sorted = [...sessions].sort(
       (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
     );
@@ -44,7 +45,7 @@ export function TodaySessionsPanel({
         (s) => !isSameDay(new Date(s.scheduled_at), now) && isAfter(new Date(s.scheduled_at), now),
       ),
     };
-  }, [sessions]);
+  }, [sessions, now]);
 
 
   if (loading) {
