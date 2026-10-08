@@ -358,6 +358,35 @@ export function PurchaseAddOnDrawer({
     }
   };
 
+  /**
+   * Members cannot sell themselves a PT package — the server only lets branch staff
+   * run purchase_pt_package. In member mode the selection becomes a high-priority
+   * front-desk task (same path as the Renewal Concierge) so the desk raises the bill
+   * and sends a payment link.
+   */
+  const requestPT = async (pkg: PtPackage) => {
+    if (!user?.id) throw new Error('Please sign in again to send this request.');
+    const trainer = trainers.find((t: { id: string }) => t.id === selectedTrainer) as
+      | { profile_name?: string | null; profile_email?: string | null }
+      | undefined;
+    const trainerLabel = trainer?.profile_name || trainer?.profile_email || 'any available trainer';
+    const requester = memberName || 'Member';
+    await createTask({
+      branchId,
+      title: `PT package request from ${requester}`,
+      description: `${requester} requested ${pkg.name} (${pkg.total_sessions} sessions, ${pkg.validity_days} days) with ${trainerLabel} from the Add-ons drawer. Raise the invoice and send the payment link.`,
+      priority: 'high',
+      slaHours: 4,
+      memberCreated: true,
+      assignedBy: user.id,
+      linkedEntityType: 'member',
+      linkedEntityId: memberId,
+    });
+    setPtRequested(true);
+    queryClient.invalidateQueries({ queryKey: ['my-plan-requests'] });
+    queryClient.invalidateQueries({ queryKey: ['my-requests'] });
+  };
+
   const buyPT = async () => {
     if (!selectedPtPkg || !selectedTrainer) {
       toast.error('Pick a package and a trainer');
@@ -367,6 +396,13 @@ export function PurchaseAddOnDrawer({
     if (!pkg) return;
     setSubmitting(true);
     try {
+      if (mode === 'member') {
+        await requestPT(pkg);
+        toast.success('Request sent to the front desk');
+        setDone(true);
+        return;
+      }
+
       const { data, error } = await supabase.rpc('purchase_pt_package', {
         _member_id: memberId,
         _package_id: selectedPtPkg,
@@ -374,20 +410,24 @@ export function PurchaseAddOnDrawer({
         _branch_id: branchId,
         _price_paid: pkg.price,
         _gst_rate: 5,
-        _payment_method: mode === 'member' ? 'pending' : paymentMethod,
+        _payment_method: paymentMethod,
         _payment_source: 'in_person',
         _idempotency_key: ptIdemKey,
       });
 
       if (error) throw error;
+      const result = (data ?? {}) as PtPurchaseResult;
+      if (result.success === false) {
+        throw new Error(result.error || 'The PT package could not be activated.');
+      }
       toast.success('PT package activated');
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['member-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['my-pending-invoices'] });
       setDone(true);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to purchase PT package');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to purchase PT package');
     } finally {
       setSubmitting(false);
     }
