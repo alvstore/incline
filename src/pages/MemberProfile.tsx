@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AvatarUpload } from '@/components/auth/AvatarUpload';
 import { useMemberData } from '@/hooks/useMemberData';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Loader2, KeyRound, HeartPulse, Pencil, CreditCard, LogOut } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Loader2, KeyRound, HeartPulse, Pencil, CreditCard, LogOut, FileText, Eye, Download } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO } from 'date-fns';
 import { getISTNow, getISTToday } from '@/lib/utils/datetime';
@@ -19,6 +19,8 @@ import { CommunicationPreferences } from '@/components/profile/CommunicationPref
 import { useQuery } from '@tanstack/react-query';
 import { Badge as UIBadge } from '@/components/ui/badge';
 import { PARQ_QUESTIONS, parseHealthConditions } from '@/lib/registration/healthQuestions';
+import { agreementReference } from '@/lib/registration/agreement';
+import { downloadAgreement, openAgreement } from '@/lib/registration/agreementDocument';
 import { MemberPasswordSheet } from '@/components/member/MemberPasswordSheet';
 
 export default function MemberProfile() {
@@ -28,6 +30,19 @@ export default function MemberProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
+  const [agreementBusy, setAgreementBusy] = useState<'view' | 'download' | null>(null);
+  const runAgreementAction = async (kind: 'view' | 'download') => {
+    if (!member?.id) return;
+    setAgreementBusy(kind);
+    try {
+      if (kind === 'view') await openAgreement(member.id);
+      else await downloadAgreement(member.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open your agreement');
+    } finally {
+      setAgreementBusy(null);
+    }
+  };
 
   const [formData, setFormData] = useState({
     phone: profile?.phone || '',
@@ -253,7 +268,7 @@ export default function MemberProfile() {
                   {healthData.signed_at && <span className="ml-auto text-xs text-muted-foreground">{format(parseISO(healthData.signed_at), 'dd MMM yyyy')}</span>}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">To update, contact reception — these answers are part of your signed waiver.</p>
+              <p className="text-xs text-muted-foreground">To update, contact reception — these answers are part of your signed Membership Agreement.</p>
             </section>
           </TabsContent>
 
