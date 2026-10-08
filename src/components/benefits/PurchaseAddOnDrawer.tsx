@@ -115,7 +115,9 @@ export function PurchaseAddOnDrawer({
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [ptRequested, setPtRequested] = useState(false);
   const [lastPurchase, setLastPurchase] = useState<{ credits: number; validityDays: number } | null>(null);
+  const { user } = useAuth();
 
   // Upsell deep-link: preselect the package the member tapped on.
   useEffect(() => {
