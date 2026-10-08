@@ -71,6 +71,13 @@
       "when": 1791432671507,
       "tag": "0009_fix_payroll_breakdown_settled_null",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791435370581,
+      "tag": "0010_phase1_lock_internal_definer_functions",
+      "breakpoints": true
     }
   ]
 }

@@ -2,3 +2,4 @@ Attendance operations views consolidate same-day member attendance rows by membe
 Browser push mirrors existing in-app notifications through an event-driven queue; all new notification creation uses dispatchCommunication, keeping existing paid delivery channels unchanged.
 Web Push signing keys are stored in a service-role-only table; endpoints are provider-allowlisted and lock-screen payloads contain no personal, financial, or health data.
 Body progress places the render before a full-width summary; historical measurement silhouettes never fetch the latest scanner model, avoiding false before/after comparisons.
+- Privileged (SECURITY DEFINER) functions used only by scheduled jobs, triggers or backend functions must have EXECUTE revoked from PUBLIC/anon/authenticated and granted to service_role only — signed-in users could otherwise call them directly.
