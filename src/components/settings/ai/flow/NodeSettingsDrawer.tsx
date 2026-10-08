@@ -66,6 +66,7 @@ export function NodeSettingsDrawer({ node, readOnly, open, onOpenChange, onSave,
 
   useEffect(() => {
     setDraft(node ? { ...node.data } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset draft only when switching nodes (by id); `node` is a new object each render and would reset in-progress edits
   }, [node?.id, node?.data]);
 
   if (!node || !draft) return null;

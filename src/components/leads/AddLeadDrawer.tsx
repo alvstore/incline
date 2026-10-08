@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadService } from '@/services/leadService';
 import { supabase } from '@/integrations/supabase/client';
-import { CommConsentCheckbox, COMM_CONSENT_TEXT, COMM_CONSENT_CHANNELS } from '@/components/consent/CommConsentCheckbox';
+import { CommConsentCheckbox } from '@/components/consent/CommConsentCheckbox';
+import { COMM_CONSENT_TEXT, COMM_CONSENT_CHANNELS } from '@/components/consent/commConsent.constants';
 import { toast } from 'sonner';
 import { Flame, Sun, Snowflake } from 'lucide-react';
 
