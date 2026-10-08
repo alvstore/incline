@@ -20,7 +20,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge as UIBadge } from '@/components/ui/badge';
 import { PARQ_QUESTIONS, parseHealthConditions } from '@/lib/registration/healthQuestions';
 import { agreementReference } from '@/lib/registration/agreement';
-import { downloadAgreement, openAgreement } from '@/lib/registration/agreementDocument';
 import { MemberPasswordSheet } from '@/components/member/MemberPasswordSheet';
 
 export default function MemberProfile() {
@@ -30,20 +29,6 @@ export default function MemberProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
-  const [agreementBusy, setAgreementBusy] = useState<'view' | 'download' | null>(null);
-  const runAgreementAction = async (kind: 'view' | 'download') => {
-    if (!member?.id) return;
-    setAgreementBusy(kind);
-    try {
-      if (kind === 'view') await openAgreement(member.id);
-      else await downloadAgreement(member.id);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not open your agreement');
-    } finally {
-      setAgreementBusy(null);
-    }
-  };
-
   const [formData, setFormData] = useState({
     phone: profile?.phone || '',
     emergency_contact_name: profile?.emergency_contact_name || '',
@@ -239,15 +224,8 @@ export default function MemberProfile() {
                       {agreementReference(member.member_code, member.id)} · signed {format(parseISO(healthData.signed_at), 'dd MMM yyyy')}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="min-h-9" disabled={agreementBusy !== null} onClick={() => void runAgreementAction('view')}>
-                      {agreementBusy === 'view' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Eye className="mr-1.5 h-3.5 w-3.5" />}View
-                    </Button>
-                    <Button size="sm" variant="ghost" className="min-h-9" disabled={agreementBusy !== null} onClick={() => void runAgreementAction('download')} aria-label="Download agreement">
-                      {agreementBusy === 'download' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    </Button>
-                  </div>
                 </div>
+                <p className="mt-3 text-xs text-muted-foreground">Kept by The Incline for records. Ask the front desk if you need a copy.</p>
               </section>
             )}
             <p className="px-1 text-xs text-muted-foreground">To change your name or email, please contact reception.</p>
