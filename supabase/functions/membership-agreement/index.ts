@@ -398,7 +398,7 @@ async function authorizeForMember(c: CallerResult, b: Bundle, mode: "read" | "wr
   if (c.internal) return true;
   const isStaff = c.roles.some((r) => (STAFF_ROLES as string[]).includes(r)) || c.roles.includes("trainer");
   if (isStaff && (await canActOnBranch(c, b.member.branch_id))) return true;
-  if (mode === "read" && c.roles.includes("member") && b.member.user_id && b.member.user_id === c.userId) return true;
+  // Members never read their own agreement file — kept for records and legal only (staff copy on request).
   return false;
 }
 
@@ -411,7 +411,7 @@ async function signedUrl(admin: SupabaseClient, path: string): Promise<string | 
 // Actions
 // ---------------------------------------------------------------------------
 async function handleGet(req: Request, body: Record<string, unknown>): Promise<Response> {
-  const caller = await requireCaller(req, corsHeaders, { roles: [...STAFF_ROLES, "trainer", "member"] });
+  const caller = await requireCaller(req, corsHeaders, { roles: [...STAFF_ROLES, "trainer"] });
   if (!caller.ok) return caller.response;
   const memberId = String(body.member_id || "");
   if (!/^[0-9a-f-]{36}$/i.test(memberId)) return json(400, { error: "invalid_member_id" });

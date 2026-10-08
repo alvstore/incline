@@ -8702,6 +8702,10 @@ export type Database = {
           joined_at: string
           lead_id: string | null
           lifecycle_state: string
+          login_disabled_at: string | null
+          login_disabled_by: string | null
+          login_disabled_reason: string | null
+          login_disabled_source: string | null
           member_code: string | null
           mips_dispatch_status: string | null
           mips_face_verified_at: string | null
@@ -8756,6 +8760,10 @@ export type Database = {
           joined_at?: string
           lead_id?: string | null
           lifecycle_state?: string
+          login_disabled_at?: string | null
+          login_disabled_by?: string | null
+          login_disabled_reason?: string | null
+          login_disabled_source?: string | null
           member_code?: string | null
           mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
@@ -8810,6 +8818,10 @@ export type Database = {
           joined_at?: string
           lead_id?: string | null
           lifecycle_state?: string
+          login_disabled_at?: string | null
+          login_disabled_by?: string | null
+          login_disabled_reason?: string | null
+          login_disabled_source?: string | null
           member_code?: string | null
           mips_dispatch_status?: string | null
           mips_face_verified_at?: string | null
@@ -11292,6 +11304,102 @@ export type Database = {
           {
             foreignKeyName: "pt_sessions_trainer_id_fkey"
             columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pt_trainer_transfers: {
+        Row: {
+          branch_id: string
+          created_at: string
+          effective_date: string
+          from_trainer_id: string
+          id: string
+          member_id: string
+          member_pt_package_id: string
+          moved_amount: number
+          moved_installment_ids: string[]
+          moved_session_ids: string[]
+          performed_by: string | null
+          previous_assigned_trainer_id: string | null
+          reason: string | null
+          reassigned_general_trainer: boolean
+          to_trainer_id: string
+          undone_at: string | null
+          undone_by: string | null
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          effective_date: string
+          from_trainer_id: string
+          id?: string
+          member_id: string
+          member_pt_package_id: string
+          moved_amount?: number
+          moved_installment_ids?: string[]
+          moved_session_ids?: string[]
+          performed_by?: string | null
+          previous_assigned_trainer_id?: string | null
+          reason?: string | null
+          reassigned_general_trainer?: boolean
+          to_trainer_id: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          effective_date?: string
+          from_trainer_id?: string
+          id?: string
+          member_id?: string
+          member_pt_package_id?: string
+          moved_amount?: number
+          moved_installment_ids?: string[]
+          moved_session_ids?: string[]
+          performed_by?: string | null
+          previous_assigned_trainer_id?: string | null
+          reason?: string | null
+          reassigned_general_trainer?: boolean
+          to_trainer_id?: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_trainer_transfers_from_trainer_id_fkey"
+            columns: ["from_trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_trainer_transfers_from_trainer_id_fkey"
+            columns: ["from_trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_trainer_transfers_member_pt_package_id_fkey"
+            columns: ["member_pt_package_id"]
+            isOneToOne: false
+            referencedRelation: "member_pt_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_trainer_transfers_to_trainer_id_fkey"
+            columns: ["to_trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_trainer_transfers_to_trainer_id_fkey"
+            columns: ["to_trainer_id"]
             isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
@@ -16986,6 +17094,14 @@ export type Database = {
         Args: { _at: string; _branch_id: string; _member_id: string }
         Returns: Json
       }
+      member_login_access_candidates: {
+        Args: never
+        Returns: {
+          action: string
+          member_id: string
+          user_id: string
+        }[]
+      }
       member_matches_segment: {
         Args: { p_member_id: string; p_status: string }
         Returns: boolean
@@ -18214,6 +18330,16 @@ export type Database = {
           weekly_off: string
         }[]
       }
+      transfer_pt_package_trainer: {
+        Args: {
+          _effective_date: string
+          _keep_general?: boolean
+          _package_ids: string[]
+          _reason?: string
+          _to_trainer: string
+        }
+        Returns: Json
+      }
       transition_member_lifecycle: {
         Args: { p_member_id: string; p_reason?: string; p_to_state: string }
         Returns: Json
@@ -18221,6 +18347,10 @@ export type Database = {
       try_whatsapp_send_lock: {
         Args: { _phone: string; _ttl_seconds?: number }
         Returns: boolean
+      }
+      undo_pt_trainer_transfer: {
+        Args: { _transfer_id: string }
+        Returns: Json
       }
       upgrade_membership: {
         Args: {

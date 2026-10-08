@@ -10,13 +10,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Pencil, FileText, MoreHorizontal, UserMinus, UserCheck, ChevronDown,
-  Briefcase, Dumbbell, User, UserX, ShieldCheck,
+  Briefcase, Dumbbell, User, UserX, ShieldCheck, ArrowRightLeft,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { UNIFIED_STAFF_KEY, type UnifiedStaffPerson, type StaffRole } from '@/hooks/useUnifiedStaff';
 import { OffboardStaffSheet } from '@/components/hrm/OffboardStaffSheet';
+import { TransferPTClientsDrawer } from '@/components/pt/TransferPTClientsDrawer';
 
 interface Props {
   person: UnifiedStaffPerson;
@@ -35,6 +36,7 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [offboardOpen, setOffboardOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [offboardMode, setOffboardMode] = useState<'offboard' | 'reinstate'>('offboard');
   const isOffboarded = !!person.exit_date;
 
@@ -133,6 +135,11 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
               ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Deactivate (offboard)…</>
               : <><UserCheck className="h-3.5 w-3.5 mr-2" /> Quick reactivate</>}
           </DropdownMenuItem>
+          {person.trainer && (
+            <DropdownMenuItem onClick={() => setTransferOpen(true)}>
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-2" /> Transfer PT clients…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-xs">Lifecycle</DropdownMenuLabel>
           {isOffboarded ? (
@@ -152,6 +159,16 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {person.trainer && transferOpen && (
+        <TransferPTClientsDrawer
+          open={transferOpen}
+          onOpenChange={setTransferOpen}
+          branchId={person.trainer.branch_id ?? person.branch_id ?? ''}
+          fromTrainerId={person.trainer.id}
+          fromTrainerName={person.name}
+        />
+      )}
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

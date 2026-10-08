@@ -148,6 +148,20 @@
       "when": 1791466429988,
       "tag": "0020_cron_conditional_dispatch",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791473968053,
+      "tag": "0021_member_login_access_and_pt_trainer_transfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791474034628,
+      "tag": "0022_member_onboarding_member_read_signature_only",
+      "breakpoints": true
     }
   ]
 }
