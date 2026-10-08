@@ -10,7 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireCaller } from "../_shared/requireCaller.ts";
+import { requireCaller, callerBranchIds } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -182,7 +182,9 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
+  const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] });
+  if (!__caller.ok) return __caller.response;
+  const __allowed = await callerBranchIds(__caller);
 
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -200,6 +202,10 @@ serve(async (req: Request) => {
 
     if (invoiceId) q = q.eq("invoice_id", invoiceId);
     else q = q.in("status", ["created", "pending", "authorized"]);
+    if (__allowed !== null) {
+      if (!__allowed.length) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      q = q.in("branch_id", __allowed);
+    }
 
     const { data: txs, error } = await q;
     if (error) throw error;
