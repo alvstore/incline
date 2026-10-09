@@ -394,6 +394,32 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     return json(500, { error: "member_insert_failed", detail: memErr?.message });
   }
 
+  // 6b) Optional referral code — re-validated server-side; never blocks sign-up.
+  const rawReferral = typeof body.referral_code === "string" ? body.referral_code.trim().toUpperCase().slice(0, 32) : "";
+  if (rawReferral) {
+    try {
+      const { data: referrerId } = await admin.rpc("_resolve_referral_code", {
+        p_code: rawReferral, p_branch_id: reg.branch_id, p_phone: reg.phone, p_email: reg.email,
+      });
+      if (referrerId && referrerId !== member.id) {
+        await admin.from("members").update({ referred_by: referrerId }).eq("id", member.id);
+        await admin.from("referrals").insert({
+          referrer_member_id: referrerId,
+          referred_member_id: member.id,
+          referred_name: reg.full_name,
+          referred_phone: reg.phone,
+          referred_email: reg.email,
+          referral_code: rawReferral,
+          status: "pending",
+          lifecycle_status: "joined",
+          metadata: { source: "self_register" },
+        });
+      }
+    } catch (e) {
+      await captureEdgeError("register-member", e, { route: "referral_link" });
+    }
+  }
+
   // 7) Render PDF + upload artefacts
   let signatureBytes: Uint8Array;
   try {
