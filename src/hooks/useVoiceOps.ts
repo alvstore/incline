@@ -163,7 +163,8 @@ export interface VoiceFeedFilters {
 }
 
 /** Generic RPC caller — the RPCs are new, so cast through the untyped client. */
-const rpc = (name: string, args: Record<string, unknown>) => (supabase as any).rpc(name, args);
+const rpc = (name: string, args: Record<string, unknown>) =>
+  (supabase as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }> }).rpc(name, args);
 
 export function useVoiceOpsSummary(branchId?: string | null) {
   return useQuery({
@@ -264,6 +265,9 @@ export function useVoiceAnalytics(branchId: string | null | undefined, days: num
 }
 
 export interface VoiceAutomationHealth {
+  automation?: import('@/lib/voice/automationStatus').AutomationSwitch | null;
+  last_call_at?: string | null;
+  renewal?: { enabled: boolean; voice_enabled: boolean; paused: boolean; pause_reason?: string | null; next_check_at?: string | null; last_check_at?: string | null } | null;
   last_run?: {
     id: string;
     status: string | null;
@@ -365,7 +369,9 @@ export function useVoiceAutomationState() {
         body: { action: 'get_state' },
       });
       if (error) throw error;
-      const a = ((data as Record<string, unknown> | null)?.retention_automation ?? {}) as Record<string, unknown>;
+      if (data?.ok === false) throw new Error(data.error || 'Could not load calling settings');
+      const integration = (data as { integration?: { retention_automation?: Record<string, unknown> } } | null)?.integration;
+      const a = integration?.retention_automation ?? {};
       return {
         enabled: a.enabled === true,
         paused: a.paused === true,
@@ -442,7 +448,11 @@ export function useVoiceRetryFailedToday(branchId?: string | null, cap = 15) {
       const seen = new Set<string>();
       const targets = rows
         .filter((r) => !!r.member_id && ['failed', 'no_answer', 'busy'].includes(String(r.status ?? '')))
-        .filter((r) => (seen.has(r.member_id!) ? false : (seen.add(r.member_id!), true)))
+        .filter((r) => {
+          if (!r.member_id || seen.has(r.member_id)) return false;
+          seen.add(r.member_id);
+          return true;
+        })
         .slice(0, cap);
 
       let placed = 0;
