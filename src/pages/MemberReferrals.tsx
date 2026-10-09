@@ -41,7 +41,7 @@ export default function MemberReferrals() {
     mutationFn: ({ rewardId, memberId }: { rewardId: string; memberId: string }) => 
       claimReward(rewardId, memberId),
     onSuccess: () => {
-      toast.success('Reward claimed successfully!');
+      toast.success('Sent to branch manager for approval');
       queryClient.invalidateQueries({ queryKey: ['my-referral-rewards'] });
     },
     onError: (e: any) => toast.error(e.message || 'Failed to claim reward'),

@@ -1030,7 +1030,7 @@ export function MemberProfileDrawer({
   const claimRewardMutation = useMutation({
     mutationFn: (rewardId: string) => claimReward(rewardId, member.id),
     onSuccess: () => {
-      toast.success('Reward claimed successfully!');
+      toast.success('Sent to branch manager for approval');
       queryClient.invalidateQueries({ queryKey: ['member-rewards', member?.id] });
     },
     onError: (error: any) => {
