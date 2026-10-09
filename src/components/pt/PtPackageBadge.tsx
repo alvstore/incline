@@ -58,13 +58,20 @@ export function PtPackageBadge({
     <div className={cn('flex flex-col gap-1 min-w-[140px]', className)}>
       <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary w-fit">
         <Dumbbell className="h-3.5 w-3.5" />
-        <span>{remaining} sessions left</span>
+        <span>{used} / {total} used · {remaining} left</span>
       </div>
       {total > 0 && (
         <Progress
+          aria-label={`${used} of ${total} sessions used`}
           value={pct}
           className="h-1 rounded-full bg-primary/15 [&>div]:bg-primary"
         />
+      )}
+      {expiryDate && (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+          Expires {format(new Date(expiryDate), 'd MMM')}
+        </span>
       )}
     </div>
   );
