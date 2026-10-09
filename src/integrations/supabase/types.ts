@@ -11104,6 +11104,65 @@ export type Database = {
         }
         Relationships: []
       }
+      pt_attendance_corrections: {
+        Row: {
+          action: string
+          approval_request_id: string | null
+          branch_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          id: string
+          log_id: string
+          reason: string
+          requested_by: string
+          status: string
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          approval_request_id?: string | null
+          branch_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          log_id: string
+          reason: string
+          requested_by: string
+          status?: string
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          approval_request_id?: string | null
+          branch_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          log_id?: string
+          reason?: string
+          requested_by?: string
+          status?: string
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_attendance_corrections_log_id_fkey"
+            columns: ["log_id"]
+            isOneToOne: false
+            referencedRelation: "pt_auto_attendance_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pt_auto_attendance_log: {
         Row: {
           arrival_order: string | null
@@ -11113,6 +11172,7 @@ export type Database = {
           id: string
           manager_alert_kind: string | null
           manager_alerted_at: string | null
+          match_reason: string | null
           member_first_at: string | null
           member_id: string
           member_pt_package_id: string
@@ -11134,6 +11194,7 @@ export type Database = {
           id?: string
           manager_alert_kind?: string | null
           manager_alerted_at?: string | null
+          match_reason?: string | null
           member_first_at?: string | null
           member_id: string
           member_pt_package_id: string
@@ -11155,6 +11216,7 @@ export type Database = {
           id?: string
           manager_alert_kind?: string | null
           manager_alerted_at?: string | null
+          match_reason?: string | null
           member_first_at?: string | null
           member_id?: string
           member_pt_package_id?: string
@@ -15645,6 +15707,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      _pt_auto_apply: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_log_id: string
+          p_note: string
+        }
+        Returns: undefined
+      }
       _pt_auto_on_member_presence: {
         Args: { p_at: string; p_member_id: string }
         Returns: undefined
@@ -15652,6 +15723,10 @@ export type Database = {
       _pt_auto_on_trainer_presence: {
         Args: { p_at: string; p_user_id: string }
         Returns: undefined
+      }
+      _pt_is_branch_manager: {
+        Args: { p_branch: string; p_user: string }
+        Returns: boolean
       }
       _purchase_pt_package_impl: {
         Args: {
@@ -17465,13 +17540,27 @@ export type Database = {
         Args: { p_facility_id?: string }
         Returns: Json
       }
+      pt_attendance_decide_correction: {
+        Args: { p_correction_id: string; p_decision: string; p_note?: string }
+        Returns: Json
+      }
+      pt_attendance_request_correction: {
+        Args: { p_action: string; p_log_id: string; p_reason: string }
+        Returns: Json
+      }
       pt_auto_attendance_board: {
         Args: { p_branch_id: string; p_date: string }
         Returns: {
           arrival_order: string
+          correction_action: string
+          correction_id: string
+          correction_reason: string
+          correction_requested_by: string
+          correction_status: string
           gap_minutes: number
           id: string
           manager_alert_kind: string
+          match_reason: string
           member_code: string
           member_first_at: string
           member_id: string
@@ -17491,6 +17580,28 @@ export type Database = {
       pt_auto_attendance_evaluate: {
         Args: { p_date: string; p_package_id: string }
         Returns: string
+      }
+      pt_auto_attendance_my_board: {
+        Args: { p_date: string }
+        Returns: {
+          arrival_order: string
+          correction_action: string
+          correction_id: string
+          correction_note: string
+          correction_reason: string
+          correction_status: string
+          gap_minutes: number
+          id: string
+          match_reason: string
+          member_code: string
+          member_first_at: string
+          member_id: string
+          member_name: string
+          mode: string
+          outcome: string
+          pt_session_id: string
+          trainer_first_at: string
+        }[]
       }
       pt_auto_attendance_resolve: {
         Args: { p_action: string; p_log_id: string; p_note?: string }
