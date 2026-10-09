@@ -779,6 +779,10 @@ Deno.serve(async (req) => {
     // last push failed) and re-drives them one at a time through the normal
     // single-person path. Bounded so an invocation can never run long.
     if ((body as any)?.sync_type === "delta") {
+      // Global sweep: only the automation brain / service callers and owners/admins.
+      if (!__callerGlobal) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       const LIMIT = 10;
       const targets: Array<{ person_type: string; person_id: string; branch_id: string | null }> = [];
       for (const [table, personType] of [
@@ -849,6 +853,18 @@ Deno.serve(async (req) => {
       force?: boolean;
     };
 
+
+    // Branch staff may only use the MIPS connection of a branch they belong to.
+    if (!__callerGlobal) {
+      if (!branch_id) {
+        return new Response(JSON.stringify({ error: "branch_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data: bm0 } = await supabase.from("branch_managers").select("branch_id").eq("user_id", __callerUid!).eq("branch_id", branch_id).limit(1);
+      const { data: sb0 } = await supabase.from("staff_branches").select("branch_id").eq("user_id", __callerUid!).eq("branch_id", branch_id).limit(1);
+      if (!(bm0?.length || sb0?.length)) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
 
     // Look up per-branch MIPS connection (fall back to env vars)
     let mipsBaseUrl: string | undefined;
