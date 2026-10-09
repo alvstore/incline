@@ -1,8 +1,9 @@
+// v1.1.0 — record must belong to a logged message of a branch the caller can act on.
 // v1.0.0 — Fetch Telinfy RCS per-record detail (delivery timeline).
 //   POST /rcs-record { branch_id?: string, record_id: string|number }
 // Mirrors rcs-wallet shape: resolves Telinfy creds from integration_settings.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { requireCaller } from "../_shared/requireCaller.ts";
+import { requireCaller, canActOnBranch, type CallerResult } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,13 +18,27 @@ const ENV_BASE = (Deno.env.get('TELINFY_BASE_URL') || 'https://hub.telinfy.com/u
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager"] }); if (!__caller.ok) return __caller.response; }
+  const __res = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager"] });
+  if (!__res.ok) return __res.response;
+  const __caller = __res as CallerResult;
   try {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const body = await req.json().catch(() => ({}));
     const branchId: string | null = body?.branch_id || null;
     const recordId = body?.record_id;
     if (!recordId) return json(400, { ok: false, reason: 'record_id required' });
+    const rid = String(recordId).slice(0, 128);
+    if (!__caller.internal) {
+      const { data: logRow } = await supabase.from('communication_logs').select('branch_id')
+        .or(`provider_record_id.eq.${rid.replace(/[^A-Za-z0-9_\-]/g, '')},provider_message_id.eq.${rid.replace(/[^A-Za-z0-9_\-]/g, '')}`)
+        .limit(1).maybeSingle();
+      if (!logRow || !(await canActOnBranch(__caller, (logRow as any).branch_id))) {
+        return json(403, { ok: false, reason: 'Forbidden' });
+      }
+      if (branchId && (logRow as any).branch_id && branchId !== (logRow as any).branch_id) {
+        return json(403, { ok: false, reason: 'Forbidden' });
+      }
+    }
 
     let apiKey = ENV_API_KEY;
     let baseUrl = ENV_BASE;
