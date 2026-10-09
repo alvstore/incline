@@ -1,18 +1,22 @@
-import { useMemo } from 'react';
-import { format, isSameDay, isAfter } from 'date-fns';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Check, X, Clock, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { avatarColor, initialsOf, type PTSessionRow } from './ptTypes';
+import { splitSessionTimeline } from './sessionTimeline';
+import { formatIST } from '@/lib/utils/datetime';
 
 interface Props {
   sessions: PTSessionRow[];
   loading?: boolean;
   busy?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   onComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onSchedule: () => void;
@@ -29,30 +33,18 @@ export function TodaySessionsPanel({
   sessions,
   loading,
   busy,
+  isError,
+  onRetry,
   onComplete,
   onCancel,
   onSchedule,
 }: Props) {
-  // Re-read the clock whenever the session list refreshes so the today/upcoming split stays current.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessions` is the intended refresh trigger
-  const now = useMemo(() => new Date(), [sessions]);
-
-  const { today, upcoming } = useMemo(() => {
-    const sorted = [...sessions].sort(
-      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
-    );
-    return {
-      today: sorted.filter((s) => isSameDay(new Date(s.scheduled_at), now)),
-      upcoming: sorted.filter(
-        (s) => !isSameDay(new Date(s.scheduled_at), now) && isAfter(new Date(s.scheduled_at), now),
-      ),
-    };
-  }, [sessions, now]);
-
+  const [period, setPeriod] = useState('today');
+  const { today, upcoming } = splitSessionTimeline(sessions);
 
   if (loading) {
     return (
-      <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 bg-card shadow-sm">
         <CardContent className="space-y-2 p-5">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-14 w-full rounded-xl" />
@@ -64,27 +56,34 @@ export function TodaySessionsPanel({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-foreground">Appointments</h2>
+        <Tabs value={period} onValueChange={setPeriod}>
+          <TabsList aria-label="Appointment period" className="h-auto rounded-xl">
+            <TabsTrigger value="today" className="min-h-11 rounded-lg">Today · {today.length}</TabsTrigger>
+            <TabsTrigger value="upcoming" className="min-h-11 rounded-lg">Upcoming · {upcoming.length}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+      {isError ? (
+        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+          <CardContent className="py-10 text-center">
+            <p className="text-sm text-destructive">Could not load appointments.</p>
+            <Button variant="outline" onClick={onRetry} className="mt-3 min-h-11">Retry</Button>
+          </CardContent>
+        </Card>
+      ) : (
       <Section
-        title={`Today · ${format(now, 'EEEE, d MMM')}`}
-        rows={today}
-        emptyTitle="No sessions today"
-        emptyHint="Schedule a session and it will show up here."
+        title={period === 'today' ? 'Today' : 'Upcoming appointments'}
+        rows={period === 'today' ? today : upcoming}
+        emptyTitle={period === 'today' ? 'No appointments today' : 'No upcoming appointments'}
+        emptyHint="Walk-in attendance is recorded in the daily roster."
         onSchedule={onSchedule}
         onComplete={onComplete}
         onCancel={onCancel}
         busy={busy}
-        highlight
       />
-      <Section
-        title="Upcoming"
-        rows={upcoming.slice(0, 20)}
-        emptyTitle="Nothing scheduled ahead"
-        emptyHint="Future sessions will appear here."
-        onSchedule={onSchedule}
-        onComplete={onComplete}
-        onCancel={onCancel}
-        busy={busy}
-      />
+      )}
     </div>
   );
 }
@@ -113,7 +112,7 @@ function Section({
   return (
     <Card
       className={cn(
-        'rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50',
+        'rounded-2xl border-0 bg-card shadow-sm',
         highlight && 'ring-1 ring-primary/20',
       )}
     >
@@ -160,7 +159,7 @@ function Section({
                     {s.member_name || 'Member'}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {format(new Date(s.scheduled_at), 'PPP p')} · {s.duration_minutes ?? 60} min
+                     {formatIST(s.scheduled_at)} · {s.duration_minutes ?? 60} min
                   </p>
                 </div>
 

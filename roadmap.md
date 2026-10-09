@@ -1,3 +1,9 @@
+# PT workspace redesign (9 Oct 2026)
+- [x] Combine Today/Upcoming into one session timeline, move Automatic Attendance after Clients, and refresh summary cards using existing theme with reduced-motion-aware animation.
+- [x] Verify owner tab navigation, real session loading and narrow-screen layout; fix roster action clipping; timeline tests pass and automatic build is clean. Package and payroll logic unchanged.
+- [ ] Separate business-rule phase: monthly programs currently remain duration-based; introducing a 26-session allowance requires matching server deduction, purchase and payroll tests, not just a UI default. No existing packages converted.
+- [ ] Trainer-account verification and analytics instrumentation remain pending.
+
 # Database performance & storage (2026-10-08 audit follow-up)
 - [x] access_logs: gate camera captures no longer stored (`_shared/mipsPayload.ts#stripScanMedia` in mips-webhook-receiver v2.10.0 + reconcile-mips-pass-records v2.7.0, deployed; live scan payload 176 KB → 0.5 KB)
 - [x] access_logs: `prune_access_log_media()` safety net in `maintain_log_sizes()` (migration 0019); all 45k historic rows backfilled + VACUUM FULL — database 3.06 GB → 396 MB, access_logs 2.6 GB → 59 MB, zero rows deleted

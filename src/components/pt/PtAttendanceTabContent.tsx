@@ -93,6 +93,7 @@ function WeekStrip({
           return (
             <button
               key={d.toISOString()}
+              aria-pressed={isSelected}
               onClick={() => onSelect(d)}
               className={cn(
                 'flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px] py-2 px-3 rounded-2xl border transition-all',
@@ -176,6 +177,7 @@ function TrainerRail({
         return (
           <button
             key={t.id}
+            aria-pressed={active}
             onClick={() => onSelect(t.id)}
             className={cn(
               'w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group',
@@ -253,12 +255,12 @@ function ClientRosterCard({
 
   return (
     <div className={cn(
-      'group relative rounded-2xl bg-card shadow-lg shadow-slate-200/50 p-4 transition-all',
-      'hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-0.5',
-      isCompletedish && 'ring-1 ring-success/25 bg-gradient-to-br from-success/10 to-white',
+      'group relative min-w-0 rounded-2xl bg-card shadow-sm p-4 motion-safe:transition-transform',
+      'motion-safe:hover:-translate-y-0.5',
+      isCompletedish && 'ring-1 ring-success/25 bg-gradient-to-br from-success/10 to-card',
     )}>
       <div className="flex items-start gap-3">
-        <Avatar className="h-11 w-11 shrink-0 ring-2 ring-white shadow-sm">
+        <Avatar className="h-11 w-11 shrink-0 ring-2 ring-background shadow-sm">
           <AvatarImage src={client.avatarUrl ?? undefined} />
           <AvatarFallback className="bg-primary/15 text-primary font-semibold">
             {initials}
@@ -294,12 +296,12 @@ function ClientRosterCard({
             )}
           </div>
         ) : canMark ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               onClick={() => markPresent.mutate()}
               disabled={markPresent.isPending || !isToday}
               className={cn(
-                'flex-1 h-10 rounded-xl font-semibold shadow-md shadow-primary/20',
+                'flex-1 min-w-32 h-11 rounded-xl font-semibold shadow-md shadow-primary/20',
                 'bg-gradient-to-r from-primary to-primary hover:from-primary hover:to-primary',
               )}
             >
@@ -476,7 +478,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
   };
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-sm">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between p-4 hover:bg-muted rounded-2xl transition-colors"
@@ -588,7 +590,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
-export function PtAttendanceTabContent() {
+export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnly?: boolean }) {
   const { selectedBranch } = useBranchContext();
   const { roles, user } = useAuth();
   const isTrainerOnly = roles.length > 0 && roles.every((r: any) => r.role === 'trainer');
@@ -643,12 +645,12 @@ export function PtAttendanceTabContent() {
   // Clients of trainer
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ['pt-roster-clients', selectedBranch, effectiveTrainerId],
-    enabled: !!effectiveTrainerId,
+    enabled: !!effectiveTrainerId && !automaticOnly,
     queryFn: async (): Promise<ClientCard[]> => {
       let q = supabase
         .from('member_pt_packages')
         .select('id, member_id, package_id, package_type, sessions_remaining, sessions_total, expiry_date, status')
-        .eq('trainer_id', effectiveTrainerId!)
+        .eq('trainer_id', effectiveTrainerId ?? '')
         .eq('status', 'active' as any);
       if (selectedBranch && selectedBranch !== 'all') q = q.eq('branch_id', selectedBranch);
       const { data, error } = await q;
@@ -699,13 +701,13 @@ export function PtAttendanceTabContent() {
   const dayISO = useMemo(() => format(selectedDate, 'yyyy-MM-dd'), [selectedDate]);
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
     queryKey: ['pt-roster-sessions', effectiveTrainerId, dayISO],
-    enabled: !!effectiveTrainerId,
+    enabled: !!effectiveTrainerId && !automaticOnly,
     queryFn: async (): Promise<SessionRow[]> => {
       const { startISO: from, endISO: to } = getISTDayRange(selectedDate);
       const { data, error } = await supabase
         .from('pt_sessions')
         .select('id, status, scheduled_at, member_pt_package_id')
-        .eq('trainer_id', effectiveTrainerId!)
+        .eq('trainer_id', effectiveTrainerId ?? '')
         .gte('scheduled_at', from)
         .lte('scheduled_at', to)
         .order('scheduled_at', { ascending: true });
@@ -749,17 +751,38 @@ export function PtAttendanceTabContent() {
     ['member-pt-packages'],
   ];
 
+  if (automaticOnly) {
+    return (
+      <div className="space-y-4">
+        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+          <CardContent className="p-4">
+            <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
+          </CardContent>
+        </Card>
+        {selectedBranch === 'all' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-muted-foreground">Attendance branch</span>
+            <Select value={effectiveTrainerId ?? undefined} onValueChange={setSelectedTrainerId}>
+              <SelectTrigger className="min-h-11 w-full sm:w-64" aria-label="Select trainer branch for automatic attendance">
+                <SelectValue placeholder="Select trainer branch" />
+              </SelectTrigger>
+              <SelectContent>{trainers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+        <PtAutoAttendancePanel branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : (selectedTrainer?.branch_id ?? null)} dayISO={dayISO} roles={roles} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Top: Week strip */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-sm">
         <CardContent className="p-4">
           <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
         </CardContent>
       </Card>
-
-      <PtAutoAttendancePanel branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : (selectedTrainer?.branch_id ?? null)} dayISO={dayISO} roles={roles as never} />
-
 
       {/* Main: Trainer rail + roster grid */}
       <div className={cn(
@@ -767,7 +790,7 @@ export function PtAttendanceTabContent() {
         isTrainerOnly ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[260px_1fr]',
       )}>
         {!isTrainerOnly && (
-          <Card className="rounded-2xl shadow-lg shadow-slate-200/50 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+          <Card className="rounded-2xl shadow-sm lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Users className="h-3.5 w-3.5" />
@@ -785,7 +808,7 @@ export function PtAttendanceTabContent() {
           </Card>
         )}
 
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base text-foreground">
@@ -803,7 +826,7 @@ export function PtAttendanceTabContent() {
                 Select a trainer to view their roster.
               </div>
             ) : clientsLoading || sessionsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))" }}>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-44 rounded-2xl" />
                 ))}
@@ -819,12 +842,12 @@ export function PtAttendanceTabContent() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))" }}>
                 {clients.map((c) => (
                   <ClientRosterCard
                     key={c.pkgId}
                     client={c}
-                    trainerId={effectiveTrainerId!}
+                    trainerId={effectiveTrainerId ?? ''}
                     session={sessionByPkg.get(c.pkgId)}
                     canMark={canMark}
                     selectedDate={selectedDate}

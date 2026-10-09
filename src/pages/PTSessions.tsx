@@ -13,7 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { toast } from "sonner";
 import {
   Plus, Package, Calendar, TrendingUp, Users, Dumbbell,
-  Eye, EyeOff, Download, Sparkles, ChevronDown, BarChart3,
+  Eye, EyeOff, Download, Sparkles, ChevronDown, BarChart3, ScanFace,
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
@@ -42,6 +42,9 @@ import { CommissionLedger } from "@/components/pt/CommissionLedger";
 import type { PTMemberPackageRow } from "@/components/pt/ptTypes";
 import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
+import { getISTToday, formatIST } from "@/lib/utils/datetime";
+import { splitSessionTimeline } from "@/components/pt/sessionTimeline";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function PTSessionsPage() {
   const { roles, user } = useAuth();
@@ -111,7 +114,13 @@ export default function PTSessionsPage() {
     return (trainers || []).map((t: any) => t.id).filter(Boolean);
   }, [trainers, isTrainer, canManage, user?.id]);
   
-  const { data: sessions, isLoading: sessionsLoading } = useTrainerSessions(trainerIds, { startDate: new Date() });
+  const todayISO = getISTToday();
+  const sessionStart = useMemo(() => new Date(`${todayISO}T00:00:00+05:30`), [todayISO]);
+  const sessionsQuery = useTrainerSessions(trainerIds, { startDate: sessionStart });
+  const { data: sessions, isLoading: sessionsLoading } = sessionsQuery;
+  const timeline = splitSessionTimeline(sessions || []);
+  const completedToday = timeline.today.filter(s => s.status === "completed").length;
+  const todayAppointments = timeline.today.filter(s => s.status === "scheduled").length;
 
   const filteredPackages = (packages || []).filter((pkg: any) => (showInactive ? true : pkg.is_active !== false));
 
@@ -154,9 +163,7 @@ export default function PTSessionsPage() {
     ];
   }, [activePackages]);
 
-  const todayCount = sessions?.filter(
-    (s) => new Date(s.scheduled_at).toDateString() === new Date().toDateString(),
-  ).length || 0;
+  const monthlyClients = activePackages?.filter(p => p.package_type === "monthly").length || 0;
 
   const openEditDrawer = (pkg: any) => {
     setEditingPackage(pkg);
@@ -194,14 +201,14 @@ export default function PTSessionsPage() {
 
   const handleScheduleSession = async () => {
     const pkg = activePackages?.find((p) => p.id === selectedPackageForSession);
-    if (!pkg || !newSession.scheduled_at) {
+    if (!pkg || !newSession.scheduled_at || !pkg.trainer_id) {
       toast.error("Please select a package and time");
       return;
     }
     try {
       await scheduleSession.mutateAsync({
         memberPackageId: pkg.id,
-        trainerId: pkg.trainer_id!,
+        trainerId: pkg.trainer_id,
         branchId: pkg.branch_id,
         scheduledAt: new Date(newSession.scheduled_at),
         durationMinutes: newSession.duration_minutes,
@@ -236,19 +243,19 @@ export default function PTSessionsPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
               <Sparkles className="h-3.5 w-3.5" aria-hidden /> Coaching Studio
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Personal Training</h1>
+            <h1 className="text-3xl font-bold text-foreground">Personal Training</h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Run today's sessions, track every client's package, and manage what you sell.
+              {formatIST(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })} · Coaching & attendance
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -284,36 +291,30 @@ export default function PTSessionsPage() {
           </div>
         </div>
 
-        {/* KPI Stats */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <KpiCard
-            icon={<Dumbbell className="h-5 w-5" />}
-            tint="amber"
-            label="PT Roster Today"
-            value={activePackages?.length || 0}
-            sub={`${todayCount} appointment${todayCount === 1 ? '' : 's'} scheduled`}
-          />
-          <KpiCard
-            icon={<Users className="h-5 w-5" />}
-            tint="emerald"
-            label="Active Clients"
-            value={activePackages?.length || 0}
-            sub={`Across ${trainerRevenue.length || 0} trainer${trainerRevenue.length === 1 ? '' : 's'}`}
-          />
-          <KpiCard
-            icon={<Package className="h-5 w-5" />}
-            tint="indigo"
-            label="Total Packages"
-            value={packages?.length || 0}
-            sub={`${filteredPackages.length} visible`}
-          />
-          <KpiCard
-            icon={<TrendingUp className="h-5 w-5" />}
-            tint="sky"
-            label="Completion Rate"
-            value={`${totalSessions ? Math.round((completedCount / totalSessions) * 100) : 0}%`}
-            sub={`${completedCount} of ${totalSessions || 0} completed`}
-          />
+        <div className="grid grid-cols-12 gap-4">
+          <Card className="relative col-span-12 overflow-hidden rounded-2xl border-0 bg-primary text-primary-foreground shadow-lg shadow-primary/15 lg:col-span-5">
+            <CardContent className="flex h-full min-h-40 items-center justify-between gap-5 p-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide">Training today</p>
+                {sessionsLoading ? <Skeleton className="my-2 h-12 w-20 bg-primary-foreground/20" /> :
+                  <p className="mt-3 text-5xl font-bold tabular-nums">{sessionsQuery.isError ? '—' : completedToday}</p>}
+                <p className="mt-2 text-sm">Sessions completed</p>
+                <p className="mt-1 text-xs text-primary-foreground/80">{todayAppointments} booked today · {timeline.upcoming.length} upcoming</p>
+              </div>
+              <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-primary-foreground/10" aria-hidden>
+                <Dumbbell className="h-9 w-9" />
+              </span>
+            </CardContent>
+          </Card>
+          <KpiCard icon={<Users className="h-5 w-5" />} tint="emerald" label="Active clients"
+            value={activePackages?.length || 0} loading={activeLoading}
+            sub={`${trainerRevenue.length} trainers`} className="col-span-6 lg:col-span-3" />
+          <div className="col-span-6 grid gap-4 lg:col-span-4">
+            <KpiCard icon={<Calendar className="h-5 w-5" />} tint="sky" label="Monthly programs"
+              value={monthlyClients} loading={activeLoading} sub="Duration-based training" compact />
+            <KpiCard icon={<Package className="h-5 w-5" />} tint="indigo" label="Session packages"
+              value={(activePackages?.length || 0) - monthlyClients} loading={activeLoading} sub="Session-based training" compact />
+          </div>
         </div>
 
         {/* Money that hasn't landed yet gets one compact strip, not a table. */}
@@ -323,38 +324,49 @@ export default function PTSessionsPage() {
           onCancelInvoice={setCancelInvoiceTarget}
         />
 
-        <Tabs defaultValue={canOperateAttendance ? "today" : "clients"} className="space-y-4">
-          <TabsList className="rounded-xl bg-muted p-1">
+        <Tabs defaultValue={canOperateAttendance ? "today" : "clients"} className="space-y-5">
+          <TabsList aria-label="Personal training workspace" className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-muted p-1.5">
             {canOperateAttendance && (
-              <TabsTrigger value="today" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                Today's Sessions
+              <TabsTrigger value="today" className="min-h-11 shrink-0 gap-2 rounded-xl px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                <Dumbbell className="h-4 w-4" aria-hidden /> Sessions
               </TabsTrigger>
             )}
-            <TabsTrigger value="clients" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              Clients
+            <TabsTrigger value="clients" className="min-h-11 shrink-0 gap-2 rounded-xl px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <Users className="h-4 w-4" aria-hidden /> Clients
             </TabsTrigger>
+            {canOperateAttendance && (
+              <TabsTrigger value="automatic" className="min-h-11 shrink-0 gap-2 rounded-xl px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                <ScanFace className="h-4 w-4" aria-hidden /> Automatic Attendance
+              </TabsTrigger>
+            )}
             {canManage && (
               <>
-                <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                  Packages
+                <TabsTrigger value="packages" className="min-h-11 shrink-0 gap-2 rounded-xl px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  <Package className="h-4 w-4" aria-hidden /> Packages
                 </TabsTrigger>
-                <TabsTrigger value="commissions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                  Commissions
+                <TabsTrigger value="commissions" className="min-h-11 shrink-0 gap-2 rounded-xl px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  <TrendingUp className="h-4 w-4" aria-hidden /> Commissions
                 </TabsTrigger>
               </>
             )}
           </TabsList>
 
-          <TabsContent value="commissions" className="animate-in fade-in-50 duration-500">
+          <TabsContent value="commissions" className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
             <CommissionLedger branchId={queryBranchId ?? null} />
           </TabsContent>
 
 
-          <TabsContent value="today">
+          <TabsContent value="automatic" className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+            <PtAttendanceTabContent automaticOnly />
+          </TabsContent>
+
+          <TabsContent value="today" className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
             <div className="space-y-5">
               <PtAttendanceTabContent />
               <TodaySessionsPanel
-                sessions={(sessions || []) as any}
+                sessions={sessions || []}
+                isError={sessionsQuery.isError}
+                onRetry={() => sessionsQuery.refetch()}
                 loading={sessionsLoading}
                 busy={completeSession.isPending || cancelSession.isPending}
                 onComplete={handleCompleteSession}
@@ -408,7 +420,7 @@ export default function PTSessionsPage() {
             {packagesLoading ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Card key={i} className="overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+                  <Card key={i} className="overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-primary/5">
                     <div className="h-1.5 bg-muted" />
                     <CardContent className="space-y-3 p-5">
                       <div className="h-4 w-24 animate-pulse rounded bg-muted" />
@@ -420,7 +432,7 @@ export default function PTSessionsPage() {
                 ))}
               </div>
             ) : filteredPackages.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-primary/5">
                 <CardContent className="flex flex-col items-center py-16 text-center">
                   <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
                     <Package className="h-6 w-6" />
@@ -497,7 +509,7 @@ export default function PTSessionsPage() {
         <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Schedule PT session</SheetTitle>
-            <SheetDescription>Optional appointment booking. Daily PT attendance is recorded from Today&apos;s Sessions.</SheetDescription>
+            <SheetDescription>Optional appointment booking. Daily PT attendance is recorded in the Sessions roster.</SheetDescription>
           </SheetHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
@@ -581,13 +593,16 @@ export default function PTSessionsPage() {
 }
 
 function KpiCard({
-  icon, tint, label, value, sub,
+  icon, tint, label, value, sub, className, compact, loading,
 }: {
   icon: React.ReactNode;
   tint: 'indigo' | 'emerald' | 'amber' | 'sky';
   label: string;
   value: number | string;
   sub: string;
+  className?: string;
+  compact?: boolean;
+  loading?: boolean;
 }) {
   const tintMap = {
     indigo: 'bg-primary/10 text-primary',
@@ -596,14 +611,14 @@ function KpiCard({
     sky: 'bg-info/10 text-info',
   } as const;
   return (
-    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
-      <CardContent className="space-y-3 p-5">
+    <Card className={cn("rounded-2xl border-0 bg-card shadow-sm motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-0.5", className)}>
+      <CardContent className={cn("flex h-full gap-4 p-5", compact ? "items-center" : "flex-col justify-center")}>
         <span className={cn('flex h-10 w-10 items-center justify-center rounded-full', tintMap[tint])} aria-hidden>
           {icon}
         </span>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-          <p className="mt-1 text-3xl font-bold tabular-nums text-foreground">{value}</p>
+          {loading ? <Skeleton className="my-1 h-8 w-12" /> : <p className={cn("mt-1 font-bold tabular-nums text-foreground", compact ? "text-2xl" : "text-3xl")}>{value}</p>}
           <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
         </div>
       </CardContent>
