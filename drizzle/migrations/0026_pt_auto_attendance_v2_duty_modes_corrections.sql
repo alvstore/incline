@@ -475,4 +475,6 @@ BEGIN
   ORDER BY l.member_first_at DESC NULLS LAST;
 END; $$;
 REVOKE EXECUTE ON FUNCTION public.pt_auto_attendance_my_board(date) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.pt_auto_attendance_my_board(date) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.pt_auto_attendance_my_board(date) TO authenticated, service_role;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.pt_auto_attendance_evaluate(uuid, date) FROM PUBLIC, anon, authenticated;
+-- pt_auto_attendance_config: guard-exempt: returns only non-sensitive branch toggles (mode, minutes)
