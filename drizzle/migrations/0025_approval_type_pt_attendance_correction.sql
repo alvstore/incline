@@ -1,0 +1,1 @@
+ALTER TYPE public.approval_type ADD VALUE IF NOT EXISTS 'pt_attendance_correction';

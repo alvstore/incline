@@ -19,6 +19,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { PtPackageBadge } from '@/components/pt/PtPackageBadge';
 import { TrainerTodayPanel } from '@/components/pt/TrainerTodayPanel';
+import { TrainerPtAttendanceCard } from '@/components/pt/TrainerPtAttendanceCard';
 import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 
 export default function TrainerDashboard() {
@@ -194,6 +195,8 @@ export default function TrainerDashboard() {
         </div>
 
         {/* Mark Today's PT Sessions — works for session-based AND monthly packs */}
+        <TrainerPtAttendanceCard />
+
         <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />
 
         <div className="grid gap-6 lg:grid-cols-2">

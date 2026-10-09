@@ -55,6 +55,7 @@ const APPROVAL_TYPE_CONFIG: Record<string, { icon: any; label: string; color: st
   expense: { icon: CreditCard, label: 'Expense', color: 'bg-muted text-muted-foreground' },
   contract: { icon: FileText, label: 'Contract', color: 'bg-accent/10 text-accent' },
   trainer_change: { icon: User, label: 'Trainer Change', color: 'bg-primary/10 text-primary' },
+  pt_attendance_correction: { icon: Clock, label: 'PT Attendance Correction', color: 'bg-warning/10 text-warning' },
 };
 
 export default function ApprovalQueuePage() {
@@ -141,6 +142,16 @@ export default function ApprovalQueuePage() {
   const approveMutation = useMutation({
     mutationFn: async ({ requestId, approved }: { requestId: string; approved: boolean }) => {
       const request = requests.find((r) => r.id === requestId);
+      if ((request as any)?.approval_type === 'pt_attendance_correction') {
+        const { error: corrErr } = await supabase.rpc('pt_attendance_decide_correction', {
+          p_correction_id: (request as any).reference_id,
+          p_decision: approved ? 'approve' : 'reject',
+          p_note: reviewNotes[requestId] || null,
+        });
+        if (corrErr) throw corrErr;
+        queryClient.invalidateQueries({ queryKey: ['pt-auto-attendance'] });
+        return { approved };
+      }
       const { data, error } = await supabase.rpc('process_approval_request', {
         p_request_id: requestId,
         p_decision: approved ? 'approve' : 'reject',
@@ -197,6 +208,18 @@ export default function ApprovalQueuePage() {
           <p><span className="text-muted-foreground">Member:</span> {data.memberName}</p>
           <p><span className="text-muted-foreground">Duration:</span> {data.daysFrozen} days</p>
           <p><span className="text-muted-foreground">Period:</span> {safeFormatDate(data.startDate, 'dd MMM', 'Pending')} - {safeFormatDate(data.endDate, 'dd MMM yyyy', 'Pending')}</p>
+          {data.reason && <p><span className="text-muted-foreground">Reason:</span> {data.reason}</p>}
+        </div>
+      );
+    }
+
+    if (request.approval_type === 'pt_attendance_correction') {
+      return (
+        <div className="space-y-1 text-sm">
+          <p><span className="text-muted-foreground">Member:</span> {data.memberName}</p>
+          <p><span className="text-muted-foreground">Trainer:</span> {data.trainerName}</p>
+          <p><span className="text-muted-foreground">Request:</span> {data.action === 'mark' ? 'Mark PT session' : 'Undo PT session'} on {safeFormatDate(data.sessionDate, 'dd MMM yyyy')}</p>
+          <p><span className="text-muted-foreground">Client in / Trainer in:</span> {safeFormatDate(data.memberIn, 'HH:mm')} / {safeFormatDate(data.trainerIn, 'HH:mm')}</p>
           {data.reason && <p><span className="text-muted-foreground">Reason:</span> {data.reason}</p>}
         </div>
       );
