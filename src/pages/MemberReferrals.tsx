@@ -23,7 +23,7 @@ export default function MemberReferrals() {
     `${(profile?.full_name || 'MEMBER').split(' ')[0].toUpperCase()}-${new Date().getFullYear()}`;
 
   const appUrl = window.location.origin;
-  const referralLink = `${appUrl}/auth?ref=${referralCode}`;
+  const referralLink = `${appUrl}/register?ref=${encodeURIComponent(referralCode)}`;
 
   const { data: referrals = [], isLoading: referralsLoading } = useQuery({
     queryKey: ['my-referrals', member?.id],

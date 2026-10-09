@@ -62,6 +62,8 @@ export default function AuthPage() {
   }
 
   if (needsSetup) return <Navigate to="/setup" replace />;
+  const refParam = searchParams.get('ref');
+  if (refParam && !user) return <Navigate to={`/register?ref=${encodeURIComponent(refParam)}`} replace />;
   if (user && !mustSetPassword) return <Navigate to={getHomePath(roles)} replace />;
   if (user && mustSetPassword) return <Navigate to="/auth/set-password" replace />;
 
