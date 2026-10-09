@@ -1,9 +1,11 @@
+// v2.3.0 — staff/trainer callers are limited to reports of members in their branch.
 // v2.2.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
 // Idempotent on (report_id, kind): repeated invocations skip already-sent channels.
 // 2.2.0: generated fallback PDF redesigned (Incline branding, healthy-range
 //        indicators, coaching targets, AI "your scan, explained" note).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCaller, canActOnBranch, type CallerResult } from "../_shared/requireCaller.ts";
 import { buildScanPdf, type MetricGroup } from "../_shared/scan-report-pdf.ts";
 import { callAI } from "../_shared/ai-dispatcher.ts";
 
@@ -191,8 +193,10 @@ Deno.serve(async (req) => {
 
     // Caller check: internal jobs and staff/trainers may deliver any report;
     // a member may only prepare their own report.
+    let staffCaller: CallerResult | null = null;
     {
       const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager", "staff", "trainer"] });
+      if (caller.ok) staffCaller = caller as CallerResult;
       if (!caller.ok) {
         const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
         const { data: ures } = await supabase.auth.getUser(tok);
@@ -258,6 +262,16 @@ Deno.serve(async (req) => {
       .eq("id", report.member_id)
       .single();
     if (!member) return jr({ error: "Member not found" }, 404);
+
+    // Branch authorization for signed-in staff/trainers.
+    if (staffCaller && !staffCaller.internal && !(await canActOnBranch(staffCaller, member.branch_id))) {
+      let trainerOk = false;
+      if (staffCaller.roles.includes("trainer")) {
+        const { data: tr } = await supabase.from("trainers").select("id, branch_id").eq("user_id", staffCaller.userId!).maybeSingle();
+        trainerOk = !!tr && (tr.branch_id === member.branch_id || tr.id === member.assigned_trainer_id);
+      }
+      if (!trainerOk) return jr({ error: "Forbidden" }, 403);
+    }
 
     const memberProfile: any = member.profiles;
     const memberName = memberProfile?.full_name || "Member";
