@@ -1,3 +1,4 @@
+// v1.1.0 — only well-formed ids for feedback that was actually sent a review request are tracked.
 // v1.0.0 — Public redirect endpoint. Records click then 302 to branch's
 // Google review link. URL: /functions/v1/google-review-redirect?f={feedback_id}
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -19,7 +20,7 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const feedbackId = url.searchParams.get("f");
-    if (!feedbackId) {
+    if (!feedbackId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(feedbackId)) {
       return new Response("Missing feedback id", { status: 400, headers: corsHeaders });
     }
 
@@ -30,11 +31,11 @@ Deno.serve(async (req) => {
 
     const { data: fb } = await supabase
       .from("feedback")
-      .select("id, branch_id")
+      .select("id, branch_id, google_review_requested_at")
       .eq("id", feedbackId)
       .maybeSingle();
 
-    if (!fb) return new Response("Not found", { status: 404, headers: corsHeaders });
+    if (!fb || !fb.google_review_requested_at) return new Response("Not found", { status: 404, headers: corsHeaders });
 
     const { data: branch } = await supabase
       .from("branches")
