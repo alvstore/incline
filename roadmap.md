@@ -1,3 +1,7 @@
+# PT workspace redesign (9 Oct 2026)
+- [ ] Combine the session views, move Automatic Attendance after Clients, and refresh summary cards using existing theme.
+- [ ] Verify signed-in tab navigation, session loading and narrow-screen layout; preserve package and payroll logic.
+
 # Database performance & storage (2026-10-08 audit follow-up)
 - [x] access_logs: gate camera captures no longer stored (`_shared/mipsPayload.ts#stripScanMedia` in mips-webhook-receiver v2.10.0 + reconcile-mips-pass-records v2.7.0, deployed; live scan payload 176 KB → 0.5 KB)
 - [x] access_logs: `prune_access_log_media()` safety net in `maintain_log_sizes()` (migration 0019); all 45k historic rows backfilled + VACUUM FULL — database 3.06 GB → 396 MB, access_logs 2.6 GB → 59 MB, zero rows deleted
