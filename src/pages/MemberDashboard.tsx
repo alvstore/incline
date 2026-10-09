@@ -14,7 +14,6 @@ import {
 import { format, differenceInDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { getBenefitIcon } from '@/lib/benefitIcons';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useState } from 'react';
@@ -23,6 +22,8 @@ import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AddToHomeScreen } from '@/components/member/AddToHomeScreen';
 import { BrowserNotifications } from '@/components/member/BrowserNotifications';
+import { fetchMemberEntitlements } from '@/lib/benefits/memberEntitlements';
+import { MemberEntitlementGrid } from '@/components/benefits/MemberEntitlementGrid';
 
 export default function MemberDashboard() {
   const { profile } = useAuth();
@@ -56,7 +57,7 @@ export default function MemberDashboard() {
   useRealtimeInvalidate({
     channel: 'member-dashboard-benefits',
     tables: ['member_benefit_credits', 'member_comps'],
-    invalidateKeys: [['dashboard-benefit-credits'], ['my-entitlements']],
+    invalidateKeys: [['dashboard-benefit-credits'], ['my-entitlements'], ['my-member-entitlements']],
     enabled: !!member?.id,
   });
 
@@ -145,84 +146,20 @@ export default function MemberDashboard() {
     },
   });
 
-  // Fetch benefit entitlements for active membership
-  const { data: entitlements } = useQuery({
-    queryKey: ['my-entitlements', activeMembership?.id],
-    enabled: !!activeMembership?.id,
-    queryFn: async () => {
-      // Get plan benefits with benefit type details
-      const { data: planBenefits, error: pbErr } = await supabase
-        .from('plan_benefits')
-        .select('*, benefit_types:benefit_type_id(name, icon, code, is_bookable)')
-        .eq('plan_id', activeMembership!.plan_id);
-      
-      if (pbErr) { console.error('Error fetching plan benefits:', pbErr); return []; }
-      if (!planBenefits || planBenefits.length === 0) return [];
-
-      // Get usage for this membership
-      const { data: usageData, error: uErr } = await supabase
-        .from('benefit_usage')
-        .select('benefit_type_id, usage_count')
-        .eq('membership_id', activeMembership!.id);
-
-      if (uErr) { console.error('Error fetching usage:', uErr); }
-
-      // Aggregate usage by benefit_type_id
-      const usageMap: Record<string, number> = {};
-      (usageData || []).forEach((u: any) => {
-        const key = u.benefit_type_id || 'unknown';
-        usageMap[key] = (usageMap[key] || 0) + (u.usage_count || 1);
-      });
-
-      // Calculate membership duration in months
-      const startDate = new Date(activeMembership!.start_date);
-      const endDate = new Date(activeMembership!.end_date);
-      const durationDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
-      const durationMonths = Math.max(1, Math.round(durationDays / 30));
-
-      return planBenefits.map((pb: any) => {
-        const bt = pb.benefit_types;
-        const typeId = pb.benefit_type_id;
-        const used = usageMap[typeId] || 0;
-        const frequency = pb.frequency || 'per_membership';
-        const limitCount = pb.limit_count;
-
-        let totalAllowed: number | null = null; // null = unlimited
-        let periodLabel = '';
-
-        if (!limitCount || limitCount <= 0) {
-          // Unlimited
-          totalAllowed = null;
-          periodLabel = '';
-        } else if (frequency === 'per_membership') {
-          // Total pool — limit_count IS the total for the entire membership
-          totalAllowed = limitCount;
-          periodLabel = 'Total';
-        } else if (frequency === 'daily') {
-          totalAllowed = limitCount;
-          periodLabel = 'per day';
-        } else if (frequency === 'weekly') {
-          totalAllowed = limitCount;
-          periodLabel = 'per week';
-        } else if (frequency === 'monthly') {
-          totalAllowed = limitCount;
-          periodLabel = 'per month';
-        } else {
-          totalAllowed = limitCount;
-          periodLabel = '';
-        }
-
-        return {
-          id: pb.id,
-          name: bt?.name || 'Benefit',
-          icon: bt?.icon || 'sparkles',
-          code: bt?.code || 'other',
-          isBookable: bt?.is_bookable || false,
-          used,
-          totalAllowed,
-          periodLabel,
-          frequency,
-        };
+  const {
+    data: entitlements = [],
+    isLoading: entitlementsLoading,
+    isError: entitlementsError,
+    refetch: refetchEntitlements,
+  } = useQuery({
+    queryKey: ['my-member-entitlements', member?.id, activeMembership?.id],
+    enabled: !!member?.id && !!activeMembership?.id,
+    queryFn: () => {
+      if (!member?.id || !activeMembership?.id) return [];
+      return fetchMemberEntitlements({
+        memberId: member.id,
+        membershipId: activeMembership.id,
+        planId: activeMembership.plan_id,
       });
     },
   });
@@ -449,74 +386,20 @@ export default function MemberDashboard() {
                     </>
                   )}
                 </div>
-              ) : (!entitlements || entitlements.length === 0) && benefitCredits.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">No benefits configured for your plan</p>
+              ) : entitlementsLoading ? (
+                <div className="grid gap-3 sm:grid-cols-2" aria-label="Loading entitlements">
+                  {[0, 1].map((item) => <div key={item} className="h-36 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />)}
+                </div>
+              ) : entitlementsError ? (
+                <div className="py-6 text-center" role="alert">
+                  <p className="text-sm text-destructive">We couldn't load your entitlements.</p>
+                  <Button variant="outline" className="mt-3" onClick={() => refetchEntitlements()}>Try again</Button>
+                </div>
+              ) : entitlements.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No active benefits, gifts or add-ons found.</p>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {(entitlements || []).map((ent: any) => {
-                      const IconComponent = getBenefitIcon(ent.icon || ent.code);
-                      const matchingCredits = (benefitCredits as any[]).filter((c: any) => {
-                        const cName = (c.benefit_type?.name || c.benefit_type || '').toString().toLowerCase();
-                        const cCode = (c.benefit_type?.code || '').toString().toLowerCase();
-                        return cName === (ent.name || '').toLowerCase() || cCode === (ent.code || '').toLowerCase();
-                      });
-                      const addOnRemaining = matchingCredits.reduce((s: number, c: any) => s + (c.credits_remaining || 0), 0);
-                      const planRemaining = ent.totalAllowed !== null ? Math.max(0, ent.totalAllowed - ent.used) : null;
-                      const totalRemaining = planRemaining === null ? null : planRemaining + addOnRemaining;
-                      const totalCap = (ent.totalAllowed || 0) + addOnRemaining;
-                      const pct = totalRemaining === null ? 100 : totalCap > 0 ? (totalRemaining / totalCap) * 100 : 0;
-                      const bookable = !isFrozen && /steam|sauna|ice|pool|spa|recovery/i.test(`${ent.name || ''} ${ent.code || ''}`);
-                      return (
-                        <div key={ent.id} className="rounded-xl bg-slate-50 dark:bg-muted/40 p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className={iconBadge}><IconComponent className="h-4 w-4" /></span>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{ent.name}</p>
-                                <p className="text-xs text-slate-500 capitalize">{ent.periodLabel || 'Included'}</p>
-                              </div>
-                            </div>
-                            {totalRemaining === null ? (
-                              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Unlimited</span>
-                            ) : (
-                              <span className="text-sm font-bold text-slate-900 dark:text-foreground">{totalRemaining}<span className="font-normal text-slate-500"> / {totalCap}</span></span>
-                            )}
-                          </div>
-                          {totalRemaining !== null && (
-                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={`${ent.name} remaining`} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-                              <div className={`h-full rounded-full ${pct <= 20 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
-                            </div>
-                          )}
-                          <div className="mt-3 flex items-center justify-between">
-                            {addOnRemaining > 0 ? <span className="text-xs text-slate-500">Includes +{addOnRemaining} add-on</span> : <span />}
-                            {bookable && (
-                              <Link to="/book?type=recovery" aria-label={`Book ${ent.name}`} className="text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-ring rounded">Book →</Link>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {benefitCredits.length > 0 && (
-                    <div className="space-y-2">
-                      <p className={`${label} flex items-center gap-1.5`}><Heart className="h-3 w-3" /> Credits &amp; Gifts</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {benefitCredits.map((credit: any) => {
-                          const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / 86400000);
-                          return (
-                            <div key={credit.id} className="flex items-center justify-between rounded-xl bg-primary/10 dark:bg-muted/40 p-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-slate-900 dark:text-foreground">{credit.benefit_type?.name || 'Add-On'}</p>
-                                <p className="text-xs text-slate-500">Exp. {format(new Date(credit.expires_at), 'dd MMM')} · {daysLeft}d left</p>
-                              </div>
-                              <span className="text-sm font-bold text-primary">{credit.credits_remaining}<span className="font-normal text-slate-500">/{credit.credits_total}</span></span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  <MemberEntitlementGrid entitlements={entitlements} frozen={isFrozen} />
                   {!isFrozen && (
                     <Button asChild className="w-full bg-theme-gradient text-white hover:opacity-95">
                       <Link to="/book?type=recovery">Book a recovery session</Link>

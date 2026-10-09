@@ -14,6 +14,8 @@ export const BENEFIT_QUERY_KEYS = [
   'member-benefit-credits',
   'dashboard-benefit-credits',
   'my-benefit-credits',
+  'my-member-entitlements',
+  'my-entitlements',
   'eligible-addons-credits',
   'benefit-balances',
   'benefit-usage',
