@@ -478,7 +478,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
   };
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-sm">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between p-4 hover:bg-muted rounded-2xl transition-colors"
@@ -778,7 +778,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
   return (
     <div className="space-y-4">
       {/* Top: Week strip */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-sm">
         <CardContent className="p-4">
           <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
         </CardContent>
@@ -790,7 +790,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
         isTrainerOnly ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[260px_1fr]',
       )}>
         {!isTrainerOnly && (
-          <Card className="rounded-2xl shadow-lg shadow-slate-200/50 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+          <Card className="rounded-2xl shadow-sm lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Users className="h-3.5 w-3.5" />
@@ -808,7 +808,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
           </Card>
         )}
 
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base text-foreground">
@@ -826,7 +826,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
                 Select a trainer to view their roster.
               </div>
             ) : clientsLoading || sessionsLoading ? (
-              <div className="grid grid-cols-1 gap-3 @[34rem]:grid-cols-2 @[54rem]:grid-cols-3">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))" }}>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-44 rounded-2xl" />
                 ))}
@@ -842,7 +842,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 @[34rem]:grid-cols-2 @[54rem]:grid-cols-3">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))" }}>
                 {clients.map((c) => (
                   <ClientRosterCard
                     key={c.pkgId}
