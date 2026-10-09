@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ReferralCodeField, type ReferralState } from "@/components/registration/ReferralCodeField";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -144,6 +145,12 @@ export default function PublicRegistration() {
   const [draftRestored, setDraftRestored] = useState(!!initialDraft);
   const sigRef = useRef<SignaturePadHandle>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const refFromLink = useMemo(
+    () => (searchParams.get("ref") || sessionStorage.getItem("referral_code") || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 32),
+    [searchParams],
+  );
+  const [referral, setReferral] = useState<ReferralState>({ code: "", valid: false });
 
   const { data: branches } = useQuery({
     queryKey: ["public-branches"],
@@ -241,6 +248,7 @@ export default function PublicRegistration() {
             consents,
             terms_version: AGREEMENT_VERSION,
             signature_data_url: signatureUrl,
+            ...(referral.valid && referral.code ? { referral_code: referral.code } : {}),
           },
         });
         if (error) throw new Error(await extractFunctionError(error));
@@ -667,6 +675,14 @@ export default function PublicRegistration() {
                 <p className="mt-2 text-[11px] text-primary-foreground/50">Confidential — only your trainer sees this.</p>
               </Field>
 
+              <ReferralCodeField
+                branchId={form.watch("branch_id")}
+                phone={form.watch("phone")}
+                email={form.watch("email")}
+                initialCode={refFromLink}
+                inputClassName={fieldInputCls}
+                onChange={setReferral}
+              />
 
               <LiquidButton type="submit" size="lg" className="w-full">
                 Continue <ArrowRight className="h-4 w-4" />
