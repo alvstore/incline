@@ -588,7 +588,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
-export function PtAttendanceTabContent() {
+export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnly?: boolean }) {
   const { selectedBranch } = useBranchContext();
   const { roles, user } = useAuth();
   const isTrainerOnly = roles.length > 0 && roles.every((r: any) => r.role === 'trainer');
@@ -643,12 +643,12 @@ export function PtAttendanceTabContent() {
   // Clients of trainer
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ['pt-roster-clients', selectedBranch, effectiveTrainerId],
-    enabled: !!effectiveTrainerId,
+    enabled: !!effectiveTrainerId && !automaticOnly,
     queryFn: async (): Promise<ClientCard[]> => {
       let q = supabase
         .from('member_pt_packages')
         .select('id, member_id, package_id, package_type, sessions_remaining, sessions_total, expiry_date, status')
-        .eq('trainer_id', effectiveTrainerId!)
+        .eq('trainer_id', effectiveTrainerId ?? '')
         .eq('status', 'active' as any);
       if (selectedBranch && selectedBranch !== 'all') q = q.eq('branch_id', selectedBranch);
       const { data, error } = await q;
@@ -699,13 +699,13 @@ export function PtAttendanceTabContent() {
   const dayISO = useMemo(() => format(selectedDate, 'yyyy-MM-dd'), [selectedDate]);
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
     queryKey: ['pt-roster-sessions', effectiveTrainerId, dayISO],
-    enabled: !!effectiveTrainerId,
+    enabled: !!effectiveTrainerId && !automaticOnly,
     queryFn: async (): Promise<SessionRow[]> => {
       const { startISO: from, endISO: to } = getISTDayRange(selectedDate);
       const { data, error } = await supabase
         .from('pt_sessions')
         .select('id, status, scheduled_at, member_pt_package_id')
-        .eq('trainer_id', effectiveTrainerId!)
+        .eq('trainer_id', effectiveTrainerId ?? '')
         .gte('scheduled_at', from)
         .lte('scheduled_at', to)
         .order('scheduled_at', { ascending: true });
@@ -749,6 +749,30 @@ export function PtAttendanceTabContent() {
     ['member-pt-packages'],
   ];
 
+  if (automaticOnly) {
+    return (
+      <div className="space-y-4">
+        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+          <CardContent className="p-4">
+            <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
+          </CardContent>
+        </Card>
+        {selectedBranch === 'all' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-muted-foreground">Attendance branch</span>
+            <Select value={effectiveTrainerId ?? undefined} onValueChange={setSelectedTrainerId}>
+              <SelectTrigger className="min-h-11 w-full sm:w-64" aria-label="Select trainer branch for automatic attendance">
+                <SelectValue placeholder="Select trainer branch" />
+              </SelectTrigger>
+              <SelectContent>{trainers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+        <PtAutoAttendancePanel branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : (selectedTrainer?.branch_id ?? null)} dayISO={dayISO} roles={roles} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Top: Week strip */}
@@ -757,9 +781,6 @@ export function PtAttendanceTabContent() {
           <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
         </CardContent>
       </Card>
-
-      <PtAutoAttendancePanel branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : (selectedTrainer?.branch_id ?? null)} dayISO={dayISO} roles={roles as never} />
-
 
       {/* Main: Trainer rail + roster grid */}
       <div className={cn(
@@ -824,7 +845,7 @@ export function PtAttendanceTabContent() {
                   <ClientRosterCard
                     key={c.pkgId}
                     client={c}
-                    trainerId={effectiveTrainerId!}
+                    trainerId={effectiveTrainerId ?? ''}
                     session={sessionByPkg.get(c.pkgId)}
                     canMark={canMark}
                     selectedDate={selectedDate}
