@@ -11846,7 +11846,11 @@ export type Database = {
       }
       referral_rewards: {
         Row: {
+          claim_approval_id: string | null
           claim_idempotency_key: string | null
+          claim_requested_at: string | null
+          claim_review_note: string | null
+          claim_status: string | null
           claimed_at: string | null
           claimed_wallet_txn_id: string | null
           created_at: string
@@ -11859,7 +11863,11 @@ export type Database = {
           reward_value: number | null
         }
         Insert: {
+          claim_approval_id?: string | null
           claim_idempotency_key?: string | null
+          claim_requested_at?: string | null
+          claim_review_note?: string | null
+          claim_status?: string | null
           claimed_at?: string | null
           claimed_wallet_txn_id?: string | null
           created_at?: string
@@ -11872,7 +11880,11 @@ export type Database = {
           reward_value?: number | null
         }
         Update: {
+          claim_approval_id?: string | null
           claim_idempotency_key?: string | null
+          claim_requested_at?: string | null
+          claim_review_note?: string | null
+          claim_status?: string | null
           claimed_at?: string | null
           claimed_wallet_txn_id?: string | null
           created_at?: string
@@ -16475,6 +16487,10 @@ export type Database = {
         Args: { p_approve: boolean; p_notes?: string; p_request_id: string }
         Returns: Json
       }
+      decide_referral_reward_claim: {
+        Args: { p_approval_id: string; p_decision: string; p_note?: string }
+        Returns: Json
+      }
       decide_role_change_request: {
         Args: {
           p_approve: boolean
@@ -18075,6 +18091,10 @@ export type Database = {
           p_reason: string
           p_restore_credit?: boolean
         }
+        Returns: Json
+      }
+      request_referral_reward_claim: {
+        Args: { p_reward_id: string }
         Returns: Json
       }
       reset_campaign_to_draft: {
