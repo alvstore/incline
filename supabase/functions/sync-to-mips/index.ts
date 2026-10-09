@@ -840,7 +840,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices, force } = body as {
+    let { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices, force } = body as {
 
       person_type: "member" | "employee" | "trainer";
       person_id: string;
@@ -856,6 +856,13 @@ Deno.serve(async (req) => {
 
     // Branch staff may only use the MIPS connection of a branch they belong to.
     if (!__callerGlobal) {
+      if (!branch_id && person_id) {
+        const t0 = person_type === "member" ? "members" : person_type === "employee" ? "employees" : person_type === "trainer" ? "trainers" : null;
+        if (t0) {
+          const { data: p0 } = await supabase.from(t0).select("branch_id").eq("id", person_id).maybeSingle();
+          branch_id = (p0 as { branch_id?: string } | null)?.branch_id ?? undefined;
+        }
+      }
       if (!branch_id) {
         return new Response(JSON.stringify({ error: "branch_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
