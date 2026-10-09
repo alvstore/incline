@@ -162,6 +162,20 @@
       "when": 1791474034628,
       "tag": "0022_member_onboarding_member_read_signature_only",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791523722208,
+      "tag": "0023_pt_auto_attendance_co_presence",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791523752686,
+      "tag": "0024_pt_auto_attendance_same_day_shift_only",
+      "breakpoints": true
     }
   ]
 }
