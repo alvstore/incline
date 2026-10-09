@@ -190,6 +190,13 @@
       "when": 1791525219014,
       "tag": "0026_pt_auto_attendance_v2_duty_modes_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791525370938,
+      "tag": "0027_pt_auto_attendance_v2_grants",
+      "breakpoints": true
     }
   ]
 }
