@@ -47,4 +47,5 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] Branch-secured referral summary with 12-week trend and lifecycle funnel.
 - [x] Bento overview, program-off state, searchable/filterable/paginated referral and reward views, mobile cards, and exact approval statuses.
 - [x] Create Referral Sheet with searchable member selector, validated Indian phone/email, saved email, and referrer-derived branch scope.
-- [ ] Verify owner and branch-manager live flows after the preview build completes; no referral will be created while the program remains off.
+- [x] Verify the owner view at desktop and phone widths with no failed requests or layout overflow; the program-off state correctly blocks creation.
+- [ ] Verify the same page through a branch-manager account when a manager session is available; no live referral was created while the program remains off.
