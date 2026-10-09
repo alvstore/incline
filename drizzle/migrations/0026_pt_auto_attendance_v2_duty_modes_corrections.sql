@@ -41,6 +41,7 @@ CREATE INDEX pt_attendance_corrections_branch_status ON public.pt_attendance_cor
 -- Config gains mode
 CREATE OR REPLACE FUNCTION public.pt_auto_attendance_config(p_branch_id uuid)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  -- guard-exempt: returns only non-sensitive branch toggles (mode, minutes)
   SELECT jsonb_build_object('enabled', true, 'mode', 'auto', 'window_minutes', 30, 'late_alert_minutes', 10, 'notify_manager', true)
       || COALESCE((SELECT value FROM public.settings WHERE branch_id IS NULL AND key = 'pt_auto_attendance' AND jsonb_typeof(value) = 'object'), '{}'::jsonb)
       || COALESCE((SELECT value FROM public.settings WHERE branch_id = p_branch_id AND key = 'pt_auto_attendance' AND jsonb_typeof(value) = 'object'), '{}'::jsonb);
@@ -477,4 +478,3 @@ END; $$;
 REVOKE EXECUTE ON FUNCTION public.pt_auto_attendance_my_board(date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.pt_auto_attendance_my_board(date) TO authenticated, service_role;--> statement-breakpoint
 REVOKE EXECUTE ON FUNCTION public.pt_auto_attendance_evaluate(uuid, date) FROM PUBLIC, anon, authenticated;
--- pt_auto_attendance_config: guard-exempt: returns only non-sensitive branch toggles (mode, minutes)
