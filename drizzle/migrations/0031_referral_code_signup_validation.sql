@@ -13,6 +13,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS referrals_one_per_referred_member_uidx ON publ
 
 CREATE OR REPLACE FUNCTION public.get_referral_enabled(p_branch_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  -- public-ok: visitor sign-up lookup, boolean only
   -- guard-exempt: returns only a boolean branch toggle, no personal data
   SELECT COALESCE((SELECT is_active FROM public.referral_settings WHERE branch_id = p_branch_id ORDER BY updated_at DESC NULLS LAST LIMIT 1), false);
 $$;
@@ -41,6 +42,7 @@ CREATE OR REPLACE FUNCTION public.validate_referral_code(p_code text, p_branch_i
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_id uuid; v_name text; v_ip text; v_key text; v_fails int;
 BEGIN
+  -- public-ok: visitor sign-up check, rate-limited
   -- guard-exempt: visitor sign-up check; rate-limited, returns only valid flag and first name + initial
   IF NOT public.get_referral_enabled(p_branch_id) THEN RETURN jsonb_build_object('valid', false, 'reason', 'disabled'); END IF;
   BEGIN v_ip := split_part(coalesce(current_setting('request.headers', true)::json->>'x-forwarded-for',''), ',', 1);
