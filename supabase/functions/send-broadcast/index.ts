@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
     // Signed-in callers can only broadcast to saved members, leads, contacts or staff:
     // addresses always come from the database, never from the request.
     if (!isSystem && Array.isArray(recipients)) {
-      recipients = await rebindRecipients(adminClient, recipients, callerIsGlobal ? null : branch_id);
+      recipients = await rebindRecipients(adminClient, recipients, callerIsGlobal ? null : branch_id, userId);
     }
 
 
@@ -1498,11 +1498,17 @@ function jsonResp(body: unknown, status: number, corsHeaders: Record<string, str
 }
 
 // deno-lint-ignore no-explicit-any
-async function rebindRecipients(db: any, input: any[], branchId: string | null): Promise<any[]> {
+async function rebindRecipients(db: any, input: any[], branchId: string | null, callerId: string | null): Promise<any[]> {
   const out: any[] = [];
+  // Test sends go only to the caller's own saved phone/email.
+  const { data: me } = callerId ? await db.from('profiles').select('full_name, phone, email').eq('id', callerId).maybeSingle() : { data: null };
   for (const r of input.slice(0, 5000)) {
     const id = typeof r?.source_ref_id === 'string' ? r.source_ref_id : null;
     const type = String(r?.source_type ?? '');
+    if (type === 'test') {
+      if (me) out.push({ ...r, phone: me.phone ?? null, email: me.email ?? null });
+      continue;
+    }
     if (!id) continue;
     let row: { full_name?: string | null; phone?: string | null; email?: string | null; branch_id?: string | null } | null = null;
     if (type === 'member') {
