@@ -192,7 +192,15 @@ export function RewardsWalletCard({ memberId, memberName, branchId, rewardPoints
                           )}
                         </div>
                         <div>
-                          <p className="text-sm font-medium">{txn.description || txn.type || 'Transaction'}</p>
+                          <p className="text-sm font-medium flex items-center gap-1.5">
+                            {txn.description || txn.txn_type || txn.type || 'Transaction'}
+                            {txn.reference_type === 'referral_reward' && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-accent border-accent/30">Referral reward</Badge>
+                            )}
+                            {txn.reference_type !== 'referral_reward' && txn.txn_type === 'credit' && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">Added by staff</Badge>
+                            )}
+                          </p>
                           <p className="text-[10px] text-muted-foreground">
                             {format(new Date(txn.created_at), 'dd MMM yyyy, hh:mm a')}
                           </p>
