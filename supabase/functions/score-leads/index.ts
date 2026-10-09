@@ -1,3 +1,4 @@
+// v2.2.0 — leads are read through the caller's own row-security scope before scoring.
 // v2.1.0 — JWT + staff role gate added. Service-role bearer also accepted for future automation use.
 // v2.0.0 — AI Lead Scoring Edge Function (SSOT: routes through ai-runtime)
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -29,6 +30,8 @@ serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
+    // Client used to read leads: the caller's own (branch-scoped) view for users.
+    let leadReader = supabase;
 
     if (bearer !== serviceKey) {
       const userClient = createClient(supabaseUrl, anonKey, {
@@ -48,11 +51,14 @@ serve(async (req: Request) => {
       if (!roles?.length) {
         return json({ error: "Forbidden" }, 403);
       }
+      leadReader = userClient;
     }
 
     const { lead_id, lead_ids } = await req.json();
 
-    const idsToScore = lead_ids || (lead_id ? [lead_id] : []);
+    const idsToScore: string[] = (Array.isArray(lead_ids) ? lead_ids : (lead_id ? [lead_id] : []))
+      .filter((v: unknown) => typeof v === "string")
+      .slice(0, 50);
     if (!idsToScore.length) {
       return json({ error: "Missing lead_id or lead_ids" }, 400);
     }
@@ -61,7 +67,8 @@ serve(async (req: Request) => {
 
     for (const id of idsToScore) {
       // Fetch lead
-      const { data: lead, error: leadErr } = await supabase
+      // Authorization: the lead must be visible to the caller under row security.
+      const { data: lead, error: leadErr } = await leadReader
         .from("leads")
         .select("*")
         .eq("id", id)
@@ -72,7 +79,7 @@ serve(async (req: Request) => {
       }
 
       // Fetch activities
-      const { data: activities } = await supabase
+      const { data: activities } = await leadReader
         .from("lead_activities")
         .select("activity_type, title, notes, created_at")
         .eq("lead_id", id)

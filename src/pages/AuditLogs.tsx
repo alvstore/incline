@@ -89,8 +89,9 @@ export default function AuditLogsPage() {
         const tables = Object.entries(TABLE_CATEGORY).filter(([, c]) => c === filters.category).map(([t]) => t);
         if (tables.length) query = query.in('table_name', tables);
       }
-      if (filters.search) {
-        query = query.or(`record_id.ilike.%${filters.search}%,table_name.ilike.%${filters.search}%,actor_name.ilike.%${filters.search}%,target_name.ilike.%${filters.search}%`);
+      const safeSearch = (filters.search || '').replace(/[^\p{L}\p{N} @.\-]/gu, '').slice(0, 80);
+      if (safeSearch) {
+        query = query.or(`record_id.ilike.%${safeSearch}%,table_name.ilike.%${safeSearch}%,actor_name.ilike.%${safeSearch}%,target_name.ilike.%${safeSearch}%`);
       }
       query = query.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
 

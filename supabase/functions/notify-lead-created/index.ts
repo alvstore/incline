@@ -15,7 +15,7 @@
 // v3.1.0 — Resolve team-alert template by trigger_event='lead_created' first.
 // v3.0.0 — Full SSOT cutover — all channels route via dispatch-communication.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireCaller } from "../_shared/requireCaller.ts";
+import { requireCaller, canActOnBranch, type CallerResult } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +34,9 @@ interface DispatchSummary {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
+  const __res = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] });
+  if (!__res.ok) return __res.response;
+  const __caller = __res as CallerResult;
 
   try {
     const { lead_id, branch_id } = await req.json();
@@ -44,11 +46,18 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Authorization: the lead must belong to branch_id and the caller must act on that branch.
+    const { data: target } = await supabase.from("leads").select("branch_id").eq("id", lead_id).maybeSingle();
+    if (!target || target.branch_id !== branch_id || !(await canActOnBranch(__caller, branch_id))) {
+      return json({ error: "Forbidden" }, 403);
+    }
+
     // 1) Atomic claim so concurrent invocations don't double-send
     const { data: claimed, error: claimErr } = await supabase
       .from("leads")
       .update({ notified_at: new Date().toISOString() })
       .eq("id", lead_id)
+      .eq("branch_id", branch_id)
       .is("notified_at", null)
       .select(
         "id, full_name, phone, email, source, branch_id, created_at, " +

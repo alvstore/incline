@@ -17,6 +17,7 @@
 // v2.3.0 — document messages send link + filename + caption together so PDFs
 //           arrive as named, captioned attachments instead of unnamed downloads.
 // v2.2.0 — honor skip_log from dispatcher to avoid duplicate communication_logs rows.
+import { safeFetch } from "../_shared/safeFetch.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_API_BASE } from "../_shared/meta-config.ts";
@@ -67,7 +68,7 @@ async function uploadMediaToMeta(input: {
   mediaUrl: string;
   fallbackType: string;
 }): Promise<string> {
-  const mediaResponse = await fetch(input.mediaUrl);
+  const mediaResponse = await safeFetch(input.mediaUrl);
   if (!mediaResponse.ok) {
     const detail = await mediaResponse.text().catch(() => "");
     throw new Error(`media_fetch_${mediaResponse.status}${detail ? `: ${detail.slice(0, 180)}` : ""}`);

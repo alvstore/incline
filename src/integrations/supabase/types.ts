@@ -18833,6 +18833,32 @@ export type Database = {
         Args: { p_payment_id: string; p_reason?: string; p_void_ratio?: number }
         Returns: Json
       }
+      wallet_adjust: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_direction: string
+          p_member_id: string
+          p_reference_id?: string
+          p_reference_type?: string
+        }
+        Returns: {
+          balance: number
+          created_at: string
+          id: string
+          is_active: boolean | null
+          member_id: string
+          total_credited: number | null
+          total_debited: number | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "wallets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       whatsapp_breaker_close: {
         Args: { _phone_number_id: string }
         Returns: undefined

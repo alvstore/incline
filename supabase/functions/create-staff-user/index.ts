@@ -245,6 +245,20 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Managers may only create staff in a branch they manage.
+    const isTopRole = callerRoles.some((r: { role: string }) => r.role === 'owner' || r.role === 'admin');
+    if (!isTopRole) {
+      const { data: managed } = await supabaseAdmin
+        .from('branch_managers').select('branch_id')
+        .eq('user_id', callingUser.id).eq('branch_id', branchId).limit(1);
+      if (!managed || managed.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'You can only add staff to a branch you manage.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     const phoneValidation = validatePhone(phone);
     if (!phoneValidation.valid) {
       return new Response(

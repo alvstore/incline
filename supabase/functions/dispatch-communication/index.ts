@@ -772,6 +772,11 @@ Deno.serve(async (req) => {
         if (!m || m.user_id !== uid) return bad(403, { error: 'forbidden' });
       }
       (input as { force?: boolean }).force = false;
+      // Non-staff callers can't send custom email markup: their body is sent as plain text.
+      if (input.channel === 'email' && input.payload) {
+        input.payload.body = String(input.payload.body ?? '')
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
     }
   }
 

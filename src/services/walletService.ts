@@ -53,43 +53,19 @@ export async function creditWallet(
   description: string,
   referenceType?: string,
   referenceId?: string,
-  createdBy?: string
+  _createdBy?: string
 ) {
-  const wallet = await getOrCreateWallet(memberId);
-  const currentBalance = Number(wallet.balance) || 0;
-  const currentCredited = Number(wallet.total_credited) || 0;
-  const numericAmount = Number(amount) || 0;
-  const newBalance = currentBalance + numericAmount;
-
-  // Create transaction
-  const { error: txnError } = await supabase
-    .from('wallet_transactions')
-    .insert({
-      wallet_id: wallet.id,
-      txn_type: 'credit' as WalletTxnType,
-      amount: numericAmount,
-      balance_after: newBalance,
-      description,
-      reference_type: referenceType,
-      reference_id: referenceId,
-      created_by: createdBy,
-    });
-
-  if (txnError) throw txnError;
-
-  // Update wallet balance
-  const { data, error: updateError } = await supabase
-    .from('wallets')
-    .update({
-      balance: newBalance,
-      total_credited: currentCredited + numericAmount,
-    })
-    .eq('id', wallet.id)
-    .select()
-    .single();
-
-  if (updateError) throw updateError;
-  return data as Wallet;
+  // Server-checked: only owners/admins or a manager of the member's branch may add funds.
+  const { data, error } = await supabase.rpc('wallet_adjust', {
+    p_member_id: memberId,
+    p_amount: Number(amount) || 0,
+    p_direction: 'credit',
+    p_description: description,
+    p_reference_type: referenceType ?? null,
+    p_reference_id: referenceId ?? null,
+  });
+  if (error) throw error;
+  return data as unknown as Wallet;
 }
 
 /**
@@ -102,53 +78,18 @@ export async function debitWallet(
   description: string,
   referenceType?: string,
   referenceId?: string,
-  createdBy?: string
+  _createdBy?: string
 ) {
-  const wallet = await fetchWallet(memberId);
-  
-  if (!wallet) {
-    throw new Error('Wallet not found');
-  }
-
-  const currentBalance = Number(wallet.balance) || 0;
-  const currentDebited = Number(wallet.total_debited) || 0;
-  const numericAmount = Number(amount) || 0;
-
-  if (currentBalance < numericAmount) {
-    throw new Error('Insufficient wallet balance');
-  }
-
-  const newBalance = currentBalance - numericAmount;
-
-  // Create transaction
-  const { error: txnError } = await supabase
-    .from('wallet_transactions')
-    .insert({
-      wallet_id: wallet.id,
-      txn_type: 'debit' as WalletTxnType,
-      amount: numericAmount,
-      balance_after: newBalance,
-      description,
-      reference_type: referenceType,
-      reference_id: referenceId,
-      created_by: createdBy,
-    });
-
-  if (txnError) throw txnError;
-
-  // Update wallet balance
-  const { data, error: updateError } = await supabase
-    .from('wallets')
-    .update({
-      balance: newBalance,
-      total_debited: currentDebited + numericAmount,
-    })
-    .eq('id', wallet.id)
-    .select()
-    .single();
-
-  if (updateError) throw updateError;
-  return data as Wallet;
+  const { data, error } = await supabase.rpc('wallet_adjust', {
+    p_member_id: memberId,
+    p_amount: Number(amount) || 0,
+    p_direction: 'debit',
+    p_description: description,
+    p_reference_type: referenceType ?? null,
+    p_reference_id: referenceId ?? null,
+  });
+  if (error) throw error;
+  return data as unknown as Wallet;
 }
 
 /**

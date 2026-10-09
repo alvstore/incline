@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, attachment_url, attachment_kind, attachment_filename, retry } = body;
+    let { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, attachment_url, attachment_kind, attachment_filename, retry } = body;
     let variables = body.variables;
     if (!isSystem && !callerIsGlobal) {
       if (!branch_id) return new Response(JSON.stringify({ error: "branch_id required" }), { status: 400, headers: corsHeaders });
@@ -114,7 +114,22 @@ Deno.serve(async (req) => {
       const { data: sb } = await adminClient.from("staff_branches").select("branch_id").eq("user_id", userId!).eq("branch_id", branch_id).limit(1);
       if (!(bm?.length || sb?.length)) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
     }
-    // v5.1.0: retries / re-runs invoked from the UI only pass campaign_id.
+    // Campaign must belong to the caller's authorised branch.
+    if (!isSystem && campaign_id) {
+      const { data: camp } = await adminClient.from('campaigns').select('branch_id').eq('id', campaign_id).maybeSingle();
+      if (!camp) return new Response(JSON.stringify({ error: "Campaign not found" }), { status: 404, headers: corsHeaders });
+      if (!callerIsGlobal && (camp as { branch_id: string | null }).branch_id !== branch_id) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+      }
+    }
+
+    // Signed-in callers can only broadcast to saved members, leads, contacts or staff:
+    // addresses always come from the database, never from the request.
+    if (!isSystem && Array.isArray(recipients)) {
+      recipients = await rebindRecipients(adminClient, recipients, callerIsGlobal ? null : branch_id, userId);
+    }
+
+
     // Without the campaign's fixed slot values ({{2}}, {{3}}, …) the dispatcher
     // pre-flight blocks the send with `template_param_empty` — hydrate them here.
     if (campaign_id && (!variables || typeof variables !== 'object' || Object.keys(variables).length === 0)) {
@@ -1482,4 +1497,43 @@ function jsonResp(body: unknown, status: number, corsHeaders: Record<string, str
   });
 }
 
-
+// deno-lint-ignore no-explicit-any
+async function rebindRecipients(db: any, input: any[], branchId: string | null, callerId: string | null): Promise<any[]> {
+  const out: any[] = [];
+  // Test sends go only to the caller's own saved phone/email.
+  const { data: me } = callerId ? await db.from('profiles').select('full_name, phone, email').eq('id', callerId).maybeSingle() : { data: null };
+  for (const r of input.slice(0, 5000)) {
+    const id = typeof r?.source_ref_id === 'string' ? r.source_ref_id : null;
+    const type = String(r?.source_type ?? '');
+    if (type === 'test') {
+      if (me) out.push({ ...r, phone: me.phone ?? null, email: me.email ?? null });
+      continue;
+    }
+    if (!id) continue;
+    let row: { full_name?: string | null; phone?: string | null; email?: string | null; branch_id?: string | null } | null = null;
+    if (type === 'member') {
+      const { data } = await db.from('members').select('branch_id, profiles:user_id(full_name, phone, email)').eq('id', id).maybeSingle();
+      if (data) row = { branch_id: data.branch_id, ...(Array.isArray(data.profiles) ? data.profiles[0] : data.profiles) };
+    } else if (type === 'lead') {
+      const { data } = await db.from('leads').select('branch_id, full_name, phone, email').eq('id', id).maybeSingle();
+      row = data;
+    } else if (type === 'contact') {
+      const { data } = await db.from('contacts').select('branch_id, full_name, phone, email').eq('id', id).maybeSingle();
+      row = data;
+    } else if (type === 'staff') {
+      const { data } = await db.from('profiles').select('full_name, phone, email').eq('id', id).maybeSingle();
+      if (data) {
+        if (branchId) {
+          const { data: sb } = await db.from('staff_branches').select('branch_id').eq('user_id', id).eq('branch_id', branchId).limit(1);
+          const { data: bm } = await db.from('branch_managers').select('branch_id').eq('user_id', id).eq('branch_id', branchId).limit(1);
+          if (!(sb?.length || bm?.length)) continue;
+        }
+        row = { ...data, branch_id: branchId };
+      }
+    }
+    if (!row) continue;
+    if (branchId && row.branch_id !== branchId) continue;
+    out.push({ ...r, full_name: row.full_name ?? null, phone: row.phone ?? null, email: row.email ?? null });
+  }
+  return out;
+}

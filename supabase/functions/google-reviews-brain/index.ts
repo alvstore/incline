@@ -1544,6 +1544,13 @@ Deno.serve(async (req) => {
       } catch { /* ignore */ }
     }
 
+    // Any action targeting a specific review must be on a branch the caller can act on.
+    if (body.inbound_id && __caller && !__caller.internal) {
+      const { data: rvGate } = await supa().from("google_reviews_inbound").select("branch_id").eq("id", body.inbound_id).maybeSingle();
+      if (!rvGate) return json({ ok: false, error: "not_found" }, 404);
+      if (!(await canActOnBranch(__caller, rvGate.branch_id))) return json({ error: "Forbidden" }, 403);
+    }
+
     switch (action) {
       case "test_connection":
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
