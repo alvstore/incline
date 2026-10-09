@@ -93,6 +93,7 @@ function WeekStrip({
           return (
             <button
               key={d.toISOString()}
+              aria-pressed={isSelected}
               onClick={() => onSelect(d)}
               className={cn(
                 'flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px] py-2 px-3 rounded-2xl border transition-all',
@@ -176,6 +177,7 @@ function TrainerRail({
         return (
           <button
             key={t.id}
+            aria-pressed={active}
             onClick={() => onSelect(t.id)}
             className={cn(
               'w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group',
@@ -253,12 +255,12 @@ function ClientRosterCard({
 
   return (
     <div className={cn(
-      'group relative rounded-2xl bg-card shadow-lg shadow-slate-200/50 p-4 transition-all',
-      'hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-0.5',
-      isCompletedish && 'ring-1 ring-success/25 bg-gradient-to-br from-success/10 to-white',
+      'group relative min-w-0 rounded-2xl bg-card shadow-sm p-4 motion-safe:transition-transform',
+      'motion-safe:hover:-translate-y-0.5',
+      isCompletedish && 'ring-1 ring-success/25 bg-gradient-to-br from-success/10 to-card',
     )}>
       <div className="flex items-start gap-3">
-        <Avatar className="h-11 w-11 shrink-0 ring-2 ring-white shadow-sm">
+        <Avatar className="h-11 w-11 shrink-0 ring-2 ring-background shadow-sm">
           <AvatarImage src={client.avatarUrl ?? undefined} />
           <AvatarFallback className="bg-primary/15 text-primary font-semibold">
             {initials}
@@ -294,12 +296,12 @@ function ClientRosterCard({
             )}
           </div>
         ) : canMark ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               onClick={() => markPresent.mutate()}
               disabled={markPresent.isPending || !isToday}
               className={cn(
-                'flex-1 h-10 rounded-xl font-semibold shadow-md shadow-primary/20',
+                'flex-1 min-w-32 h-11 rounded-xl font-semibold shadow-md shadow-primary/20',
                 'bg-gradient-to-r from-primary to-primary hover:from-primary hover:to-primary',
               )}
             >
@@ -824,7 +826,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
                 Select a trainer to view their roster.
               </div>
             ) : clientsLoading || sessionsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 @[34rem]:grid-cols-2 @[54rem]:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-44 rounded-2xl" />
                 ))}
@@ -840,7 +842,7 @@ export function PtAttendanceTabContent({ automaticOnly = false }: { automaticOnl
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 @[34rem]:grid-cols-2 @[54rem]:grid-cols-3">
                 {clients.map((c) => (
                   <ClientRosterCard
                     key={c.pkgId}
