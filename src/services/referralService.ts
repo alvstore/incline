@@ -46,21 +46,16 @@ export async function fetchMemberRewards(memberId: string) {
   return data;
 }
 
-export async function claimReward(rewardId: string, memberId: string) {
+/**
+ * Ask to add a referral reward to the wallet. Nothing is credited here —
+ * the branch manager must approve it under Approvals first.
+ */
+export async function claimReward(rewardId: string, _memberId?: string) {
   const user = await checkAuth();
   if (!user) throw new Error('Not authenticated');
-
-  // Atomic backend RPC — locks the reward, credits the wallet (if applicable),
-  // marks claimed, and is idempotent. No client-side wallet credit step.
-  const idempotencyKey = `claim-${rewardId}-${user.id}`;
-  const { data, error } = await supabase.rpc('claim_referral_reward', {
-    p_reward_id: rewardId,
-    p_member_id: memberId,
-    p_idempotency_key: idempotencyKey,
-  });
-
+  const { data, error } = await supabase.rpc('request_referral_reward_claim', { p_reward_id: rewardId });
   if (error) throw error;
-  const result = data as { success?: boolean; error?: string } | null;
-  if (!result?.success) throw new Error(result?.error || 'Failed to claim reward');
+  const result = data as { success?: boolean; error?: string; pending?: boolean } | null;
+  if (!result?.success) throw new Error(result?.error || 'Failed to request reward');
   return result;
 }

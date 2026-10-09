@@ -56,6 +56,7 @@ const APPROVAL_TYPE_CONFIG: Record<string, { icon: any; label: string; color: st
   contract: { icon: FileText, label: 'Contract', color: 'bg-accent/10 text-accent' },
   trainer_change: { icon: User, label: 'Trainer Change', color: 'bg-primary/10 text-primary' },
   pt_attendance_correction: { icon: Clock, label: 'PT Attendance Correction', color: 'bg-warning/10 text-warning' },
+  referral_reward: { icon: Clock, label: 'Referral Reward', color: 'bg-accent/10 text-accent' },
 };
 
 export default function ApprovalQueuePage() {
@@ -142,6 +143,18 @@ export default function ApprovalQueuePage() {
   const approveMutation = useMutation({
     mutationFn: async ({ requestId, approved }: { requestId: string; approved: boolean }) => {
       const request = requests.find((r) => r.id === requestId);
+      if ((request as any)?.approval_type === 'referral_reward') {
+        const { data: rr, error: rrErr } = await supabase.rpc('decide_referral_reward_claim', {
+          p_approval_id: requestId,
+          p_decision: approved ? 'approve' : 'reject',
+          p_note: reviewNotes[requestId] || null,
+        });
+        if (rrErr) throw rrErr;
+        const r = rr as { success?: boolean; error?: string } | null;
+        if (!r?.success) throw new Error(r?.error || 'Failed to decide reward');
+        queryClient.invalidateQueries({ queryKey: ['referral-rewards'] });
+        return { approved };
+      }
       if ((request as any)?.approval_type === 'pt_attendance_correction') {
         const { error: corrErr } = await supabase.rpc('pt_attendance_decide_correction', {
           p_correction_id: (request as any).reference_id,
@@ -209,6 +222,16 @@ export default function ApprovalQueuePage() {
           <p><span className="text-muted-foreground">Duration:</span> {data.daysFrozen} days</p>
           <p><span className="text-muted-foreground">Period:</span> {safeFormatDate(data.startDate, 'dd MMM', 'Pending')} - {safeFormatDate(data.endDate, 'dd MMM yyyy', 'Pending')}</p>
           {data.reason && <p><span className="text-muted-foreground">Reason:</span> {data.reason}</p>}
+        </div>
+      );
+    }
+
+    if (request.approval_type === 'referral_reward') {
+      return (
+        <div className="space-y-1 text-sm">
+          <p><span className="text-muted-foreground">Member:</span> {data.memberName} {data.memberCode ? `(${data.memberCode})` : ''}</p>
+          <p><span className="text-muted-foreground">Reward:</span> ₹{Number(data.rewardValue || 0).toLocaleString('en-IN')} to wallet</p>
+          {data.description && <p><span className="text-muted-foreground">For:</span> {data.description}</p>}
         </div>
       );
     }
