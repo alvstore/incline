@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { splitSessionTimeline } from './sessionTimeline';
+import { splitSessionTimeline } from '../../src/components/pt/sessionTimeline';
 
 describe('PT session timeline', () => {
   const now = new Date('2026-10-09T07:30:00Z');
