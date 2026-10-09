@@ -4,6 +4,7 @@
 
 - Bhavik Jain (`INC-26-0103`) is active with a Quarterly Plan through 11 Nov 2026.
 - The gift exists and is unused: **1 Body Composition & Posture Scan**, attached to his active membership and expiring with it.
+- Bhavik’s gift uses the exact scanner-recognized benefit record (`3d_body_scanning`), so it is eligible for QR authorization; this incident is not a mismatched gift type.
 - The staff Benefits screen reads gifts from the complimentary-gift ledger, which is why the gift appears there.
 - The member dashboard’s **My Entitlements** section reads plan benefits and purchased add-ons, but does **not** read complimentary gifts. The separate **My Benefits** page has the same omission. This is the visibility defect.
 - Scanner authorization already includes valid complimentary gifts. The body/posture scanner flow consumes the gift only after a confirmed report arrives, and companion body + posture reports from the same assessment are not charged twice.
