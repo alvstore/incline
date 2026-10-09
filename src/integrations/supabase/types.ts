@@ -17954,6 +17954,10 @@ export type Database = {
         }
         Returns: Json
       }
+      referral_workspace_summary: {
+        Args: { p_branch_id?: string }
+        Returns: Json
+      }
       refresh_campaign_stats: { Args: { p_campaign_id: string }; Returns: Json }
       reinstate_class_session: { Args: { p_class_id: string }; Returns: Json }
       release_coupon: {
