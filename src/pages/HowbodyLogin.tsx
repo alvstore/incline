@@ -115,7 +115,7 @@ export default function HowbodyLogin() {
   async function handleSearch() {
     if (!search.trim()) return;
     setSearching(true);
-    const term = `%${search.trim()}%`;
+    const term = `%${search.trim().replace(/[^\p{L}\p{N} +@.\-]/gu, "").slice(0, 60)}%`;
     const { data } = await supabase
       .from("members")
       .select("id, member_code, profiles:user_id(full_name, phone)")
