@@ -646,6 +646,16 @@ async function handleAiTool(authHeader: string, body: any) {
 
   let result: Record<string, any> = {};
 
+  // Member-scoped tools: non-owner/admin callers may only query members of their branches.
+  if (args?.member_id && !roles?.some((r: any) => r.role === "owner" || r.role === "admin")) {
+    const { data: mem } = await supabase.from("members").select("branch_id").eq("id", args.member_id).maybeSingle();
+    const bid = (mem as { branch_id?: string } | null)?.branch_id;
+    if (!bid) return json({ error: "Member not found" }, 404);
+    const { data: bm } = await supabase.from("branch_managers").select("branch_id").eq("user_id", user.id).eq("branch_id", bid).limit(1);
+    const { data: sb } = await supabase.from("staff_branches").select("branch_id").eq("user_id", user.id).eq("branch_id", bid).limit(1);
+    if (!(bm?.length || sb?.length)) return json({ error: "Forbidden" }, 403);
+  }
+
   switch (tool_name) {
     case "get_membership_status": {
       const memberId = args?.member_id;
