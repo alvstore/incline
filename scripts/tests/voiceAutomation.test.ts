@@ -1,0 +1,10 @@
+import { expect, test } from 'bun:test';
+import { automationStatus, voiceTime } from '../../src/lib/voice/automationStatus';
+const a = { enabled: true, is_active: true, window_start: '10:00', window_end: '19:00' };
+const s = { is_active: true, last_status: 'success', next_run_at: '2026-10-09T05:00:00Z' };
+test('operator pause overrides a successful scheduler', () => expect(automationStatus({ ...a, paused: true }, s)).toBe('paused'));
+test('calling ends at 19:00 IST', () => expect(automationStatus(a, s, new Date('2026-10-09T13:30:00Z'))).toBe('outside'));
+test('calling starts at 10:00 IST', () => expect(automationStatus(a, s, new Date('2026-10-09T04:30:00Z'))).toBe('scheduled'));
+test('disabled master switch prevents scheduled state', () => expect(automationStatus({ ...a, enabled: false }, s)).toBe('disabled'));
+test('unknown settings are not shown as running', () => expect(automationStatus(null, s)).toBe('unknown'));
+test('voice timestamps remain IST', () => expect(voiceTime('2026-10-09T04:30:00Z')).toContain('10:00'));

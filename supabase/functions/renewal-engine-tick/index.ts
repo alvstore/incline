@@ -1,3 +1,4 @@
+// v1.4.0 — independent, bounded voice retry queue; successful calls only are linked.
 // v1.3.0 — busy line, cooldown and calling window are expected outcomes, not logged as errors.
 // renewal-engine-tick v1.2.0 — Phase 2 renewal orchestrator.
 // v1.2.0 — voice escalation now authenticates to sarvam-voice with the
@@ -162,18 +163,13 @@ Deno.serve(async (req) => {
         else { failed++; lastError = detail; }
       }
 
+      const { data: voiceDue, error: voiceDueError } = await admin.rpc("renewal_voice_due_cases", { _limit: batch });
+      if (voiceDueError) throw voiceDueError;
+
       // Optional voice escalation: only for branches that switched it on, and
       // only on the configured day offsets. The single Ananya agent places the
       // call; cooldown + call windows stay owned by sarvam-voice.
-      for (const c of cases) {
-        const cfg = (configs || []).find((x: Record<string, unknown>) => x.branch_id === c.branch_id)
-          ?? (configs || []).find((x: Record<string, unknown>) => x.branch_id === null);
-        const voiceOn = Boolean((cfg as Record<string, unknown> | undefined)?.voice_auto_call_enabled);
-        const offsets = ((cfg as Record<string, unknown> | undefined)?.voice_stage_offsets as number[] | null) ?? [-3, 0];
-        // stage offsets are stored expiry-relative (negative = before expiry)
-        if (!voiceOn || !c.phone) continue;
-        if (!offsets.includes(-c.days_to_expiry)) continue;
-
+      for (const c of (voiceDue || []) as Array<{ case_id: string; member_id: string; phone: string }>) {
         try {
           const res = await fetch(`${supabaseUrl}/functions/v1/sarvam-voice`, {
             method: "POST",
@@ -193,16 +189,17 @@ Deno.serve(async (req) => {
             }),
           });
           const body = await res.json().catch(() => ({}));
-          if (body?.call_record_id) {
-            await admin.rpc("renewal_link_voice_call", {
+          if (body?.ok === true && body?.call_record_id) {
+            const { error: linkError } = await admin.rpc("renewal_link_voice_call", {
               _case_id: c.case_id,
               _attempt_id: body.call_record_id,
             });
+            if (linkError) throw linkError;
             voiceCalls++;
           } else if (body?.code === "concurrency_limit") {
             // Line busy with another call — expected; remaining cases retry next tick.
             break;
-          } else if (["cooldown_active", "outside_window", "daily_cap_reached", "do_not_contact", "duplicate_live_call"].includes(body?.code)) {
+          } else if (["cooldown_active", "outside_window", "daily_cap_reached", "do_not_contact", "duplicate_live_call", "paused_by_operator", "automation_disabled"].includes(body?.code)) {
             continue;
           } else {
             await captureEdgeError(

@@ -1,3 +1,8 @@
+# Voice automation repair & workspace (9 Oct 2026)
+- [ ] Restore automatic retention, repair renewal escalation selection and preserve pause/window/DND/cap safeguards.
+- [ ] Clarify automation health, last actual call, next check and member last-call/next-attempt timing in themed bento cards.
+- [ ] Run rule tests and verify authenticated voice page and non-dialing worker checks.
+
 # PT workspace redesign (9 Oct 2026)
 - [x] Combine Today/Upcoming into one session timeline, move Automatic Attendance after Clients, and refresh summary cards using existing theme with reduced-motion-aware animation.
 - [x] Verify owner tab navigation, real session loading and narrow-screen layout; fix roster action clipping; timeline tests pass and automatic build is clean. Package and payroll logic unchanged.

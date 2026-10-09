@@ -18118,6 +18118,17 @@ export type Database = {
         Returns: string
       }
       renewal_queue_counts: { Args: { _branch_id?: string }; Returns: Json }
+      renewal_voice_due_cases: {
+        Args: { _limit?: number }
+        Returns: {
+          branch_id: string
+          case_id: string
+          days_to_expiry: number
+          member_id: string
+          membership_id: string
+          phone: string
+        }[]
+      }
       request_booking_reschedule: {
         Args: {
           p_blame?: string
