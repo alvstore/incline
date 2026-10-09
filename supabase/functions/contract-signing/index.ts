@@ -74,6 +74,17 @@ async function assertStaff(req: Request) {
   return { userId: u.user.id };
 }
 
+/** Owners/admins: any contract. Managers: only contracts of a branch they manage. */
+async function canAccessContract(userId: string, contractId: string): Promise<boolean> {
+  const { data: c } = await supabase.from("contracts").select("branch_id").eq("id", contractId).maybeSingle();
+  if (!c) return false;
+  const { data: top } = await supabase.from("user_roles").select("role").eq("user_id", userId).in("role", ["owner", "admin"]).limit(1);
+  if (top && top.length) return true;
+  if (!c.branch_id) return false;
+  const { data: bm } = await supabase.from("branch_managers").select("branch_id").eq("user_id", userId).eq("branch_id", c.branch_id).limit(1);
+  return !!(bm && bm.length);
+}
+
 // ── Allowlists per fill role ──────────────────────────────────────────────
 const FILL_ALLOWLIST: Record<string, string[]> = {
   employee: [
@@ -176,6 +187,7 @@ async function createSignLink(req: Request, body: any) {
 
   const auth = await assertStaff(req);
   if ("error" in auth) return auth.error;
+  if (!(await canAccessContract(auth.userId, contractId))) return json({ error: "Forbidden" }, 403);
 
   const { data: contract, error: contractError } = await supabase
     .from("contracts").select("id, branch_id").eq("id", contractId).single();
@@ -587,6 +599,7 @@ async function getOrBuildPdf(req: Request, body: any, forceRebuild: boolean) {
   const contractId = body?.contract_id;
   const copy: CopyKind = (body?.copy as CopyKind) ?? "employee_copy";
   if (!contractId) return json({ error: "Missing contract_id" }, 400);
+  if (!(await canAccessContract(auth.userId, contractId))) return json({ error: "Forbidden" }, 403);
 
   // Draft previews are always built fresh (not cached) and skip the signature block.
   if (copy !== "draft" && !forceRebuild) {
