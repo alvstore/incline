@@ -1,3 +1,4 @@
+// v1.5.0 — renewal calls honour operator pause; capacity deferrals are not failures.
 // v1.4.0 — call recording import (get_recording). v1.3.0 — purpose-specific opening line (renewal vs retention). Sarvam Voice AI control plane (owner/admin only).
 //
 // Actions: get_state | get_readiness | run_eligibility_check | save_config |
@@ -903,6 +904,10 @@ Deno.serve(async (req) => {
       if (body.confirmed !== true) {
         return json({ ok: false, error: "Confirmation is required before placing a call.", code: "not_confirmed" });
       }
+      if (isRenewalEngine) {
+        const a = (row.retention_automation || {}) as Record<string, unknown>;
+        if (a.paused === true) return json({ ok: false, code: "paused_by_operator", error: "Automatic calling is paused" });
+      }
       const gate = await dialGate();
       if (gate.blocked) return gate.blocked;
 
@@ -935,7 +940,7 @@ Deno.serve(async (req) => {
         branchIdForCall: callBranch,
         cooldownDays: memberId ? Number(body.cooldown_days ?? 7) : 0,
         vars,
-        apiKey: gate.key!,
+        apiKey: gate.key ?? "",
       });
       return json(res);
     }
@@ -998,7 +1003,7 @@ Deno.serve(async (req) => {
           branchIdForCall: (c.branch_id as string) ?? null,
           cooldownDays: cooldown,
           vars: ctx?.vars ?? {},
-          apiKey: gate.key!,
+          apiKey: gate.key ?? "",
         });
         results.push(res);
         // Serialise: concurrency is capped at max_concurrent_calls anyway and
@@ -1055,7 +1060,7 @@ Deno.serve(async (req) => {
 
       try {
         const gate = await dialGate();
-        if (gate.blocked) {
+        if (gate.blocked || !gate.key) {
           return await finish(runId, { status: "skipped", skip_reason: "provider_not_ready" });
         }
 
@@ -1103,6 +1108,7 @@ Deno.serve(async (req) => {
         const batch = eligible.slice(0, Math.min(remaining, 10));
 
         let placed = 0;
+        let attempted = 0;
         let errors = 0;
         let lastError: string | null = null;
         for (const c of batch) {
@@ -1116,8 +1122,10 @@ Deno.serve(async (req) => {
             branchIdForCall: (c.branch_id as string) ?? null,
             cooldownDays: cooldown,
             vars: ctx?.vars ?? {},
-            apiKey: gate.key!,
+            apiKey: gate.key ?? "",
           });
+          if (["concurrency_limit", "duplicate_live_call", "daily_cap_reached"].includes(res.code ?? "")) break;
+          attempted++;
           if (res.ok) placed++;
           else {
             errors++;
@@ -1130,18 +1138,18 @@ Deno.serve(async (req) => {
           worker: "voice_retention_worker",
           run_id: runId,
           eligible_count: eligible.length,
-          attempted_count: batch.length,
+          attempted_count: attempted,
           placed_count: placed,
-          skipped_count: batch.length - placed,
+          skipped_count: attempted - placed,
           error_count: errors,
         }));
 
         return await finish(runId, {
-          status: "completed",
+          status: errors > 0 && placed === 0 ? "failed" : "completed",
           candidates_found: eligible.length,
-          calls_attempted: batch.length,
+          calls_attempted: attempted,
           calls_placed: placed,
-          calls_skipped: batch.length - placed,
+          calls_skipped: attempted - placed,
           error_count: errors,
           last_error: lastError,
         });
