@@ -42,3 +42,9 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [ ] Staff drawer + profile drawer + member profile: single "View signed agreement", no old waiver link, no client-side jsPDF agreement
 - [ ] Backfill all 182 signed members to the unified agreement PDF (terms_version unified, legacy kept in audit fields)
 - [ ] Verify as staff + member; update memory
+
+# Referrals workspace redesign (9 Oct 2026)
+- [x] Branch-secured referral summary with 12-week trend and lifecycle funnel.
+- [x] Bento overview, program-off state, searchable/filterable/paginated referral and reward views, mobile cards, and exact approval statuses.
+- [x] Create Referral Sheet with searchable member selector, validated Indian phone/email, saved email, and referrer-derived branch scope.
+- [ ] Verify owner and branch-manager live flows after the preview build completes; no referral will be created while the program remains off.
