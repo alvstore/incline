@@ -32,7 +32,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function requireStaff(req: Request): Promise<{ userId: string } | Response> {
+async function requireStaff(req: Request): Promise<{ userId: string; top: boolean } | Response> {
   const auth = req.headers.get("Authorization") ?? "";
   const token = auth.replace(/^Bearer\s+/i, "").trim();
   if (!token) return json({ error: "Not authenticated" }, 401);
@@ -49,7 +49,8 @@ async function requireStaff(req: Request): Promise<{ userId: string } | Response
   const ok = (roles ?? []).some((r: { role: string }) => allowed.has(r.role));
   if (!ok) return json({ error: "Not allowed" }, 403);
 
-  return { userId: userData.user.id };
+  const top = (roles ?? []).some((r: { role: string }) => r.role === "owner" || r.role === "admin");
+  return { userId: userData.user.id, top };
 }
 
 async function loadIntegration(branchId: string | null): Promise<Integration | null> {
@@ -109,6 +110,14 @@ Deno.serve(async (req) => {
     const payload = await req.json().catch(() => ({}));
     const action = String(payload?.action ?? "status");
     const branchId: string | null = payload?.branch_id ?? null;
+
+    // Managers may only act on the WhatsApp number of a branch they manage.
+    if (!guard.top) {
+      if (!branchId) return json({ error: "branch_id required" }, 400);
+      const { data: bm } = await supabase.from("branch_managers").select("branch_id")
+        .eq("user_id", guard.userId).eq("branch_id", branchId).limit(1);
+      if (!bm?.length) return json({ error: "Not allowed for this branch" }, 403);
+    }
 
     const integration = await loadIntegration(branchId);
     if (!integration) return json({ error: "No active WhatsApp connection for this branch" }, 404);
