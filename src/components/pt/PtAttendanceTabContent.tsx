@@ -758,7 +758,7 @@ export function PtAttendanceTabContent() {
         </CardContent>
       </Card>
 
-      <PtAutoAttendancePanel branchId={selectedBranch ?? null} dayISO={dayISO} roles={roles as never} />
+      <PtAutoAttendancePanel branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : (selectedTrainer?.branch_id ?? null)} dayISO={dayISO} roles={roles as never} />
 
 
       {/* Main: Trainer rail + roster grid */}
