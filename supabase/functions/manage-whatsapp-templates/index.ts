@@ -15,6 +15,7 @@
 //           Falls back to text-only if upload fails (preserves v2.3.0 behavior).
 // v2.3.0 — Adds `bulk_create` (array of template_data, per-row results) and `mark_stale`
 // (flags whatsapp_templates rows whose meta_template_id is no longer present after a list sync).
+import { safeFetch } from "../_shared/safeFetch.ts";
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_GRAPH_VERSION, META_API_BASE } from "../_shared/meta-config.ts";
@@ -35,7 +36,7 @@ async function uploadSampleAsHandle(opts: {
   fallbackContentType: string;
 }): Promise<string | null> {
   try {
-    const fileRes = await fetch(opts.sampleUrl);
+    const fileRes = await safeFetch(opts.sampleUrl);
     if (!fileRes.ok) {
       console.warn(`[uploadSampleAsHandle] fetch ${opts.sampleUrl} → ${fileRes.status}`);
       return null;
