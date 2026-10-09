@@ -225,6 +225,13 @@
       "when": 1791556231829,
       "tag": "0031_referral_code_signup_validation",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791557548822,
+      "tag": "0032_referral_workspace_summary",
+      "breakpoints": true
     }
   ]
 }
