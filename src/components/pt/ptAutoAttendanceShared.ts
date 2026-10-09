@@ -1,5 +1,4 @@
 import { CheckCircle2, Clock, AlertTriangle, XCircle, Undo2, Hand } from 'lucide-react';
-import { format } from 'date-fns';
 
 export type AutoMode = 'auto' | 'review' | 'manual';
 
@@ -21,6 +20,7 @@ export const REASON: Record<string, string> = {
   trainer_very_late: 'trainer very late',
 };
 
-export const hhmm = (iso: string | null | undefined) => (iso ? format(new Date(iso), 'HH:mm') : '—');
+export const hhmm = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }) : '—';
 
 export const isMarked = (outcome: string) => outcome === 'auto_logged' || outcome === 'confirmed';
