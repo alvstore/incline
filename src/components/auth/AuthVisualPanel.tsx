@@ -89,7 +89,7 @@ export function AuthVisualPanel() {
           <ul className="space-y-4">
             {PILLARS.map(({ icon: Icon, title, copy }) => (
               <li key={title} className="flex items-start gap-3">
-                <span className="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-primary-foreground/10 border border-primary-foreground/15 grid place-items-center backdrop-blur-sm">
+                <span className="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-primary-foreground/10 border border-primary-foreground/15 grid place-items-center">
                   <Icon className="h-4 w-4 text-primary-foreground" />
                 </span>
                 <div>

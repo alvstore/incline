@@ -55,7 +55,15 @@ export function useTrainerSessions(
 ) {
   const ids = Array.isArray(trainerId) ? trainerId.filter(Boolean) : [trainerId].filter(Boolean);
   return useQuery({
-    queryKey: ["trainer-sessions", ids.slice().sort().join(","), options],
+    // Key by calendar day, not the raw Date: callers often pass `new Date()`
+    // inline, which changes every render and caused an endless refetch loop
+    // (the panel stayed on its loading skeleton forever).
+    queryKey: [
+      "trainer-sessions",
+      ids.slice().sort().join(","),
+      options?.startDate ? options.startDate.toDateString() : null,
+      options?.endDate ? options.endDate.toDateString() : null,
+    ],
     queryFn: () => fetchTrainerSessions(ids, options),
     enabled: ids.length > 0,
   });

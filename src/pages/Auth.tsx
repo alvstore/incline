@@ -76,13 +76,9 @@ export default function AuthPage() {
         noindex
       />
 
-      {/* LEFT — Visual panel (desktop full height, mobile compact hero) */}
-      <div className="hidden lg:block relative min-h-dvh">
-        <AuthVisualPanel />
-      </div>
-
-      {/* Mobile compact hero */}
-      <div className="lg:hidden relative h-[210px] overflow-hidden">
+      {/* Visual panel — mounted ONCE (desktop full height, mobile compact hero).
+          Two copies doubled the animated layers and caused repaint flicker. */}
+      <div className="relative h-[210px] overflow-hidden lg:h-auto lg:min-h-dvh">
         <AuthVisualPanel />
       </div>
 
