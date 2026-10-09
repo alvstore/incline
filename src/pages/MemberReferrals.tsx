@@ -159,6 +159,8 @@ export default function MemberReferrals() {
                     </div>
                     {reward.is_claimed ? (
                       <Badge variant="default" className="bg-success"><CheckCircle className="h-3 w-3 mr-1" />Claimed</Badge>
+                    ) : reward.claim_status === 'pending_approval' ? (
+                      <Badge variant="outline" className="text-warning border-warning/30">Awaiting approval</Badge>
                     ) : (
                       <Button size="sm" onClick={() => claimRewardMutation.mutate({ rewardId: reward.id, memberId: member.id })} disabled={claimRewardMutation.isPending}>
                         Claim

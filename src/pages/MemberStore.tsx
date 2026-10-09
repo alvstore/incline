@@ -188,7 +188,7 @@ export default function MemberStore() {
       return claimRewardSvc(rewardId, member!.id);
     },
     onSuccess: () => {
-      toast.success('Reward credited to your wallet!');
+      toast.success('Sent to branch manager for approval');
       queryClient.invalidateQueries({ queryKey: ['wallet'] });
       queryClient.invalidateQueries({ queryKey: ['unclaimed-rewards'] });
     },
