@@ -19,6 +19,7 @@ import { getMenuForRole } from '@/config/menu';
 import { groupMenuIntoModules, findActiveModuleId } from '@/config/navModules';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { MemberMobileNav } from '@/components/member/MemberMobileNav';
+import { MobileBranchBar } from './MobileBranchBar';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -171,6 +172,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Avatar>
           </div>
         </header>
+        <MobileBranchBar />
 
         {/* Desktop: single horizontal band — brand + modules + header utilities */}
         <div className="hidden lg:flex sticky top-0 z-40 h-14 items-center bg-card border-b border-border">
@@ -235,6 +237,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Avatar>
           </div>
         </header>
+        <MobileBranchBar />
 
         {/* Desktop: full AppHeader on top (with brand, since no sidebar) */}
         <div className="hidden lg:block">
@@ -298,6 +301,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Avatar>
           </div>
         </header>
+        <MobileBranchBar />
 
         {renderContent()}
         {showMemberMobileNav && <MemberMobileNav />}
