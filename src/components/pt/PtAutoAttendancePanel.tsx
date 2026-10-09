@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,53 +7,44 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet';
-import {
-  ScanFace, Settings2, CheckCircle2, Clock, AlertTriangle, Undo2, XCircle, Loader2,
-} from 'lucide-react';
+import { ScanFace, Settings2, Undo2, Loader2, MessageSquareWarning } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { can } from '@/lib/auth/permissions';
 import type { RoleLike } from '@/lib/auth/permissions';
 import { toast } from 'sonner';
+import { OUTCOME, REASON, hhmm, type AutoMode } from './ptAutoAttendanceShared';
 
 type BoardRow = {
   id: string;
-  member_id: string;
   member_name: string | null;
-  member_code: string | null;
-  trainer_id: string;
   trainer_name: string | null;
   member_first_at: string | null;
   trainer_first_at: string | null;
   arrival_order: string | null;
   gap_minutes: number | null;
   outcome: string;
-  pt_session_id: string | null;
+  match_reason: string | null;
   manager_alert_kind: string | null;
-  resolution_note: string | null;
+  correction_id: string | null;
+  correction_action: string | null;
+  correction_status: string | null;
+  correction_reason: string | null;
 };
 
 type AutoConfig = {
   enabled: boolean;
+  mode: AutoMode;
   window_minutes: number;
   late_alert_minutes: number;
   notify_manager: boolean;
 };
 
-const OUTCOME: Record<string, { label: string; cls: string; icon: typeof CheckCircle2 }> = {
-  auto_logged: { label: 'Auto-marked', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20', icon: CheckCircle2 },
-  confirmed: { label: 'Confirmed', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20', icon: CheckCircle2 },
-  awaiting_trainer: { label: 'Waiting for trainer', cls: 'bg-amber-500/10 text-amber-600 border border-amber-500/20', icon: Clock },
-  needs_review: { label: 'Trainer very late — review', cls: 'bg-destructive/10 text-destructive border border-destructive/20', icon: AlertTriangle },
-  trainer_no_show: { label: 'Trainer did not come', cls: 'bg-destructive/10 text-destructive border border-destructive/20', icon: XCircle },
-  dismissed: { label: 'Dismissed', cls: 'bg-muted text-muted-foreground border border-border', icon: XCircle },
-  reversed: { label: 'Reversed', cls: 'bg-muted text-muted-foreground border border-border', icon: Undo2 },
-};
-
-const t = (iso: string | null) => (iso ? format(new Date(iso), 'HH:mm') : '—');
+const MODE_LABEL: Record<AutoMode, string> = { auto: 'Automatic', review: 'Review first', manual: 'Manual only' };
 
 export function PtAutoAttendancePanel({
   branchId, dayISO, roles,
@@ -62,6 +52,7 @@ export function PtAutoAttendancePanel({
   const qc = useQueryClient();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const enabled = !!branchId && branchId !== 'all';
+  const isManager = can.manageSettings(roles) || roles.some(r => (typeof r === 'string' ? r : r?.role) === 'manager');
 
   const board = useQuery({
     queryKey: ['pt-auto-attendance', branchId, dayISO],
@@ -79,16 +70,22 @@ export function PtAutoAttendancePanel({
     queryFn: async (): Promise<AutoConfig> => {
       const { data, error } = await supabase.rpc('pt_auto_attendance_config', { p_branch_id: branchId! });
       if (error) throw error;
-      return data as unknown as AutoConfig;
+      const c = data as unknown as AutoConfig;
+      return { ...c, mode: c.enabled === false ? 'manual' : (c.mode ?? 'auto') };
     },
   });
 
   useRealtimeInvalidate({
     channel: 'pt-auto-attendance',
-    tables: ['pt_sessions'],
+    tables: ['pt_sessions', 'approval_requests'],
     invalidateKeys: [['pt-auto-attendance']],
     enabled,
   });
+
+  const invalidate = () => {
+    ['pt-auto-attendance', 'pt-roster-sessions', 'pt-attendance-history', 'member-pt-packages', 'approval-queue']
+      .forEach(k => qc.invalidateQueries({ queryKey: [k] }));
+  };
 
   const resolve = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: 'confirm' | 'dismiss' | 'reverse' }) => {
@@ -96,38 +93,48 @@ export function PtAutoAttendancePanel({
       if (error) throw error;
     },
     onSuccess: (_d, v) => {
-      toast.success(v.action === 'confirm' ? 'Session marked' : v.action === 'reverse' ? 'Session reversed' : 'Dismissed');
-      qc.invalidateQueries({ queryKey: ['pt-auto-attendance'] });
-      qc.invalidateQueries({ queryKey: ['pt-roster-sessions'] });
-      qc.invalidateQueries({ queryKey: ['pt-attendance-history'] });
-      qc.invalidateQueries({ queryKey: ['member-pt-packages'] });
+      toast.success(v.action === 'confirm' ? 'Session marked' : v.action === 'reverse' ? 'Session undone' : 'Marked as not trained');
+      invalidate();
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const decide = useMutation({
+    mutationFn: async ({ id, decision }: { id: string; decision: 'approve' | 'reject' }) => {
+      const { error } = await supabase.rpc('pt_attendance_decide_correction', { p_correction_id: id, p_decision: decision, p_note: null });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { toast.success(v.decision === 'approve' ? 'Correction approved' : 'Correction rejected'); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   if (!enabled) return null;
   const rows = board.data ?? [];
-  const isOff = config.data && !config.data.enabled;
+  const mode: AutoMode = config.data?.mode ?? 'auto';
   const windowMin = config.data?.window_minutes ?? 30;
+  const pending = rows.filter(r => r.correction_status === 'pending').length;
 
   return (
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader className="pb-3 flex flex-row items-start justify-between gap-3">
         <div>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-base flex flex-wrap items-center gap-2">
             <ScanFace className="h-4 w-4 text-primary" aria-hidden />
             Automatic PT attendance
-            {isOff ? (
-              <Badge variant="outline" className="bg-muted text-muted-foreground">Off</Badge>
-            ) : (
-              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">On</Badge>
+            <Badge variant="outline" className={mode === 'manual' ? 'bg-muted text-muted-foreground' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}>
+              {MODE_LABEL[mode]}
+            </Badge>
+            {pending > 0 && (
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
+                {pending} correction{pending > 1 ? 's' : ''} pending
+              </Badge>
             )}
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            Marked when a client and their trainer both scan in within {windowMin} minutes. Managers are alerted when the trainer comes after the client.
+            A session counts when the client arrives while their trainer is on duty, or within {windowMin} minutes of the trainer. Managers are alerted when the trainer comes after the client.
           </p>
         </div>
-        {can.manageSettings(roles) && (
+        {isManager && (
           <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => setSettingsOpen(true)} aria-label="Automatic PT attendance settings">
             <Settings2 className="h-4 w-4 mr-1" /> Settings
           </Button>
@@ -149,45 +156,65 @@ export function PtAutoAttendancePanel({
               const o = OUTCOME[r.outcome] ?? OUTCOME.dismissed;
               const Icon = o.icon;
               const late = r.arrival_order === 'member_first' && (r.gap_minutes ?? 0) > 0;
-              const busy = resolve.isPending && resolve.variables?.id === r.id;
+              const busy = (resolve.isPending && resolve.variables?.id === r.id)
+                || (decide.isPending && decide.variables?.id === r.correction_id);
               return (
-                <li key={r.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {r.member_name ?? 'Member'} <span className="text-muted-foreground font-normal">with {r.trainer_name ?? 'Trainer'}</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Client in {t(r.member_first_at)} · Trainer in {t(r.trainer_first_at)}
-                      {late && <span className="text-amber-600"> · trainer {r.gap_minutes} min after client</span>}
-                      {r.manager_alert_kind && <span> · manager alerted</span>}
-                    </p>
-                  </div>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${o.cls}`}>
-                    <Icon className="h-3 w-3" aria-hidden /> {o.label}
-                  </span>
-                  <div className="flex gap-2">
-                    {['needs_review', 'awaiting_trainer', 'trainer_no_show'].includes(r.outcome) && (
-                      <>
+                <li key={r.id} className="py-3 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {r.member_name ?? 'Member'} <span className="text-muted-foreground font-normal">with {r.trainer_name ?? 'Trainer'}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Client in {hhmm(r.member_first_at)} · Trainer {r.match_reason === 'outside_duty' ? 'last seen' : 'in'} {hhmm(r.trainer_first_at)}
+                        {r.match_reason && <span> · {REASON[r.match_reason] ?? r.match_reason}</span>}
+                        {late && r.match_reason !== 'trainer_very_late' && <span className="text-amber-600"> · trainer {r.gap_minutes} min after client</span>}
+                        {r.manager_alert_kind && <span> · manager alerted</span>}
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${o.cls}`}>
+                      <Icon className="h-3 w-3" aria-hidden /> {o.label}
+                    </span>
+                    <div className="flex gap-2">
+                      {['needs_review', 'awaiting_trainer', 'trainer_no_show', 'ready_to_confirm', 'dismissed', 'reversed'].includes(r.outcome) && (
                         <Button size="sm" className="min-h-[44px]" disabled={busy}
                           aria-label={`Mark PT session for ${r.member_name ?? 'member'}`}
                           onClick={() => resolve.mutate({ id: r.id, action: 'confirm' })}>
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Mark session'}
                         </Button>
+                      )}
+                      {['needs_review', 'awaiting_trainer', 'trainer_no_show', 'ready_to_confirm'].includes(r.outcome) && (
                         <Button size="sm" variant="outline" className="min-h-[44px]" disabled={busy}
-                          aria-label={`Dismiss for ${r.member_name ?? 'member'}`}
+                          aria-label={`Not trained: ${r.member_name ?? 'member'}`}
                           onClick={() => resolve.mutate({ id: r.id, action: 'dismiss' })}>
-                          Dismiss
+                          Not trained
                         </Button>
-                      </>
-                    )}
-                    {['auto_logged', 'confirmed'].includes(r.outcome) && (
-                      <Button size="sm" variant="ghost" className="min-h-[44px]" disabled={busy}
-                        aria-label={`Reverse PT session for ${r.member_name ?? 'member'}`}
-                        onClick={() => resolve.mutate({ id: r.id, action: 'reverse' })}>
-                        <Undo2 className="h-4 w-4 mr-1" /> Undo
-                      </Button>
-                    )}
+                      )}
+                      {['auto_logged', 'confirmed'].includes(r.outcome) && (
+                        <Button size="sm" variant="ghost" className="min-h-[44px]" disabled={busy}
+                          aria-label={`Undo PT session for ${r.member_name ?? 'member'}`}
+                          onClick={() => resolve.mutate({ id: r.id, action: 'reverse' })}>
+                          <Undo2 className="h-4 w-4 mr-1" /> Undo
+                        </Button>
+                      )}
+                    </div>
                   </div>
+                  {r.correction_status === 'pending' && r.correction_id && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                      <MessageSquareWarning className="h-4 w-4 text-amber-600 shrink-0" aria-hidden />
+                      <p className="text-xs flex-1">
+                        Trainer asks to <strong>{r.correction_action === 'mark' ? 'mark this session' : 'undo this session'}</strong>: {r.correction_reason}
+                      </p>
+                      {isManager && (
+                        <div className="flex gap-2">
+                          <Button size="sm" className="min-h-[44px]" disabled={busy}
+                            onClick={() => decide.mutate({ id: r.correction_id!, decision: 'approve' })}>Approve</Button>
+                          <Button size="sm" variant="outline" className="min-h-[44px]" disabled={busy}
+                            onClick={() => decide.mutate({ id: r.correction_id!, decision: 'reject' })}>Reject</Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -224,17 +251,29 @@ function AutoSettingsSheet({
       <SheetContent className="sm:max-w-lg flex flex-col">
         <SheetHeader>
           <SheetTitle>Automatic PT attendance</SheetTitle>
-          <SheetDescription>Applies to this branch. Manual marking keeps working either way.</SheetDescription>
+          <SheetDescription>Applies to this branch. Manual marking keeps working in every mode.</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto space-y-5 py-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="pt-auto-enabled">Mark sessions automatically</Label>
-            <Switch id="pt-auto-enabled" checked={cfg.enabled} onCheckedChange={(v) => setCfg({ ...cfg, enabled: v })} />
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <RadioGroup value={cfg.mode} onValueChange={(v) => setCfg({ ...cfg, mode: v as AutoMode })} className="space-y-2">
+              {([
+                ['auto', 'Automatic', 'Sessions are marked by themselves from gate scans.'],
+                ['review', 'Review first', 'Matches wait as "Ready to confirm" for the trainer or desk to tap.'],
+                ['manual', 'Manual only', 'Nothing automatic. Use Mark Present as before.'],
+              ] as const).map(([v, l, d]) => (
+                <label key={v} htmlFor={`mode-${v}`} className="flex items-start gap-3 rounded-xl border border-border p-3 cursor-pointer hover:bg-secondary">
+                  <RadioGroupItem id={`mode-${v}`} value={v} className="mt-0.5" />
+                  <span><span className="text-sm font-medium block">{l}</span><span className="text-xs text-muted-foreground">{d}</span></span>
+                </label>
+              ))}
+            </RadioGroup>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="pt-auto-window">Both must scan in within (minutes)</Label>
+            <Label htmlFor="pt-auto-window">Arrival window around trainer (minutes)</Label>
             <Input id="pt-auto-window" type="number" min={5} max={180} value={cfg.window_minutes}
               onChange={(e) => setCfg({ ...cfg, window_minutes: Number(e.target.value) })} />
+            <p className="text-xs text-muted-foreground">Also added to the end of the trainer's shift.</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="pt-auto-late">Alert manager when trainer is late by (minutes)</Label>
