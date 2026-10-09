@@ -18906,6 +18906,7 @@ export type Database = {
         | "locker_request"
         | "booking_reschedule"
         | "pt_attendance_correction"
+        | "referral_reward"
       attendance_shift_type: "morning" | "evening" | "night" | "full_day"
       benefit_booking_status:
         | "booked"
@@ -19208,6 +19209,7 @@ export const Constants = {
         "locker_request",
         "booking_reschedule",
         "pt_attendance_correction",
+        "referral_reward",
       ],
       attendance_shift_type: ["morning", "evening", "night", "full_day"],
       benefit_booking_status: [
