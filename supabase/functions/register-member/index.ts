@@ -410,7 +410,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
           referred_phone: reg.phone,
           referred_email: reg.email,
           referral_code: rawReferral,
-          status: "pending",
+          status: "new",
           lifecycle_status: "joined",
           metadata: { source: "self_register" },
         });
