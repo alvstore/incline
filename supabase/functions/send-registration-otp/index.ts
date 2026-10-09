@@ -1,4 +1,4 @@
-// send-registration-otp v1.0.0
+// send-registration-otp v1.1.0
 // Split out of `register-member` purely for latency. register-member imports
 // pdf-lib (waiver generation), which dominates its cold start — the OTP step
 // paid that cost on every /register attempt. This function imports nothing
@@ -21,6 +21,22 @@ const json = (status: number, body: unknown) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+async function dispatch(body: Record<string, unknown>, route: string) {
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/dispatch-communication`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, apikey: key },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    console.error(`dispatch ${route} failed ${res.status}: ${text.slice(0, 300)}`);
+    await captureEdgeError("send-registration-otp", new Error(`dispatch ${route} ${res.status}: ${text.slice(0, 300)}`), { route });
+  } else {
+    console.log(`dispatch ${route} ok: ${text.slice(0, 200)}`);
+  }
+}
 
 function backgroundTask(p: Promise<unknown>) {
   const safe = p.catch((e) => captureEdgeError("send-registration-otp", e, { route: "background_task" }));
@@ -116,8 +132,7 @@ Deno.serve(async (req) => {
     const fallbackBody = `Your Incline verification code is *${code}*. It expires in 5 minutes. Do not share this code.`;
 
     const deliveries: Promise<unknown>[] = [
-      admin.functions.invoke("dispatch-communication", {
-        body: {
+      dispatch({
           branch_id,
           channel: "whatsapp",
           category: "transactional",
@@ -129,13 +144,11 @@ Deno.serve(async (req) => {
           },
           dedupe_key,
           force: true,
-        },
-      }).catch((e) => captureEdgeError("send-registration-otp", e, { route: "whatsapp" })),
+      }, "whatsapp").catch((e) => captureEdgeError("send-registration-otp", e, { route: "whatsapp" })),
     ];
 
     if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      deliveries.push(admin.functions.invoke("dispatch-communication", {
-        body: {
+      deliveries.push(dispatch({
           branch_id,
           channel: "email",
           category: "transactional",
@@ -147,8 +160,7 @@ Deno.serve(async (req) => {
           },
           dedupe_key: `${dedupe_key}:email`,
           force: true,
-        },
-      }).catch((e) => captureEdgeError("send-registration-otp", e, { route: "email" })));
+      }, "email").catch((e) => captureEdgeError("send-registration-otp", e, { route: "email" })));
     }
 
     backgroundTask(Promise.allSettled(deliveries));
