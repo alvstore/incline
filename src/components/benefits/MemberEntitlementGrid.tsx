@@ -41,7 +41,7 @@ export function MemberEntitlementGrid({ entitlements, frozen = false }: MemberEn
               {entitlement.remaining === null ? (
                 <Badge className="shrink-0 bg-success/10 text-success">Unlimited</Badge>
               ) : (
-                <p className="shrink-0 text-sm font-bold text-foreground">
+                <p className="shrink-0 text-sm font-bold text-foreground" aria-label={`${entitlement.remaining} of ${entitlement.total} available`}>
                   {entitlement.remaining}<span className="font-normal text-muted-foreground"> / {entitlement.total}</span>
                 </p>
               )}

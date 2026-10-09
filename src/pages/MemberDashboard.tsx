@@ -154,11 +154,14 @@ export default function MemberDashboard() {
   } = useQuery({
     queryKey: ['my-member-entitlements', member?.id, activeMembership?.id],
     enabled: !!member?.id && !!activeMembership?.id,
-    queryFn: () => fetchMemberEntitlements({
-      memberId: member!.id,
-      membershipId: activeMembership!.id,
-      planId: activeMembership!.plan_id,
-    }),
+    queryFn: () => {
+      if (!member?.id || !activeMembership?.id) return [];
+      return fetchMemberEntitlements({
+        memberId: member.id,
+        membershipId: activeMembership.id,
+        planId: activeMembership.plan_id,
+      });
+    },
   });
 
   if (isLoading) {

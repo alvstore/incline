@@ -4,19 +4,19 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { useMemberData } from '@/hooks/useMemberData';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Heart, AlertCircle, Calendar, Clock, Droplets, Sparkles, Gift, Plus, XCircle } from 'lucide-react';
+import { Heart, AlertCircle, Calendar, Droplets, Sparkles, Gift, Plus, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
-import { CombinedCreditsSummary } from '@/components/benefits/CombinedCreditsSummary';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import { fetchMemberEntitlements } from '@/lib/benefits/memberEntitlements';
+import { MemberEntitlementGrid } from '@/components/benefits/MemberEntitlementGrid';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +38,7 @@ export default function MyBenefits() {
   useRealtimeInvalidate({
     channel: 'my-benefits-credits',
     tables: ['member_benefit_credits', 'member_comps', 'benefit_bookings'],
-    invalidateKeys: [['my-benefit-credits'], ['my-benefit-usage'], ['my-benefit-bookings']],
+    invalidateKeys: [['my-benefit-credits'], ['my-benefit-usage'], ['my-benefit-bookings'], ['my-member-entitlements']],
     enabled: !!member?.id,
   });
 
@@ -81,6 +81,24 @@ export default function MyBenefits() {
 
       if (error) throw error;
       return data || [];
+    },
+  });
+
+  const {
+    data: entitlements = [],
+    isLoading: entitlementsLoading,
+    isError: entitlementsError,
+    refetch: refetchEntitlements,
+  } = useQuery({
+    queryKey: ['my-member-entitlements', member?.id, activeMembership?.id],
+    enabled: !!member?.id && !!activeMembership?.id,
+    queryFn: () => {
+      if (!member?.id || !activeMembership?.id) return [];
+      return fetchMemberEntitlements({
+        memberId: member.id,
+        membershipId: activeMembership.id,
+        planId: activeMembership.plan_id,
+      });
     },
   });
 
@@ -232,65 +250,32 @@ export default function MyBenefits() {
           </Card>
         )}
 
-        {/* Combined Plan + Add-On summary */}
-        {benefitCredits.length > 0 && (
-          <CombinedCreditsSummary
-            credits={benefitCredits as any}
-            onBuyAddon={() => setAddOnOpen(true)}
-            disabled={!activeMembership}
-          />
-        )}
-
-        {/* Benefit Credits */}
-        {benefitCredits.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Your Benefit Credits</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {benefitCredits.map((credit) => {
-                const usedCredits = credit.credits_total - credit.credits_remaining;
-                const usagePercent = (usedCredits / credit.credits_total) * 100;
-                const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-                return (
-                  <Card key={credit.id} className="border-border/50">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          {getBenefitIcon(credit.benefit_type)}
-                          {resolveBenefitMeta(credit.benefit_type).label}
-                        </CardTitle>
-                        <Badge variant={daysLeft <= 7 ? "destructive" : "outline"}>
-                          {daysLeft} days left
-                        </Badge>
-                      </div>
-                      <div className="mt-1">
-                        <Badge variant="secondary" className="text-[10px]">
-                          {credit.package_id ? 'Add-on' : 'Plan'}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between text-sm mb-2">
-                            <span className="text-muted-foreground">Usage</span>
-                            <span className="font-medium">
-                              {credit.credits_remaining} / {credit.credits_total} remaining
-                            </span>
-                          </div>
-                          <Progress value={100 - usagePercent} className="h-2" />
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>Expires {format(new Date(credit.expires_at), 'dd MMM yyyy')}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
+        {activeMembership && (
+          <Card className="border-0 shadow-lg shadow-primary/5">
+            <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+              <div>
+                <CardTitle className="text-xl">My Entitlements</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">Plan benefits, gifts and add-ons in one place.</p>
+              </div>
+              <Gift className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            </CardHeader>
+            <CardContent>
+              {entitlementsLoading ? (
+                <div className="grid gap-3 sm:grid-cols-2" aria-label="Loading entitlements">
+                  {[0, 1].map((item) => <div key={item} className="h-36 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />)}
+                </div>
+              ) : entitlementsError ? (
+                <div className="py-6 text-center" role="alert">
+                  <p className="text-sm text-destructive">We couldn't load your entitlements.</p>
+                  <Button variant="outline" className="mt-3" onClick={() => refetchEntitlements()}>Try again</Button>
+                </div>
+              ) : entitlements.length > 0 ? (
+                <MemberEntitlementGrid entitlements={entitlements} frozen={activeMembership.status === 'frozen'} />
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No active benefits, gifts or add-ons found.</p>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Upcoming Bookings */}
@@ -404,7 +389,7 @@ export default function MyBenefits() {
         )}
 
         {/* Empty State */}
-        {benefitCredits.length === 0 && upcomingBookings.length === 0 && benefitUsage.length === 0 && (
+        {entitlements.length === 0 && upcomingBookings.length === 0 && benefitUsage.length === 0 && !entitlementsLoading && (
           <Card className="border-border/50">
             <CardContent className="py-12 text-center">
               <Heart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
