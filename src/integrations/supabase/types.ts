@@ -11793,6 +11793,27 @@ export type Database = {
           },
         ]
       }
+      referral_code_attempts: {
+        Row: {
+          created_at: string
+          id: string
+          ok: boolean
+          rate_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ok?: boolean
+          rate_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ok?: boolean
+          rate_key?: string
+        }
+        Relationships: []
+      }
       referral_lifecycle_events: {
         Row: {
           actor_user_id: string | null
@@ -15776,6 +15797,15 @@ export type Database = {
         Args: { p_row: Json; p_table: string }
         Returns: string
       }
+      _resolve_referral_code: {
+        Args: {
+          p_branch_id: string
+          p_code: string
+          p_email: string
+          p_phone: string
+        }
+        Returns: string
+      }
       _staff_roster_for_date: {
         Args: { p_date: string; p_user_id: string }
         Returns: {
@@ -16910,6 +16940,7 @@ export type Database = {
         }[]
       }
       get_rcs_webhook_token: { Args: never; Returns: string }
+      get_referral_enabled: { Args: { p_branch_id: string }; Returns: boolean }
       get_setting_numeric: {
         Args: { p_branch_id: string; p_default: number; p_key: string }
         Returns: number
@@ -18689,6 +18720,15 @@ export type Database = {
       }
       validate_member_checkin: {
         Args: { _branch_id: string; _member_id: string }
+        Returns: Json
+      }
+      validate_referral_code: {
+        Args: {
+          p_branch_id: string
+          p_code: string
+          p_email?: string
+          p_phone?: string
+        }
         Returns: Json
       }
       verify_internal_fn_token: { Args: { p_token: string }; Returns: boolean }
