@@ -38,7 +38,6 @@ import { toast } from 'sonner';
 
 
 import { can } from '@/lib/auth/permissions';
-import { format, formatDistanceToNowStrict } from 'date-fns';
 import { voiceTime } from '@/lib/voice/automationStatus';
 
 const PAGE_SIZE = 25;
@@ -46,12 +45,12 @@ const ALL = '__all__';
 
 const SKIP_REASON_LOOK: Record<string, { label: string; className: string }> = {
   no_phone: { label: 'No phone number', className: 'bg-muted text-muted-foreground' },
-  do_not_contact: { label: 'Do not contact', className: 'bg-red-100 text-red-700' },
-  member_paused: { label: 'Member paused', className: 'bg-blue-100 text-blue-700' },
+  do_not_contact: { label: 'Do not contact', className: 'bg-destructive/10 text-destructive' },
+  member_paused: { label: 'Member paused', className: 'bg-secondary text-secondary-foreground' },
   no_visit_history: { label: 'Never visited', className: 'bg-muted text-muted-foreground' },
-  recently_contacted: { label: 'Recently contacted', className: 'bg-amber-100 text-amber-700' },
-  cooldown: { label: 'In cooldown', className: 'bg-amber-100 text-amber-700' },
-  recent_visit: { label: 'Visited recently', className: 'bg-emerald-100 text-emerald-700' },
+  recently_contacted: { label: 'Recently contacted', className: 'bg-accent/10 text-accent' },
+  cooldown: { label: 'In cooldown', className: 'bg-accent/10 text-accent' },
+  recent_visit: { label: 'Visited recently', className: 'bg-primary/10 text-primary' },
 };
 
 function skipLook(reason?: string | null) {
@@ -281,10 +280,10 @@ export default function VoiceAIPage() {
     : (historyRows[0]?.id ?? null);
   const setActiveCallId = setPickedCallId;
   const readiness = integration?.is_active
-    ? { label: 'READY', className: 'bg-emerald-100 text-emerald-700' }
+    ? { label: 'READY', className: 'bg-primary/10 text-primary' }
     : integration?.agent_id
-      ? { label: 'ACTION REQUIRED', className: 'bg-amber-100 text-amber-700' }
-      : { label: 'BLOCKED', className: 'bg-red-100 text-red-700' };
+      ? { label: 'ACTION REQUIRED', className: 'bg-accent/10 text-accent' }
+      : { label: 'BLOCKED', className: 'bg-destructive/10 text-destructive' };
 
   const a = analyticsQ.data ?? {};
   const pct = (num?: number, den?: number) =>
@@ -301,7 +300,7 @@ export default function VoiceAIPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge className={`rounded-full ${readiness.className}`}>{readiness.label}</Badge>
-            {paused && <Badge className="rounded-full bg-amber-100 text-amber-700">PAUSED</Badge>}
+            {paused && <Badge className="rounded-full bg-accent/10 text-accent">PAUSED</Badge>}
             <Button asChild variant="outline" size="sm" className="rounded-full">
               <Link to="/renewal-center">Renewal Center</Link>
             </Button>
