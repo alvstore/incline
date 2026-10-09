@@ -293,7 +293,7 @@ export default function ReferralsPage() {
     mutationFn: ({ rewardId, memberId }: { rewardId: string; memberId: string }) =>
       claimReward(rewardId, memberId),
     onSuccess: () => {
-      toast.success('Reward claimed and credited to wallet!');
+      toast.success('Sent to branch manager for approval');
       queryClient.invalidateQueries({ queryKey: ['all-rewards'] });
     },
     onError: (error: Error) => {

@@ -1,0 +1,1 @@
+ALTER TYPE public.approval_type ADD VALUE IF NOT EXISTS 'referral_reward';
