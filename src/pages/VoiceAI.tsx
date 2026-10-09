@@ -39,6 +39,7 @@ import { toast } from 'sonner';
 
 import { can } from '@/lib/auth/permissions';
 import { format, formatDistanceToNowStrict } from 'date-fns';
+import { voiceTime } from '@/lib/voice/automationStatus';
 
 const PAGE_SIZE = 25;
 const ALL = '__all__';
@@ -65,7 +66,7 @@ function skipLook(reason?: string | null) {
 function fmt(value?: string | null, pattern = 'dd MMM, HH:mm') {
   if (!value) return '—';
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : format(d, pattern);
+  return Number.isNaN(d.getTime()) ? '—' : pattern === 'dd MMM yyyy' ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).format(d) : voiceTime(value);
 }
 
 /** Plain-language "when do we ring them next". */
@@ -74,7 +75,7 @@ function whenNext(value?: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
   if (d.getTime() <= Date.now()) return 'Due now';
-  return `In ${formatDistanceToNowStrict(d)}`;
+  return `${voiceTime(value)} IST`;
 }
 
 
@@ -83,20 +84,20 @@ function Kpi({ label, value, sub, icon: Icon, tone = 'indigo' }: {
   icon: React.ComponentType<{ className?: string }>; tone?: 'indigo' | 'emerald' | 'amber' | 'red' | 'slate';
 }) {
   const tones: Record<string, string> = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    amber: 'bg-amber-50 text-amber-600',
-    red: 'bg-red-50 text-red-600',
+    indigo: 'bg-primary/10 text-primary',
+    emerald: 'bg-primary/10 text-primary',
+    amber: 'bg-accent/10 text-accent',
+    red: 'bg-destructive/10 text-destructive',
     slate: 'bg-muted text-muted-foreground',
   };
   return (
-    <Card className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
+    <Card className="rounded-2xl border-border transition-colors duration-200 hover:bg-secondary/40">
       <CardContent className="flex items-center gap-3 p-4">
         <span className={`rounded-full p-2 ${tones[tone]}`}><Icon className="h-5 w-5" /></span>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-          {sub && <p className="truncate text-xs text-muted-foreground">{sub}</p>}
+          <p className="text-3xl font-bold tabular-nums text-foreground">{value}</p>
+          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
         </div>
       </CardContent>
     </Card>
@@ -194,7 +195,7 @@ export default function VoiceAIPage() {
   const { effectiveBranchId } = useBranchContext();
   const branchId = effectiveBranchId ?? null;
 
-  const [tab, setTab] = useState('history');
+  const [tab, setTab] = useState('queue');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [status, setStatus] = useState<string>(ALL);
@@ -269,7 +270,7 @@ export default function VoiceAIPage() {
   useRealtimeInvalidate({
     channel: 'voice-ops',
     tables: ['voice_call_attempts'],
-    invalidateKeys: [['voice-calls'], ['voice-ops-summary'], ['voice-analytics'], ['voice-call-detail']],
+    invalidateKeys: [['voice-calls'], ['voice-ops-summary'], ['voice-analytics'], ['voice-call-detail'], ['voice-queue'], ['voice-blocked'], ['voice-automation-health']],
   });
 
   const total = historyQ.data?.[0]?.total_count ?? 0;
@@ -308,7 +309,7 @@ export default function VoiceAIPage() {
               <>
                 <Button
                   variant={paused ? 'default' : 'outline'} size="sm" className="cursor-pointer"
-                  disabled={pauseM.isPending || automationQ.isLoading}
+                  disabled={pauseM.isPending || automationQ.isLoading || automationQ.isError}
                   onClick={togglePause}
                   aria-label={paused ? 'Resume retention calling' : 'Pause retention calling'}
                 >
@@ -329,7 +330,7 @@ export default function VoiceAIPage() {
             )}
             <Button
               variant="outline" size="sm" className="cursor-pointer"
-              onClick={() => { summaryQ.refetch(); historyQ.refetch(); }}
+              onClick={() => { summaryQ.refetch(); historyQ.refetch(); queueQ.refetch(); blockedQ.refetch(); automationQ.refetch(); }}
               aria-label="Refresh Voice AI data"
             >
               <RefreshCw className="mr-2 h-4 w-4" /> Refresh
@@ -338,37 +339,33 @@ export default function VoiceAIPage() {
 
         </div>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-5">
-            {summaryQ.isLoading ? (
-              [0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)
-            ) : (
-              <>
-                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Provider</p><p className="text-sm font-semibold">Sarvam</p></div>
-                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Agent</p><p className="truncate text-sm font-semibold">{integration?.agent_id ?? '—'} {integration?.agent_version ? `· v${integration.agent_version}` : ''}</p></div>
-                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Calling number</p><p className="text-sm font-semibold">{integration?.agent_phone_number ?? '—'}</p></div>
-                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Calling window</p><p className="text-sm font-semibold">{integration?.window_start ?? '—'}–{integration?.window_end ?? '—'} IST</p></div>
-                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Retention automation</p><p className="text-sm font-semibold">{integration?.retention_enabled ? 'Enabled' : 'Disabled'}</p></div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <AutomationHealthCard />
-
-        {/* KPIs */}
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          <Kpi label="Today's calls" value={`${today.calls ?? 0} / ${cap}`} sub="Calls used vs daily cap" icon={PhoneCall} />
-          <Kpi label="Connected" value={today.connected ?? 0} icon={PhoneIncoming} tone="emerald" />
-          <Kpi label="Coming back" value={today.coming_back ?? 0} icon={CheckCircle2} tone="emerald" />
-          <Kpi label="Callbacks" value={today.callbacks ?? 0} icon={Clock} tone="indigo" />
-          <Kpi label="Complaints" value={today.complaints ?? 0} icon={AlertTriangle} tone="red" />
-          <Kpi label="DND / wrong number" value={today.dnd_requests ?? 0} icon={ShieldOff} tone="slate" />
+        <div className="grid grid-cols-12 gap-4">
+          <div className="col-span-12 lg:col-span-7"><AutomationHealthCard /></div>
+          <div className="col-span-12 grid gap-4 lg:col-span-5">
+            <Card className="rounded-2xl border-border">
+              <CardHeader className="pb-3"><CardTitle className="text-base">Ananya · member care</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div><p className="text-xs text-muted-foreground">Calling number</p><p className="mt-1 text-sm font-semibold">{integration?.agent_phone_number ?? '—'}</p></div>
+                <div><p className="text-xs text-muted-foreground">Calling hours · IST</p><p className="mt-1 text-sm font-semibold">{integration?.window_start ?? '—'}–{integration?.window_end ?? '—'}</p></div>
+                <div><p className="text-xs text-muted-foreground">Absence threshold</p><p className="mt-1 text-sm font-semibold">{integration?.min_absent_days ?? '—'} days</p></div>
+                <div><p className="text-xs text-muted-foreground">Call cooldown</p><p className="mt-1 text-sm font-semibold">{integration?.cooldown_days ?? '—'} days</p></div>
+              </CardContent>
+            </Card>
+            <div className="grid grid-cols-2 gap-4">
+              <Kpi label="Today's calls" value={`${today.calls ?? 0} / ${cap}`} icon={PhoneCall} />
+              <Kpi label="Connected" value={today.connected ?? 0} icon={PhoneIncoming} />
+            </div>
+          </div>
+          <div className="col-span-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <Kpi label="Coming back" value={today.coming_back ?? 0} icon={CheckCircle2} />
+            <Kpi label="Callbacks" value={today.callbacks ?? 0} icon={Clock} />
+            <Kpi label="Complaints" value={today.complaints ?? 0} icon={AlertTriangle} tone="red" />
+            <Kpi label="DND requests" value={today.dnd_requests ?? 0} icon={ShieldOff} tone="slate" />
+          </div>
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-          <TabsList className="flex w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/60 p-1">
+          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/60 p-1">
             {([
               { v: 'queue', label: "Today's queue", count: null },
               { v: 'history', label: 'Call history', count: null },
@@ -483,28 +480,18 @@ export default function VoiceAIPage() {
           <TabsContent value="queue" className="space-y-4">
             <Card className="rounded-2xl shadow-sm">
               <CardHeader>
-                <CardTitle className="text-base">Today's retention queue</CardTitle>
+                <CardTitle className="text-base">Retention queue <span className="ml-2 text-sm font-normal text-muted-foreground">{queueQ.data?.[0]?.total_count ?? 0} eligible</span></CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-start gap-2 rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                  <p>
-                    Eligibility, DND, calling window, daily cap and concurrency are decided by the
-                    Voice AI backend — this screen never computes them. Managers can dial a listed
-                    member immediately with Call now; do-not-contact is still enforced server-side.
-                    Live calls appear in Call history the moment they start.
-                  </p>
-
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Kpi label="Calls in progress" value={today.in_progress ?? 0} icon={Activity} tone="indigo" />
-                  <Kpi label="Used today" value={`${today.calls ?? 0} / ${cap}`} icon={PhoneCall} />
-                  <Kpi label="Minimum absence" value={`${integration?.min_absent_days ?? 7} days`} sub={`Cooldown ${integration?.cooldown_days ?? 7} days`} icon={Clock} tone="slate" />
+                <div className="flex flex-wrap gap-6 border-b border-border pb-4 text-sm">
+                  <span><span className="text-muted-foreground">In progress </span><strong>{today.in_progress ?? 0}</strong></span>
+                  <span><span className="text-muted-foreground">Used today </span><strong>{today.calls ?? 0} / {cap}</strong></span>
+                  <span><span className="text-muted-foreground">Minimum absence </span><strong>{integration?.min_absent_days ?? 10} days</strong></span>
                 </div>
 
                 {queueQ.isError ? (
                   <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Could not load the queue. Refresh to try again.
+                    Could not load the queue. <Button variant="outline" onClick={() => queueQ.refetch()}>Retry</Button>
                   </div>
                 ) : queueQ.isLoading ? (
                   <div className="space-y-2">
@@ -525,9 +512,10 @@ export default function VoiceAIPage() {
                           <TableHead>Days absent</TableHead>
                           <TableHead>Plan expiry</TableHead>
                           <TableHead>Trainer</TableHead>
+                          <TableHead>Last call · IST</TableHead>
                           <TableHead>Last outcome</TableHead>
                           <TableHead>Tries</TableHead>
-                          <TableHead>Next attempt</TableHead>
+                          <TableHead>Next eligible attempt · IST</TableHead>
                           {canControl && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
                       </TableHeader>
@@ -552,13 +540,14 @@ export default function VoiceAIPage() {
                               <TableCell className="text-sm">{q.days_absent ?? '—'}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">{fmt(q.plan_expiry, 'dd MMM yyyy')}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">{q.trainer_name ?? '—'}</TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">{q.last_call_id ? <Button variant="link" className="h-auto p-0" onClick={(e) => { e.stopPropagation(); setOpenCallId(q.last_call_id); }}>{voiceTime(q.last_call_at)}</Button> : 'Never called'}</TableCell>
                               <TableCell>
                                 {disp
                                   ? <Badge className={`rounded-full ${disp.className}`}>{disp.label}</Badge>
                                   : <span className="text-xs text-muted-foreground">Never called</span>}
                               </TableCell>
                               <TableCell className="text-sm">{q.attempts_cycle ?? 0}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{whenNext(q.next_attempt_at ?? q.eligible_at)}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{paused ? 'Paused' : whenNext(q.next_attempt_at ?? q.eligible_at)}</TableCell>
                               {canControl && (
                                 <TableCell className="text-right">
                                   <Button
