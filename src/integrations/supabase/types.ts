@@ -11104,6 +11104,80 @@ export type Database = {
         }
         Relationships: []
       }
+      pt_auto_attendance_log: {
+        Row: {
+          arrival_order: string | null
+          branch_id: string
+          created_at: string
+          gap_minutes: number | null
+          id: string
+          manager_alert_kind: string | null
+          manager_alerted_at: string | null
+          member_first_at: string | null
+          member_id: string
+          member_pt_package_id: string
+          outcome: string
+          pt_session_id: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          session_date: string
+          trainer_first_at: string | null
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          arrival_order?: string | null
+          branch_id: string
+          created_at?: string
+          gap_minutes?: number | null
+          id?: string
+          manager_alert_kind?: string | null
+          manager_alerted_at?: string | null
+          member_first_at?: string | null
+          member_id: string
+          member_pt_package_id: string
+          outcome?: string
+          pt_session_id?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          session_date: string
+          trainer_first_at?: string | null
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          arrival_order?: string | null
+          branch_id?: string
+          created_at?: string
+          gap_minutes?: number | null
+          id?: string
+          manager_alert_kind?: string | null
+          manager_alerted_at?: string | null
+          member_first_at?: string | null
+          member_id?: string
+          member_pt_package_id?: string
+          outcome?: string
+          pt_session_id?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          session_date?: string
+          trainer_first_at?: string | null
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_auto_attendance_log_member_pt_package_id_fkey"
+            columns: ["member_pt_package_id"]
+            isOneToOne: false
+            referencedRelation: "member_pt_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pt_commission_installments: {
         Row: {
           blocked_reason: string | null
@@ -15562,6 +15636,23 @@ export type Database = {
             Args: { p_booking_id: string; p_event: string }
             Returns: undefined
           }
+      _pt_auto_alert_managers: {
+        Args: {
+          p_branch_id: string
+          p_message: string
+          p_meta: Json
+          p_title: string
+        }
+        Returns: undefined
+      }
+      _pt_auto_on_member_presence: {
+        Args: { p_at: string; p_member_id: string }
+        Returns: undefined
+      }
+      _pt_auto_on_trainer_presence: {
+        Args: { p_at: string; p_user_id: string }
+        Returns: undefined
+      }
       _purchase_pt_package_impl: {
         Args: {
           _amount_paid?: number
@@ -17374,6 +17465,42 @@ export type Database = {
         Args: { p_facility_id?: string }
         Returns: Json
       }
+      pt_auto_attendance_board: {
+        Args: { p_branch_id: string; p_date: string }
+        Returns: {
+          arrival_order: string
+          gap_minutes: number
+          id: string
+          manager_alert_kind: string
+          member_code: string
+          member_first_at: string
+          member_id: string
+          member_name: string
+          outcome: string
+          pt_session_id: string
+          resolution_note: string
+          trainer_first_at: string
+          trainer_id: string
+          trainer_name: string
+        }[]
+      }
+      pt_auto_attendance_config: {
+        Args: { p_branch_id: string }
+        Returns: Json
+      }
+      pt_auto_attendance_evaluate: {
+        Args: { p_date: string; p_package_id: string }
+        Returns: string
+      }
+      pt_auto_attendance_resolve: {
+        Args: { p_action: string; p_log_id: string; p_note?: string }
+        Returns: Json
+      }
+      pt_auto_attendance_set_config: {
+        Args: { p_branch_id: string; p_config: Json }
+        Returns: Json
+      }
+      pt_auto_attendance_sweep: { Args: never; Returns: Json }
       pt_calendar_expiry: {
         Args: { p_months: number; p_start: string; p_validity_days?: number }
         Returns: string

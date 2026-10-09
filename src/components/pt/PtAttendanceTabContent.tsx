@@ -27,6 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { PtPackageBadge } from '@/components/pt/PtPackageBadge';
 import { PtStatusBadge } from '@/components/pt/PtStatusBadge';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
+import { PtAutoAttendancePanel } from '@/components/pt/PtAutoAttendancePanel';
 import { logPtSession } from '@/services/ptService';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { toast } from 'sonner';
@@ -756,6 +757,9 @@ export function PtAttendanceTabContent() {
           <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
         </CardContent>
       </Card>
+
+      <PtAutoAttendancePanel branchId={selectedBranch ?? null} dayISO={dayISO} roles={roles as never} />
+
 
       {/* Main: Trainer rail + roster grid */}
       <div className={cn(
