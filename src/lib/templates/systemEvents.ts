@@ -70,6 +70,9 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'absent_member_motivation_low', label: 'Member Nurture — Motivation (3-5 days)', category: 'engagement', description: 'Gentle nudge for members missing for a few days to stay consistent.', channels: ALL },
   { event: 'absent_member_motivation_high', label: 'Member Nurture — Re-engagement (7-10 days)', category: 'engagement', description: 'Stronger motivational nudge for members missing for a week+.', channels: ALL },
   { event: 'body_scan_ready', label: 'Body Scan Ready', category: 'engagement', description: 'New HOWBODY scan report available', channels: ALL, headerHint: 'document' },
+  { event: 'posture_scan_ready', label: 'Posture Scan Ready', category: 'engagement', description: 'New HOWBODY posture report available. Vars: {{member_name}}.', channels: ALL },
+  { event: 'trainer_member_assigned', label: 'Trainer — New Client Assigned', category: 'operations', description: 'Alert to a trainer when a member is assigned (general or PT). Vars: {{trainer_name}} {{member_name}} {{assignment_type}}.', channels: ALL },
+  { event: 'member_trainer_assigned', label: 'Member — Meet Your Coach', category: 'engagement', description: 'Welcome to a member introducing their assigned coach. Vars: {{member_name}} {{trainer_name}} {{training_type}}.', channels: ALL },
 
   { event: 'task_assigned', label: 'Task Assigned (Staff / Trainer)', category: 'engagement', description: 'Internal alert to the staff member or trainer a task was just assigned to. Vars: {{assignee_name}} {{task_title}} {{priority}} {{due_date}} {{link}}.', channels: ALL },
   { event: 'diet_plan_ready', label: 'Diet Plan Ready (PDF)', category: 'document', description: 'Trainer published a diet plan', channels: ALL, headerHint: 'document' },

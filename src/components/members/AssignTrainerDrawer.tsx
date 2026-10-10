@@ -132,7 +132,11 @@ export function AssignTrainerDrawer({
       return { previousMembers };
     },
     onSuccess: () => {
-      toast.success(selectedTrainerId ? 'Trainer assigned successfully' : 'Trainer removed');
+      const newId = selectedTrainerId && selectedTrainerId !== 'none' ? selectedTrainerId : null;
+      toast.success(newId ? 'Trainer assigned · trainer and member notified' : 'Trainer removed');
+      if (newId && newId !== currentTrainerId) {
+        void notifyTrainerAssignment({ memberId, trainerId: newId, branchId, kind: 'general' });
+      }
       invalidateMembersData(queryClient);
       queryClient.invalidateQueries({ queryKey: ['trainers-utilization'] });
       onOpenChange(false);

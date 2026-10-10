@@ -429,6 +429,12 @@ export function PurchasePTPackageDrawer({
     onSuccess: (data: any) => {
       const invoiceId = data?.invoice_id;
       const mpId = data?.member_package_id;
+      if (trainerId && branchId) {
+        void notifyTrainerAssignment({
+          memberId, trainerId, branchId, kind: 'personal',
+          detail: (selected === 'custom' ? custom.name : selectedPkg?.name) || null,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['my-pt-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });
       queryClient.invalidateQueries({ queryKey: ['active-member-packages'] });
