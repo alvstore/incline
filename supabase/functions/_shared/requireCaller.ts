@@ -33,6 +33,10 @@ export async function isInternalCall(req: Request): Promise<boolean> {
   const auth = req.headers.get("authorization") ?? "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
   if (bearer && SERVICE_KEY && bearer === SERVICE_KEY) return true;
+  // Edge-to-edge calls: the gateway may swap the Authorization header for a
+  // minted token, but the original service key stays in `apikey`.
+  const apikey = req.headers.get("apikey") ?? "";
+  if (apikey && SERVICE_KEY && apikey === SERVICE_KEY) return true;
   const tok = req.headers.get("x-internal-token");
   if (tok && tok.length >= 32) {
     const { data, error } = await adminClient().rpc("verify_internal_fn_token", { p_token: tok });
