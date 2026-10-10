@@ -1,3 +1,4 @@
+import { notifyTrainerAssignment } from '@/lib/comms/trainerAssignmentNotify';
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -132,7 +133,11 @@ export function AssignTrainerDrawer({
       return { previousMembers };
     },
     onSuccess: () => {
-      toast.success(selectedTrainerId ? 'Trainer assigned successfully' : 'Trainer removed');
+      const newId = selectedTrainerId && selectedTrainerId !== 'none' ? selectedTrainerId : null;
+      toast.success(newId ? 'Trainer assigned · trainer and member notified' : 'Trainer removed');
+      if (newId && newId !== currentTrainerId) {
+        void notifyTrainerAssignment({ memberId, trainerId: newId, branchId, kind: 'general' });
+      }
       invalidateMembersData(queryClient);
       queryClient.invalidateQueries({ queryKey: ['trainers-utilization'] });
       onOpenChange(false);
