@@ -473,7 +473,15 @@ Deno.serve(async (req) => {
           skip_notification: true,
         },
       });
-      if (response.error) throw new Error(response.error.message || String(response.error));
+      if (response.error) {
+        let detail = "";
+        try {
+          const ctx = (response.error as { context?: Response }).context;
+          if (ctx && typeof ctx.text === "function") detail = (await ctx.text()).slice(0, 400);
+        } catch { /* ignore */ }
+        console.error(`dispatch ${channel} failed:`, response.error.message, detail);
+        throw new Error(`${response.error.message || String(response.error)}${detail ? ` — ${detail}` : ""}`);
+      }
       return (response.data || {}) as DispatchResult;
     };
 
@@ -604,20 +612,22 @@ Deno.serve(async (req) => {
 
     // Final delivery status update
     if (deliveryId) {
-      await supabase
-        .from("scan_report_deliveries")
-        .update({
-          email_status: emailStatus,
-          email_error: emailError,
-          email_communication_log_id: emailLogId,
+      // A channel we did not attempt this run keeps its previous status, so a
+      // retry of one channel never wipes another channel's delivered/read state.
+      const upd: Record<string, unknown> = { inapp_status: inappStatus === "skipped" && existing?.inapp_status ? existing.inapp_status : inappStatus };
+      if (emailStatus !== "skipped" || !existing) {
+        Object.assign(upd, { email_status: emailStatus, email_error: emailError, email_communication_log_id: emailLogId });
+      }
+      if (waStatus !== "skipped" || !existing) {
+        Object.assign(upd, {
           whatsapp_status: waStatus,
           whatsapp_error: waError,
           whatsapp_communication_log_id: waLogId,
           whatsapp_provider_message_id: waProviderMessageId,
           whatsapp_accepted_at: waStatus === "sent" ? new Date().toISOString() : null,
-          inapp_status: inappStatus,
-        })
-        .eq("id", deliveryId);
+        });
+      }
+      await supabase.from("scan_report_deliveries").update(upd).eq("id", deliveryId);
     }
 
     return jr({
