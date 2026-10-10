@@ -1,4 +1,4 @@
-// v1.0.0 — opt-in browser delivery of existing in-app notifications.
+// v1.0.1 — opt-in browser delivery of existing in-app notifications.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import webpush from 'npm:web-push@3.6.7';
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
@@ -29,7 +29,8 @@ Deno.serve(async req => {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
     const input = await req.json();
     if (!token) return respond(401, { error: 'Sign in first' });
-    const system = token === serviceKey;
+    // Gateway may swap Authorization on DB/edge calls; the service key stays in apikey.
+    const system = token === serviceKey || req.headers.get('apikey') === serviceKey;
     const { data: authData } = system ? { data: { user: null } } : await db.auth.getUser(token);
     if (!system && !authData.user) return respond(401, { error: 'Sign in first' });
     if (input.action === 'deliver' && !system) return respond(403, { error: 'Not permitted' });
