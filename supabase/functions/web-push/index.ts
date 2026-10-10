@@ -28,9 +28,11 @@ Deno.serve(async req => {
     const db = createClient(serverUrl, serviceKey, { auth: { persistSession: false } });
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
     const input = await req.json();
-    if (!token) return respond(401, { error: 'Sign in first' });
+    if (!token && !req.headers.get('x-internal-token')) return respond(401, { error: 'Sign in first' });
     // Gateway may swap Authorization on DB/edge calls; the service key stays in apikey.
-    const system = token === serviceKey || req.headers.get('apikey') === serviceKey;
+    const internalTok = req.headers.get('x-internal-token') || '';
+    let system = token === serviceKey || req.headers.get('apikey') === serviceKey;
+    if (!system && internalTok.length >= 32) { const { data: ok } = await db.rpc('verify_internal_fn_token', { p_token: internalTok }); system = ok === true; }
     const { data: authData } = system ? { data: { user: null } } : await db.auth.getUser(token);
     if (!system && !authData.user) return respond(401, { error: 'Sign in first' });
     if (input.action === 'deliver' && !system) return respond(403, { error: 'Not permitted' });
