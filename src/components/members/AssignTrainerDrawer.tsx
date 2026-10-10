@@ -1,3 +1,4 @@
+import { notifyTrainerAssignment } from '@/lib/comms/trainerAssignmentNotify';
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
