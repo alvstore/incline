@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BellRing, BellOff, Loader2, Send, Share } from 'lucide-react';
+import { BellRing, BellOff, Loader2, Send, Share, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,10 +8,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { pushSupport, pushEnabled, pushPublicKey, enablePush, disablePush, testPush } from '@/services/webPushService';
 import { toast } from 'sonner';
 
+const DISMISS_KEY = 'incline_push_prompt_dismissed';
+
 export function BrowserNotifications({ branchId }: { branchId: string }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(() => typeof window !== 'undefined' && localStorage.getItem(DISMISS_KEY) === '1');
   const support = pushSupport();
   const queryKey = ['browser-push', user?.id, branchId];
   const { data: enabled = false, isLoading, isError } = useQuery({ queryKey, queryFn: () => user ? pushEnabled(user.id, branchId) : Promise.resolve(false), enabled: Boolean(user && branchId && support === 'supported'), refetchOnWindowFocus: true });
@@ -26,8 +29,24 @@ export function BrowserNotifications({ branchId }: { branchId: string }) {
     onError: (e: Error) => setError(e.message),
   });
   const test = useMutation({ mutationFn: () => testPush(branchId), onSuccess: () => toast.success('Test queued. Check your device notifications.'), onError: (e: Error) => setError(e.message) });
+  // Once enabled on this device, collapse to a compact chip so it doesn't use dashboard space.
+  if (support === 'supported' && enabled && !error) {
+    return (
+      <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+        <span className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm text-foreground">
+          <BellRing aria-hidden className="h-4 w-4 text-primary" /> Notifications on
+        </span>
+        <Button variant="ghost" size="sm" className="min-h-11" disabled={test.isPending} onClick={() => test.mutate()}>{test.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}<span className="ml-1">Send test</span></Button>
+        <Button variant="ghost" size="sm" className="min-h-11" disabled={update.isPending} onClick={() => update.mutate()}>Turn off</Button>
+      </div>
+    );
+  }
+  if (dismissed && !enabled) return null;
   return (
-    <Card className="min-w-0 rounded-2xl border-border bg-card">
+    <Card className="relative min-w-0 rounded-2xl border-border bg-card">
+      <button type="button" aria-label="Hide notifications prompt" onClick={() => { localStorage.setItem(DISMISS_KEY, '1'); setDismissed(true); }} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <X className="h-4 w-4" />
+      </button>
       <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><BellRing className="h-5 w-5" /></div>

@@ -1509,12 +1509,29 @@ async function rebindRecipients(db: any, input: any[], branchId: string | null, 
       if (me) out.push({ ...r, phone: me.phone ?? null, email: me.email ?? null });
       continue;
     }
+    // CSV rows: save as a branch contact first so the address is held in the
+    // system (keeps the "saved contacts only" rule), then send to that record.
+    if (type === 'csv') {
+      const digits = String(r?.phone ?? '').replace(/\D/g, '');
+      if (!branchId || digits.length < 10) continue;
+      const phone = digits.length === 10 ? `+91${digits}` : `+${digits}`;
+      const name = String(r?.full_name ?? r?.name ?? '').trim().slice(0, 120) || phone;
+      const email = typeof r?.email === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email) ? r.email.trim().toLowerCase() : null;
+      const { data: existing } = await db.from('contacts').select('id, full_name, phone, email').eq('branch_id', branchId).in('phone', [phone, digits, digits.slice(-10)]).limit(1);
+      let c = existing?.[0] ?? null;
+      if (!c) {
+        const { data: ins } = await db.from('contacts').insert({ branch_id: branchId, full_name: name, phone, email, category: 'general', source_type: 'csv_import', tags: ['csv-import'], created_by: callerId }).select('id, full_name, phone, email').maybeSingle();
+        c = ins;
+      }
+      if (c) out.push({ ...r, source_type: 'contact', source_ref_id: c.id, full_name: c.full_name, phone: c.phone, email: c.email ?? email });
+      continue;
+    }
     if (!id) continue;
     let row: { full_name?: string | null; phone?: string | null; email?: string | null; branch_id?: string | null } | null = null;
     if (type === 'member') {
       const { data } = await db.from('members').select('branch_id, profiles:user_id(full_name, phone, email)').eq('id', id).maybeSingle();
       if (data) row = { branch_id: data.branch_id, ...(Array.isArray(data.profiles) ? data.profiles[0] : data.profiles) };
-    } else if (type === 'lead') {
+    } else if (type === 'lead' || type === 'lost_lead') {
       const { data } = await db.from('leads').select('branch_id, full_name, phone, email').eq('id', id).maybeSingle();
       row = data;
     } else if (type === 'contact') {

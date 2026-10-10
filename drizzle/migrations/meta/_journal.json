@@ -239,6 +239,13 @@
       "when": 1791562603863,
       "tag": "0033_voice_automation_health_and_renewal_retry",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791641695317,
+      "tag": "0034_web_push_internal_token",
+      "breakpoints": true
     }
   ]
 }
