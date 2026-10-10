@@ -473,7 +473,15 @@ Deno.serve(async (req) => {
           skip_notification: true,
         },
       });
-      if (response.error) throw new Error(response.error.message || String(response.error));
+      if (response.error) {
+        let detail = "";
+        try {
+          const ctx = (response.error as { context?: Response }).context;
+          if (ctx && typeof ctx.text === "function") detail = (await ctx.text()).slice(0, 400);
+        } catch { /* ignore */ }
+        console.error(`dispatch ${channel} failed:`, response.error.message, detail);
+        throw new Error(`${response.error.message || String(response.error)}${detail ? ` — ${detail}` : ""}`);
+      }
       return (response.data || {}) as DispatchResult;
     };
 
