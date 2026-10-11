@@ -67,3 +67,6 @@ When `mips_tz_revoke_mode` is on, revoke sets validTimeBegin=2099-01-01 00:00:00
 
 ## Delta-only dispatch (Oct 2026, mips-access v2.21.0 / sync-to-mips v3.4.0)
 Every successful gate push stores `response_payload.state_sig` (lock state + validity dates, plus photo for sync-to-mips). A new push to the same person+gate is skipped ("Skipped: Member already in desired hardware state.") when the signature matches the last success, unless a full roster sync hit that gate afterwards or the push is a verification-failure re-push (force). Combined with 25s gate gap + 3-min cooldown + sequential bulk loops.
+
+## Rule change ⇒ re-check (Oct 2026)
+Gate status only moves on member events, so changing `gate_tier_mode` must re-check members. `set_gate_settings` (Devices → Gate Rules) does this automatically via `gate_recheck_branch`; `gate_access_drift` lists mismatches. Only gate switches turned off for `dues` are re-opened — never manual blocks.
