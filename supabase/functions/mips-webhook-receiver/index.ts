@@ -1,4 +1,4 @@
-// v2.10.0 - access_logs payload no longer stores the terminal's base64 frame (imgBase64 /
+// v2.11.0 - records RED/AMBER gate tier alerts (front_desk_alerts). v2.10.0 - access_logs payload no longer stores the terminal's base64 frame (imgBase64 /
 //           inline img_uri / checkImgUri) nor the device token. Those blobs were ~110 kB per
 //           scan, 85% of the whole database, and made every Live Access Feed load 3-4 MB.
 //           The raw payload still goes to the MIPS relay untouched; only the stored copy
@@ -307,6 +307,20 @@ async function handleMemberCheckin(
       .maybeSingle();
     if (recentExit) {
       return { result: "member", message: `${personName} entry scan ignored (just checked out)` };
+    }
+
+    // 3-tier gate: record RED/AMBER decisions for the front desk feed (shadow
+    // or enforce mode). Never blocks the scan if it fails.
+    try {
+      const { data: tierAccess } = await supabase.rpc("member_access_status", {
+        _member_id: memberId,
+        _branch_id: branchId,
+      });
+      if (tierAccess && tierAccess.mode !== "legacy" && (tierAccess.tier === "amber" || tierAccess.tier === "red")) {
+        await supabase.rpc("record_gate_alert", { _member_id: memberId, _branch_id: branchId, _access: tierAccess });
+      }
+    } catch (tierErr) {
+      console.warn("gate tier alert failed:", tierErr);
     }
 
     const { data: checkinResult } = await supabase.rpc("member_check_in", {

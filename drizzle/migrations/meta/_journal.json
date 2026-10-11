@@ -246,6 +246,27 @@
       "when": 1791641695317,
       "tag": "0034_web_push_internal_token",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791696768572,
+      "tag": "0035_gate_three_tier_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791696798022,
+      "tag": "0036_gate_alert_guard_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791696879970,
+      "tag": "0037_member_access_status_guard",
+      "breakpoints": true
     }
   ]
 }
