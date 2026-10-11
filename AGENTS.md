@@ -15,4 +15,4 @@ Body progress places the render before a full-width summary; historical measurem
 
 - PT workspace keeps walk-in roster and optional appointments in Sessions; automatic attendance is a separate tab after Clients using the same attendance component in board-only mode, so moving UI never changes payout or booking engines.
 - Referral workspace analytics come from the branch-guarded `referral_workspace_summary` RPC; keep referral charts server-aggregated so managers cannot infer other branches and clients do not download rows for trends.
-- Gate entry is denied only for base-membership causes (expired/frozen/cancelled or overdue membership bills); overdue PT/store/add-on bills are AMBER (gate opens, front_desk_alerts + member_debt_locks), switched per branch by settings.gate_tier_mode legacy|shadow|enforce — so secondary debts never lock someone out and rollout is reversible without a release.
+- Gate denies only for base-membership causes; PT/store/add-on dues are AMBER (gate opens, desk alert, digital locks), per-branch via settings.gate_tier_mode legacy|shadow|enforce — reversible without a release.
