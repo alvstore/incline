@@ -5380,6 +5380,39 @@ export type Database = {
           },
         ]
       }
+      gate_rule_changes: {
+        Row: {
+          actor_id: string | null
+          branch_id: string | null
+          created_at: string
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+          rechecked: number
+          setting: string
+        }
+        Insert: {
+          actor_id?: string | null
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          rechecked?: number
+          setting: string
+        }
+        Update: {
+          actor_id?: string | null
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          rechecked?: number
+          setting?: string
+        }
+        Relationships: []
+      }
       google_reviews: {
         Row: {
           branch_id: string
@@ -15800,6 +15833,7 @@ export type Database = {
         Args: { p_allow_shortfall?: boolean; p_booking_id: string }
         Returns: Json
       }
+      _gate_is_owner_admin: { Args: never; Returns: boolean }
       _notify_booking_event:
         | {
             Args: { p_booking_id: string; p_event: string }
@@ -16707,6 +16741,24 @@ export type Database = {
         }
         Returns: Json
       }
+      gate_access_drift: {
+        Args: { _branch_id?: string }
+        Returns: {
+          base_due: number
+          branch_id: string
+          expected: string
+          full_name: string
+          hardware_access_enabled: boolean
+          hardware_access_reason: string
+          hardware_access_status: string
+          member_code: string
+          member_id: string
+          other_due: number
+        }[]
+      }
+      gate_fix_member: { Args: { _member_id: string }; Returns: Json }
+      gate_recheck_branch: { Args: { _branch_id?: string }; Returns: Json }
+      gate_rules_overview: { Args: never; Returns: Json }
       gate_tier_mode: { Args: { _branch_id: string }; Returns: string }
       generate_class_sessions: {
         Args: { p_days_ahead?: number; p_template_id?: string }
@@ -18490,6 +18542,10 @@ export type Database = {
       }
       set_active_branch: { Args: { p_branch_id: string }; Returns: undefined }
       set_default_ai_provider: { Args: { p_id: string }; Returns: undefined }
+      set_gate_settings: {
+        Args: { _branch_id?: string; _mode?: string; _tz_lock?: boolean }
+        Returns: Json
+      }
       set_handoff:
         | {
             Args: { _phone: string; _reason?: string; _urgency?: string }
