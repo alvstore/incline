@@ -267,6 +267,20 @@
       "when": 1791696879970,
       "tag": "0037_member_access_status_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791699911976,
+      "tag": "0038_gate_rules_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791699945050,
+      "tag": "0039_gate_access_drift_fix",
+      "breakpoints": true
     }
   ]
 }

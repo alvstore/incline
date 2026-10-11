@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, RefreshCw, Monitor, Activity, Upload, Settings2, ScanFace, HeartPulse } from "lucide-react";
+import { Plus, RefreshCw, Monitor, Activity, Upload, Settings2, ScanFace, HeartPulse, ShieldCheck } from "lucide-react";
+import GateRulesTab from "@/components/devices/GateRulesTab";
 import { toast } from "sonner";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -101,6 +102,11 @@ const DeviceManagement = () => {
             <TabsTrigger value="live-feed" className="gap-1.5 rounded-lg">
               <Activity className="h-4 w-4" /> Live Feed
             </TabsTrigger>
+            {isAdminOrOwner && (
+              <TabsTrigger value="gate-rules" className="gap-1.5 rounded-lg">
+                <ShieldCheck className="h-4 w-4" /> Gate Rules
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="fleet">
@@ -122,6 +128,12 @@ const DeviceManagement = () => {
           <TabsContent value="live-feed">
             <LiveAccessLog branchId={branchFilter || undefined} limit={400} />
           </TabsContent>
+
+          {isAdminOrOwner && (
+            <TabsContent value="gate-rules">
+              <GateRulesTab branchId={branchFilter || undefined} />
+            </TabsContent>
+          )}
         </Tabs>
 
         <AddDeviceDrawer
