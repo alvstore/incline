@@ -309,6 +309,20 @@ async function handleMemberCheckin(
       return { result: "member", message: `${personName} entry scan ignored (just checked out)` };
     }
 
+    // 3-tier gate: record RED/AMBER decisions for the front desk feed (shadow
+    // or enforce mode). Never blocks the scan if it fails.
+    try {
+      const { data: tierAccess } = await supabase.rpc("member_access_status", {
+        _member_id: memberId,
+        _branch_id: branchId,
+      });
+      if (tierAccess && tierAccess.mode !== "legacy" && (tierAccess.tier === "amber" || tierAccess.tier === "red")) {
+        await supabase.rpc("record_gate_alert", { _member_id: memberId, _branch_id: branchId, _access: tierAccess });
+      }
+    } catch (tierErr) {
+      console.warn("gate tier alert failed:", tierErr);
+    }
+
     const { data: checkinResult } = await supabase.rpc("member_check_in", {
       _member_id: memberId,
       _branch_id: branchId,
