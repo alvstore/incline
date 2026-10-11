@@ -260,6 +260,13 @@
       "when": 1791696798022,
       "tag": "0036_gate_alert_guard_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791696879970,
+      "tag": "0037_member_access_status_guard",
+      "breakpoints": true
     }
   ]
 }
