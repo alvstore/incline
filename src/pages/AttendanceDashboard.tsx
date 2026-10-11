@@ -26,6 +26,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { toast } from 'sonner';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { LivePill } from '@/components/ui/live-pill';
+import { GateAlertsCard } from '@/components/attendance/GateAlertsCard';
 import { canRecordAttendanceFor } from '@/lib/auth/permissions';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
@@ -655,6 +656,7 @@ export default function AttendanceDashboard() {
   return (
     <AppLayout>
       <div className="space-y-4">
+        <GateAlertsCard branchId={branchFilter} />
         {/* Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
