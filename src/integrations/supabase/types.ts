@@ -5302,6 +5302,84 @@ export type Database = {
           },
         ]
       }
+      front_desk_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          addon_due: number
+          alert_day: string
+          base_due: number
+          branch_id: string
+          created_at: string
+          id: string
+          member_id: string
+          mode: string
+          pt_due: number
+          reasons: string[]
+          resolved_at: string | null
+          scan_count: number
+          status: string
+          store_due: number
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          addon_due?: number
+          alert_day?: string
+          base_due?: number
+          branch_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          mode?: string
+          pt_due?: number
+          reasons?: string[]
+          resolved_at?: string | null
+          scan_count?: number
+          status?: string
+          store_due?: number
+          tier: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          addon_due?: number
+          alert_day?: string
+          base_due?: number
+          branch_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          mode?: string
+          pt_due?: number
+          reasons?: string[]
+          resolved_at?: string | null
+          scan_count?: number
+          status?: string
+          store_due?: number
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "front_desk_alerts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "front_desk_alerts_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_reviews: {
         Row: {
           branch_id: string
@@ -16629,6 +16707,7 @@ export type Database = {
         }
         Returns: Json
       }
+      gate_tier_mode: { Args: { _branch_id: string }; Returns: string }
       generate_class_sessions: {
         Args: { p_days_ahead?: number; p_template_id?: string }
         Returns: Json
@@ -17294,6 +17373,7 @@ export type Database = {
         Returns: Json
       }
       member_check_out: { Args: { _member_id: string }; Returns: Json }
+      member_debt_locks: { Args: { _member_id: string }; Returns: Json }
       member_force_check_in: {
         Args: {
           p_actor_user_id?: string
@@ -17318,6 +17398,17 @@ export type Database = {
       member_matches_segment: {
         Args: { p_member_id: string; p_status: string }
         Returns: boolean
+      }
+      member_overdue_breakdown: {
+        Args: { _grace: number; _member_id: string }
+        Returns: {
+          addon_due: number
+          base_due: number
+          oldest_any: string
+          oldest_base: string
+          pt_due: number
+          store_due: number
+        }[]
       }
       members_blocked_for_dues: {
         Args: never
@@ -17890,6 +17981,10 @@ export type Database = {
           p_vendor?: string
         }
         Returns: Json
+      }
+      record_gate_alert: {
+        Args: { _access: Json; _branch_id: string; _member_id: string }
+        Returns: string
       }
       record_health_ping: {
         Args: {
@@ -18655,6 +18750,10 @@ export type Database = {
       undo_pt_trainer_transfer: {
         Args: { _transfer_id: string }
         Returns: Json
+      }
+      update_gate_alert: {
+        Args: { _alert_id: string; _status: string }
+        Returns: undefined
       }
       upgrade_membership: {
         Args: {
