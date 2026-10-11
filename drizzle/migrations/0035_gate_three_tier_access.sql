@@ -49,11 +49,11 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.member_overdue_breakdown(uuid,int) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.member_overdue_breakdown(uuid,int) TO service_role;
 
--- guard-exempt: superseded by 0037 which adds the rpc_guard_applies() check
 -- member_access_status: same contract, additive fields. In 'enforce' mode only
 -- base-membership dues block; PT/store/add-on dues become AMBER.
 CREATE OR REPLACE FUNCTION public.member_access_status(_member_id uuid, _branch_id uuid DEFAULT NULL::uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $function$
+-- guard-exempt: superseded by 0037 which adds the rpc_guard_applies() check
 DECLARE
   v_branch uuid; v_block boolean := true; v_grace int := 0; v_mode text;
   b record; v_total numeric; v_blocking numeric; v_oldest date; v_days int := 0; v_tier text;
