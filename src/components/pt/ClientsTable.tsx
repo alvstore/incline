@@ -157,7 +157,7 @@ export function ClientsTable(props: Props) {
           {!isExpired(pkg) && <DropdownMenuItem onClick={() => onSchedule(pkg)}><CalendarPlus className="mr-2 h-4 w-4" />Schedule session</DropdownMenuItem>}
           {canManage && !isExpired(pkg) && <DropdownMenuItem onClick={() => onTransfer([pkg])}><ArrowRightLeft className="mr-2 h-4 w-4" />Change trainer</DropdownMenuItem>}
           {(pkg.due ?? 0) > 0 && <DropdownMenuItem onClick={() => onCollect(pkg)}><IndianRupee className="mr-2 h-4 w-4" />Collect payment</DropdownMenuItem>}
-          <DropdownMenuItem disabled={renewPending} onClick={() => onRenew(pkg)}><RefreshCw className="mr-2 h-4 w-4" />Renew</DropdownMenuItem>
+          <DropdownMenuItem disabled={renewPending} aria-label={`Renew PT for ${pkg.member_name ?? 'client'}`} onClick={() => onRenew(pkg)}><RefreshCw className="mr-2 h-4 w-4" />Renew</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onView(pkg)}><UserRound className="mr-2 h-4 w-4" />View member</DropdownMenuItem>
           {canCancelInvoice && pkg.invoice_id && (pkg.due ?? 0) > 0 && (
             <>

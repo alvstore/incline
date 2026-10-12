@@ -1,5 +1,6 @@
 import { notifyTrainerAssignment } from '@/lib/comms/trainerAssignmentNotify';
 import { useEffect, useMemo, useState } from 'react';
+import { track } from '@/lib/analytics';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -502,6 +503,7 @@ export function PurchasePTPackageDrawer({
           : 'PT package activated',
       );
 
+      if (renewFromPackageId) track('pt_renew_completed', { package_type: dbType, payment_method: payMethod, gst: gstRate > 0 });
       onOpenChange(false);
     },
 
