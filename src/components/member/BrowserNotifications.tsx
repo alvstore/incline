@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BellRing, BellOff, Loader2, Send, Share, X } from 'lucide-react';
+import { BellRing, BellOff, Loader2, Share, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { pushSupport, pushEnabled, pushPublicKey, enablePush, disablePush, testPush } from '@/services/webPushService';
+import { pushSupport, pushEnabled, pushPublicKey, enablePush, disablePush } from '@/services/webPushService';
 import { toast } from 'sonner';
 
 const DISMISS_KEY = 'incline_push_prompt_dismissed';
@@ -28,7 +28,6 @@ export function BrowserNotifications({ branchId }: { branchId: string }) {
     onSuccess: () => { setError(null); qc.invalidateQueries({ queryKey }); toast.success(enabled ? 'Browser notifications turned off' : 'Browser notifications enabled'); },
     onError: (e: Error) => setError(e.message),
   });
-  const test = useMutation({ mutationFn: () => testPush(branchId), onSuccess: () => toast.success('Test queued. Check your device notifications.'), onError: (e: Error) => setError(e.message) });
   // Once enabled on this device, collapse to a compact chip so it doesn't use dashboard space.
   if (support === 'supported' && enabled && !error) {
     return (
@@ -36,7 +35,6 @@ export function BrowserNotifications({ branchId }: { branchId: string }) {
         <span className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm text-foreground">
           <BellRing aria-hidden className="h-4 w-4 text-primary" /> Notifications on
         </span>
-        <Button variant="ghost" size="sm" className="min-h-11" disabled={test.isPending} onClick={() => test.mutate()}>{test.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}<span className="ml-1">Send test</span></Button>
         <Button variant="ghost" size="sm" className="min-h-11" disabled={update.isPending} onClick={() => update.mutate()}>Turn off</Button>
       </div>
     );
