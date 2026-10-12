@@ -16,3 +16,4 @@ Body progress places the render before a full-width summary; historical measurem
 - Referral workspace analytics come from the branch-guarded `referral_workspace_summary` RPC; keep referral charts server-aggregated so managers cannot infer other branches and clients do not download rows for trends.
 - Gate denies only for base-membership causes; PT/store/add-on dues are AMBER (gate opens, desk alert, locks); per branch via settings.gate_tier_mode legacy|shadow|enforce.
 - DB triggers call edge functions with `x-internal-token`, because stored service keys go stale on rotation and cause silent 401s.
+- Zoho Books direct OAuth credentials live only in the service-role `zoho_direct_credentials` table and are managed via the `zoho-oauth` edge function; `settings.zoho_mode` (connector|direct) is the kill switch and direct requires a passed test, so a broken Zoho login never silently stops sync.
