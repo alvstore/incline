@@ -15468,6 +15468,75 @@ export type Database = {
           },
         ]
       }
+      zoho_direct_credentials: {
+        Row: {
+          client_id: string | null
+          client_secret: string | null
+          connected_at: string | null
+          connected_by: string | null
+          dc: string
+          id: boolean
+          last_refresh_error: string | null
+          last_test_ok_at: string | null
+          org_name: string | null
+          organization_id: string | null
+          refresh_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          client_secret?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          dc?: string
+          id?: boolean
+          last_refresh_error?: string | null
+          last_test_ok_at?: string | null
+          org_name?: string | null
+          organization_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          client_secret?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          dc?: string
+          id?: boolean
+          last_refresh_error?: string | null
+          last_test_ok_at?: string | null
+          org_name?: string | null
+          organization_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      zoho_oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          state: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          state: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          state?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       zoho_sync_log: {
         Row: {
           created_at: string
