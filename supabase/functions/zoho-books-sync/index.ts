@@ -233,10 +233,24 @@ Deno.serve(async (req) => {
           const { data: items } = await admin
             .from("invoice_items").select("hsn_code, reference_type").eq("invoice_id", row.entity_id);
           const code = hsnFor(items ?? []);
-          const zi = (await zoho("GET", `/invoices/${row.zoho_id}`, { query: org })).invoice as Json;
+          let zid = String(row.zoho_id);
+          let zi: Json;
+          try {
+            zi = (await zoho("GET", `/invoices/${zid}`, { query: org })).invoice as Json;
+          } catch (e) {
+            // Logged copy was deleted in Zoho: repoint the log to the live copy.
+            if (!String(e).includes("404")) throw e;
+            const { data: li } = await admin.from("invoices").select("invoice_number").eq("id", row.entity_id).maybeSingle();
+            const hit = (((await zoho("GET", "/invoices", { query: { ...org, invoice_number: String(li?.invoice_number) } })).invoices as Json[]) ?? [])
+              .find((i) => String(i.invoice_number) === String(li?.invoice_number));
+            if (!hit) throw e;
+            zid = String(hit.invoice_id);
+            await admin.from("zoho_sync_log").update({ zoho_id: zid }).eq("entity_type", "invoice").eq("entity_id", row.entity_id);
+            zi = (await zoho("GET", `/invoices/${zid}`, { query: org })).invoice as Json;
+          }
           const lines = (zi?.line_items as Json[]) ?? [];
           if (lines.every((l) => l.hsn_or_sac)) { report.already_ok++; continue; }
-          await zoho("PUT", `/invoices/${row.zoho_id}`, {
+          await zoho("PUT", `/invoices/${zid}`, {
             query: org,
             body: {
               customer_id: zi.customer_id,
