@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 
 export type RenewalQueue = 'all' | 'due_soon' | 'today' | 'lapsed' | 'voice' | 'callback' | 'won' | 'lost';
 
@@ -42,7 +44,9 @@ export interface RenewalActionInput {
 }
 
 export function useRenewalQueue(branchId: string | undefined, queue: RenewalQueue, search: string) {
+  const { roles } = useAuth();
   return useQuery({
+    enabled: can.manageRenewals(roles),
     queryKey: ['renewal-center', branchId ?? 'all', queue, search],
     queryFn: async (): Promise<RenewalCaseRow[]> => {
       const { data, error } = await supabase.rpc('renewal_center_queue', {
@@ -59,7 +63,9 @@ export function useRenewalQueue(branchId: string | undefined, queue: RenewalQueu
 }
 
 export function useRenewalFunnel(branchId: string | undefined) {
+  const { roles } = useAuth();
   return useQuery({
+    enabled: can.manageRenewals(roles),
     queryKey: ['renewal-funnel', branchId ?? 'all'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('renewal_funnel', { _branch_id: branchId ?? undefined, _days: 90 });
