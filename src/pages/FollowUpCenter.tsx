@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +17,7 @@ import { Link } from 'react-router-dom';
 import { communicationService } from '@/services/communicationService';
 
 export default function FollowUpCenter() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
 
   // Get staff's assigned branch — uses same query key & shape as StaffDashboard
   const { data: staffBranch } = useQuery({
@@ -57,7 +58,7 @@ export default function FollowUpCenter() {
   // Renewal Center is the single source of truth for renewal work.
   const { data: renewalSummary = [] } = useQuery({
     queryKey: ['followup-renewal-summary', branchId],
-    enabled: !!branchId,
+    enabled: !!branchId && can.manageRenewals(roles),
     queryFn: async () => {
       const { data, error } = await supabase.rpc('renewal_center_queue', {
         _branch_id: branchId,

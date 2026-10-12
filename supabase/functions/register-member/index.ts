@@ -522,7 +522,10 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   await admin.from("otp_verifications").update({ consumed_at: signedAt }).eq("id", otp.id);
 
   // 10) Sign in to get session tokens
-  const { data: session, error: sessErr } = await admin.auth.signInWithPassword({
+  // Separate client: signing in on `admin` would switch it to the member's session and
+  // make the background document insert fail row security.
+  const authClient = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { data: session, error: sessErr } = await authClient.auth.signInWithPassword({
     email: reg.email,
     password: tempPassword,
   });

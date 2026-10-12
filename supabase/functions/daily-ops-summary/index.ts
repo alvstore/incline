@@ -353,7 +353,8 @@ Deno.serve(async (req) => {
           deliveries,
           error: `${incomplete.length} of ${deliveries.length} channel deliveries incomplete`,
         }),
-        { status: 424, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        // Some delivered → partial success (warning already logged); none → hard failure.
+        { status: incomplete.length < deliveries.length ? 200 : 424, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

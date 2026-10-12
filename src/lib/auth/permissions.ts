@@ -28,7 +28,8 @@ export type Capability =
   | 'delete_task'
   | 'rcs_admin'
   | 'rcs_wallet_view'
-  | 'manage_class_schedule';
+  | 'manage_class_schedule'
+  | 'manage_renewals';
 
 const MATRIX: Record<Capability, AppRole[]> = {
   view_financials:     ['owner', 'admin', 'manager'],
@@ -50,6 +51,8 @@ const MATRIX: Record<Capability, AppRole[]> = {
   rcs_wallet_view:     ['owner', 'admin'],
   // Class types + recurring schedule rules (mirrors RLS on class_types / class_templates)
   manage_class_schedule: ['owner', 'admin', 'manager'],
+  // Mirrors role_capabilities.manage_renewals (renewal_center_queue / renewal_funnel)
+  manage_renewals: ['owner', 'admin', 'manager', 'staff'],
 };
 
 /** Accepts `['owner']` OR `[{ role: 'owner' }]` (AuthContext shape) — normalizing
@@ -71,6 +74,7 @@ export function hasCapability(roles: RoleLike[] | undefined, cap: Capability): b
 }
 
 export const can = {
+  manageRenewals:    (r?: RoleLike[]) => hasCapability(r, 'manage_renewals'),
   viewFinancials:    (r?: RoleLike[]) => hasCapability(r, 'view_financials'),
   manageStaff:       (r?: RoleLike[]) => hasCapability(r, 'manage_staff'),
   recordPayment:     (r?: RoleLike[]) => hasCapability(r, 'record_payment'),
