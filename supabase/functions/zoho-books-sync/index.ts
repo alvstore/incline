@@ -1,4 +1,4 @@
-// zoho-books-sync v1.4.0 — duplicate-proof push + duplicate cleanup mode.
+// zoho-books-sync v1.5.0 — direct Zoho OAuth (optional) + read-only audit mode.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
