@@ -557,7 +557,7 @@ Deno.serve(async (req) => {
     }
 
     const remaining = Math.max(pending.length - batch.length, 0);
-    return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, remaining, ...result }), {
+    return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, remaining, ...result, catchup }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
