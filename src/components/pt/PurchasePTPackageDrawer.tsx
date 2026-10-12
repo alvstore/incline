@@ -1,5 +1,6 @@
 import { notifyTrainerAssignment } from '@/lib/comms/trainerAssignmentNotify';
 import { useEffect, useMemo, useState } from 'react';
+import { track } from '@/lib/analytics';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -64,6 +65,8 @@ interface PurchasePTPackageDrawerProps {
   branchId: string;
   /** Optional — shown in the header so staff know who they are selling to. */
   memberName?: string;
+  /** Renewal: prefill trainer, plan and a start date that continues the previous package. */
+  renewFromPackageId?: string | null;
 }
 
 interface CatalogPkg {
@@ -141,6 +144,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function PurchasePTPackageDrawer({
   open, onOpenChange, memberId, branchId, memberName,
+  renewFromPackageId = null,
 }: PurchasePTPackageDrawerProps) {
   const queryClient = useQueryClient();
   const { roles } = useAuth();
@@ -231,6 +235,36 @@ export function PurchasePTPackageDrawer({
   const [duplicateAck, setDuplicateAck] = useState(false);
   useEffect(() => { if (!open) setDuplicateAck(false); }, [open]);
 
+  // Renewal prefill — staff still confirm price, GST, mode and dates.
+  const { data: renewSource } = useQuery({
+    queryKey: ['pt-renew-source', renewFromPackageId],
+    enabled: open && !!renewFromPackageId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_pt_packages')
+        .select('id, package_id, trainer_id, expiry_date, pt_packages(package_type)')
+        .eq('id', renewFromPackageId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; package_id: string | null; trainer_id: string | null; expiry_date: string | null; pt_packages: { package_type: string | null } | null } | null;
+    },
+  });
+  const [renewSeeded, setRenewSeeded] = useState<'none' | 'mode' | 'done'>('none');
+  useEffect(() => { if (!open) setRenewSeeded('none'); }, [open]);
+  useEffect(() => {
+    if (!open || !renewSource || renewSeeded !== 'none') return;
+    setMode(renewSource.pt_packages?.package_type === 'session_based' ? 'session' : 'monthly');
+    if (renewSource.expiry_date) {
+      const next = new Date(renewSource.expiry_date + 'T00:00:00');
+      next.setDate(next.getDate() + 1);
+      const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+      // Continue from the last expiry; if that is long past, staff can change it.
+      setStartDate(iso);
+    }
+    setDuplicateAck(true);
+    setRenewSeeded('mode');
+  }, [open, renewSource, renewSeeded]);
+
   // Branch trainer roster — staff pick who is coaching this PT package.
   const {
     data: trainers = [], isLoading: trainersLoading, isError: trainersError, refetch: refetchTrainers,
@@ -276,6 +310,14 @@ export function PurchasePTPackageDrawer({
   useEffect(() => {
     if (!open) { setTrainerId(null); setTrainerDraftKey('none'); setKeepCurrentTrainer(false); }
   }, [open]);
+
+  // Second renewal pass: runs after the mode reset so the plan stays selected.
+  useEffect(() => {
+    if (renewSeeded !== 'mode' || !renewSource) return;
+    if (renewSource.trainer_id) { setTrainerId(renewSource.trainer_id); setTrainerDraftKey(renewSource.trainer_id); }
+    if (renewSource.package_id) setSelected(renewSource.package_id);
+    setRenewSeeded('done');
+  }, [renewSeeded, renewSource]);
 
   const handleTrainerChange = (id: string) => {
     setTrainerId(id);
@@ -461,6 +503,7 @@ export function PurchasePTPackageDrawer({
           : 'PT package activated',
       );
 
+      if (renewFromPackageId) track('pt_renew_completed', { package_type: dbType, payment_method: payMethod, gst: gstRate > 0 });
       onOpenChange(false);
     },
 

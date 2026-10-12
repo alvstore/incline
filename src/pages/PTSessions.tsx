@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
-  useCompletePTSession, useCancelPTSession, useSchedulePTSession, useUpdatePTPackage, useRenewPtPackage,
+  useCompletePTSession, useCancelPTSession, useSchedulePTSession, useUpdatePTPackage,
 } from "@/hooks/usePTPackages";
 import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -40,6 +40,8 @@ import { PackageCard } from "@/components/pt/PackageCard";
 import { CommissionLedger } from "@/components/pt/CommissionLedger";
 
 import type { PTMemberPackageRow } from "@/components/pt/ptTypes";
+import { PurchasePTPackageDrawer } from "@/components/pt/PurchasePTPackageDrawer";
+import { track } from "@/lib/analytics";
 import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
 import { getISTToday, formatIST } from "@/lib/utils/datetime";
@@ -100,8 +102,6 @@ export default function PTSessionsPage() {
   const completeSession = useCompletePTSession();
   const cancelSession = useCancelPTSession();
   const updatePackage = useUpdatePTPackage();
-  const renewPackage = useRenewPtPackage();
-  const [renewingId, setRenewingId] = useState<string | null>(null);
 
   // Session KPIs must cover every trainer in the branch — reading only the
   // first trainer made the dashboard show 0 sessions while packages existed.
@@ -181,22 +181,12 @@ export default function PTSessionsPage() {
 
   // Continues a client on the same plan — the server starts the new term the
   // day after the current expiry so there is no gap in coverage.
-  const handleRenewPackage = async (pkg: any) => {
-    setRenewingId(pkg.id);
-    try {
-      const result = await renewPackage.mutateAsync({ memberPackageId: pkg.id });
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
-        return;
-      }
-      toast.success(
-        `${pkg.member_name || 'Client'} renewed until ${result.expiry_date ? format(new Date(result.expiry_date), 'PP') : 'the new term end'}`,
-      );
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to renew package');
-    } finally {
-      setRenewingId(null);
-    }
+  // Renewal always goes through the purchase drawer so staff confirm price,
+  // GST/BOS, payment mode and dates — never a silent one-click bill.
+  const [renewTarget, setRenewTarget] = useState<PTMemberPackageRow | null>(null);
+  const handleRenewPackage = (pkg: PTMemberPackageRow) => {
+    setRenewTarget(pkg);
+    track('pt_renew_opened', { package_type: pkg.package_type ?? null });
   };
 
   const handleScheduleSession = async () => {
@@ -382,8 +372,8 @@ export default function PTSessionsPage() {
               loading={clientsQuery.isLoading}
               isError={clientsQuery.isError}
               onRetry={() => clientsQuery.refetch()}
-              renewingId={renewingId}
-              renewPending={renewPackage.isPending}
+              renewingId={null}
+              renewPending={false}
               canCancelInvoice={canCancelInvoice}
               canManage={canManage}
               onSchedule={(pkg) => { if (pkg) setSelectedPackageForSession(pkg.id); setIsScheduleOpen(true); }}
@@ -588,6 +578,16 @@ export default function PTSessionsPage() {
         onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
         invoice={cancelInvoiceTarget}
       />
+      {renewTarget?.member_id && (
+        <PurchasePTPackageDrawer
+          open={!!renewTarget}
+          onOpenChange={(o) => { if (!o) setRenewTarget(null); }}
+          memberId={renewTarget.member_id}
+          memberName={renewTarget.member_name ?? undefined}
+          branchId={renewTarget.branch_id || branchId || ''}
+          renewFromPackageId={renewTarget.id}
+        />
+      )}
     </AppLayout>
   );
 }
