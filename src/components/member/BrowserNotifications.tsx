@@ -57,7 +57,6 @@ export function BrowserNotifications({ branchId }: { branchId: string }) {
         <div className="flex shrink-0 flex-wrap gap-2">
           {support === 'supported' && <>
             <Button variant={enabled ? 'outline' : 'default'} className="min-h-11 gap-2" onClick={() => update.mutate()} disabled={update.isPending || isLoading || (!enabled && !key.data)}>{update.isPending || isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : enabled ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}{enabled ? 'Turn off' : 'Enable notifications'}</Button>
-            {enabled && <Button variant="outline" className="min-h-11 gap-2" disabled={test.isPending || update.isPending} onClick={() => test.mutate()}>{test.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send test</Button>}
             {(isError || key.isError) && <Button variant="outline" onClick={() => { qc.invalidateQueries({ queryKey }); key.refetch(); }}>Retry</Button>}
           </>}
           {support === 'install' && <Share aria-hidden className="h-5 w-5 text-primary" />}
