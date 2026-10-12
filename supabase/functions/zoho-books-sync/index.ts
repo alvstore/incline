@@ -1,4 +1,4 @@
-// zoho-books-sync v1.6.0 — SAC fallback (999723) on every line + fix_hsn repair mode.
+// zoho-books-sync v1.7.0 — direct mode from in-app OAuth (settings.zoho_mode) + SAC fallback.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
@@ -9,6 +9,7 @@
 
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getMode, loadCreds, refreshAccessToken, type ZohoCreds } from "../_shared/zohoDirect.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,26 +30,27 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const ZOHO_BOOKS_API_KEY = Deno.env.get("ZOHO_BOOKS_API_KEY");
 // Direct mode (optional): own Zoho OAuth app. Used when all three are set;
 // otherwise the connector is used. India data centre by default.
-const ZOHO_CLIENT_ID = Deno.env.get("ZOHO_CLIENT_ID");
-const ZOHO_CLIENT_SECRET = Deno.env.get("ZOHO_CLIENT_SECRET");
-const ZOHO_REFRESH_TOKEN = Deno.env.get("ZOHO_REFRESH_TOKEN");
-const ZOHO_DC = Deno.env.get("ZOHO_DC") ?? "in";
-const DIRECT = Boolean(ZOHO_CLIENT_ID && ZOHO_CLIENT_SECRET && ZOHO_REFRESH_TOKEN);
+// Direct mode: credentials come from the in-app connection (zoho_direct_credentials)
+// when settings.zoho_mode = 'direct'; legacy env vars still work as a fallback.
+const ENV_CREDS: ZohoCreds | null = Deno.env.get("ZOHO_CLIENT_ID") && Deno.env.get("ZOHO_CLIENT_SECRET") && Deno.env.get("ZOHO_REFRESH_TOKEN")
+  ? { client_id: Deno.env.get("ZOHO_CLIENT_ID")!, client_secret: Deno.env.get("ZOHO_CLIENT_SECRET")!,
+      refresh_token: Deno.env.get("ZOHO_REFRESH_TOKEN")!, dc: (Deno.env.get("ZOHO_DC") ?? "in") as ZohoCreds["dc"],
+      organization_id: null, org_name: null, connected_by: null, connected_at: null, last_test_ok_at: null, last_refresh_error: null }
+  : null;
+let DIRECT_CREDS: ZohoCreds | null = null;
 let directToken: { value: string; exp: number } | null = null;
+let onRefreshError: ((msg: string) => Promise<void>) | null = null;
 
 async function directAccessToken(): Promise<string> {
   if (directToken && directToken.exp > Date.now() + 60_000) return directToken.value;
-  const res = await fetch(`https://accounts.zoho.${ZOHO_DC}/oauth/v2/token`, {
-    method: "POST",
-    body: new URLSearchParams({
-      refresh_token: ZOHO_REFRESH_TOKEN!, client_id: ZOHO_CLIENT_ID!,
-      client_secret: ZOHO_CLIENT_SECRET!, grant_type: "refresh_token",
-    }),
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || !j.access_token) throw new Error(`Zoho token refresh failed: ${j.error ?? res.status}`);
-  directToken = { value: j.access_token, exp: Date.now() + Number(j.expires_in ?? 3600) * 1000 };
-  return directToken.value;
+  try {
+    const t = await refreshAccessToken(DIRECT_CREDS!);
+    directToken = { value: t.token, exp: Date.now() + t.expiresIn * 1000 };
+    return directToken.value;
+  } catch (e) {
+    if (onRefreshError) await onRefreshError((e as Error).message);
+    throw e;
+  }
 }
 
 const PLACE_OF_SUPPLY = "RJ";
@@ -63,8 +65,8 @@ async function zoho(
   const qs = opts.query ? `?${new URLSearchParams(opts.query).toString()}` : "";
   let url: string;
   let headers: Record<string, string>;
-  if (DIRECT) {
-    url = `https://www.zohoapis.${ZOHO_DC}/books/v3${path}${qs}`;
+  if (DIRECT_CREDS) {
+    url = `https://www.zohoapis.${DIRECT_CREDS.dc}/books/v3${path}${qs}`;
     headers = { Authorization: `Zoho-oauthtoken ${await directAccessToken()}`, "Content-Type": "application/json" };
   } else {
     if (!LOVABLE_API_KEY || !ZOHO_BOOKS_API_KEY) {
@@ -151,6 +153,20 @@ Deno.serve(async (req) => {
     const limit = Math.min(Number(body.limit) || 25, 50);
     const dryRun = Boolean(body.dryRun);
     const mode = String(body.mode ?? "sync");
+
+    // ---- connection mode (kill switch) --------------------------------------
+    DIRECT_CREDS = null;
+    if ((await getMode(admin)) === "direct") {
+      const c = await loadCreds(admin);
+      if (!c?.refresh_token) throw new Error("Direct Zoho mode is on but not connected — reconnect in Finance → GST");
+      DIRECT_CREDS = c;
+      onRefreshError = async (msg) => {
+        await admin.from("zoho_direct_credentials").update({ last_refresh_error: msg }).eq("id", true);
+        await admin.rpc("log_error_event", { p_source: "zoho-books-sync", p_message: msg, p_severity: "error" }).then(() => {}, () => {});
+      };
+    } else if (ENV_CREDS) {
+      DIRECT_CREDS = ENV_CREDS;
+    }
 
 
     // ---- org + tax lookup ---------------------------------------------------
