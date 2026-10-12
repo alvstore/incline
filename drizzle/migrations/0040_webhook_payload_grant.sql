@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.get_payment_webhook_payload(uuid) TO authenticated;
