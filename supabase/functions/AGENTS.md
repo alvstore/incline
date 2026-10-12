@@ -1,0 +1,1 @@
+- Zoho direct OAuth secrets stay in service-role `zoho_direct_credentials` (via `zoho-oauth`); `settings.zoho_mode` is the kill switch and direct needs a passed test, so a broken login never silently stops sync.
