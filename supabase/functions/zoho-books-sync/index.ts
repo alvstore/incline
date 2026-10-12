@@ -212,6 +212,7 @@ Deno.serve(async (req) => {
         const z = zs[0];
         const zTotal = r2(Number(z.total)); const zPaid = r2(zTotal - Number(z.balance));
         if (Math.abs(zTotal - total) > 0.5) report.total_mismatch.push({ n, name: a.customer_name, app: total, zoho: zTotal });
+        if (!z.hsn_or_sac && z.line_items === undefined) { /* list view lacks lines */ }
         if (Math.abs(zPaid - Math.min(paid, total)) > 0.5) report.paid_mismatch.push({ n, name: a.customer_name, app_paid: paid, zoho_paid: zPaid, zoho_status: z.status });
       }
       for (const n of zByNum.keys()) if (!appNums.has(n)) report.only_in_zoho.push({ n, total: zByNum.get(n)![0].total, status: zByNum.get(n)![0].status });
