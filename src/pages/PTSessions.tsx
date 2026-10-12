@@ -181,22 +181,12 @@ export default function PTSessionsPage() {
 
   // Continues a client on the same plan — the server starts the new term the
   // day after the current expiry so there is no gap in coverage.
-  const handleRenewPackage = async (pkg: any) => {
-    setRenewingId(pkg.id);
-    try {
-      const result = await renewPackage.mutateAsync({ memberPackageId: pkg.id });
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
-        return;
-      }
-      toast.success(
-        `${pkg.member_name || 'Client'} renewed until ${result.expiry_date ? format(new Date(result.expiry_date), 'PP') : 'the new term end'}`,
-      );
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to renew package');
-    } finally {
-      setRenewingId(null);
-    }
+  // Renewal always goes through the purchase drawer so staff confirm price,
+  // GST/BOS, payment mode and dates — never a silent one-click bill.
+  const [renewTarget, setRenewTarget] = useState<PTMemberPackageRow | null>(null);
+  const handleRenewPackage = (pkg: PTMemberPackageRow) => {
+    setRenewTarget(pkg);
+    track('pt_renew_opened', { package_type: pkg.package_type ?? null });
   };
 
   const handleScheduleSession = async () => {

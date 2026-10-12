@@ -310,6 +310,14 @@ export function PurchasePTPackageDrawer({
     if (!open) { setTrainerId(null); setTrainerDraftKey('none'); setKeepCurrentTrainer(false); }
   }, [open]);
 
+  // Second renewal pass: runs after the mode reset so the plan stays selected.
+  useEffect(() => {
+    if (renewSeeded !== 'mode' || !renewSource) return;
+    if (renewSource.trainer_id) { setTrainerId(renewSource.trainer_id); setTrainerDraftKey(renewSource.trainer_id); }
+    if (renewSource.package_id) setSelected(renewSource.package_id);
+    setRenewSeeded('done');
+  }, [renewSeeded, renewSource]);
+
   const handleTrainerChange = (id: string) => {
     setTrainerId(id);
     setTrainerDraftKey(id);
