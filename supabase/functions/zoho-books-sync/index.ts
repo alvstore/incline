@@ -299,6 +299,60 @@ Deno.serve(async (req) => {
 
     const pending = (invoices ?? []).filter((i) => !syncedInvoices.has(i.id));
 
+    // ---- v1.5.0 catch-up: instalments paid AFTER the invoice was pushed ------
+    // Previously only invoices still pending were scanned for payments, so a
+    // second instalment on an already-synced invoice never reached Zoho. Each
+    // payment is applied only up to the Zoho balance; if Zoho already shows the
+    // invoice settled, the payment is logged as already applied, not re-posted.
+    const catchup = { synced: 0, already_applied: 0, failed: 0 };
+    if (!dryRun) {
+      const syncedIds = (invoices ?? []).filter((i) => zohoInvoiceIdByLocal.has(i.id)).map((i) => i.id);
+      const { data: latePays } = syncedIds.length ? await admin
+        .from("payments")
+        .select("id, invoice_id, amount, payment_method, payment_date, transaction_id, notes")
+        .in("invoice_id", syncedIds).eq("status", "completed").gt("amount", 0)
+        .order("payment_date", { ascending: true }) : { data: [] };
+      const todo = (latePays ?? []).filter((p) => !syncedPayments.has(p.id)).slice(0, 30);
+      for (const p of todo) {
+        const zid = zohoInvoiceIdByLocal.get(p.invoice_id as string)!;
+        try {
+          const zi = (await zoho("GET", `/invoices/${zid}`, { query: org })).invoice as Json;
+          const balance = Number(zi?.balance ?? 0);
+          const apply = Math.min(Number(p.amount), balance);
+          let zohoPaymentId = "already_applied";
+          if (apply > 0.009) {
+            const created = await zoho("POST", "/customerpayments", {
+              query: org,
+              body: {
+                customer_id: zi.customer_id,
+                payment_mode: PAYMENT_MODE[p.payment_method as string] ?? "other",
+                amount: apply,
+                date: istDate(p.payment_date as string),
+                reference_number: clean(p.transaction_id as string),
+                description: clean(p.notes as string),
+                invoices: [{ invoice_id: zid, amount_applied: apply }],
+              },
+            });
+            zohoPaymentId = String((created.payment as Json)?.payment_id ?? "");
+            catchup.synced++;
+          } else {
+            catchup.already_applied++;
+          }
+          syncedPayments.add(p.id);
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "payment", entity_id: p.id, zoho_id: zohoPaymentId,
+            zoho_org_id: orgId, status: "synced", error: null, synced_at: new Date().toISOString(),
+          }, { onConflict: "entity_type,entity_id" });
+        } catch (e) {
+          catchup.failed++;
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "payment", entity_id: p.id, zoho_org_id: orgId,
+            status: "failed", error: e instanceof Error ? e.message : String(e),
+          }, { onConflict: "entity_type,entity_id" });
+        }
+      }
+    }
+
     if (dryRun) {
       return new Response(JSON.stringify({
         success: true, dryRun: true, organization: orgs[0]?.name,
