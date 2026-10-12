@@ -47,6 +47,7 @@ import {
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
 import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_shared/mipsDispatch.ts";
+import { isInternalCall } from "../_shared/requireCaller.ts";
 import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
 
@@ -629,6 +630,9 @@ async function dispatchToDevices(
     }
     if (local?.id && coolingDevices.has(String(local.id))) {
       console.log(`[dispatchToDevices] person ${personId} → gate ${mipsDeviceId}: Skipped: 3-minute cooldown active`);
+      // The same person was just issued to this gate — that push carries the
+      // current state, so this gate counts as delivered (job must not stick).
+      deliveredDeviceIds.push(mipsDeviceId);
       results.push({ mipsDeviceId, status: "skipped", reason: "Skipped: 3-minute cooldown active" });
       if (branchId) {
         await supabase.from("mips_sync_attempts").insert({
@@ -734,9 +738,12 @@ Deno.serve(async (req) => {
   // (this was the hourly HTTP 401 on mips_personnel_delta_sync).
   const apiKeyHeader = (req.headers.get("apikey") || "").trim();
   const systemCall = (req.headers.get("x-system-call") || "").trim();
+  // v3.5.0 — DB triggers authenticate with x-internal-token. The service key they
+  // used to send had gone stale, so every instant push was a silent 401.
   const isService =
     (bearer && bearer === SERVICE_KEY) ||
-    (apiKeyHeader === SERVICE_KEY && systemCall.length > 0);
+    (apiKeyHeader === SERVICE_KEY && systemCall.length > 0) ||
+    (await isInternalCall(req));
   let __callerUid: string | null = null;
   let __callerGlobal = isService;
   if (!isService) {
@@ -1364,7 +1371,9 @@ Deno.serve(async (req) => {
     } else {
       try {
         dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id, force === true,
-          `${String(validTimeBegin).slice(0, 10)}|${String(validTimeEnd).slice(0, 10)}|${photoSource ?? ""}:${String(photoUrl || "").split("?")[0]}`);
+          // Photo fingerprint, not file location: a re-uploaded face reuses the
+          // same storage path, so the path alone made new photos look unchanged.
+          `${String(validTimeBegin).slice(0, 10)}|${String(validTimeEnd).slice(0, 10)}|${photoSource ?? ""}:${photoResult?.hash ?? String(photoUrl || "").split("?")[0]}`);
       } catch (e) {
         console.error("Dispatch error:", e);
         dispatchResult = { error: String(e) };
