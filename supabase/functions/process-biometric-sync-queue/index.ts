@@ -1,3 +1,4 @@
+// v1.6.0 — merge duplicate queue rows per person.
 // v1.5.0 — Drain biometric_sync_queue in bounded batches of five.
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason

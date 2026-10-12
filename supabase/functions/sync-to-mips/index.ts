@@ -1,3 +1,4 @@
+// v3.5.0 — internal-token auth for DB triggers; photo-hash state signature; cooldown counts as delivered.
 // v3.4.0 — DELTA-ONLY: gate push skipped when the person's state signature matches the last successful push.
 // v3.3.0 — OOM guard: 25s minimum gap between person pushes per gate and a
 // 3-minute per person/gate cooldown against duplicate triggers.
