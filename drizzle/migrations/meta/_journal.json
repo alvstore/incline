@@ -309,6 +309,13 @@
       "when": 1791811840258,
       "tag": "0043_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791816728026,
+      "tag": "0044_gate_direct_pt_renew",
+      "breakpoints": true
     }
   ]
 }
