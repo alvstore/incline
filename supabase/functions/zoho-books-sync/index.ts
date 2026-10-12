@@ -1,4 +1,4 @@
-// zoho-books-sync v1.5.0 — direct Zoho OAuth (optional) + read-only audit mode.
+// zoho-books-sync v1.6.0 — SAC fallback (999723) on every line + fix_hsn repair mode.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
@@ -18,6 +18,13 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/zoho_books";
+
+// SAC 999723 = health club & fitness centre services. Membership, PT, add-on and
+// benefit lines rarely carry an explicit code, so they fall back to it.
+const SERVICE_SAC = "999723";
+function hsnFor(items: { hsn_code?: string | null }[]): string {
+  return items.find((i) => i.hsn_code)?.hsn_code ?? SERVICE_SAC;
+}
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const ZOHO_BOOKS_API_KEY = Deno.env.get("ZOHO_BOOKS_API_KEY");
 // Direct mode (optional): own Zoho OAuth app. Used when all three are set;
@@ -209,6 +216,42 @@ Deno.serve(async (req) => {
       }
       for (const n of zByNum.keys()) if (!appNums.has(n)) report.only_in_zoho.push({ n, total: zByNum.get(n)![0].total, status: zByNum.get(n)![0].status });
       return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, ...report }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ---- v1.6.0 HSN/SAC repair: fill missing SAC on already-pushed invoices ----
+    if (mode === "fix_hsn") {
+      const { data: logRows } = await admin
+        .from("zoho_sync_log").select("entity_id, zoho_id")
+        .eq("entity_type", "invoice").eq("status", "synced");
+      const report = { checked: 0, fixed: 0, already_ok: 0, errors: [] as string[] };
+      for (const row of (logRows ?? []).slice(0, Math.min(Number(body.limit) || 300, 400))) {
+        report.checked++;
+        try {
+          const { data: items } = await admin
+            .from("invoice_items").select("hsn_code, reference_type").eq("invoice_id", row.entity_id);
+          const code = hsnFor(items ?? []);
+          const zi = (await zoho("GET", `/invoices/${row.zoho_id}`, { query: org })).invoice as Json;
+          const lines = (zi?.line_items as Json[]) ?? [];
+          if (lines.every((l) => l.hsn_or_sac)) { report.already_ok++; continue; }
+          await zoho("PUT", `/invoices/${row.zoho_id}`, {
+            query: org,
+            body: {
+              customer_id: zi.customer_id,
+              line_items: lines.map((l) => ({
+                line_item_id: l.line_item_id, name: l.name, description: l.description,
+                rate: l.rate, quantity: l.quantity, tax_id: l.tax_id,
+                hsn_or_sac: l.hsn_or_sac || code,
+              })),
+            },
+          });
+          report.fixed++;
+        } catch (e) {
+          report.errors.push(`${row.entity_id}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      return new Response(JSON.stringify({ success: true, mode: "fix_hsn", ...report }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -431,10 +474,10 @@ Deno.serve(async (req) => {
         if (!taxId) throw new Error(`No Zoho tax configured for GST ${rate}%`);
 
         const { data: items } = await admin
-          .from("invoice_items").select("description, hsn_code").eq("invoice_id", inv.id);
+          .from("invoice_items").select("description, hsn_code, reference_type").eq("invoice_id", inv.id);
         const description = (items ?? []).map((i) => i.description).filter(Boolean).join(" · ")
           || "Gym services";
-        const hsn = (items ?? []).find((i) => i.hsn_code)?.hsn_code ?? undefined;
+        const hsn = hsnFor(items ?? []);
 
         // Zoho rounds CGST/SGST halves independently; mirror that and post the
         // 1-paisa delta as an adjustment so Zoho's total equals our invoice total.
