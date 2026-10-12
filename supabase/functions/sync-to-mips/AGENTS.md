@@ -1,0 +1,1 @@
+- MIPS gate state signatures use the photo hash, not the storage path, because re-uploads reuse the same path.

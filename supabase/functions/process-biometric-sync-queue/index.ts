@@ -1,3 +1,4 @@
+// v1.6.0 — merge duplicate queue rows per person.
 // v1.5.0 — Drain biometric_sync_queue in bounded batches of five.
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason
@@ -55,12 +56,30 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     const now = Date.now();
-    const dueRows = (rows || []).filter((r: any) => {
+    const dueAll = (rows || []).filter((r: any) => {
       if (r.status === "pending" && (r.retry_count || 0) === 0) return true;
       const waitMin = BACKOFF_MIN[Math.min(r.retry_count || 0, BACKOFF_MIN.length - 1)];
       const anchorTs = new Date(r.processed_at || r.queued_at).getTime();
       return anchorTs + waitMin * 60_000 <= now;
     });
+    // v1.6.0 — one sync per person per run: sync-to-mips always pushes the
+    // person's CURRENT state, so older duplicate rows are merged, not replayed.
+    const byPerson = new Map<string, any>();
+    const merged: string[] = [];
+    for (const r of dueAll as any[]) {
+      const k = r.person_uuid || r.member_id || r.staff_id;
+      if (!k) { byPerson.set(`row:${r.id}`, r); continue; }
+      const prev = byPerson.get(k);
+      if (prev) merged.push(prev.id);
+      byPerson.set(k, r); // keep newest (ordered ascending)
+    }
+    if (merged.length) {
+      await supabase.from("biometric_sync_queue").update({
+        status: "succeeded", processed_at: new Date().toISOString(),
+        error_message: "merged into newer sync for the same person",
+      }).in("id", merged);
+    }
+    const dueRows = [...byPerson.values()];
 
     console.log(`[process-biometric-sync-queue] picked=${rows?.length || 0} due=${dueRows.length}`);
 
