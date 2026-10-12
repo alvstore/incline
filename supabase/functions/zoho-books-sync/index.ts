@@ -1,4 +1,4 @@
-// zoho-books-sync v1.4.0 — duplicate-proof push + duplicate cleanup mode.
+// zoho-books-sync v1.5.0 — direct Zoho OAuth (optional) + read-only audit mode.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
@@ -20,6 +20,29 @@ const corsHeaders = {
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/zoho_books";
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const ZOHO_BOOKS_API_KEY = Deno.env.get("ZOHO_BOOKS_API_KEY");
+// Direct mode (optional): own Zoho OAuth app. Used when all three are set;
+// otherwise the connector is used. India data centre by default.
+const ZOHO_CLIENT_ID = Deno.env.get("ZOHO_CLIENT_ID");
+const ZOHO_CLIENT_SECRET = Deno.env.get("ZOHO_CLIENT_SECRET");
+const ZOHO_REFRESH_TOKEN = Deno.env.get("ZOHO_REFRESH_TOKEN");
+const ZOHO_DC = Deno.env.get("ZOHO_DC") ?? "in";
+const DIRECT = Boolean(ZOHO_CLIENT_ID && ZOHO_CLIENT_SECRET && ZOHO_REFRESH_TOKEN);
+let directToken: { value: string; exp: number } | null = null;
+
+async function directAccessToken(): Promise<string> {
+  if (directToken && directToken.exp > Date.now() + 60_000) return directToken.value;
+  const res = await fetch(`https://accounts.zoho.${ZOHO_DC}/oauth/v2/token`, {
+    method: "POST",
+    body: new URLSearchParams({
+      refresh_token: ZOHO_REFRESH_TOKEN!, client_id: ZOHO_CLIENT_ID!,
+      client_secret: ZOHO_CLIENT_SECRET!, grant_type: "refresh_token",
+    }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.access_token) throw new Error(`Zoho token refresh failed: ${j.error ?? res.status}`);
+  directToken = { value: j.access_token, exp: Date.now() + Number(j.expires_in ?? 3600) * 1000 };
+  return directToken.value;
+}
 
 const PLACE_OF_SUPPLY = "RJ";
 
@@ -30,17 +53,26 @@ async function zoho(
   path: string,
   opts: { query?: Record<string, string>; body?: Json } = {},
 ): Promise<Json> {
-  if (!LOVABLE_API_KEY || !ZOHO_BOOKS_API_KEY) {
-    throw new Error("Zoho Books connector is not configured");
-  }
   const qs = opts.query ? `?${new URLSearchParams(opts.query).toString()}` : "";
-  const res = await fetch(`${GATEWAY_URL}${path}${qs}`, {
-    method,
-    headers: {
+  let url: string;
+  let headers: Record<string, string>;
+  if (DIRECT) {
+    url = `https://www.zohoapis.${ZOHO_DC}/books/v3${path}${qs}`;
+    headers = { Authorization: `Zoho-oauthtoken ${await directAccessToken()}`, "Content-Type": "application/json" };
+  } else {
+    if (!LOVABLE_API_KEY || !ZOHO_BOOKS_API_KEY) {
+      throw new Error("Zoho Books is not linked (connector or direct credentials missing)");
+    }
+    url = `${GATEWAY_URL}${path}${qs}`;
+    headers = {
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
       "X-Connection-Api-Key": ZOHO_BOOKS_API_KEY,
       "Content-Type": "application/json",
-    },
+    };
+  }
+  const res = await fetch(url, {
+    method,
+    headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const text = await res.text();
@@ -130,6 +162,57 @@ Deno.serve(async (req) => {
       return match ? String(match.tax_id) : null;
     };
 
+    // ---- reconciliation audit (read-only) ------------------------------------
+    if (mode === "audit") {
+      const zInv: Json[] = [];
+      for (let page = 1; page <= 20; page++) {
+        const r = await zoho("GET", "/invoices", { query: { ...org, per_page: "200", page: String(page) } });
+        zInv.push(...((r.invoices as Json[]) ?? []));
+        if (!(r.page_context as Json)?.has_more_page) break;
+      }
+      const { data: appInv } = await admin
+        .from("invoices")
+        .select("id, invoice_number, total_amount, amount_paid, status, created_at, customer_name")
+        .eq("is_gst_invoice", true).eq("is_proforma", false)
+        .gt("gst_rate", 0).gt("tax_amount", 0)
+        .not("status", "in", "(cancelled,draft,refunded)")
+        .not("invoice_number", "ilike", "BOS%");
+      const { data: payRows } = await admin
+        .from("payments").select("invoice_id, amount").eq("status", "completed")
+        .in("invoice_id", (appInv ?? []).map((i) => i.id));
+      const paidByInv = new Map<string, number>();
+      for (const p of payRows ?? []) paidByInv.set(p.invoice_id as string, (paidByInv.get(p.invoice_id as string) ?? 0) + Number(p.amount));
+      const zByNum = new Map<string, Json[]>();
+      for (const z of zInv) {
+        const n = String(z.invoice_number);
+        zByNum.set(n, [...(zByNum.get(n) ?? []), z]);
+      }
+      const appNums = new Set((appInv ?? []).map((i) => String(i.invoice_number)));
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const report = {
+        app_invoices: appInv?.length ?? 0, zoho_invoices: zInv.length,
+        missing_in_zoho: [] as unknown[], only_in_zoho: [] as unknown[], duplicates_in_zoho: [] as unknown[],
+        total_mismatch: [] as unknown[], paid_mismatch: [] as unknown[], overpaid_in_app: [] as unknown[],
+      };
+      for (const a of appInv ?? []) {
+        const n = String(a.invoice_number);
+        const zs = zByNum.get(n) ?? [];
+        const paid = r2(paidByInv.get(a.id) ?? 0);
+        const total = r2(Number(a.total_amount));
+        if (paid > total + 0.5) report.overpaid_in_app.push({ n, name: a.customer_name, total, paid });
+        if (!zs.length) { report.missing_in_zoho.push({ n, name: a.customer_name, total, created: a.created_at }); continue; }
+        if (zs.length > 1) report.duplicates_in_zoho.push({ n, copies: zs.length });
+        const z = zs[0];
+        const zTotal = r2(Number(z.total)); const zPaid = r2(zTotal - Number(z.balance));
+        if (Math.abs(zTotal - total) > 0.5) report.total_mismatch.push({ n, name: a.customer_name, app: total, zoho: zTotal });
+        if (Math.abs(zPaid - Math.min(paid, total)) > 0.5) report.paid_mismatch.push({ n, name: a.customer_name, app_paid: paid, zoho_paid: zPaid, zoho_status: z.status });
+      }
+      for (const n of zByNum.keys()) if (!appNums.has(n)) report.only_in_zoho.push({ n, total: zByNum.get(n)![0].total, status: zByNum.get(n)![0].status });
+      return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, ...report }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     /** Every Zoho invoice carrying this exact invoice number. */
     const invoicesByNumber = async (number: string): Promise<Json[]> => {
       const found = await zoho("GET", "/invoices", {
@@ -215,6 +298,60 @@ Deno.serve(async (req) => {
     if (invErr) throw invErr;
 
     const pending = (invoices ?? []).filter((i) => !syncedInvoices.has(i.id));
+
+    // ---- v1.5.0 catch-up: instalments paid AFTER the invoice was pushed ------
+    // Previously only invoices still pending were scanned for payments, so a
+    // second instalment on an already-synced invoice never reached Zoho. Each
+    // payment is applied only up to the Zoho balance; if Zoho already shows the
+    // invoice settled, the payment is logged as already applied, not re-posted.
+    const catchup = { synced: 0, already_applied: 0, failed: 0 };
+    if (!dryRun) {
+      const syncedIds = (invoices ?? []).filter((i) => zohoInvoiceIdByLocal.has(i.id)).map((i) => i.id);
+      const { data: latePays } = syncedIds.length ? await admin
+        .from("payments")
+        .select("id, invoice_id, amount, payment_method, payment_date, transaction_id, notes")
+        .in("invoice_id", syncedIds).eq("status", "completed").gt("amount", 0)
+        .order("payment_date", { ascending: true }) : { data: [] };
+      const todo = (latePays ?? []).filter((p) => !syncedPayments.has(p.id)).slice(0, 30);
+      for (const p of todo) {
+        const zid = zohoInvoiceIdByLocal.get(p.invoice_id as string)!;
+        try {
+          const zi = (await zoho("GET", `/invoices/${zid}`, { query: org })).invoice as Json;
+          const balance = Number(zi?.balance ?? 0);
+          const apply = Math.min(Number(p.amount), balance);
+          let zohoPaymentId = "already_applied";
+          if (apply > 0.009) {
+            const created = await zoho("POST", "/customerpayments", {
+              query: org,
+              body: {
+                customer_id: zi.customer_id,
+                payment_mode: PAYMENT_MODE[p.payment_method as string] ?? "other",
+                amount: apply,
+                date: istDate(p.payment_date as string),
+                reference_number: clean(p.transaction_id as string),
+                description: clean(p.notes as string),
+                invoices: [{ invoice_id: zid, amount_applied: apply }],
+              },
+            });
+            zohoPaymentId = String((created.payment as Json)?.payment_id ?? "");
+            catchup.synced++;
+          } else {
+            catchup.already_applied++;
+          }
+          syncedPayments.add(p.id);
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "payment", entity_id: p.id, zoho_id: zohoPaymentId,
+            zoho_org_id: orgId, status: "synced", error: null, synced_at: new Date().toISOString(),
+          }, { onConflict: "entity_type,entity_id" });
+        } catch (e) {
+          catchup.failed++;
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "payment", entity_id: p.id, zoho_org_id: orgId,
+            status: "failed", error: e instanceof Error ? e.message : String(e),
+          }, { onConflict: "entity_type,entity_id" });
+        }
+      }
+    }
 
     if (dryRun) {
       return new Response(JSON.stringify({
@@ -420,7 +557,7 @@ Deno.serve(async (req) => {
     }
 
     const remaining = Math.max(pending.length - batch.length, 0);
-    return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, remaining, ...result }), {
+    return new Response(JSON.stringify({ success: true, organization: orgs[0]?.name, remaining, ...result, catchup }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
