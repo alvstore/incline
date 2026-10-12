@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Receipt, Plus, X } from 'lucide-react';
+import { Receipt, Plus, X, BookOpenCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -84,6 +85,10 @@ export function TaxGstSettings() {
 
   return (
     <div className="space-y-6">
+      <Link to="/finance?tab=gst" className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-muted/40 p-3 text-sm text-foreground hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <BookOpenCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+        Zoho Books connection is managed in Finance → GST. Open it to connect directly or check status.
+      </Link>
       <div>
         <h2 className="text-lg font-semibold">Tax & GST Settings</h2>
         <p className="text-sm text-muted-foreground">Configure GST rate slabs and HSN/SAC codes for invoicing</p>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { ZohoConnectionPanel } from './ZohoConnectionPanel';
 import { BookOpenCheck, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 
 interface SyncResponse {
@@ -153,6 +154,7 @@ export function ZohoBooksSyncCard() {
 
       </CardHeader>
       <CardContent className="space-y-4">
+        <ZohoConnectionPanel />
         {statsQuery.isLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}

@@ -552,7 +552,7 @@ export default function FinancePage() {
 
           {/* Income / Expenses Tabs - Wide */}
           <div className="lg:col-span-2">
-            <Tabs defaultValue="income" className="space-y-4">
+            <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') === 'gst' ? 'gst' : 'income'} className="space-y-4">
               <TabsList>
                 <TabsTrigger value="income" className="gap-2">
                   <ArrowUpRight className="h-4 w-4 text-success" />

@@ -162,3 +162,9 @@ verify_jwt = false
 
 [functions.sarvam-agent-tools]
 verify_jwt = false
+
+[functions.zoho-oauth]
+verify_jwt = false
+
+[functions.zoho-oauth-callback]
+verify_jwt = false
