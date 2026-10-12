@@ -16,3 +16,4 @@ Body progress places the render before a full-width summary; historical measurem
 - PT workspace keeps walk-in roster and optional appointments in Sessions; automatic attendance is a separate tab after Clients using the same attendance component in board-only mode, so moving UI never changes payout or booking engines.
 - Referral workspace analytics come from the branch-guarded `referral_workspace_summary` RPC; keep referral charts server-aggregated so managers cannot infer other branches and clients do not download rows for trends.
 - Gate denies only for base-membership causes; PT/store/add-on dues are AMBER (gate opens, desk alert, locks); per branch via settings.gate_tier_mode legacy|shadow|enforce.
+- DB triggers call edge functions via `private.mips_dispatch` with `x-internal-token` (stored service keys go stale on rotation → silent 401s); MIPS gate state signatures use the photo hash, not storage path, because re-uploads reuse the same path.
