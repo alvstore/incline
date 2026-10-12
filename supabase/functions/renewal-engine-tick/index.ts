@@ -1,3 +1,4 @@
+// v1.5.0 — a call that can't be linked to its case (branch moved / no provider id yet) is a handled skip.
 // v1.4.0 — independent, bounded voice retry queue; successful calls only are linked.
 // v1.3.0 — busy line, cooldown and calling window are expected outcomes, not logged as errors.
 // renewal-engine-tick v1.2.0 — Phase 2 renewal orchestrator.
@@ -194,7 +195,10 @@ Deno.serve(async (req) => {
               _case_id: c.case_id,
               _attempt_id: body.call_record_id,
             });
-            if (linkError) throw linkError;
+            if (linkError) {
+              if (/does not match|not open/i.test(linkError.message)) { voiceCalls++; continue; }
+              throw linkError;
+            }
             voiceCalls++;
           } else if (body?.code === "concurrency_limit") {
             // Line busy with another call — expected; remaining cases retry next tick.
