@@ -16,3 +16,4 @@ Body progress places the render before a full-width summary; historical measurem
 - Referral workspace analytics come from the branch-guarded `referral_workspace_summary` RPC; keep referral charts server-aggregated so managers cannot infer other branches and clients do not download rows for trends.
 - Gate denies only for base-membership causes; PT/store/add-on dues are AMBER (gate opens, desk alert, locks); per branch via settings.gate_tier_mode legacy|shadow|enforce.
 - DB triggers call edge functions with `x-internal-token`, because stored service keys go stale on rotation and cause silent 401s.
+- Supplier stock purchases go through the guarded `import_purchase_bill` RPC (vendor bill + GST lines in `expense_items` + batches + inventory in one transaction); imported products start `is_sellable=false` and POS/member store list only sellable products, so purchase cost is never shown as a sale price.
