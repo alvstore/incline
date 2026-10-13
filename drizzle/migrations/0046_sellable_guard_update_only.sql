@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS trg_products_sellable_guard ON public.products;
+CREATE TRIGGER trg_products_sellable_guard BEFORE UPDATE OF is_sellable ON public.products FOR EACH ROW EXECUTE FUNCTION public.tg_products_sellable_guard();

@@ -316,6 +316,20 @@
       "when": 1791816728026,
       "tag": "0044_gate_direct_pt_renew",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791869409238,
+      "tag": "0045_purchase_bill_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791869433804,
+      "tag": "0046_sellable_guard_update_only",
+      "breakpoints": true
     }
   ]
 }

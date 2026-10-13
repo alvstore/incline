@@ -79,6 +79,7 @@ export default function POSPage() {
         .from('products')
         .select('*, product_categories(name), inventory(quantity, min_quantity, branch_id)')
         .eq('is_active', true)
+        .eq('is_sellable', true)
         .order('name');
       
       if (categoryFilter) {

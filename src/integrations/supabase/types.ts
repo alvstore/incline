@@ -4816,6 +4816,85 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_items: {
+        Row: {
+          batch_id: string | null
+          branch_id: string
+          cgst_amount: number
+          created_at: string
+          expense_id: string
+          gst_rate: number
+          hsn_code: string | null
+          id: string
+          igst_amount: number
+          item_name: string
+          product_id: string | null
+          quantity: number
+          rate: number
+          sgst_amount: number
+          taxable_amount: number
+          total_amount: number
+        }
+        Insert: {
+          batch_id?: string | null
+          branch_id: string
+          cgst_amount?: number
+          created_at?: string
+          expense_id: string
+          gst_rate?: number
+          hsn_code?: string | null
+          id?: string
+          igst_amount?: number
+          item_name: string
+          product_id?: string | null
+          quantity: number
+          rate: number
+          sgst_amount?: number
+          taxable_amount: number
+          total_amount: number
+        }
+        Update: {
+          batch_id?: string | null
+          branch_id?: string
+          cgst_amount?: number
+          created_at?: string
+          expense_id?: string
+          gst_rate?: number
+          hsn_code?: string | null
+          id?: string
+          igst_amount?: number
+          item_name?: string
+          product_id?: string | null
+          quantity?: number
+          rate?: number
+          sgst_amount?: number
+          taxable_amount?: number
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "product_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_items_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
@@ -4824,23 +4903,29 @@ export type Database = {
           bill_number: string | null
           branch_id: string
           category_id: string | null
+          cgst_amount: number | null
           created_at: string
           description: string
           edit_reason: string | null
           employee_user_id: string | null
           expense_date: string
           expense_type: Database["public"]["Enums"]["expense_kind"]
+          gst_rate: number | null
           id: string
+          igst_amount: number | null
           is_paid: boolean
           paid_at: string | null
           paid_by: string | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
           payment_reference: string | null
           receipt_url: string | null
+          sgst_amount: number | null
           status: Database["public"]["Enums"]["approval_status"]
           submitted_by: string | null
+          taxable_amount: number | null
           updated_at: string
           vendor: string | null
+          vendor_gstin: string | null
         }
         Insert: {
           amount: number
@@ -4849,23 +4934,29 @@ export type Database = {
           bill_number?: string | null
           branch_id: string
           category_id?: string | null
+          cgst_amount?: number | null
           created_at?: string
           description: string
           edit_reason?: string | null
           employee_user_id?: string | null
           expense_date?: string
           expense_type?: Database["public"]["Enums"]["expense_kind"]
+          gst_rate?: number | null
           id?: string
+          igst_amount?: number | null
           is_paid?: boolean
           paid_at?: string | null
           paid_by?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           payment_reference?: string | null
           receipt_url?: string | null
+          sgst_amount?: number | null
           status?: Database["public"]["Enums"]["approval_status"]
           submitted_by?: string | null
+          taxable_amount?: number | null
           updated_at?: string
           vendor?: string | null
+          vendor_gstin?: string | null
         }
         Update: {
           amount?: number
@@ -4874,23 +4965,29 @@ export type Database = {
           bill_number?: string | null
           branch_id?: string
           category_id?: string | null
+          cgst_amount?: number | null
           created_at?: string
           description?: string
           edit_reason?: string | null
           employee_user_id?: string | null
           expense_date?: string
           expense_type?: Database["public"]["Enums"]["expense_kind"]
+          gst_rate?: number | null
           id?: string
+          igst_amount?: number | null
           is_paid?: boolean
           paid_at?: string | null
           paid_by?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           payment_reference?: string | null
           receipt_url?: string | null
+          sgst_amount?: number | null
           status?: Database["public"]["Enums"]["approval_status"]
           submitted_by?: string | null
+          taxable_amount?: number | null
           updated_at?: string
           vendor?: string | null
+          vendor_gstin?: string | null
         }
         Relationships: [
           {
@@ -11056,9 +11153,11 @@ export type Database = {
           created_at: string
           default_shelf_life_days: number | null
           description: string | null
+          hsn_code: string | null
           id: string
           image_url: string | null
           is_active: boolean | null
+          is_sellable: boolean
           name: string
           price: number
           requires_batch_tracking: boolean
@@ -11075,9 +11174,11 @@ export type Database = {
           created_at?: string
           default_shelf_life_days?: number | null
           description?: string | null
+          hsn_code?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
+          is_sellable?: boolean
           name: string
           price: number
           requires_batch_tracking?: boolean
@@ -11094,9 +11195,11 @@ export type Database = {
           created_at?: string
           default_shelf_life_days?: number | null
           description?: string | null
+          hsn_code?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
+          is_sellable?: boolean
           name?: string
           price?: number
           requires_batch_tracking?: boolean
@@ -17286,6 +17389,7 @@ export type Database = {
         Args: { _equipment_no: string }
         Returns: undefined
       }
+      import_purchase_bill: { Args: { p_payload: Json }; Returns: Json }
       internal_fn_token: { Args: never; Returns: string }
       is_bot_paused: {
         Args: { p_branch_id: string; p_phone: string }
