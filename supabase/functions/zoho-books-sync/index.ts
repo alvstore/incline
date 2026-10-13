@@ -309,6 +309,21 @@ Deno.serve(async (req) => {
         .order("expense_date", { ascending: true });
       if (vbErr) throw vbErr;
 
+      // Zoho bills require an expense account per line. Prefer a purchases /
+      // cost-of-goods account, else the first expense account.
+      const coa = ((await zoho("GET", "/chartofaccounts", { query: org })).chartofaccounts as Json[]) ?? [];
+      const pick = (preds: ((a: Json) => boolean)[]) => {
+        for (const p of preds) { const hit = coa.find(p); if (hit) return String(hit.account_id); }
+        return null;
+      };
+      const expenseAccountId = pick([
+        (a) => a.account_type === "cost_of_goods_sold" && /purchase|cost of goods/i.test(String(a.account_name)),
+        (a) => a.account_type === "cost_of_goods_sold",
+        (a) => a.account_type === "expense" && /purchase|supplement|stock|inventory/i.test(String(a.account_name)),
+        (a) => a.account_type === "expense",
+      ]);
+      if (!expenseAccountId) throw new Error("No expense account found in Zoho chart of accounts");
+
       const pendingBills = (vendorBills ?? []).filter((b) => !doneBills.has(b.id));
       if (dryRun) {
         return new Response(JSON.stringify({
