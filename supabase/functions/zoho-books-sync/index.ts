@@ -389,6 +389,7 @@ Deno.serve(async (req) => {
                 is_inclusive_tax: false,
                 line_items: lines.map((l) => ({
                   name: clean(l.item_name as string),
+                  account_id: expenseAccountId,
                   rate: Number(l.rate),
                   quantity: Number(l.quantity),
                   hsn_or_sac: clean(l.hsn_code as string),
