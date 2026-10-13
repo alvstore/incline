@@ -293,9 +293,12 @@ Deno.serve(async (req) => {
     // Idempotent via zoho_sync_log entity_type 'bill' + bill_number lookup.
     if (mode === "bills") {
       const { data: billLog } = await admin
-        .from("zoho_sync_log").select("entity_id, zoho_id")
-        .eq("entity_type", "bill").eq("status", "synced");
-      const doneBills = new Set((billLog ?? []).map((r) => r.entity_id));
+        .from("zoho_sync_log").select("entity_id, zoho_id, entity_type")
+        .in("entity_type", ["bill", "contact"]).eq("status", "synced");
+      const doneBills = new Set((billLog ?? []).filter((r) => r.entity_type === "bill").map((r) => r.entity_id));
+      const contactMap = new Map(
+        (billLog ?? []).filter((r) => r.entity_type === "contact").map((r) => [r.entity_id, r.zoho_id!]),
+      );
 
       const { data: vendorBills, error: vbErr } = await admin
         .from("expenses")
