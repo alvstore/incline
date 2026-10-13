@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -234,8 +234,8 @@ export function VendorBillsPanel({ branchId }: { branchId?: string | null }) {
                   const gst = Number(b.cgst_amount ?? 0) + Number(b.sgst_amount ?? 0) + Number(b.igst_amount ?? 0);
                   const open = openId === b.id;
                   return (
-                    <>
-                      <TableRow key={b.id} className="hover:bg-muted/40 transition-colors">
+                    <Fragment key={b.id}>
+                      <TableRow className="hover:bg-muted/40 transition-colors">
                         <TableCell className="font-medium">#{b.bill_number ?? '—'}</TableCell>
                         <TableCell>
                           <div className="flex flex-col">
