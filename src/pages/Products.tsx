@@ -12,6 +12,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AddProductDrawer } from '@/components/products/AddProductDrawer';
 import { ProductBatchesTab } from '@/components/products/ProductBatchesTab';
+import { ImportPurchaseBillDrawer } from '@/components/products/ImportPurchaseBillDrawer';
+import { ProductsToActivate } from '@/components/products/ProductsToActivate';
+import { FileSpreadsheet, Sparkles } from 'lucide-react';
 import { 
   Plus, 
   Package, 
@@ -33,6 +36,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function ProductsPage() {
+  const [importOpen, setImportOpen] = useState(false);
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -179,10 +183,16 @@ export default function ProductsPage() {
             </h1>
             <p className="text-muted-foreground mt-1">Manage your product catalog and stock levels</p>
           </div>
+          <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" aria-hidden />
+            Import purchase bill
+          </Button>
           <Button onClick={handleAdd} className="bg-primary hover:bg-primary/90">
             <Plus className="mr-2 h-4 w-4" />
             Add Product
           </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -283,6 +293,10 @@ export default function ProductsPage() {
               <TabsTrigger value="inventory" className="gap-2">
                 <Archive className="h-4 w-4" />
                 Inventory
+              </TabsTrigger>
+              <TabsTrigger value="activate" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Ready to activate
               </TabsTrigger>
             </TabsList>
 
@@ -579,8 +593,13 @@ export default function ProductsPage() {
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="activate" className="m-0">
+            <ProductsToActivate />
+          </TabsContent>
         </Tabs>
       </div>
+
+      <ImportPurchaseBillDrawer open={importOpen} onOpenChange={setImportOpen} />
 
       <AddProductDrawer
         open={drawerOpen}

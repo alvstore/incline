@@ -83,7 +83,8 @@ export default function MemberStore() {
           category:product_categories(id, name),
           inventory(quantity, branch_id)
         `)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('is_sellable', true);
 
       if (error) throw error;
       
