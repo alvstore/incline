@@ -1,4 +1,4 @@
-// zoho-books-sync v1.7.0 — direct mode from in-app OAuth (settings.zoho_mode) + SAC fallback.
+// zoho-books-sync v1.8.0 — vendor bills push (mode "bills") + direct mode from in-app OAuth (settings.zoho_mode) + SAC fallback.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
@@ -283,6 +283,139 @@ Deno.serve(async (req) => {
         }
       }
       return new Response(JSON.stringify({ success: true, mode: "fix_hsn", ...report }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ---- v1.8.0 vendor bills: push purchase bills (expenses kind=vendor_bill) ----
+    // Creates/uses a Zoho vendor contact (GSTIN-aware) and posts a Bill per
+    // expense, one line per expense_items row with its HSN and 5% intra tax.
+    // Idempotent via zoho_sync_log entity_type 'bill' + bill_number lookup.
+    if (mode === "bills") {
+      const { data: billLog } = await admin
+        .from("zoho_sync_log").select("entity_id, zoho_id, entity_type")
+        .in("entity_type", ["bill", "contact"]).eq("status", "synced");
+      const doneBills = new Set((billLog ?? []).filter((r) => r.entity_type === "bill").map((r) => r.entity_id));
+      const contactMap = new Map(
+        (billLog ?? []).filter((r) => r.entity_type === "contact").map((r) => [r.entity_id, r.zoho_id!]),
+      );
+
+      const { data: vendorBills, error: vbErr } = await admin
+        .from("expenses")
+        .select("id, bill_number, vendor, vendor_gstin, expense_date, amount, taxable_amount, gst_rate, status")
+        .eq("expense_type", "vendor_bill")
+        .not("bill_number", "is", null)
+        .eq("status", "approved")
+        .order("expense_date", { ascending: true });
+      if (vbErr) throw vbErr;
+
+      // Zoho bills require an expense account per line. Prefer a purchases /
+      // cost-of-goods account, else the first expense account.
+      const coa = ((await zoho("GET", "/chartofaccounts", { query: org })).chartofaccounts as Json[]) ?? [];
+      const pick = (preds: ((a: Json) => boolean)[]) => {
+        for (const p of preds) { const hit = coa.find(p); if (hit) return String(hit.account_id); }
+        return null;
+      };
+      const expenseAccountId = pick([
+        (a) => a.account_type === "cost_of_goods_sold" && /purchase|cost of goods/i.test(String(a.account_name)),
+        (a) => a.account_type === "cost_of_goods_sold",
+        (a) => a.account_type === "expense" && /purchase|supplement|stock|inventory/i.test(String(a.account_name)),
+        (a) => a.account_type === "expense",
+      ]);
+      if (!expenseAccountId) throw new Error("No expense account found in Zoho chart of accounts");
+
+      const pendingBills = (vendorBills ?? []).filter((b) => !doneBills.has(b.id));
+      if (dryRun) {
+        return new Response(JSON.stringify({
+          success: true, dryRun: true, mode: "bills",
+          vendor_bills: vendorBills?.length ?? 0, pending: pendingBills.length,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const billResult = { bills_synced: 0, bills_failed: 0, errors: [] as string[] };
+      for (const bill of pendingBills.slice(0, limit)) {
+        try {
+          const { data: lines } = await admin
+            .from("expense_items")
+            .select("item_name, hsn_code, quantity, rate, gst_rate")
+            .eq("expense_id", bill.id);
+          if (!lines?.length) throw new Error("no line items");
+
+          // --- vendor contact -------------------------------------------------
+          const vendorKey = `vendor:${String(bill.vendor).trim().toLowerCase()}`;
+          let vendorId = contactMap.get(vendorKey);
+          if (!vendorId) {
+            const gstin = clean(bill.vendor_gstin as string);
+            const payload: Json = {
+              contact_name: clean(bill.vendor as string),
+              contact_type: "vendor",
+              gst_treatment: gstin ? "business_gst" : "consumer",
+              place_of_contact: PLACE_OF_SUPPLY,
+              ...(gstin ? { gst_no: gstin } : {}),
+            };
+            try {
+              const created = await zoho("POST", "/contacts", { query: org, body: payload });
+              vendorId = String((created.contact as Json)?.contact_id);
+            } catch (e) {
+              const found = await zoho("GET", "/contacts", {
+                query: { ...org, contact_name: String(payload.contact_name) },
+              });
+              const hit = ((found.contacts as Json[]) ?? [])[0];
+              if (!hit) throw e;
+              vendorId = String(hit.contact_id);
+            }
+            contactMap.set(vendorKey, vendorId);
+            await admin.from("zoho_sync_log").upsert({
+              entity_type: "contact", entity_id: vendorKey, zoho_id: vendorId,
+              zoho_org_id: orgId, status: "synced", synced_at: new Date().toISOString(), error: null,
+            }, { onConflict: "entity_type,entity_id" });
+          }
+
+          // --- adopt existing bill with the same number, else create -----------
+          const existing = ((await zoho("GET", "/bills", {
+            query: { ...org, bill_number: String(bill.bill_number) },
+          })).bills as Json[]) ?? [];
+          const hit = existing.find((b) => String(b.bill_number) === String(bill.bill_number));
+          let zohoBillId: string;
+          if (hit) {
+            zohoBillId = String(hit.bill_id);
+          } else {
+            const created = await zoho("POST", "/bills", {
+              query: { ...org, ignore_auto_number_generation: "true" },
+              body: {
+                vendor_id: vendorId,
+                bill_number: clean(bill.bill_number as string),
+                date: istDate(bill.expense_date as string),
+                is_inclusive_tax: false,
+                line_items: lines.map((l) => ({
+                  name: clean(l.item_name as string),
+                  account_id: expenseAccountId,
+                  rate: Number(l.rate),
+                  quantity: Number(l.quantity),
+                  hsn_or_sac: clean(l.hsn_code as string),
+                  ...(taxIdForRate(Number(l.gst_rate)) ? { tax_id: taxIdForRate(Number(l.gst_rate)) } : {}),
+                })),
+              },
+            });
+            zohoBillId = String((created.bill as Json)?.bill_id ?? "");
+          }
+
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "bill", entity_id: bill.id, zoho_id: zohoBillId,
+            zoho_org_id: orgId, status: "synced", error: null, synced_at: new Date().toISOString(),
+          }, { onConflict: "entity_type,entity_id" });
+          billResult.bills_synced++;
+        } catch (e) {
+          billResult.bills_failed++;
+          const msg = e instanceof Error ? e.message : String(e);
+          billResult.errors.push(`${bill.bill_number}: ${msg}`);
+          await admin.from("zoho_sync_log").upsert({
+            entity_type: "bill", entity_id: bill.id, zoho_org_id: orgId,
+            status: "failed", error: msg,
+          }, { onConflict: "entity_type,entity_id" });
+        }
+      }
+      return new Response(JSON.stringify({ success: true, mode: "bills", ...billResult }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
