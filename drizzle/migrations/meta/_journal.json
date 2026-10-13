@@ -323,6 +323,13 @@
       "when": 1791869409238,
       "tag": "0045_purchase_bill_import",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791869433804,
+      "tag": "0046_sellable_guard_update_only",
+      "breakpoints": true
     }
   ]
 }
