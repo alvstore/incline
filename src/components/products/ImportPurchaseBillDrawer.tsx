@@ -64,7 +64,9 @@ export function ImportPurchaseBillDrawer({ open, onOpenChange }: Props) {
       if (/\.csv$/i.test(f.name)) {
         rows = (await f.text()).split(/\r?\n/).map((l) => l.split(','));
       } else {
-        rows = (await readXlsxFile(f)) as unknown[][];
+        const res = (await readXlsxFile(f)) as unknown;
+        const first = Array.isArray(res) ? res[0] : null;
+        rows = (first && !Array.isArray(first) && typeof first === 'object' && 'data' in first ? (first as { data: unknown[][] }).data : res) as unknown[][];
       }
       const res = parsePurchaseRows(rows);
       // auto-match existing products by exact name
