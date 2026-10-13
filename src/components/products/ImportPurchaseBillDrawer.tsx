@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import readXlsxFile from 'read-excel-file';
+import readXlsxFile from 'read-excel-file/browser';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
