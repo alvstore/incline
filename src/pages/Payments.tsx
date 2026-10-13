@@ -495,6 +495,10 @@ export default function PaymentsPage() {
           </TabsContent>
 
           {/* ── Advances ─────────────────────────────────────────── */}
+          <TabsContent value="vendor-bills">
+            <VendorBillsPanel branchId={branchFilter} />
+          </TabsContent>
+
           <TabsContent value="advances">
             <AdvancesTable branchId={branchFilter} search={searchTerm} />
           </TabsContent>
