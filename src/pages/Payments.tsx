@@ -16,11 +16,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard, History as HistoryIcon, Clock, Tag } from 'lucide-react';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard, History as HistoryIcon, Clock, Tag, FileSpreadsheet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
 import { EditExpenseDrawer } from '@/components/finance/EditExpenseDrawer';
 import { ExpensesTable } from '@/components/finance/ExpensesTable';
+import { VendorBillsPanel } from '@/components/finance/VendorBillsPanel';
 import { AdvancesTable } from '@/components/finance/AdvancesTable';
 import { PaymentEditDrawer } from '@/components/payments/PaymentEditDrawer';
 import { can } from '@/lib/auth/permissions';
@@ -431,6 +432,7 @@ export default function PaymentsPage() {
             <TabsTrigger value="overview" className="rounded-lg"><LayoutDashboard className="h-4 w-4 mr-1.5" />Overview</TabsTrigger>
             <TabsTrigger value="income" className="rounded-lg"><ArrowUpRight className="h-4 w-4 mr-1.5" />Income</TabsTrigger>
             <TabsTrigger value="expenses" className="rounded-lg"><Receipt className="h-4 w-4 mr-1.5" />Expenses</TabsTrigger>
+            <TabsTrigger value="vendor-bills" className="rounded-lg"><FileSpreadsheet className="h-4 w-4 mr-1.5" />Vendor Bills</TabsTrigger>
             <TabsTrigger value="advances" className="rounded-lg"><HandCoins className="h-4 w-4 mr-1.5" />Advances</TabsTrigger>
             <TabsTrigger value="dues" className="rounded-lg"><AlertTriangle className="h-4 w-4 mr-1.5" />Dues{overdueInvoices.length > 0 && <span className="ml-1.5 rounded-full bg-warning/15 px-1.5 text-[10px] font-semibold text-warning">{overdueInvoices.length}</span>}</TabsTrigger>
           </TabsList>
@@ -493,6 +495,10 @@ export default function PaymentsPage() {
           </TabsContent>
 
           {/* ── Advances ─────────────────────────────────────────── */}
+          <TabsContent value="vendor-bills">
+            <VendorBillsPanel branchId={branchFilter} />
+          </TabsContent>
+
           <TabsContent value="advances">
             <AdvancesTable branchId={branchFilter} search={searchTerm} />
           </TabsContent>
