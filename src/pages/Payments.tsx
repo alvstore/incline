@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
 import { EditExpenseDrawer } from '@/components/finance/EditExpenseDrawer';
 import { ExpensesTable } from '@/components/finance/ExpensesTable';
+import { VendorBillsPanel } from '@/components/finance/VendorBillsPanel';
 import { AdvancesTable } from '@/components/finance/AdvancesTable';
 import { PaymentEditDrawer } from '@/components/payments/PaymentEditDrawer';
 import { can } from '@/lib/auth/permissions';
@@ -431,6 +432,7 @@ export default function PaymentsPage() {
             <TabsTrigger value="overview" className="rounded-lg"><LayoutDashboard className="h-4 w-4 mr-1.5" />Overview</TabsTrigger>
             <TabsTrigger value="income" className="rounded-lg"><ArrowUpRight className="h-4 w-4 mr-1.5" />Income</TabsTrigger>
             <TabsTrigger value="expenses" className="rounded-lg"><Receipt className="h-4 w-4 mr-1.5" />Expenses</TabsTrigger>
+            <TabsTrigger value="vendor-bills" className="rounded-lg"><FileSpreadsheet className="h-4 w-4 mr-1.5" />Vendor Bills</TabsTrigger>
             <TabsTrigger value="advances" className="rounded-lg"><HandCoins className="h-4 w-4 mr-1.5" />Advances</TabsTrigger>
             <TabsTrigger value="dues" className="rounded-lg"><AlertTriangle className="h-4 w-4 mr-1.5" />Dues{overdueInvoices.length > 0 && <span className="ml-1.5 rounded-full bg-warning/15 px-1.5 text-[10px] font-semibold text-warning">{overdueInvoices.length}</span>}</TabsTrigger>
           </TabsList>
