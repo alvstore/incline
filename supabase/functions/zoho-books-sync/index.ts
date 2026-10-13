@@ -1,4 +1,4 @@
-// zoho-books-sync v1.7.0 — direct mode from in-app OAuth (settings.zoho_mode) + SAC fallback.
+// zoho-books-sync v1.8.0 — vendor bills push (mode "bills") + direct mode from in-app OAuth (settings.zoho_mode) + SAC fallback.
 // Pushes GST invoices (and their settled payments) from Incline into Zoho Books
 // through the Lovable connector gateway. Idempotent: every entity pushed is
 // recorded in public.zoho_sync_log and never sent twice. Because Zoho is called
