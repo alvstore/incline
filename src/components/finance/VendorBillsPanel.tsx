@@ -272,7 +272,7 @@ export function VendorBillsPanel({ branchId }: { branchId?: string | null }) {
                         </TableCell>
                       </TableRow>
                       {open && (
-                        <TableRow key={`${b.id}-lines`}>
+                        <TableRow>
                           <TableCell colSpan={8} id={`lines-${b.id}`} className="bg-muted/20 p-4">
                             <Table>
                               <TableHeader>
@@ -303,13 +303,13 @@ export function VendorBillsPanel({ branchId }: { branchId?: string | null }) {
                         </TableRow>
                       )}
                       {payingId === b.id && (
-                        <TableRow key={`${b.id}-pay`}>
+                        <TableRow>
                           <TableCell colSpan={8} className="p-3">
                             <MarkPaidForm bill={b} onDone={() => setPayingId(null)} />
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>
