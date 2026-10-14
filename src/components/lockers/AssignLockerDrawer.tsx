@@ -55,58 +55,44 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   });
 
 
-  const handleMemberSearch = async () => {
-    if (!memberSearch.trim() || !branchId) return;
-    
+  const handleMemberSearch = async (term: string = memberSearch) => {
+    const q = term.trim();
+    if (q.length < 2 || !branchId) return;
     setIsSearching(true);
     try {
-      const { data: membersByCode } = await supabase
-        .from('members')
-        .select(`
-          id,
-          member_code,
-          user_id,
-          profiles:user_id (full_name, email, phone)
-        `)
-        .eq('branch_id', branchId)
-        .ilike('member_code', `%${memberSearch}%`)
-        .limit(10);
-
-      const { data: membersByProfile } = await supabase
-        .from('members')
-        .select(`
-          id,
-          member_code,
-          user_id,
-          profiles:user_id (full_name, email, phone)
-        `)
-        .eq('branch_id', branchId)
-        .not('user_id', 'is', null)
-        .limit(50);
-
-      const searchLower = memberSearch.toLowerCase();
-      const filteredByProfile = (membersByProfile || []).filter((m) => {
-        const profile = m.profiles as any;
-        if (!profile) return false;
-        return (
-          (profile.full_name?.toLowerCase().includes(searchLower)) ||
-          (profile.email?.toLowerCase().includes(searchLower)) ||
-          (profile.phone?.includes(memberSearch))
-        );
+      // Server-side search across ALL branch members (name, code, phone variants, email)
+      const digits = q.replace(/\D/g, '');
+      const searchTerm = digits.length >= 10 ? digits.slice(-10) : q;
+      const { data, error } = await supabase.rpc('search_members', {
+        search_term: searchTerm,
+        p_branch_id: branchId,
+        p_limit: 10,
       });
-
-      const allResults = [...(membersByCode || []), ...filteredByProfile];
-      const uniqueResults = allResults.filter(
-        (member, index, self) => index === self.findIndex((m) => m.id === member.id)
-      ).slice(0, 10);
-
-      setSearchResults(uniqueResults);
+      if (error) throw error;
+      const rows = (data || []) as Array<{ id: string; member_code: string; full_name: string | null; email?: string | null; phone?: string | null }>;
+      setSearchResults(
+        rows.map((m) => ({
+          id: m.id,
+          member_code: m.member_code,
+          profiles: { full_name: m.full_name, email: m.email ?? null, phone: m.phone ?? null },
+        })),
+      );
     } catch (error) {
       toast.error('Failed to search members');
     } finally {
       setIsSearching(false);
     }
   };
+
+  useEffect(() => {
+    if (memberSearch.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const t = setTimeout(() => handleMemberSearch(memberSearch), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberSearch, branchId]);
 
   // Check member plan + fetch membership end date
   useEffect(() => {
@@ -290,7 +276,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
                   className="pl-10"
                 />
               </div>
-              <Button variant="outline" onClick={handleMemberSearch} disabled={isSearching}>
+              <Button variant="outline" onClick={() => handleMemberSearch()} disabled={isSearching}>
                 {isSearching ? 'Searching...' : 'Search'}
               </Button>
             </div>
