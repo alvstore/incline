@@ -35,7 +35,7 @@ export function upgradeWindowDay(windowEndsAt: string, now = new Date()): number
 
 const STATUS: Record<UpgradeOfferRow['status'], { label: string; cls: string }> = {
   pending: { label: 'In window', cls: 'bg-muted text-muted-foreground border border-border' },
-  day7_sent: { label: 'Day 7 sent', cls: 'bg-blue-500/10 text-blue-500 border border-blue-500/20' },
+  day7_sent: { label: 'Past Day 7', cls: 'bg-blue-500/10 text-blue-500 border border-blue-500/20' },
   day12_sent: { label: 'Closing soon', cls: 'bg-amber-500/10 text-amber-500 border border-amber-500/20' },
   converted: { label: 'Upgraded', cls: 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' },
 };

@@ -498,7 +498,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <UpgradeWindowWidget branchId={branchFilter || null} showRevenue={can.viewFinancials(roles)} />
+        <UpgradeWindowWidget branchId={branchFilter || (branches?.length === 1 ? branches[0].id : null)} showRevenue={can.viewFinancials(roles)} />
 
         {/* Google Reviews + Live Access Feed */}
         <div className="grid gap-6 md:grid-cols-3">
