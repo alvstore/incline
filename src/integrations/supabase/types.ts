@@ -14313,6 +14313,7 @@ export type Database = {
           id: string
           member_id: string
           membership_id: string
+          pending_invoice_id: string | null
           status: string
           target_plan_id: string | null
           updated_at: string
@@ -14329,6 +14330,7 @@ export type Database = {
           id?: string
           member_id: string
           membership_id: string
+          pending_invoice_id?: string | null
           status?: string
           target_plan_id?: string | null
           updated_at?: string
@@ -14345,6 +14347,7 @@ export type Database = {
           id?: string
           member_id?: string
           membership_id?: string
+          pending_invoice_id?: string | null
           status?: string
           target_plan_id?: string | null
           updated_at?: string
@@ -16878,6 +16881,7 @@ export type Database = {
         }
         Returns: string
       }
+      create_upgrade_invoice: { Args: { p_offer_id: string }; Returns: Json }
       credit_member: {
         Args: {
           p_branch_id: string
