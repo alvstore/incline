@@ -14302,6 +14302,93 @@ export type Database = {
           },
         ]
       }
+      upgrade_offers: {
+        Row: {
+          already_paid: number
+          annual_price: number | null
+          branch_id: string
+          converted_at: string | null
+          converted_invoice_id: string | null
+          created_at: string
+          id: string
+          member_id: string
+          membership_id: string
+          status: string
+          target_plan_id: string | null
+          updated_at: string
+          upgrade_cost: number | null
+          window_ends_at: string
+        }
+        Insert: {
+          already_paid?: number
+          annual_price?: number | null
+          branch_id: string
+          converted_at?: string | null
+          converted_invoice_id?: string | null
+          created_at?: string
+          id?: string
+          member_id: string
+          membership_id: string
+          status?: string
+          target_plan_id?: string | null
+          updated_at?: string
+          upgrade_cost?: number | null
+          window_ends_at: string
+        }
+        Update: {
+          already_paid?: number
+          annual_price?: number | null
+          branch_id?: string
+          converted_at?: string | null
+          converted_invoice_id?: string | null
+          created_at?: string
+          id?: string
+          member_id?: string
+          membership_id?: string
+          status?: string
+          target_plan_id?: string | null
+          updated_at?: string
+          upgrade_cost?: number | null
+          window_ends_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upgrade_offers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upgrade_offers_converted_invoice_id_fkey"
+            columns: ["converted_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upgrade_offers_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upgrade_offers_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upgrade_offers_target_plan_id_fkey"
+            columns: ["target_plan_id"]
+            isOneToOne: false
+            referencedRelation: "membership_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_active_branch: {
         Row: {
           branch_id: string | null
@@ -16368,6 +16455,7 @@ export type Database = {
         Args: { p_clock_in: string; p_clock_out: string }
         Returns: number
       }
+      calculate_upgrade_cost: { Args: { p_member_id: string }; Returns: Json }
       campaign_recipient_rank: { Args: { _status: string }; Returns: number }
       can_access_biometric_photo: {
         Args: { _path: string; _user_id: string }
@@ -16676,6 +16764,10 @@ export type Database = {
           p_referrer_reward_type?: string
           p_referrer_reward_value?: number
         }
+        Returns: Json
+      }
+      convert_to_annual: {
+        Args: { p_invoice_id: string; p_offer_id: string }
         Returns: Json
       }
       correct_invoice: {
@@ -19004,6 +19096,7 @@ export type Database = {
         }
         Returns: Json
       }
+      upgrade_window_summary: { Args: { p_branch_id: string }; Returns: Json }
       upsert_meta_contact_profile:
         | {
             Args: {
