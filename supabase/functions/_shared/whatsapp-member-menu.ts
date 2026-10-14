@@ -859,6 +859,55 @@ async function handleTriage(supabase: any, ctx: MemberContext, text: string, pho
   return `Got it, ${ctx.firstName}! I've flagged your message to our front desk manager on duty. Someone from our team will respond to you right away. ✨${BACK}`;
 }
 
+
+// ─── Annual upgrade (15-day window) ───────────────────────────────────────────
+// Button titles double as IDs (Meta echoes the title): BTN_SHOW_UPGRADE_SAVINGS
+// = "Show my savings", BTN_GENERATE_UPGRADE_LINK = "Get payment link".
+const UPGRADE_SAVINGS_RE = /^(upgrade|show my savings|show savings|my savings|upgrade savings|btn show upgrade savings)$/;
+const UPGRADE_LINK_RE = /^(get payment link|generate payment link|pay now|upgrade link|btn generate upgrade link)$/;
+const inr = (v: unknown) => `₹${Math.round(Number(v ?? 0)).toLocaleString("en-IN")}`;
+
+async function handleUpgradeSavings(supabase: any, ctx: MemberContext): Promise<string> {
+  const { data, error } = await supabase.rpc("calculate_upgrade_cost", { p_member_id: ctx.memberId });
+  if (error || !data?.eligible) {
+    return `Your annual-upgrade window isn't open right now, ${ctx.firstName}. The front desk can walk you through Annual options anytime.${BACK}`;
+  }
+  const days = Number(data.days_left ?? 0);
+  return JSON.stringify({
+    type: "interactive",
+    body: `Your Annual upgrade, ${ctx.firstName}:\n\nAnnual: ${inr(data.annual_price)}\nAlready paid: −${inr(data.already_paid)}\n*Upgrade cost: ${inr(data.upgrade_cost)}*\n\nEvery rupee you've paid counts. ${days} day${days === 1 ? "" : "s"} left in your window.`,
+    buttons: ["Get payment link"],
+  });
+}
+
+async function handleUpgradeLink(supabase: any, ctx: MemberContext): Promise<string> {
+  const { data: calc } = await supabase.rpc("calculate_upgrade_cost", { p_member_id: ctx.memberId });
+  if (!calc?.eligible || !calc?.offer_id) {
+    return `Your annual-upgrade window isn't open right now. Please speak with the front desk.${BACK}`;
+  }
+  const { data: inv, error } = await supabase.rpc("create_upgrade_invoice", { p_offer_id: calc.offer_id });
+  if (error || !inv?.success) {
+    return `We couldn't create your payment link just now. The front desk will help you complete the upgrade.${BACK}`;
+  }
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const res = await fetch(`${url}/functions/v1/create-razorpay-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, apikey: key },
+    body: JSON.stringify({ invoiceId: inv.invoice_id, amount: Number(inv.amount), branchId: inv.branch_id }),
+  });
+  const body = await res.json().catch(() => ({}));
+  const link = body?.short_url ?? body?.shortUrl ?? body?.url ?? body?.payment_link;
+  if (!res.ok || !link) {
+    await supabase.rpc("log_error_event", {
+      p_source: "annual_upgrade", p_severity: "error", p_message: "Upgrade payment link failed",
+      p_context: { offer_id: calc.offer_id, status: res.status, body },
+    });
+    return `We couldn't create your payment link just now. The front desk will help you complete the upgrade.${BACK}`;
+  }
+  return `Here's your secure UPI/card link for ${inr(inv.amount)}:\n${link}\n\nOnce paid, your membership switches to Annual automatically and you'll get a confirmation.${BACK}`;
+}
+
 // ─── router ───────────────────────────────────────────────────────────────────
 
 export async function runMemberGateway(
@@ -871,6 +920,9 @@ export async function runMemberGateway(
   const n = norm(raw);
 
   if (!raw || GREETING_RE.test(raw)) return mainMenu(ctx);
+
+  if (UPGRADE_SAVINGS_RE.test(n)) return await handleUpgradeSavings(supabase, ctx);
+  if (UPGRADE_LINK_RE.test(n)) return await handleUpgradeLink(supabase, ctx);
 
   // Exact sub-menu taps first (service / day / time titles echoed back by Meta),
   // otherwise keyword routing below would bounce "Steam room" back to the menu.
