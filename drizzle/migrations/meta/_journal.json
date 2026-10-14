@@ -344,6 +344,13 @@
       "when": 1791967309215,
       "tag": "0048_annual_upgrade_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1791967978830,
+      "tag": "0049_fix_upgrade_cost_paid_lookup",
+      "breakpoints": true
     }
   ]
 }
