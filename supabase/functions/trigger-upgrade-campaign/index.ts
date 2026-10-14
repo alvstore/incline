@@ -1,3 +1,4 @@
+// v1.1.0 — event_key routes to approved Meta templates annual_upgrade_day7 / annual_upgrade_closing.
 // v1.0.0 — 15-Day "Honeymoon" Annual Upgrade campaign worker.
 // Called daily by Automation Brain (rule `annual_upgrade_nudge`, 09:00 IST).
 // Day 7: send the upgrade offer. Day 12: send the 72-hour closing reminder.
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
       });
 
       const body = isDay7
-        ? `Hi ${firstName}! You're one week into your Incline journey 💪 Upgrade to the Annual plan within your 15-day window and we'll adjust every rupee you've already paid (${paid}) against the Annual fee (${annual}) — your upgrade cost is just ${cost}. Reply UPGRADE to see your exact savings. Window ends ${endsOn}.`
+        ? `Hi ${firstName}! You're one week into your Incline journey Upgrade to the Annual plan within your 15-day window and we'll adjust every rupee you've already paid (${paid}) against the Annual fee (${annual}) — your upgrade cost is just ${cost}. Reply UPGRADE to see your exact savings. Window ends ${endsOn}.`
         : `Hi ${firstName}, your annual-upgrade window closes in 72 hours (${endsOn}). Your ${paid} already paid still counts 100% toward the Annual plan — upgrade for just ${cost}. Reply UPGRADE before the window closes.`;
 
       const result = await dispatch({
@@ -159,6 +160,7 @@ Deno.serve(async (req) => {
             already_paid: paid,
             upgrade_cost: cost,
             window_ends: endsOn,
+            event_key: isDay7 ? "annual_upgrade_day7" : "annual_upgrade_closing",
           },
         },
         dedupe_key: `upgrade:${offer.id}:${isDay7 ? "d7" : "d12"}:wa`,
