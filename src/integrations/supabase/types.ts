@@ -14311,6 +14311,7 @@ export type Database = {
           converted_invoice_id: string | null
           created_at: string
           id: string
+          last_sent_at: string | null
           member_id: string
           membership_id: string
           pending_invoice_id: string | null
@@ -14328,6 +14329,7 @@ export type Database = {
           converted_invoice_id?: string | null
           created_at?: string
           id?: string
+          last_sent_at?: string | null
           member_id: string
           membership_id: string
           pending_invoice_id?: string | null
@@ -14345,6 +14347,7 @@ export type Database = {
           converted_invoice_id?: string | null
           created_at?: string
           id?: string
+          last_sent_at?: string | null
           member_id?: string
           membership_id?: string
           pending_invoice_id?: string | null

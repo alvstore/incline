@@ -365,6 +365,13 @@
       "when": 1791968744379,
       "tag": "0051_upgrade_offer_target_and_update_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1791968829399,
+      "tag": "0052_fix_upgrade_window_summary",
+      "breakpoints": true
     }
   ]
 }
