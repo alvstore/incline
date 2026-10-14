@@ -1,3 +1,4 @@
+// v1.2.0 — records last_sent_at for the dashboard "offers sent" tile.
 // v1.1.0 — event_key routes to approved Meta templates annual_upgrade_day7 / annual_upgrade_closing.
 // v1.0.0 — 15-Day "Honeymoon" Annual Upgrade campaign worker.
 // Called daily by Automation Brain (rule `annual_upgrade_nudge`, 09:00 IST).
@@ -173,7 +174,7 @@ Deno.serve(async (req) => {
 
       await admin
         .from("upgrade_offers")
-        .update({ status: isDay7 ? "day7_sent" : "day12_sent", updated_at: new Date().toISOString() })
+        .update({ status: isDay7 ? "day7_sent" : "day12_sent", last_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", offer.id);
       if (isDay7) sentDay7++; else sentDay12++;
     }
