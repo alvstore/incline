@@ -1,7 +1,7 @@
 # Annual upgrade Analytics (15 Oct 2026)
-- [ ] Move annual upgrades from Dashboard to Analytics with paginated IST deadline timelines and verified message states.
-- [ ] Harden Day 7/12 catch-up, expiry and outcome tracking; preserve dispatcher preferences and payment flow.
-- [ ] Run business tests, authenticated Analytics checks and four-width design critique.
+- [x] Move annual upgrades from Dashboard to Analytics with paginated IST deadline timelines and verified message states.
+- [x] Harden Day 7/12 catch-up, expiry and outcome tracking; preserve dispatcher preferences and payment flow.
+- [x] Run business tests, authenticated Analytics checks and four-width design critique.
 - [ ] Promotional email blocked: requires a dedicated external marketing service; never use app-email infrastructure.
 
 # Voice automation repair & workspace (9 Oct 2026)

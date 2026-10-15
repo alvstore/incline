@@ -22,7 +22,7 @@ export function UpgradeTimelineRow({ offer, now, showRevenue }: { offer: Upgrade
   const day = upgradeWindowDay(offer.window_ends_at, now);
   const urgent = left.days <= 3;
   return (
-    <li className="py-5 first:pt-0 last:pb-0 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+    <li className="py-5 text-foreground first:pt-0 last:pb-0 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Button variant="link" className="h-auto min-h-11 max-w-full justify-start whitespace-normal p-0 text-left text-base font-semibold text-foreground" onClick={() => navigate(`/members?member=${offer.member_id}`)}>
@@ -43,7 +43,7 @@ export function UpgradeTimelineRow({ offer, now, showRevenue }: { offer: Upgrade
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <span className="inline-flex items-center gap-1.5 text-muted-foreground"><MessageCircle className="h-3.5 w-3.5" />WhatsApp</span>
-        {offer.reminders.map((r) => <span key={r.stage} className="inline-flex flex-wrap items-center gap-1.5"><span className="text-muted-foreground">Day {r.stage === 'd7' ? '7' : '12'}</span><Badge variant="secondary" className={cn('border-0 text-xs capitalize', tones[r.status] ?? 'bg-muted text-muted-foreground')}>{r.status}</Badge>{r.timestamp && <span className="text-muted-foreground">{timestamp(r.timestamp)} IST</span>}</span>)}
+        {offer.reminders.map((r) => <span key={r.stage} className="inline-flex flex-wrap items-center gap-1.5"><span className="text-muted-foreground">Day {r.stage === 'd7' ? '7' : '12'}</span><Badge variant="secondary" className={cn('border-0 text-xs capitalize', tones[r.status] ?? 'bg-muted text-muted-foreground')}>{r.status === 'scheduled' && day >= (r.stage === 'd7' ? 7 : 12) ? 'Not sent' : r.status}</Badge>{r.timestamp && <span className="text-muted-foreground">{timestamp(r.timestamp)} IST</span>}</span>)}
       </div>
     </li>
   );

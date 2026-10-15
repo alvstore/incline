@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { UpgradeTimelineRow, type UpgradeTimelineOffer } from '@/components/analytics/UpgradeTimelineRow';
-export { upgradeWindowDay } from '../../../supabase/functions/_shared/upgradeWindow';
 
 interface UpgradeSummary {
   stats: { in_window: number; closing_soon: number; converted_month: number; conversion_revenue_month: number };
@@ -36,7 +35,7 @@ export function UpgradeWindowWidget({ branchId, showRevenue }: { branchId: strin
     { label: 'Upgraded this month', value: data?.stats.converted_month ?? 0, icon: Crown, tone: 'text-success bg-success/10' },
     ...(showRevenue ? [{ label: 'Upgrade revenue · month', value: `₹${Number(data?.stats.conversion_revenue_month ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'text-primary bg-primary/10' }] : []),
   ];
-  return <section aria-labelledby="upgrade-window-title" className="space-y-4">
+  return <section aria-labelledby="upgrade-window-title" className="space-y-4 text-foreground">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 id="upgrade-window-title" className="text-xl font-semibold text-foreground">Annual upgrades</h2><p className="mt-1 text-sm text-muted-foreground">15-day window · Monthly, quarterly & half-yearly members</p></div>
       <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching || !branchId} aria-label="Refresh annual upgrades" className="h-11 w-11"><RefreshCw className="h-4 w-4" /></Button>
