@@ -18,6 +18,7 @@ describe('annual upgrade reminders', () => {
   it('does not re-send queued messages', () => expect(upgradeReminderHandled('queued')).toBe(true));
   it('does not re-send suppressed messages', () => expect(upgradeReminderHandled('suppressed')).toBe(true));
   it('permits a failed attempt to retry', () => expect(upgradeReminderHandled('failed')).toBe(false));
+  it('does not repeatedly retry Meta ecosystem rejection 131049', () => expect(upgradeReminderHandled('failed', '131049: ecosystem engagement')).toBe(true));
   it('deduplicates sent messages', () => expect(upgradeReminderHandled('sent')).toBe(true));
   it('expires the visible countdown exactly at deadline', () => expect(upgradeTimeLeft(deadline, new Date(deadline)).expired).toBe(true));
   it('counts one hour remaining accurately', () => expect(upgradeTimeLeft(deadline, new Date('2026-10-15T17:30:00Z')).hours).toBe(1));

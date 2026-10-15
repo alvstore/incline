@@ -12,16 +12,11 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireCaller, callerBranchIds } from "../_shared/requireCaller.ts";
 import { upgradeReminderStage, upgradeReminderHandled } from "../_shared/upgradeWindow.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? '';
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? '';
 
 function istToday(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-function istDateDaysAgo(days: number): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000 - days * 86400_000).toISOString().slice(0, 10);
 }
 
 function inr(n: number): string {
@@ -116,13 +111,14 @@ Deno.serve(async (req) => {
       const isDay7 = stage === 'd7';
       const dedupeKey = `upgrade:${offer.id}:${stage}:wa`;
       const { data: previous, error: previousError } = await admin.from('communication_logs')
-        .select('delivery_status').eq('dedupe_key', dedupeKey).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        .select('delivery_status,error_message').eq('dedupe_key', dedupeKey).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (previousError) throw previousError;
-      if (upgradeReminderHandled(previous?.delivery_status)) continue;
+      if (upgradeReminderHandled(previous?.delivery_status, previous?.error_message)) continue;
       // Existing queue owns retries; do not race a queued failed attempt.
-      const { data: retry } = await admin.from('communication_retry_queue').select('id')
+      const { data: retry, error: retryError } = await admin.from('communication_retry_queue').select('id')
         .eq('member_id', offer.member_id).in('status', ['pending', 'processing', 'awaiting_confirmation'])
         .contains('metadata', { event_key: isDay7 ? 'annual_upgrade_day7' : 'annual_upgrade_closing' }).limit(1).maybeSingle();
+      if (retryError) throw retryError;
       if (retry) continue;
       eligible++;
       if (dryRun) continue;
@@ -162,6 +158,7 @@ Deno.serve(async (req) => {
           body,
           variables: {
             member_name: firstName,
+            upgrade_offer_id: offer.id,
             annual_price: annual,
             already_paid: paid,
             upgrade_cost: cost,
