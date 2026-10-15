@@ -16,7 +16,7 @@ export function UpgradeDetailsPanel({ open, onOpenChange, branchId, now, showRev
   const offers = data?.offers.filter(o => Date.parse(o.window_ends_at) > now.getTime()) ?? [];
   const total = Math.max(0, (data?.total ?? 0) - ((data?.offers.length ?? 0) - offers.length));
   return <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent className="flex h-[100dvh] w-full flex-col gap-0 p-0 sm:max-w-xl motion-reduce:transition-none motion-reduce:animate-none" onCloseAutoFocus={event => { event.preventDefault(); returnFocus(); }}>
+    <SheetContent className="flex h-[100dvh] w-full flex-col gap-0 p-0 sm:max-w-xl motion-reduce:transition-none motion-reduce:animate-none [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center [&>button]:right-2 [&>button]:top-2" onCloseAutoFocus={event => { event.preventDefault(); returnFocus(); }}>
       <SheetHeader className="shrink-0 border-b border-border p-6 pr-12 text-left">
         <SheetTitle>Annual upgrades</SheetTitle>
         <SheetDescription>15-day window · Monthly, quarterly &amp; half-yearly members</SheetDescription>
