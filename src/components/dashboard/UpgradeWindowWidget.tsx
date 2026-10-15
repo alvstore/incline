@@ -34,7 +34,7 @@ export function UpgradeWindowWidget({ branchId, showRevenue }: { branchId: strin
   return <>
     <Card className="flex h-[410px] min-w-0 flex-col rounded-2xl border-none shadow-lg shadow-primary/5" aria-labelledby="upgrade-window-title" data-testid="annual-upgrade-widget">
       <CardHeader className="flex shrink-0 flex-row items-start justify-between gap-2 p-5 pb-3">
-        <div className="min-w-0"><CardTitle id="upgrade-window-title" className="flex items-center gap-2 text-base font-bold"><CalendarClock className="h-5 w-5 shrink-0 text-primary" />Annual upgrades</CardTitle><p className="mt-1 text-xs text-muted-foreground">15-day window</p></div>
+        <div className="min-w-0"><CardTitle id="upgrade-window-title" className="flex items-center gap-2 text-base font-bold"><CalendarClock className="h-5 w-5 shrink-0 text-foreground" />Annual upgrades</CardTitle><p className="mt-1 text-xs text-muted-foreground">15-day window</p></div>
         <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={refresh} disabled={isFetching || !branchId} aria-label="Refresh annual upgrades" className="-mr-2 -mt-1 h-11 w-11 shrink-0"><RefreshCw className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Refresh annual upgrades</TooltipContent></Tooltip>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col px-5 pb-4 pt-0">
@@ -53,7 +53,7 @@ export function UpgradeWindowWidget({ branchId, showRevenue }: { branchId: strin
             })}</ul>}
           </div>
         </>}
-        <Button ref={viewAllRef} variant="ghost" className="mt-2 h-11 w-full shrink-0 justify-between px-0 text-primary hover:bg-secondary" disabled={!branchId || isLoading || isError} onClick={() => setOpen(true)}>View all{data ? ` (${total})` : ''}<ArrowRight className="h-4 w-4" /></Button>
+        <Button ref={viewAllRef} variant="ghost" className="mt-2 h-11 w-full shrink-0 justify-between px-0 text-foreground hover:bg-secondary" disabled={!branchId || isLoading || isError} onClick={() => setOpen(true)}>View all{data ? ` (${total})` : ''}<ArrowRight className="h-4 w-4" /></Button>
       </CardContent>
     </Card>
     <UpgradeDetailsPanel open={open} onOpenChange={setOpen} branchId={branchId} now={now} showRevenue={showRevenue} returnFocus={() => viewAllRef.current?.focus()} />
