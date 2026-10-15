@@ -1,3 +1,4 @@
+// dispatch-communication v1.40.0 — annual-upgrade sends/retries recheck live deadlines.
 // dispatch-communication v1.39.0 — fix in_app insert: notifications table uses
 //          `message` (not `body`); resolve user_id from a UUID recipient when
 //          input.user_id is absent.
@@ -789,6 +790,22 @@ Deno.serve(async (req) => {
   );
 
   try {
+    // Scoped to annual upgrades, including retry keys with the original variable bag.
+    const upgradeId = String(input.payload.variables?.upgrade_offer_id ?? '') ||
+      input.dedupe_key.match(/^upgrade:([0-9a-f-]{36}):d(?:7|12):wa$/i)?.[1];
+    if (upgradeId) {
+      const { data: offer, error: offerError } = await supabase.from('upgrade_offers')
+        .select('status,window_ends_at,member_id,branch_id,memberships!inner(status,membership_plans(duration_days))')
+        .eq('id', upgradeId).maybeSingle();
+      if (offerError) return bad(503, { status: 'failed', reason: 'upgrade_eligibility_unavailable' });
+      const membership = Array.isArray(offer?.memberships) ? offer.memberships[0] : offer?.memberships;
+      const plan = Array.isArray(membership?.membership_plans) ? membership.membership_plans[0] : membership?.membership_plans;
+      if (!offer || offer.member_id !== input.member_id || offer.branch_id !== input.branch_id ||
+          Date.parse(offer.window_ends_at) <= Date.now() || ['converted','expired'].includes(offer.status) ||
+          membership?.status !== 'active' || ![30,90,180].includes(Number(plan?.duration_days))) {
+        return ok({ status: 'suppressed', reason: 'upgrade_window_closed' });
+      }
+    }
     // Runtime delivery owns recipient context; the catalog worker only owns
     // template discovery/approval. Hydrate absent values here so every caller
     // (including legacy retry rows) gets the same complete template contract.
