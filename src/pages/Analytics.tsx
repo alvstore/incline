@@ -402,8 +402,6 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <UpgradeWindowWidget branchId={branchFilter} showRevenue={can.viewFinancials(roles)} />
-
         {/* Earning Reports + Member Retention */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="rounded-2xl border-none shadow-lg shadow-primary/5">
@@ -650,9 +648,9 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
-        {/* Charts Row 2 */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="rounded-2xl border-none shadow-lg shadow-primary/5">
+        {/* Membership performance */}
+        <div className="grid grid-cols-12 gap-6">
+          <Card className="col-span-12 min-w-0 rounded-2xl border-none shadow-lg shadow-primary/5 md:col-span-6 xl:col-span-4">
             <CardHeader>
               <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-primary" />
@@ -681,7 +679,7 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-none shadow-lg shadow-primary/5">
+          <Card className="col-span-12 min-w-0 rounded-2xl border-none shadow-lg shadow-primary/5 md:col-span-6 xl:col-span-4">
             <CardHeader>
               <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" />
@@ -709,6 +707,9 @@ export default function AnalyticsPage() {
               )}
             </CardContent>
           </Card>
+          <div className="col-span-12 min-w-0 md:col-span-6 xl:col-span-4">
+            <UpgradeWindowWidget branchId={branchFilter} showRevenue={can.viewFinancials(roles)} />
+          </div>
         </div>
 
         {/* PT Analytics Section */}
