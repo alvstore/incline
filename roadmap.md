@@ -1,4 +1,5 @@
 # Annual upgrade Analytics (15 Oct 2026)
+- [ ] Compact upgrade card beside membership charts, three-member preview and paginated side panel; verify both themes and four widths.
 - [x] Move annual upgrades from Dashboard to Analytics with paginated IST deadline timelines and verified message states.
 - [x] Harden Day 7/12 catch-up, expiry and outcome tracking; preserve dispatcher preferences and payment flow.
 - [x] Run business tests, authenticated Analytics checks and four-width design critique.
