@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUpgradeSummary } from '@/components/analytics/useUpgradeSummary';
 import { UpgradeDetailsPanel } from '@/components/analytics/UpgradeDetailsPanel';
+import { UpgradeMemberAvatar } from '@/components/analytics/UpgradeMemberAvatar';
 import { selectUpgradePreview } from '@/lib/upgradePreview';
 import { upgradeTimeLeft } from '../../../supabase/functions/_shared/upgradeWindow';
 import { cn } from '@/lib/utils';
@@ -46,8 +47,11 @@ export function UpgradeWindowWidget({ branchId, showRevenue }: { branchId: strin
               const left = upgradeTimeLeft(offer.window_ends_at, now);
               const urgent = left.days <= 3;
               return <li key={offer.id} data-testid="upgrade-preview-row" className="relative py-1">
-                <div className="flex items-center justify-between gap-2"><Button variant="link" className="h-6 min-w-0 justify-start truncate p-0 text-xs font-semibold text-foreground" title={offer.member_name} onClick={() => navigate(`/members?member=${offer.member_id}`)}><span className="truncate">{offer.member_name}</span></Button><span className={cn('shrink-0 text-xs font-semibold tabular-nums', urgent ? 'text-warning' : 'text-info')}>{left.milliseconds < 86_400_000 ? `${left.hours}h left` : `${left.days}d left`}</span></div>
-                <p className="mb-1 text-[11px] leading-4 text-muted-foreground">Joined {joinedDate(offer.joined_at)}</p>
+                <div className="flex min-h-11 items-center gap-2">
+                  <UpgradeMemberAvatar name={offer.member_name} src={offer.avatar_url} />
+                  <div className="min-w-0 flex-1"><Button variant="link" className="h-auto min-w-0 max-w-full justify-start truncate p-0 text-xs font-semibold text-foreground" title={offer.member_name} onClick={() => navigate(`/members?member=${offer.member_id}`)}><span className="truncate">{offer.member_name}</span></Button><p className="text-[11px] leading-4 text-muted-foreground">Joined {joinedDate(offer.joined_at)}</p></div>
+                  <span className={cn('shrink-0 text-xs font-semibold tabular-nums', urgent ? 'text-foreground' : 'text-info')}>{left.milliseconds < 86_400_000 ? `${left.hours}h left` : `${left.days}d left`}</span>
+                </div>
                 <progress className={cn('block h-1 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full', urgent ? '[&::-webkit-progress-value]:bg-warning [&::-moz-progress-bar]:bg-warning' : '[&::-webkit-progress-value]:bg-info [&::-moz-progress-bar]:bg-info')} value={left.percent} max={100} aria-label={`${offer.member_name}: time remaining to upgrade`} />
               </li>;
             })}</ul>}

@@ -140,7 +140,7 @@ export function explainCommError(raw: string | null | undefined): OperatorExplan
     return {
       title: `Pace limited${code ? ` (Meta ${code})` : ''}`,
       what: 'Meta withheld this marketing message to protect recipient experience. It was never delivered and was not a technical failure.',
-      action: 'No action needed. Automatic retry is disabled; the recipient becomes eligible again after the cooldown.',
+      action: 'Automatic retry is disabled. Wait at least 24 hours before considering a new intentional send; delivery is not guaranteed. Do not resend after the offer expires.',
       retryable: false,
     };
   }

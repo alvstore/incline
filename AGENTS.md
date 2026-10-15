@@ -17,4 +17,4 @@ Body progress places the render before a full-width summary; historical measurem
 - Gate denies only for base-membership causes; PT/store/add-on dues are AMBER (gate opens, desk alert, locks); per branch via settings.gate_tier_mode legacy|shadow|enforce.
 - DB triggers call edge functions with `x-internal-token`, because stored service keys go stale on rotation and cause silent 401s.
 - Stock purchases use the atomic `import_purchase_bill` RPC; imported products start unsellable and POS/store list only `is_sellable`, so cost is never shown as price.
-- Annual-upgrade Analytics uses guarded summary/deadline helpers and dispatcher-log states, never backfilled stages. Cached page-zero preview and independent Sheet pagination keep browsing from changing the card.
+- Annual-upgrade Analytics uses guarded deadline helpers and dispatcher states, never backfilled stages. Page-zero preview and independent Sheet paging share cache; photos use a branch-filtered batch with initials fallback. Drawer bars show elapsed time; preview bars show remaining time.

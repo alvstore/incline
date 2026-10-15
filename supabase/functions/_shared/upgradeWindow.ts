@@ -12,6 +12,10 @@ export function upgradeReminderStage(startDate: string, deadline: string, member
   const day = Math.round((Date.parse(todayIST) - Date.parse(startDate.slice(0, 10))) / DAY) + 1;
   return day >= 12 ? 'd12' : day >= 7 ? 'd7' : null;
 }
+/** Elapsed timeline fills from start to deadline; countdown keeps remaining time. */
+export function upgradeElapsedPercent(windowEndsAt: string, now = new Date()): number {
+  return 100 - upgradeTimeLeft(windowEndsAt, now).percent;
+}
 export function upgradeReminderHandled(status: string | null | undefined, reason?: string | null): boolean {
   return ['sent', 'delivered', 'read', 'queued', 'sending', 'suppressed', 'clicked', 'replied'].includes(status ?? '') ||
     /131049|131026|132000|132001|do_not_contact|preference_block|template_not_approved/i.test(reason ?? '');
