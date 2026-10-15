@@ -1,6 +1,6 @@
 # Annual upgrade Analytics (15 Oct 2026)
-- [ ] Improve member photos, current-plan presentation and elapsed timeline clarity; verify both themes and keyboard access.
-- [ ] Verify live Meta template status and the specific annual-upgrade delivery rejections; preserve pacing and expiry safeguards.
+- [x] Member photos (10/10 loaded), highlighted current plans and elapsed drawer timelines verified in both themes, phone layout, pagination and Escape/focus return; 27 tests pass.
+- [x] Live Meta checks: both annual templates APPROVED/MARKETING, rejection NONE; two message failures are 131049 pacing, explained in drawer. No template resubmission or automatic resend; expiry safeguards preserved.
 - [x] Compact upgrade card beside membership charts; three-member preview, independent paginated side panel and focus return verified with real branch data at four widths in both themes; 24 upgrade tests pass.
 - [x] Move annual upgrades from Dashboard to Analytics with paginated IST deadline timelines and verified message states.
 - [x] Harden Day 7/12 catch-up, expiry and outcome tracking; preserve dispatcher preferences and payment flow.
