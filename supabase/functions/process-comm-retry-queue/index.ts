@@ -1,4 +1,4 @@
-// process-comm-retry-queue v3.1.0
+// process-comm-retry-queue v3.2.0 — upgrade retries recheck live eligibility and deadline.
 // v3.1.0: PHASE 8 — safe claiming. Rows are claimed with a conditional update
 //          that RETURNS the row; if another worker won the race we skip it.
 //          Rows stranded in `processing` (worker crash / edge timeout) are
@@ -213,6 +213,26 @@ Deno.serve(async (req) => {
           if (meta.event_key && payloadVariables && !payloadVariables.event_key) {
             payloadVariables.event_key = meta.event_key;
           }
+        }
+      }
+
+      // v2.9.0: campaign replays must carry the campaign's fixed slot values
+      // Annual-upgrade retries must never outlive the offer or a conversion.
+      const upgradeMatch = String(originDedupeKey ?? '').match(/^upgrade:([0-9a-f-]{36}):(d7|d12):wa$/i);
+      if (upgradeMatch) {
+        const { data: offer, error: offerError } = await supabase.from('upgrade_offers')
+          .select('status, window_ends_at, memberships!inner(status, plan_id, membership_plans(duration_days))')
+          .eq('id', upgradeMatch[1]).maybeSingle();
+        const membership = Array.isArray(offer?.memberships) ? offer.memberships[0] : offer?.memberships;
+        const plan = Array.isArray(membership?.membership_plans) ? membership.membership_plans[0] : membership?.membership_plans;
+        if (offerError || !offer || Date.parse(offer.window_ends_at) <= Date.now() ||
+            ['converted', 'expired'].includes(offer.status) || membership?.status !== 'active' ||
+            ![30, 90, 180].includes(Number(plan?.duration_days))) {
+          await supabase.from('communication_retry_queue').update({ status: offerError ? 'pending' : 'cancelled',
+            last_error: offerError ? 'upgrade_eligibility_unavailable' : 'upgrade_window_closed',
+            next_retry_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() }).eq('id', row.id);
+          results.push({ id: row.id, status: offerError ? 'pending' : 'cancelled', reason: 'upgrade_eligibility' });
+          continue;
         }
       }
 

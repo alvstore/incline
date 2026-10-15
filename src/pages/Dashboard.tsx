@@ -18,8 +18,6 @@ import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { getISTDayRange, formatISTTime } from '@/lib/utils/datetime';
 import { useNavigate } from 'react-router-dom';
 import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
-import { UpgradeWindowWidget } from '@/components/dashboard/UpgradeWindowWidget';
-import { can } from '@/lib/auth/permissions';
 import { 
   UserPlus, 
   Dumbbell, 
@@ -497,8 +495,6 @@ export default function DashboardPage() {
             </>
           )}
         </div>
-
-        <UpgradeWindowWidget branchId={branchFilter || (branches?.length === 1 ? branches[0].id : null)} showRevenue={can.viewFinancials(roles)} />
 
         {/* Google Reviews + Live Access Feed */}
         <div className="grid gap-6 md:grid-cols-3">

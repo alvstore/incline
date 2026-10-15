@@ -9,6 +9,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { format, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, getDay, subDays, addDays } from 'date-fns';
 import { analyticsService } from '@/services/analyticsService';
+import { UpgradeWindowWidget } from '@/components/dashboard/UpgradeWindowWidget';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import { useState } from 'react';
 import { ResponsiveSheet, ResponsiveSheetHeader, ResponsiveSheetTitle, ResponsiveSheetDescription } from '@/components/ui/ResponsiveSheet';
 import {
@@ -32,6 +35,7 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function AnalyticsPage() {
   const { branchFilter } = useBranchContext();
+  const { roles } = useAuth();
 
   const { data: stats } = useQuery({
     queryKey: ['analytics-stats', branchFilter],
@@ -397,6 +401,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
         </div>
+
+        <UpgradeWindowWidget branchId={branchFilter} showRevenue={can.viewFinancials(roles)} />
 
         {/* Earning Reports + Member Retention */}
         <div className="grid gap-6 md:grid-cols-2">
