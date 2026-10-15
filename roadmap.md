@@ -1,3 +1,9 @@
+# Annual upgrade Analytics (15 Oct 2026)
+- [ ] Move annual upgrades from Dashboard to Analytics with paginated IST deadline timelines and verified message states.
+- [ ] Harden Day 7/12 catch-up, expiry and outcome tracking; preserve dispatcher preferences and payment flow.
+- [ ] Run business tests, authenticated Analytics checks and four-width design critique.
+- [ ] Promotional email blocked: requires a dedicated external marketing service; never use app-email infrastructure.
+
 # Voice automation repair & workspace (9 Oct 2026)
 - [ ] Restore automatic retention, repair renewal escalation selection and preserve pause/window/DND/cap safeguards.
 - [ ] Clarify automation health, last actual call, next check and member last-call/next-attempt timing in themed bento cards.
