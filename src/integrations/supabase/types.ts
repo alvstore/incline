@@ -19086,6 +19086,10 @@ export type Database = {
         Args: { _alert_id: string; _status: string }
         Returns: undefined
       }
+      upgrade_analytics_summary: {
+        Args: { p_branch_id: string; p_page?: number }
+        Returns: Json
+      }
       upgrade_membership: {
         Args: {
           p_amount_paying?: number
