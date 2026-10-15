@@ -28,7 +28,7 @@ export function UpgradeWindowWidget({ branchId, showRevenue }: { branchId: strin
   const metrics = [
     { label: 'Eligible', value: Math.max(0, (data?.stats.in_window ?? 0) - expired), tone: 'text-foreground' },
     { label: 'Closing soon', value: Math.max(0, (data?.stats.closing_soon ?? 0) - expired), tone: 'text-warning' },
-    { label: 'Upgraded · month', value: data?.stats.converted_month ?? 0, tone: 'text-success' },
+    { label: 'Upgraded', value: data?.stats.converted_month ?? 0, tone: 'text-success' },
   ];
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['upgrade-analytics-summary', branchId] });
   return <>
@@ -39,13 +39,13 @@ export function UpgradeWindowWidget({ branchId, showRevenue }: { branchId: strin
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col px-5 pb-4 pt-0">
         {!branchId ? <div className="flex flex-1 items-center justify-center text-center"><p className="text-sm text-muted-foreground">Choose a branch to see annual upgrades.</p></div> : isError ? <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center" role="alert"><CircleAlert className="h-6 w-6 text-destructive" /><p className="text-sm text-muted-foreground">Couldn't load annual upgrades.</p><Button variant="outline" onClick={refresh}>Retry</Button></div> : <>
-          <div className="grid grid-cols-3 gap-2 pb-2">{metrics.map(metric => <div key={metric.label} className="min-w-0">{isLoading ? <Skeleton className="h-7 w-10" /> : <p className={cn('text-2xl font-semibold tabular-nums', metric.tone)}>{metric.value}</p>}<p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{metric.label}</p></div>)}</div>
+          <div className="grid grid-cols-3 gap-2 pb-2">{metrics.map(metric => <div key={metric.label} className="min-w-0" title={metric.label === 'Upgraded' ? 'Upgraded this month' : metric.label}>{isLoading ? <Skeleton className="h-7 w-10" /> : <p className={cn('text-2xl font-semibold tabular-nums', metric.tone)}>{metric.value}</p>}<p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{metric.label}</p></div>)}</div>
           {showRevenue && <div className="flex items-center justify-between gap-2 text-xs"><span className="text-muted-foreground">Upgrade revenue · month</span>{isLoading ? <Skeleton className="h-4 w-14" /> : <span className="font-semibold tabular-nums">₹{Number(data?.stats.conversion_revenue_month ?? 0).toLocaleString('en-IN')}</span>}</div>}
-          <div className="mt-3 min-h-0 flex-1 border-t border-border pt-2">
+          <div className="mt-3 min-h-0 flex-1 border-t border-border pt-1">
             {isLoading ? <div className="space-y-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div> : !preview.length ? <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">No active upgrade windows.</div> : <ul aria-label="Nearest annual upgrade deadlines" className="space-y-1">{preview.map(offer => {
               const left = upgradeTimeLeft(offer.window_ends_at, now);
               const urgent = left.days <= 3;
-              return <li key={offer.id} data-testid="upgrade-preview-row" className="py-1">
+              return <li key={offer.id} data-testid="upgrade-preview-row" className="relative py-1">
                 <div className="flex items-center justify-between gap-2"><Button variant="link" className="h-6 min-w-0 justify-start truncate p-0 text-xs font-semibold text-foreground" title={offer.member_name} onClick={() => navigate(`/members?member=${offer.member_id}`)}><span className="truncate">{offer.member_name}</span></Button><span className={cn('shrink-0 text-xs font-semibold tabular-nums', urgent ? 'text-warning' : 'text-info')}>{left.milliseconds < 86_400_000 ? `${left.hours}h left` : `${left.days}d left`}</span></div>
                 <p className="mb-1 text-[11px] leading-4 text-muted-foreground">Joined {joinedDate(offer.joined_at)}</p>
                 <progress className={cn('block h-1 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full', urgent ? '[&::-webkit-progress-value]:bg-warning [&::-moz-progress-bar]:bg-warning' : '[&::-webkit-progress-value]:bg-info [&::-moz-progress-bar]:bg-info')} value={left.percent} max={100} aria-label={`${offer.member_name}: time remaining to upgrade`} />
