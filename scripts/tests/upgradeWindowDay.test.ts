@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { upgradeWindowDay } from '../../src/components/dashboard/UpgradeWindowWidget';
+import { upgradeWindowDay } from '../../supabase/functions/_shared/upgradeWindow';
 
 const now = new Date('2026-10-14T04:00:00Z');
 const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
