@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { lockerPricing, LOCKER_SIZES } from './requestTypes';
+import { describe, it, expect } from 'bun:test';
+import { lockerPricing, LOCKER_SIZES } from '../../src/components/member/requests/requestTypes';
 
 describe('dedicated locker pricing', () => {
   it('medium is ₹2,500 + 18% GST', () => {
