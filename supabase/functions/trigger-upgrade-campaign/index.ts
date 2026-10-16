@@ -1,3 +1,4 @@
+// v1.4.0 — email companion per stage (own dedupe key) + owner test_recipients preview mode.
 // v1.3.0 — IST Day 7/12 catch-up, actual outcomes and live eligibility.
 // v1.2.0 — records last_sent_at for the dashboard "offers sent" tile.
 // v1.1.0 — event_key routes to approved Meta templates annual_upgrade_day7 / annual_upgrade_closing.
@@ -21,6 +22,24 @@ function istToday(): string {
 
 function inr(n: number): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
+}
+
+function upgradeEmailPayload(o: {
+  branch_id: string; member_id?: string; email: string; firstName: string;
+  paid: string; annual: string; cost: string; endsOn: string; isDay7: boolean; dedupe_key: string;
+}): Record<string, unknown> {
+  const subject = o.isDay7
+    ? `Your Incline membership credit — Annual plan adjustment`
+    : `Reminder: your membership credit adjustment ends ${o.endsOn}`;
+  const body = o.isDay7
+    ? `Hi ${o.firstName},\n\nThis is an update on your Incline membership account.\n\nAmount already paid: ${o.paid}\nAnnual plan fee: ${o.annual}\nBalance payable if you switch: ${o.cost}\n\nThe amount you have paid is adjusted in full against the Annual plan if you switch on or before ${o.endsOn}. Reply UPGRADE on WhatsApp or speak to the front desk to see your calculation and receive a secure payment link.\n\nThe Incline Life by Incline`
+    : `Hi ${o.firstName},\n\nThe credit adjustment on your Incline membership account ends on ${o.endsOn}.\n\nAmount already paid: ${o.paid}\nBalance payable for the Annual plan: ${o.cost}\n\nAfter this date the amount can no longer be adjusted. Reply UPGRADE on WhatsApp or visit the front desk to complete it.\n\nThe Incline Life by Incline`;
+  return {
+    branch_id: o.branch_id, channel: "email", category: "transactional", recipient: o.email,
+    member_id: o.member_id, payload: { subject, body },
+    dedupe_key: o.dedupe_key, ttl_seconds: 7 * 86400,
+    source_caller: "trigger-upgrade-campaign", source_type: "automation",
+  };
 }
 
 async function dispatch(payload: Record<string, unknown>): Promise<{ status: string; reason?: string }> {
@@ -54,6 +73,36 @@ Deno.serve(async (req) => {
     const branchIds = await callerBranchIds(caller);
     const input = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
     const dryRun = input.dry_run === true;
+
+    // Preview mode: owner/admin sends sample Day 7 + closing messages to staff contacts. Never touches offers.
+    if (Array.isArray(input.test_recipients)) {
+      if (!caller.roles?.some((r: string) => r === 'owner' || r === 'admin')) {
+        return new Response(JSON.stringify({ error: 'owner/admin only' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const branchId = String(input.branch_id ?? '');
+      const stamp = Date.now();
+      const sample = { paid: inr(5000), annual: inr(25000), cost: inr(20000), endsOn: new Date(Date.now() + 8 * 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" }) };
+      const results: Record<string, unknown>[] = [];
+      for (const t of input.test_recipients.slice(0, 5)) {
+        const firstName = String(t.name ?? 'there').split(' ')[0];
+        for (const isDay7 of [true, false]) {
+          const event_key = isDay7 ? 'annual_upgrade_day7' : 'annual_upgrade_closing';
+          if (t.phone) {
+            const r = await dispatch({
+              branch_id: branchId, channel: 'whatsapp', category: 'retention_nudge', recipient: String(t.phone).replace(/\D/g, ''),
+              payload: { body: `[TEST] ${event_key}`, variables: { member_name: firstName, already_paid: sample.paid, annual_price: sample.annual, upgrade_cost: sample.cost, window_ends: sample.endsOn, event_key } },
+              dedupe_key: `upgrade-test:${t.phone}:${event_key}:${stamp}`, source_caller: 'trigger-upgrade-campaign:test', source_type: 'manual',
+            });
+            results.push({ to: t.phone, event_key, channel: 'whatsapp', ...r });
+          }
+          if (t.email) {
+            const r = await dispatch(upgradeEmailPayload({ branch_id: branchId, email: t.email, firstName, ...sample, isDay7, dedupe_key: `upgrade-test:${t.email}:${event_key}:${stamp}` }));
+            results.push({ to: t.email, event_key, channel: 'email', ...r });
+          }
+        }
+      }
+      return new Response(JSON.stringify({ success: true, test: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // Kill switch: settings row branch_id IS NULL, key 'annual_upgrade_campaign', value 'false' disables.
     const { data: killSwitch } = await admin
@@ -96,6 +145,7 @@ Deno.serve(async (req) => {
 
     let sentDay7 = 0;
     let sentDay12 = 0;
+    let emailsSent = 0;
     const failures: string[] = [];
     let eligible = 0;
     let queued = 0;
@@ -129,7 +179,7 @@ Deno.serve(async (req) => {
       // Resolve recipient.
       const { data: member } = await admin
         .from("members")
-        .select("id, member_code, profiles:user_id(full_name, phone)")
+        .select("id, member_code, profiles:user_id(full_name, phone, email)")
         .eq("id", offer.member_id)
         .maybeSingle();
       const profile = Array.isArray(member?.profiles) ? member?.profiles[0] : member?.profiles;
@@ -147,6 +197,17 @@ Deno.serve(async (req) => {
       const body = isDay7
         ? `Hi ${firstName}! You're one week into your Incline journey Upgrade to the Annual plan within your 15-day window and we'll adjust every rupee you've already paid (${paid}) against the Annual fee (${annual}) — your upgrade cost is just ${cost}. Reply UPGRADE to see your exact savings. Window ends ${endsOn}.`
         : `Hi ${firstName}, your annual-upgrade window closes on ${endsOn}. Your ${paid} already paid still counts 100% toward the Annual plan — upgrade for just ${cost}. Reply UPGRADE before the window closes.`;
+
+      // Email companion — independent of WhatsApp pacing; account-notice (transactional) for existing members.
+      const email = String(profile?.email ?? "").trim();
+      if (email) {
+        const er = await dispatch(upgradeEmailPayload({
+          branch_id: offer.branch_id, member_id: offer.member_id, email, firstName, paid, annual, cost, endsOn, isDay7,
+          dedupe_key: `upgrade:${offer.id}:${stage}:email`,
+        }));
+        if (er.status === "sent" || er.status === "queued") emailsSent++;
+        else if (er.status !== "deduped" && er.status !== "suppressed") failures.push(`${offer.id}: email ${er.reason ?? er.status}`);
+      }
 
       const result = await dispatch({
         branch_id: offer.branch_id,
