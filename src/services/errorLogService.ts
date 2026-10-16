@@ -161,6 +161,7 @@ export function initGlobalErrorLogging() {
     const firstArg = String(args[0] || '');
     if (firstArg.includes('ErrorBoundary') || 
         firstArg.includes('Warning:') ||
+        firstArg.includes('[hmr]') || firstArg.includes('[vite]') ||
         firstArg.includes('Download the React DevTools')) return;
 
     const msg = args.map(a => formatErrorMessage(a)).join(' ');
@@ -191,7 +192,9 @@ export function initGlobalErrorLogging() {
           const parsed = (() => { try { return JSON.parse(body); } catch { return null; } })();
           const errorMsg = parsed?.error || parsed?.message || parsed?.msg || body.slice(0, 500);
           
-          if (errorMsg && response.status !== 401) { // Skip auth redirects
+          // Storage 5xx (e.g. Cloudflare 520) are transient upstream outages returning HTML, not app faults.
+          const transientStorage = url.includes('/storage/v1/') && response.status >= 500;
+          if (errorMsg && response.status !== 401 && !transientStorage) { // Skip auth redirects
             queueError({
               error_message: getHumanReadableMessage(String(errorMsg)),
               stack_trace: `${response.status} ${response.statusText} — ${url}`,
