@@ -21,6 +21,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { toast } from 'sonner';
 import { BulkCreateLockersDrawer } from '@/components/lockers/BulkCreateLockersDrawer';
 import { AssignLockerDrawer } from '@/components/lockers/AssignLockerDrawer';
+import { LockerPricingSheet } from '@/components/lockers/LockerPricingSheet';
+import { IndianRupee } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { exportToCSV } from '@/lib/csvExport';
@@ -41,6 +43,7 @@ type CreateLockerData = z.infer<typeof createLockerSchema>;
 export default function LockersPage() {
   const { effectiveBranchId: branchId, isLoading: branchLoading } = useBranchContext();
   const { roles } = useAuth();
+  const [pricingOpen, setPricingOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
@@ -250,6 +253,12 @@ export default function LockersPage() {
               }}>
                 <Download className="h-4 w-4" /> Export
               </Button>
+              {branchId && (
+                <Button variant="outline" onClick={() => setPricingOpen(true)} className="gap-2 rounded-xl">
+                  <IndianRupee className="w-4 h-4" />
+                  Pricing & GST
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setIsBulkCreateOpen(true)} className="gap-2 rounded-xl">
                 <Package className="w-4 h-4" />
                 Bulk Create
@@ -640,6 +649,7 @@ export default function LockersPage() {
 
         <AssignLockerDrawer open={isAssignOpen} onOpenChange={setIsAssignOpen} locker={selectedLocker} branchId={branchId || ''} />
         <BulkCreateLockersDrawer open={isBulkCreateOpen} onOpenChange={setIsBulkCreateOpen} branchId={branchId || ''} />
+        {branchId && <LockerPricingSheet open={pricingOpen} onOpenChange={setPricingOpen} branchId={branchId} />}
       </div>
     </AppLayout>
   );

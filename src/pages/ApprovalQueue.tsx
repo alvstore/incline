@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
+import { ApproveLockerRequestSheet, type LockerRequestRow } from '@/components/lockers/ApproveLockerRequestSheet';
 import { closeMemberRequestTask } from '@/lib/tasks/memberRequestTasks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -66,6 +67,7 @@ export default function ApprovalQueuePage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [lockerApproval, setLockerApproval] = useState<LockerRequestRow | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch approval requests
@@ -264,6 +266,8 @@ export default function ApprovalQueuePage() {
         <div className="space-y-1 text-sm">
           <p><span className="text-muted-foreground">Member:</span> {data?.memberName || 'N/A'} {data?.memberCode ? `(${data.memberCode})` : ''}</p>
           <p><span className="text-muted-foreground">Type:</span> Locker allocation request</p>
+          {data?.preferred_size && <p><span className="text-muted-foreground">Size:</span> {data.preferred_size}{data?.quoted_fee?.total ? ` · quoted ₹${Number(data.quoted_fee.total).toLocaleString('en-IN')} incl. GST` : ''}</p>}
+          {data?.assigned_locker && <p><span className="text-muted-foreground">Assigned:</span> {data.assigned_locker} · billed ₹{Number(data.charged_fee || 0).toLocaleString('en-IN')} + GST</p>}
           {data?.note && <p><span className="text-muted-foreground">Preference:</span> {data.note}</p>}
         </div>
       );
@@ -483,7 +487,9 @@ export default function ApprovalQueuePage() {
                                   <Button
                                     size="sm"
                                     className="flex-1"
-                                    onClick={() => approveMutation.mutate({ requestId: request.id, approved: true })}
+                                    onClick={() => request.approval_type === 'locker_request'
+                                      ? setLockerApproval(request as unknown as LockerRequestRow)
+                                      : approveMutation.mutate({ requestId: request.id, approved: true })}
                                     disabled={approveMutation.isPending}
                                   >
                                     <CheckCircle className="h-4 w-4 mr-1" />
@@ -509,6 +515,7 @@ export default function ApprovalQueuePage() {
           </CardContent>
         </Card>
       </div>
+      <ApproveLockerRequestSheet request={lockerApproval} onOpenChange={(o) => !o && setLockerApproval(null)} />
     </AppLayout>
   );
 }

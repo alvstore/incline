@@ -414,6 +414,13 @@
       "when": 1792127401106,
       "tag": "0058_fix_search_command_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792129105782,
+      "tag": "0059_locker_pricing_settings",
+      "breakpoints": true
     }
   ]
 }

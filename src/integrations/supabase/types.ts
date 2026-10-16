@@ -7552,6 +7552,50 @@ export type Database = {
           },
         ]
       }
+      locker_pricing_settings: {
+        Row: {
+          branch_id: string
+          daily_use_note: string | null
+          gst_enabled: boolean
+          gst_rate: number
+          large_fee: number
+          medium_fee: number
+          portal_requests_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          branch_id: string
+          daily_use_note?: string | null
+          gst_enabled?: boolean
+          gst_rate?: number
+          large_fee?: number
+          medium_fee?: number
+          portal_requests_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          branch_id?: string
+          daily_use_note?: string | null
+          gst_enabled?: boolean
+          gst_rate?: number
+          large_fee?: number
+          medium_fee?: number
+          portal_requests_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locker_pricing_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lockers: {
         Row: {
           branch_id: string
@@ -16329,6 +16373,15 @@ export type Database = {
         Returns: Json
       }
       apply_late_gate_exits: { Args: { p_since?: string }; Returns: number }
+      approve_locker_request: {
+        Args: {
+          p_locker_id: string
+          p_notes?: string
+          p_request_id: string
+          p_size: string
+        }
+        Returns: Json
+      }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_branch_staff: {
         Args: {
@@ -19091,6 +19144,18 @@ export type Database = {
       update_gate_alert: {
         Args: { _alert_id: string; _status: string }
         Returns: undefined
+      }
+      update_locker_pricing_settings: {
+        Args: {
+          p_branch_id: string
+          p_daily_use_note: string
+          p_gst_enabled: boolean
+          p_gst_rate: number
+          p_large_fee: number
+          p_medium_fee: number
+          p_portal_requests_enabled: boolean
+        }
+        Returns: Json
       }
       upgrade_analytics_summary: {
         Args: { p_branch_id: string; p_page?: number }
