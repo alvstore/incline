@@ -18,3 +18,4 @@ Body progress places the render before a full-width summary; historical measurem
 - Stock purchases use the atomic `import_purchase_bill` RPC; imported products start unsellable and POS/store list only `is_sellable`, so cost is never shown as price.
 - Annual-upgrade Analytics uses guarded deadline helpers and dispatcher states, never backfilled stages. Page-zero preview and independent Sheet paging share cache; photos use a branch-filtered batch with initials fallback. Drawer bars show elapsed time; preview bars show remaining time.
 - Subdirectories (e.g. supabase/functions) have their own AGENTS.md; read it before changing files there.
+- Dedicated locker prices/GST/portal toggle live per branch in `locker_pricing_settings` (edited only via audited `update_locker_pricing_settings`); member locker requests are approved via atomic `approve_locker_request`, so assignment, invoice and approval never drift apart.
