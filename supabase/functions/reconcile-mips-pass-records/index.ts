@@ -683,6 +683,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Exits replayed before their entry (outage backlog) are re-applied at gate time.
+    if (!dryRun && imported > 0) {
+      await supabase.rpc("apply_late_gate_exits", { p_since: new Date(Date.now() - 24 * 3600_000).toISOString() })
+        .then(({ error }) => { if (error) console.warn("apply_late_gate_exits:", error.message); });
+    }
+
     // Clock + outage visibility. Gate time is trusted; we only flag anomalies.
     if (!dryRun && imported > 0) {
       const nowMs = Date.now();

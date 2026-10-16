@@ -16328,6 +16328,7 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_late_gate_exits: { Args: { p_since?: string }; Returns: number }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_branch_staff: {
         Args: {
