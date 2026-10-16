@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 
 import { supabase } from '@/integrations/supabase/client';
+import { track } from '@/lib/analytics';
 import { usePlans } from '@/hooks/usePlans';
 import { useGstRates } from '@/hooks/useGstRates';
 import { upgradeMembership } from '@/services/membershipActionsService';
@@ -60,6 +61,8 @@ export function UpgradeMembershipDrawer({
   const [discountReason, setDiscountReason] = useState('');
   const [sendReminders, setSendReminders] = useState(true);
   const [selectedLockerId, setSelectedLockerId] = useState('');
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [dueDate, setDueDate] = useState(() => new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
 
 
   // Mirrors the server: the invoice that carries this membership + its gifted days.
@@ -201,7 +204,7 @@ export function UpgradeMembershipDrawer({
       if (payNow && amountPaying > balanceDue) {
         throw new Error('Amount collected cannot exceed the balance due');
       }
-      return upgradeMembership({
+      const result = await upgradeMembership({
         membershipId: membership.id,
         newPlanId,
         reason: reason.trim() || undefined,
@@ -215,6 +218,18 @@ export function UpgradeMembershipDrawer({
         assignLockerId: hasLockerBenefit && selectedLockerId ? selectedLockerId : null,
         idempotencyKey: `upgrade:${membership?.id}:${newPlanId}:${newTotal}`,
       });
+      const invoiceId = (result as { invoice_id?: string } | null)?.invoice_id;
+      const remaining = Number((result as { balance_due?: number } | null)?.balance_due ?? 0);
+      if (invoiceId && remaining > 0 && dueDate) {
+        const { error: dueErr } = await supabase.rpc('set_invoice_due_date', {
+          p_invoice_id: invoiceId,
+          p_due_date: dueDate,
+          p_reason: 'Balance after membership upgrade',
+        });
+        if (dueErr) toast.warning('Upgrade done, but the due date could not be saved. Set it from Invoices.');
+        else track('upgrade_due_date_set', { days: Math.round((new Date(dueDate).getTime() - Date.now()) / 86400000) });
+      }
+      return result;
     },
     onSuccess: (res: any) => {
       toast.success(
@@ -469,6 +484,23 @@ export function UpgradeMembershipDrawer({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+              )}
+              {(!payNow || amountPaying < balanceDue) && (
+                <div className="space-y-2">
+                  <Label htmlFor="upgrade-due-date">Balance due by</Label>
+                  <Input
+                    id="upgrade-due-date"
+                    type="date"
+                    className="h-11"
+                    min={todayIso}
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    aria-describedby="upgrade-due-date-help"
+                  />
+                  <p id="upgrade-due-date-help" className="text-xs text-muted-foreground">
+                    The gate stays open until this date. Default is 7 days from today.
+                  </p>
                 </div>
               )}
               {(!payNow || amountPaying < balanceDue) && (
