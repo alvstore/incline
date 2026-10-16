@@ -18,6 +18,7 @@ import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { getISTDayRange, formatISTTime } from '@/lib/utils/datetime';
 import { useNavigate } from 'react-router-dom';
 import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
+import { TaskPulseWidget } from '@/components/dashboard/TaskPulseWidget';
 import { 
   UserPlus, 
   Dumbbell, 
@@ -45,6 +46,16 @@ function ChartSkeleton() {
 
 export default function DashboardPage() {
   const { profile, roles, user } = useAuth();
+  // Kill switch for the compact task widget. Default ON; set settings(key='dashboard_task_widget_v2', branch_id NULL) value=false to revert.
+  const { data: taskPulseV2 = true } = useQuery({
+    queryKey: ['setting', 'dashboard_task_widget_v2'],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase.from('settings').select('value').eq('key', 'dashboard_task_widget_v2').is('branch_id', null).maybeSingle();
+      const v = (data as any)?.value;
+      return !(v === false || v === 'false' || v?.enabled === false);
+    },
+  });
   const { selectedBranch, setSelectedBranch, branchFilter, branches } = useBranchContext();
   const navigate = useNavigate();
 
@@ -432,16 +443,22 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Live task pulse */}
-        <MyTasksWidget branchFilter={branchFilter} />
-
-
-        {/* Charts Row */}
-
-        <div className="grid gap-6 md:grid-cols-2">
-          <RevenueChart data={revenueData} />
-          <AttendanceChart data={attendanceData} />
-        </div>
+        {/* Live task pulse — compact bento card (kill switch: settings.dashboard_task_widget_v2) */}
+        {taskPulseV2 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-12">
+            <TaskPulseWidget branchFilter={branchFilter} className="md:col-span-2 lg:col-span-4" />
+            <div className="min-w-0 lg:col-span-4"><RevenueChart data={revenueData} /></div>
+            <div className="min-w-0 lg:col-span-4"><AttendanceChart data={attendanceData} /></div>
+          </div>
+        ) : (
+          <>
+            <MyTasksWidget branchFilter={branchFilter} />
+            <div className="grid gap-6 md:grid-cols-2">
+              <RevenueChart data={revenueData} />
+              <AttendanceChart data={attendanceData} />
+            </div>
+          </>
+        )}
 
         {/* Members Counting + Joined Summary */}
         <div className="grid gap-6 md:grid-cols-3">
