@@ -131,7 +131,7 @@ export function TaskPulsePanel({ open, onOpenChange, filter, onFilterChange, isM
                       <p className="truncate text-sm font-semibold text-foreground">{t.title}</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <time dateTime={t.created_at} title={fullDate(t.created_at)}>Created {relativeAge(t.created_at)}</time>
-                        {t.due_date && <DueDatePill dueDate={t.due_date} dueTime={t.due_time} status={t.status} />}
+                        {t.due_date && <DueDatePill dueDate={t.due_date} status={t.status} />}
                         {t.assignee ? <AssigneeAvatar name={t.assignee.full_name} email={t.assignee.email} showName /> : <span>Unassigned</span>}
                       </div>
                     </div>
