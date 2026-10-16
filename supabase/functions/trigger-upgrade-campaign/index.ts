@@ -187,7 +187,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const profile = Array.isArray(member?.profiles) ? member?.profiles[0] : member?.profiles;
       const phone = String(profile?.phone ?? "").replace(/\D/g, "");
-      if (!phone) { failures.push(`${offer.id}: no phone`); continue; }
 
       const firstName = String(profile?.full_name ?? "there").split(" ")[0];
       const cost = inr(Number(calculation.upgrade_cost ?? 0));
@@ -212,6 +211,8 @@ Deno.serve(async (req) => {
         else if (er.status !== "deduped" && er.status !== "suppressed") failures.push(`${offer.id}: email ${er.reason ?? er.status}`);
       }
 
+      if (waDone) continue;
+      if (!phone) { failures.push(`${offer.id}: no phone`); continue; }
       const result = await dispatch({
         branch_id: offer.branch_id,
         channel: "whatsapp",
@@ -260,6 +261,7 @@ Deno.serve(async (req) => {
         eligible, queued, suppressed,
         sent_day7: sentDay7,
         sent_day12: sentDay12,
+        emails_sent: emailsSent,
         failures,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
