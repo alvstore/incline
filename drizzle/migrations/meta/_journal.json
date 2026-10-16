@@ -386,6 +386,13 @@
       "when": 1792038150481,
       "tag": "0054_upgrade_deadline_boundaries",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792126115736,
+      "tag": "0055_member_check_in_scan_time",
+      "breakpoints": true
     }
   ]
 }
