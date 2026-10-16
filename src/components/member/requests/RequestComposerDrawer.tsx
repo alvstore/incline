@@ -103,6 +103,7 @@ export function RequestComposerDrawer({
   const [kind, setKind] = useState<RequestKind | null>(initialKind);
   const [note, setNote] = useState('');
   const [lockerSize, setLockerSize] = useState<LockerSize>('Medium');
+  const { data: lockerCfg } = useLockerPricing(member?.branch_id);
 
   useEffect(() => {
     if (open) {
@@ -359,13 +360,13 @@ export function RequestComposerDrawer({
               {kind === 'locker' && (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    Our standard gym lockers are free for temporary, daily use while you work out. Choose a
-                    dedicated locker below if you would like one reserved for you for the rest of your membership.
+                    {lockerCfg?.daily_use_note ||
+                      'Our standard gym lockers are free for temporary, daily use while you work out. Choose a dedicated locker below if you would like one reserved for you for the rest of your membership.'}
                   </div>
                   <Label>Dedicated locker size</Label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3" role="group" aria-label="Dedicated locker size">
                     {LOCKER_SIZES.map((size) => {
-                      const price = lockerPricing(size);
+                      const price = lockerPricing(size, lockerCfg);
                       const selected = lockerSize === size;
                       return (
                         <button

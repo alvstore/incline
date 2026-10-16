@@ -649,6 +649,7 @@ export default function LockersPage() {
 
         <AssignLockerDrawer open={isAssignOpen} onOpenChange={setIsAssignOpen} locker={selectedLocker} branchId={branchId || ''} />
         <BulkCreateLockersDrawer open={isBulkCreateOpen} onOpenChange={setIsBulkCreateOpen} branchId={branchId || ''} />
+        {branchId && <LockerPricingSheet open={pricingOpen} onOpenChange={setPricingOpen} branchId={branchId} />}
       </div>
     </AppLayout>
   );
