@@ -383,7 +383,7 @@ export function RequestComposerDrawer({
                             {size}
                           </span>
                           <span className="text-lg font-bold tabular-nums text-foreground">₹{price.base.toLocaleString('en-IN')}</span>
-                          <span className="text-xs text-muted-foreground">+ ₹{price.gst.toLocaleString('en-IN')} GST · ₹{price.total.toLocaleString('en-IN')} total</span>
+                          <span className="text-xs text-muted-foreground">{price.gst ? `+ ₹${price.gst.toLocaleString("en-IN")} GST · ` : "No GST · "}₹{price.total.toLocaleString('en-IN')} total</span>
                         </button>
                       );
                     })}
