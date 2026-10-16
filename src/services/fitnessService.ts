@@ -486,7 +486,21 @@ async function sendOneNotification(
         category: 'transactional',
         recipient,
         member_id: contact.id,
-        payload: { subject, body, use_branded_template: channel === 'email' },
+        payload: {
+          subject,
+          body,
+          use_branded_template: channel === 'email',
+          // Utility template `fitness_plan_assigned_notice`: {{1}} name, {{2}} plan type, {{3}} plan name.
+          variables: {
+            event_key: 'fitness_plan_assigned',
+            member_name: contact.full_name,
+            plan_type: params.plan_type,
+            plan_name: params.plan_name,
+            variable_1: contact.full_name,
+            variable_2: params.plan_type,
+            variable_3: params.plan_name,
+          },
+        },
         dedupe_key: buildDedupeKey(['fitness-plan', params.plan_type, contact.id, channel]),
         force: true,
       });
