@@ -32,5 +32,15 @@ export const REQUEST_TITLES: Record<RequestKind, string> = {
   workout: 'Workout plan',
 };
 
-export const LOCKER_SIZES = ['Small', 'Medium', 'Large'] as const;
+export const LOCKER_SIZES = ['Medium', 'Large'] as const;
 export type LockerSize = (typeof LOCKER_SIZES)[number];
+
+/** Dedicated locker fee (pre-GST), valid until the member's current membership ends. */
+export const LOCKER_BASE_FEE: Record<LockerSize, number> = { Medium: 2500, Large: 3500 };
+export const LOCKER_GST_RATE = 0.18;
+
+export function lockerPricing(size: LockerSize) {
+  const base = LOCKER_BASE_FEE[size];
+  const gst = Math.round(base * LOCKER_GST_RATE);
+  return { base, gst, total: base + gst };
+}

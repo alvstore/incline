@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { LOCKER_SIZES, REQUEST_TITLES } from './requestTypes';
+import { LOCKER_SIZES, REQUEST_TITLES, lockerPricing } from './requestTypes';
 import {
   MEMBER_REQUEST_LABEL,
   memberRequestTaskTitle,
@@ -63,11 +63,11 @@ const COPY: Record<RequestKind, { title: string; description: string; fieldLabel
     requireText: true,
   },
   locker: {
-    title: 'Request a locker',
-    description: 'Ask the front desk to allocate a locker for you.',
+    title: 'Request a dedicated locker',
+    description: 'Reserve your own locker for the rest of your membership.',
     fieldLabel: 'Preference (optional)',
     placeholder: 'e.g., Near the changing room',
-    note: 'The team confirms availability and charges (if any) before allocating.',
+    note: 'The front desk confirms availability, assigns your locker and collects the fee.',
     requireText: false,
   },
   diet: {
@@ -270,14 +270,17 @@ export function RequestComposerDrawer({
           memberName,
           memberCode: member.member_code,
           preferred_size: lockerSize,
+          quoted_fee: lockerPricing(lockerSize),
+          validity: 'until_membership_end',
           note,
           requested_at: new Date().toISOString(),
         },
       } as any);
       if (error) throw error;
+      const quote = lockerPricing(lockerSize);
       await createRequestTask(
         memberRequestTaskTitle('locker', memberName),
-        `${memberName} requested a ${lockerSize.toLowerCase()} locker.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
+        `${memberName} requested a dedicated ${lockerSize.toLowerCase()} locker (₹${quote.base.toLocaleString('en-IN')} + GST = ₹${quote.total.toLocaleString('en-IN')}, valid until membership end). Assign a locker and collect payment.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
         null,
       );
     },
@@ -354,25 +357,39 @@ export function RequestComposerDrawer({
               )}
 
               {kind === 'locker' && (
-                <div className="space-y-2">
-                  <Label>Preferred size</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {LOCKER_SIZES.map((size) => (
-                      <button
-                        key={size}
-                        type="button"
-                        onClick={() => setLockerSize(size)}
-                        className={`flex min-h-[44px] items-center gap-1.5 rounded-xl border px-4 text-sm font-medium transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary ${
-                          lockerSize === size
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border/60 text-muted-foreground hover:bg-muted/60'
-                        }`}
-                      >
-                        {lockerSize === size && <Check className="h-3.5 w-3.5" />}
-                        {size}
-                      </button>
-                    ))}
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                    Our standard gym lockers are free for temporary, daily use while you work out. Choose a
+                    dedicated locker below if you would like one reserved for you for the rest of your membership.
                   </div>
+                  <Label>Dedicated locker size</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {LOCKER_SIZES.map((size) => {
+                      const price = lockerPricing(size);
+                      const selected = lockerSize === size;
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => setLockerSize(size)}
+                          aria-pressed={selected}
+                          className={`flex min-h-[44px] flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary ${
+                            selected ? 'border-primary bg-primary/10' : 'border-border/60 hover:bg-muted/60'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                            {selected && <Check className="h-3.5 w-3.5 text-primary" />}
+                            {size}
+                          </span>
+                          <span className="text-lg font-bold tabular-nums text-foreground">₹{price.base.toLocaleString('en-IN')}</span>
+                          <span className="text-xs text-muted-foreground">+ ₹{price.gst.toLocaleString('en-IN')} GST · ₹{price.total.toLocaleString('en-IN')} total</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Valid until your current membership ends. The front desk confirms the locker number and collects payment.
+                  </p>
                 </div>
               )}
 
