@@ -393,6 +393,13 @@
       "when": 1792126115736,
       "tag": "0055_member_check_in_scan_time",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792126501771,
+      "tag": "0056_apply_late_gate_exits",
+      "breakpoints": true
     }
   ]
 }
