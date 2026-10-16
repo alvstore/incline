@@ -76,7 +76,7 @@ export async function notifyTrainerAssignment(input: TrainerAssignmentNotifyInpu
 
     const jobs: Promise<unknown>[] = [];
     if (tp) {
-      const vars = { event_key: 'trainer_member_assigned', trainer_name: trainerName, member_name: memberName, assignment_type: label, recipient_name: trainerName };
+      const vars = { event_key: 'trainer_member_assigned', trainer_name: trainerName, member_name: memberName, assignment_type: label, recipient_name: trainerName, variable_1: trainerName, variable_2: memberName, variable_3: label };
       if (tp.phone) jobs.push(dispatchCommunication({
         branch_id: input.branchId, channel: 'whatsapp', category: 'transactional', recipient: tp.phone,
         user_id: tp.id, payload: { body: trainerBody, variables: vars },
@@ -89,7 +89,7 @@ export async function notifyTrainerAssignment(input: TrainerAssignmentNotifyInpu
       }));
     }
     if (mp) {
-      const vars = { event_key: 'member_trainer_assigned', member_name: memberName, trainer_name: trainerName, training_type: input.kind === 'personal' ? 'Personal' : 'General Fitness', recipient_name: memberName };
+      const vars = { event_key: 'member_trainer_assigned', member_name: memberName, trainer_name: trainerName, training_type: input.kind === 'personal' ? 'Personal' : 'General Fitness', recipient_name: memberName, variable_1: memberName, variable_2: trainerName, variable_3: input.kind === 'personal' ? 'Personal' : 'General Fitness' };
       if (mp.phone) jobs.push(dispatchCommunication({
         branch_id: input.branchId, channel: 'whatsapp', category: 'transactional', recipient: mp.phone,
         member_id: input.memberId, payload: { body: memberBody, variables: vars },
