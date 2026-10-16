@@ -21,6 +21,8 @@ const NOISE_PATTERNS: RegExp[] = [
   /Non-Error promise rejection captured/i,
   // Opaque cross-origin script errors (browser strips details for CORS-less scripts).
   /^Script error\.?$/i,
+  // Dev-server hot reload messages (editor only, never seen by real users).
+  /^\[(hmr|vite)\]/i,
 ];
 
 function isNoise(message: string): boolean {

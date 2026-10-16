@@ -107,7 +107,9 @@ export type RenewalQueueCounts = Partial<Record<RenewalQueue, number>>;
  * Same branch/capability scoping as the queue itself.
  */
 export function useRenewalQueueCounts(branchId: string | undefined) {
+  const { roles } = useAuth();
   return useQuery({
+    enabled: can.manageRenewals(roles),
     queryKey: ['renewal-queue-counts', branchId ?? 'all'],
     queryFn: async (): Promise<RenewalQueueCounts> => {
       const { data, error } = await (supabase as any).rpc('renewal_queue_counts', {
