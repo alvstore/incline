@@ -61,11 +61,11 @@ export function ApproveLockerRequestSheet({ request, onOpenChange }: Props) {
     },
     onSuccess: async (d) => {
       track('locker_request_approved', { size, gst_enabled: quote.gstRate > 0 });
-      await closeMemberRequestTask({ requestId: request!.id, kind: 'locker', decision: 'approved' } as never).catch(() => undefined);
+      await closeMemberRequestTask({ memberId: request!.reference_id ?? '', referenceType: 'locker', decision: 'approved' });
       toast.success(`Locker ${d?.locker_number ?? ''} assigned — bill of ₹${quote.total.toLocaleString('en-IN')} created`, {
         description: 'The member can pay from My Invoices, or collect at the desk.',
       });
-      qc.invalidateQueries({ queryKey: ['approval-requests'] });
+      qc.invalidateQueries({ queryKey: ['approval-queue'] });
       qc.invalidateQueries({ queryKey: ['approval-stats'] });
       qc.invalidateQueries({ queryKey: ['lockers'] });
       onOpenChange(false);
