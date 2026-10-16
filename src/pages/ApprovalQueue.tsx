@@ -253,10 +253,18 @@ export default function ApprovalQueuePage() {
     if (request.reference_type === 'trainer_change') {
       return (
         <div className="space-y-1 text-sm">
-          <p><span className="text-muted-foreground">Member:</span> {data.memberName || 'N/A'}</p>
-          <p><span className="text-muted-foreground">Current Trainer:</span> {data.currentTrainerName || 'None'}</p>
-          <p><span className="text-muted-foreground">New Trainer:</span> {data.newTrainerName || 'N/A'}</p>
-          {data.reason && <p><span className="text-muted-foreground">Reason:</span> {data.reason}</p>}
+          <p><span className="text-muted-foreground">Member:</span> {data.memberName || 'N/A'} {data.memberCode ? `(${data.memberCode})` : ''}</p>
+          <p><span className="text-muted-foreground">Current Trainer:</span> {data.current_trainer_name || data.currentTrainerName || (data.request_mode === 'new' ? 'None — wants a trainer' : 'Not recorded')}
+            {data.current_trainer_source && <span className="text-muted-foreground"> · {data.current_trainer_source === 'general' ? 'General coach' : 'Personal training'}</span>}</p>
+          {data.reason_label && (
+            <p><span className="text-muted-foreground">Reason:</span>{' '}
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${['guidance','communication'].includes(data.reason_code) ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-muted text-muted-foreground border-border'}`}>{data.reason_label}</span>
+            </p>
+          )}
+          {data.goal && <p><span className="text-muted-foreground">Goal:</span> {data.goal}</p>}
+          {data.preferred_slot && <p><span className="text-muted-foreground">Preferred time:</span> {data.preferred_slot}</p>}
+          {(data.preferred_trainer_name || data.newTrainerName) && <p><span className="text-muted-foreground">Preferred trainer:</span> {data.preferred_trainer_name || data.newTrainerName}</p>}
+          {data.reason && <p><span className="text-muted-foreground">{data.reason_label ? 'Details' : 'Reason'}:</span> {data.reason}</p>}
         </div>
       );
     }

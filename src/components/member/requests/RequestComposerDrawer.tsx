@@ -113,7 +113,6 @@ export function RequestComposerDrawer({
   member,
   activeMembership,
   userId,
-  trainerName,
   freezeDaysAllowance,
 }: RequestComposerDrawerProps) {
   const queryClient = useQueryClient();
