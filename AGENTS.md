@@ -18,3 +18,4 @@ Body progress places the render before a full-width summary; historical measurem
 - DB triggers call edge functions with `x-internal-token`, because stored service keys go stale on rotation and cause silent 401s.
 - Stock purchases use the atomic `import_purchase_bill` RPC; imported products start unsellable and POS/store list only `is_sellable`, so cost is never shown as price.
 - Annual-upgrade Analytics uses guarded deadline helpers and dispatcher states, never backfilled stages. Page-zero preview and independent Sheet paging share cache; photos use a branch-filtered batch with initials fallback. Drawer bars show elapsed time; preview bars show remaining time.
+- Member gate check-ins pass the hardware scan time (`member_check_in._at`, honoured only for internal callers, max 48h old, never future); never stamp attendance with arrival/poll time, because outage backlogs would pile up at reconnect time.
