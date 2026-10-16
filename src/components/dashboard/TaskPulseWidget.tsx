@@ -66,9 +66,9 @@ export function TaskPulseWidget({ branchFilter, className }: { branchFilter?: st
 
   const metrics: { key: PulseFilter; label: string; value: number; tone: string }[] = [
     { key: 'all', label: 'Open', value: tasks.length, tone: 'text-foreground' },
-    { key: 'today', label: 'Due today', value: tasks.filter(isToday).length, tone: 'text-info' },
+    { key: 'today', label: 'Today', value: tasks.filter(isToday).length, tone: 'text-info' },
     { key: 'overdue', label: 'Overdue', value: tasks.filter(isOverdue).length, tone: 'text-destructive' },
-    { key: 'urgent', label: 'High priority', value: tasks.filter(isHigh).length, tone: 'text-warning' },
+    { key: 'urgent', label: 'Urgent', value: tasks.filter(isHigh).length, tone: 'text-warning' },
   ];
   const refresh = () => qc.invalidateQueries({ queryKey: ['dashboard-my-tasks'] });
 
