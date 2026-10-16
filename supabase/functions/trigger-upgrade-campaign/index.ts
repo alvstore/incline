@@ -163,13 +163,16 @@ Deno.serve(async (req) => {
       const { data: previous, error: previousError } = await admin.from('communication_logs')
         .select('delivery_status,error_message').eq('dedupe_key', dedupeKey).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (previousError) throw previousError;
-      if (upgradeReminderHandled(previous?.delivery_status, previous?.error_message)) continue;
-      // Existing queue owns retries; do not race a queued failed attempt.
-      const { data: retry, error: retryError } = await admin.from('communication_retry_queue').select('id')
-        .eq('member_id', offer.member_id).in('status', ['pending', 'processing', 'awaiting_confirmation'])
-        .contains('metadata', { event_key: isDay7 ? 'annual_upgrade_day7' : 'annual_upgrade_closing' }).limit(1).maybeSingle();
-      if (retryError) throw retryError;
-      if (retry) continue;
+      // WhatsApp already handled/retrying still lets the email companion go out (its own dedupe key).
+      let waDone = upgradeReminderHandled(previous?.delivery_status, previous?.error_message);
+      if (!waDone) {
+        // Existing queue owns retries; do not race a queued failed attempt.
+        const { data: retry, error: retryError } = await admin.from('communication_retry_queue').select('id')
+          .eq('member_id', offer.member_id).in('status', ['pending', 'processing', 'awaiting_confirmation'])
+          .contains('metadata', { event_key: isDay7 ? 'annual_upgrade_day7' : 'annual_upgrade_closing' }).limit(1).maybeSingle();
+        if (retryError) throw retryError;
+        if (retry) waDone = true;
+      }
       eligible++;
       if (dryRun) continue;
       const { data: calculation, error: calcError } = await admin.rpc('calculate_upgrade_cost', { p_member_id: offer.member_id });
