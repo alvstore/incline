@@ -407,6 +407,13 @@
       "when": 1792126547355,
       "tag": "0057_member_check_in_dedupe_scan",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792127401106,
+      "tag": "0058_fix_search_command_invoices",
+      "breakpoints": true
     }
   ]
 }
