@@ -1,4 +1,4 @@
-// v1.1.0 — Server-side image fetcher: staff-only, SSRF-hardened, bucket hardcoded
+// v1.1.1 — Server-side image fetcher: staff-only, SSRF-hardened, bucket hardcoded
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
-const ALLOWED_BUCKET = "product-images"; // hardcoded — never trust client
+const ALLOWED_BUCKET = "products"; // hardcoded — never trust client
 const STAFF_ROLES = ["owner", "admin", "manager", "staff"];
 
 // Block private/internal/metadata addresses (SSRF defense)
