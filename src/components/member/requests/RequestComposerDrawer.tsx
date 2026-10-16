@@ -474,17 +474,41 @@ export function RequestComposerDrawer({
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="request-note">{copy!.fieldLabel}</Label>
+                <Label htmlFor="request-note">
+                  {kind === 'trainer' && reasonFlagOn
+                    ? hasTrainer
+                      ? reasonNeedsDetails(reasonCode) ? 'What happened? (required)' : 'Details (optional)'
+                      : 'Anything else we should know? (optional)'
+                    : copy!.fieldLabel}
+                </Label>
                 <Textarea
                   id="request-note"
-                  rows={5}
-                  placeholder={copy!.placeholder}
+                  rows={kind === 'trainer' ? 4 : 5}
+                  maxLength={kind === 'trainer' ? 500 : undefined}
+                  placeholder={kind === 'trainer' && hasTrainer && reasonFlagOn
+                    ? 'Share specifics so the manager can follow up — e.g. missed sessions, late arrivals…'
+                    : copy!.placeholder}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
+                  aria-required={kind === 'trainer' ? reasonNeedsDetails(reasonCode) || !reasonFlagOn : copy!.requireText}
+                  aria-invalid={!!trainerError && note.length > 0}
+                  aria-describedby={kind === 'trainer' ? 'trainer-error' : undefined}
                 />
+                {kind === 'trainer' && (
+                  <p id="trainer-error" role="status" aria-live="polite" className="min-h-[1rem] text-xs text-muted-foreground">
+                    {trainerError && (reasonCode || note.length > 0) ? trainerError : note.length > 0 ? `${note.length}/500` : ''}
+                  </p>
+                )}
               </div>
 
-              <p className="text-sm text-muted-foreground">{copy!.note}</p>
+              {kind === 'trainer' && hasTrainer && reasonFlagOn ? (
+                <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  Your feedback goes to the branch manager, not your trainer.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">{copy!.note}</p>
+              )}
             </>
           )}
         </div>
