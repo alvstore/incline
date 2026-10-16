@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
             const r = await dispatch({
               branch_id: branchId, channel: 'whatsapp', category: 'retention_nudge', recipient: String(t.phone).replace(/\D/g, ''),
               payload: { body: `[TEST] ${event_key}`, variables: { member_name: firstName, already_paid: sample.paid, annual_price: sample.annual, upgrade_cost: sample.cost, window_ends: sample.endsOn, event_key } },
-              dedupe_key: `upgrade-test:${t.phone}:${event_key}:${stamp}`, source_caller: 'trigger-upgrade-campaign:test', source_type: 'manual',
+              dedupe_key: `upgrade-test:${t.phone}:${event_key}:${stamp}`, source_caller: 'trigger-upgrade-campaign:test', source_type: 'automation',
             });
             results.push({ to: t.phone, event_key, channel: 'whatsapp', ...r });
           }
