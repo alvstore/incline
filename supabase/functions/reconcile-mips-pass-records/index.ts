@@ -431,6 +431,7 @@ async function markAttendance(
       _member_id: person.id,
       _branch_id: person.branch_id,
       _method: "biometric",
+      _at: scanTime,
     });
     const result = data as { valid?: boolean; message?: string } | null;
     return result?.message ?? null;
