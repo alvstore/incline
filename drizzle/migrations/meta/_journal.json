@@ -421,6 +421,13 @@
       "when": 1792129105782,
       "tag": "0059_locker_pricing_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792129738090,
+      "tag": "0060_scope_locker_pricing_read",
+      "breakpoints": true
     }
   ]
 }
