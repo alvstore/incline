@@ -10,6 +10,7 @@ import { RequestsHero } from '@/components/member/requests/RequestsHero';
 import { RequestLauncher } from '@/components/member/requests/RequestLauncher';
 import { RequestTimeline, type TimelineItem } from '@/components/member/requests/RequestTimeline';
 import { RequestComposerDrawer } from '@/components/member/requests/RequestComposerDrawer';
+import { useLockerPricing } from '@/hooks/useLockerPricing';
 import type { RequestKind, RequestOption } from '@/components/member/requests/requestTypes';
 
 export default function MemberRequests() {
@@ -18,6 +19,7 @@ export default function MemberRequests() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerKind, setComposerKind] = useState<RequestKind | null>(null);
 
+  const { data: lockerCfg } = useLockerPricing(member?.branch_id);
   const isFrozen = activeMembership?.status === 'frozen';
   const freezeDaysAllowance = Number((activeMembership as any)?.plan?.max_freeze_days || 0);
   const freezeAllowed = freezeDaysAllowance > 0;
@@ -151,10 +153,12 @@ export default function MemberRequests() {
     list.push({
       kind: 'locker',
       title: 'Request a locker',
-      description: 'Ask the front desk to allocate a locker',
+      description: 'Your own locker until your membership ends',
       icon: Lock,
       tone: 'bg-warning/10 text-warning',
-      disabledReason: hasPending('locker') ? 'Request already pending' : undefined,
+      disabledReason: lockerCfg && !lockerCfg.portal_requests_enabled
+        ? 'Ask the front desk — app requests are paused'
+        : hasPending('locker') ? 'Request already pending' : undefined,
     });
 
     list.push({
@@ -174,7 +178,7 @@ export default function MemberRequests() {
     });
 
     return list;
-  }, [isFrozen, freezeAllowed, freezeDaysAllowance, activeMembership, member, hasPending]);
+  }, [isFrozen, freezeAllowed, freezeDaysAllowance, activeMembership, member, hasPending, lockerCfg]);
 
   const openComposer = (kind: RequestKind | null) => {
     setComposerKind(kind);
