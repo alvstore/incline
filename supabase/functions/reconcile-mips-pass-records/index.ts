@@ -586,6 +586,7 @@ Deno.serve(async (req) => {
     let skipped = 0;
     let attendanceUpdated = 0;
     let unmatched = 0;
+    const importedTimes: number[] = [];
     const errors: string[] = [];
     const latestRecordAt = records.reduce<string | null>((latest, record) => {
       const iso = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
@@ -678,6 +679,7 @@ Deno.serve(async (req) => {
         else errors.push(`insert ${recordKey}: ${insertError.message}`);
       } else {
         imported++;
+        importedTimes.push(new Date(scanTime).getTime());
       }
     }
 
@@ -699,7 +701,7 @@ Deno.serve(async (req) => {
           p_context: { branch_id: branch, records: future.length },
         }).catch(() => null);
       }
-      const oldestMs = Math.min(...times.filter((t) => Number.isFinite(t)));
+      const oldestMs = Math.min(...importedTimes.filter((t) => Number.isFinite(t)));
       if (Number.isFinite(oldestMs) && nowMs - oldestMs > 15 * 60_000 && imported >= 1) {
         await supabase.from("access_device_health_events").insert({
           branch_id: branch, event_type: "backlog_recovered",
