@@ -61,3 +61,51 @@ export function lockerPricing(size: LockerSize, cfg: LockerPricingConfig = DEFAU
   const gst = Math.round(base * (rate / 100));
   return { base, gst, total: base + gst, gstRate: rate };
 }
+
+/* ---------------- Trainer change / request ---------------- */
+
+export const TRAINER_CHANGE_REASONS = [
+  { code: 'schedule', label: "Schedule doesn't match" },
+  { code: 'guidance', label: 'Not satisfied with guidance' },
+  { code: 'communication', label: 'Communication / punctuality' },
+  { code: 'style', label: 'Want a different training style' },
+  { code: 'comfort', label: 'Personal comfort / prefer other gender' },
+  { code: 'other', label: 'Other' },
+] as const;
+export type TrainerChangeReason = (typeof TRAINER_CHANGE_REASONS)[number]['code'];
+
+export const TRAINER_GOALS = ['Weight loss', 'Strength', 'Mobility', 'Rehab', 'General fitness'] as const;
+export const TRAINER_SLOTS = ['Morning', 'Afternoon', 'Evening'] as const;
+
+/** Reasons that point at a service problem with the current trainer → high-priority escalation. */
+export function isEscalationReason(code: string | null | undefined): boolean {
+  return code === 'guidance' || code === 'communication';
+}
+
+/** Reasons where the member must explain what happened. */
+export function reasonNeedsDetails(code: string | null | undefined): boolean {
+  return code === 'other' || isEscalationReason(code);
+}
+
+export function trainerReasonLabel(code: string | null | undefined): string | null {
+  return TRAINER_CHANGE_REASONS.find((r) => r.code === code)?.label ?? null;
+}
+
+/**
+ * Validates a change-trainer submission.
+ * When the kill switch is off, only a free-text note is required (legacy flow).
+ */
+export function validateTrainerChange(input: {
+  flagOn: boolean;
+  hasTrainer: boolean;
+  reason: string | null;
+  details: string;
+}): string | null {
+  const details = input.details.trim();
+  if (!input.flagOn) return details ? null : 'Please describe your request.';
+  if (!input.hasTrainer) return null;
+  if (!input.reason) return 'Choose a reason.';
+  if (reasonNeedsDetails(input.reason) && details.length < 10) return 'Please add at least 10 characters of detail.';
+  if (details.length > 500) return 'Keep details under 500 characters.';
+  return null;
+}

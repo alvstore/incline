@@ -1,15 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLockerPricing } from '@/hooks/useLockerPricing';
 import { track } from '@/lib/analytics';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Loader2, ChevronLeft, ChevronRight, Check, UserPlus, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { LOCKER_SIZES, REQUEST_TITLES, lockerPricing } from './requestTypes';
+import { fetchMyTrainers } from '@/lib/members/myTrainers';
+import {
+  LOCKER_SIZES,
+  REQUEST_TITLES,
+  lockerPricing,
+  TRAINER_CHANGE_REASONS,
+  TRAINER_GOALS,
+  TRAINER_SLOTS,
+  isEscalationReason,
+  reasonNeedsDetails,
+  trainerReasonLabel,
+  validateTrainerChange,
+  type TrainerChangeReason,
+} from './requestTypes';
 import {
   MEMBER_REQUEST_LABEL,
   memberRequestTaskTitle,
@@ -98,22 +113,68 @@ export function RequestComposerDrawer({
   member,
   activeMembership,
   userId,
-  trainerName,
   freezeDaysAllowance,
 }: RequestComposerDrawerProps) {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<RequestKind | null>(initialKind);
   const [note, setNote] = useState('');
   const [lockerSize, setLockerSize] = useState<LockerSize>('Medium');
+  const [reasonCode, setReasonCode] = useState<TrainerChangeReason | null>(null);
+  const [goal, setGoal] = useState<string | null>(null);
+  const [slot, setSlot] = useState<string | null>(null);
+  const [preferredTrainer, setPreferredTrainer] = useState('');
+  const [targetTrainerId, setTargetTrainerId] = useState<string | null>(null);
   const { data: lockerCfg } = useLockerPricing(member?.branch_id);
+
+  // Same cache as useMemberData — includes general coach and PT-package trainers.
+  const { data: myTrainers = [] } = useQuery({
+    queryKey: ['my-trainers', userId],
+    enabled: open && !!userId,
+    queryFn: fetchMyTrainers,
+    staleTime: 5 * 60 * 1000,
+  });
+  const currentTrainers = useMemo(() => {
+    const seen = new Set<string>();
+    return myTrainers
+      .filter((t) => t.relation === 'assigned' || t.relation === 'pt_package')
+      .filter((t) => (seen.has(t.trainer_id) ? false : (seen.add(t.trainer_id), true)));
+  }, [myTrainers]);
+  const hasTrainer = currentTrainers.length > 0;
+
+  // Kill switch: settings key `trainer_change_reason_required` (global row). Default ON.
+  const { data: reasonFlagOn = true } = useQuery({
+    queryKey: ['setting', 'trainer_change_reason_required'],
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'trainer_change_reason_required')
+        .is('branch_id', null)
+        .maybeSingle();
+      const v = (data as any)?.value;
+      if (v === false || v === 'false' || v?.enabled === false) return false;
+      return true;
+    },
+  });
 
   useEffect(() => {
     if (open) {
       setKind(initialKind);
       setNote('');
       setLockerSize('Medium');
+      setReasonCode(null);
+      setGoal(null);
+      setSlot(null);
+      setPreferredTrainer('');
+      setTargetTrainerId(null);
     }
   }, [open, initialKind]);
+
+  const trainerError = kind === 'trainer'
+    ? validateTrainerChange({ flagOn: reasonFlagOn, hasTrainer, reason: reasonCode, details: note })
+    : null;
 
   
 
@@ -125,14 +186,14 @@ export function RequestComposerDrawer({
       const memberName = await resolveMemberDisplayName(member || {});
 
       /** Every member request gets a task so staff/trainers see it in their queue. */
-      const createRequestTask = async (title: string, description: string, assignedTo: string | null) => {
+      const createRequestTask = async (title: string, description: string, assignedTo: string | null, priority: 'medium' | 'high' = 'medium') => {
         const { data, error } = await supabase
           .from('tasks')
           .insert({
             branch_id: member.branch_id,
             title,
             description,
-            priority: 'medium',
+            priority,
             status: 'pending',
             assigned_to: assignedTo,
             assigned_by: userId,
@@ -239,28 +300,43 @@ export function RequestComposerDrawer({
       }
 
       if (kind === 'trainer') {
+        const target = currentTrainers.find((t) => t.trainer_id === targetTrainerId) ?? currentTrainers[0] ?? null;
+        const reasonLabel = trainerReasonLabel(reasonCode);
         const { error } = await supabase.from('approval_requests').insert({
           ...base,
           approval_type: 'complimentary' as const,
           reference_type: 'trainer_change',
           request_data: {
-            current_trainer_id: member.assigned_trainer_id,
-            reason: note,
+            memberName,
+            memberCode: member.member_code,
+            request_mode: target ? 'change' : 'new',
+            current_trainer_id: target?.trainer_id ?? member.assigned_trainer_id ?? null,
+            current_trainer_name: target?.full_name ?? null,
+            currentTrainerName: target?.full_name ?? null,
+            current_trainer_source: target ? (target.relation === 'assigned' ? 'general' : 'personal_training') : null,
+            reason_code: reasonCode,
+            reason_label: reasonLabel,
+            reason: note.trim(),
+            goal: goal,
+            preferred_trainer_name: preferredTrainer.trim() || null,
+            preferred_slot: slot,
             requested_at: new Date().toISOString(),
           },
-        });
+        } as any);
         if (error) throw error;
 
-        let trainerUserId: string | null = null;
-        if (member.assigned_trainer_id) {
-          const { data: t } = await (supabase as any)
-            .from('trainers_directory')
-            .select('user_id')
-            .eq('id', member.assigned_trainer_id)
-            .maybeSingle();
-          trainerUserId = t?.user_id ?? null;
-        }
-        await queueTask('trainer_change', trainerUserId);
+        // Escalate to branch staff/manager queue — never to the trainer being reviewed.
+        const priority = isEscalationReason(reasonCode) ? 'high' : 'medium';
+        const parts = [
+          target ? `Current trainer: ${target.full_name}` : 'No trainer assigned — wants one',
+          reasonLabel ? `Reason: ${reasonLabel}` : null,
+          goal ? `Goal: ${goal}` : null,
+          slot ? `Preferred time: ${slot}` : null,
+          preferredTrainer.trim() ? `Preferred trainer: ${preferredTrainer.trim()}` : null,
+          note.trim() ? `Details: ${note.trim()}` : null,
+        ].filter(Boolean);
+        await createRequestTask(memberRequestTaskTitle('trainer_change', memberName), parts.join(' · '), null, priority);
+        track('trainer_request_submitted', { mode: target ? 'change' : 'new', reason: reasonCode ?? 'none' });
         return;
       }
 
@@ -300,8 +376,13 @@ export function RequestComposerDrawer({
     onError: (e: any) => toast.error(e?.message || 'Failed to submit request'),
   });
 
-  const copy = kind ? COPY[kind] : null;
-  const canSubmit = !!kind && (!copy?.requireText || note.trim().length > 0);
+  const baseCopy = kind ? COPY[kind] : null;
+  const copy = kind === 'trainer' && baseCopy
+    ? hasTrainer
+      ? { ...baseCopy, title: 'Change trainer', description: 'Tell us what isn’t working so the manager can help.', note: 'The branch manager reviews your request and follows up.' }
+      : { ...baseCopy, title: 'Request a trainer', description: 'Get matched with a coach for your goals.', note: 'The front desk will match you with a suitable trainer.' }
+    : baseCopy;
+  const canSubmit = !!kind && (kind === 'trainer' ? !trainerError : (!copy?.requireText || note.trim().length > 0));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -352,10 +433,96 @@ export function RequestComposerDrawer({
               )}
 
               {kind === 'trainer' && (
-                <div className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-                  {trainerName
-                    ? <>Current trainer: <span className="font-semibold text-foreground">{trainerName}</span></>
-                    : 'No trainer is assigned to you yet.'}
+                <div className="space-y-5">
+                  {hasTrainer ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {currentTrainers.length > 1 ? 'Which trainer is this about?' : 'Your current trainer'}
+                      </p>
+                      <div className="grid gap-2" role="radiogroup" aria-label="Current trainer">
+                        {currentTrainers.map((t) => {
+                          const selected = (targetTrainerId ?? currentTrainers[0].trainer_id) === t.trainer_id;
+                          const initials = t.full_name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+                          return (
+                            <button
+                              key={t.trainer_id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={currentTrainers.length === 1}
+                              onClick={() => setTargetTrainerId(t.trainer_id)}
+                              className={`flex min-h-[56px] items-center gap-3 rounded-xl border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default ${
+                                selected ? 'border-primary bg-primary/5' : 'cursor-pointer border-border/60 hover:bg-muted/60'
+                              }`}
+                            >
+                              <Avatar className="h-10 w-10">
+                                {t.avatar_url && <AvatarImage src={t.avatar_url} alt={`Photo of ${t.full_name}`} />}
+                                <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">{initials}</AvatarFallback>
+                              </Avatar>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-foreground">{t.full_name}</span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {t.relation === 'assigned' ? 'General coach' : 'Personal training'}
+                                  {t.trainer_code ? ` · ${t.trainer_code}` : ''}
+                                </span>
+                              </span>
+                              {selected && currentTrainers.length > 1 && <Check className="h-4 w-4 text-primary" aria-hidden="true" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/40 p-4">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <UserPlus className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">You don't have a trainer yet</p>
+                        <p className="text-xs text-muted-foreground">Tell us your goal and we'll match you with the right coach.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {reasonFlagOn && hasTrainer && (
+                    <ChipGroup
+                      label="Why do you want to change? (required)"
+                      options={TRAINER_CHANGE_REASONS.map((r) => ({ value: r.code, label: r.label }))}
+                      value={reasonCode}
+                      onChange={(v) => setReasonCode(v as TrainerChangeReason)}
+                      columns
+                    />
+                  )}
+
+                  {reasonFlagOn && !hasTrainer && (
+                    <ChipGroup
+                      label="Your main goal"
+                      options={TRAINER_GOALS.map((g) => ({ value: g, label: g }))}
+                      value={goal}
+                      onChange={setGoal}
+                    />
+                  )}
+
+                  {reasonFlagOn && (
+                    <>
+                      <ChipGroup
+                        label="Preferred time (optional)"
+                        options={TRAINER_SLOTS.map((s) => ({ value: s, label: s }))}
+                        value={slot}
+                        onChange={(v) => setSlot(slot === v ? null : v)}
+                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="pref-trainer">Preferred trainer (optional)</Label>
+                        <Input
+                          id="pref-trainer"
+                          value={preferredTrainer}
+                          maxLength={80}
+                          onChange={(e) => setPreferredTrainer(e.target.value)}
+                          placeholder="No preference"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -397,17 +564,41 @@ export function RequestComposerDrawer({
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="request-note">{copy!.fieldLabel}</Label>
+                <Label htmlFor="request-note">
+                  {kind === 'trainer' && reasonFlagOn
+                    ? hasTrainer
+                      ? reasonNeedsDetails(reasonCode) ? 'What happened? (required)' : 'Details (optional)'
+                      : 'Anything else we should know? (optional)'
+                    : copy!.fieldLabel}
+                </Label>
                 <Textarea
                   id="request-note"
-                  rows={5}
-                  placeholder={copy!.placeholder}
+                  rows={kind === 'trainer' ? 4 : 5}
+                  maxLength={kind === 'trainer' ? 500 : undefined}
+                  placeholder={kind === 'trainer' && hasTrainer && reasonFlagOn
+                    ? 'Share specifics so the manager can follow up — e.g. missed sessions, late arrivals…'
+                    : copy!.placeholder}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
+                  aria-required={kind === 'trainer' ? reasonNeedsDetails(reasonCode) || !reasonFlagOn : copy!.requireText}
+                  aria-invalid={!!trainerError && note.length > 0}
+                  aria-describedby={kind === 'trainer' ? 'trainer-error' : undefined}
                 />
+                {kind === 'trainer' && (
+                  <p id="trainer-error" role="status" aria-live="polite" className="min-h-[1rem] text-xs text-muted-foreground">
+                    {trainerError && (reasonCode || note.length > 0) ? trainerError : note.length > 0 ? `${note.length}/500` : ''}
+                  </p>
+                )}
               </div>
 
-              <p className="text-sm text-muted-foreground">{copy!.note}</p>
+              {kind === 'trainer' && hasTrainer && reasonFlagOn ? (
+                <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  Your feedback goes to the branch manager, not your trainer.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">{copy!.note}</p>
+              )}
             </>
           )}
         </div>
@@ -430,10 +621,48 @@ export function RequestComposerDrawer({
             data-testid="btn-submit-request"
           >
             {submit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submit.isPending ? 'Submitting…' : `Send ${kind ? REQUEST_TITLES[kind].toLowerCase() : ''} request`}
+            {submit.isPending ? 'Submitting…' : kind === 'trainer' ? (hasTrainer ? 'Send change request' : 'Request a trainer') : `Send ${kind ? REQUEST_TITLES[kind].toLowerCase() : ''} request`}
           </Button>
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+interface ChipGroupProps {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string | null;
+  onChange: (value: string) => void;
+  columns?: boolean;
+}
+
+/** Accessible single-select chip group (radio semantics, arrow-key friendly via Tab). */
+function ChipGroup({ label, options, value, onChange, columns }: ChipGroupProps) {
+  const id = label.replace(/\W+/g, '-').toLowerCase();
+  return (
+    <div className="space-y-2">
+      <p id={id} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div role="radiogroup" aria-labelledby={id} className={columns ? 'grid grid-cols-1 gap-2 sm:grid-cols-2' : 'flex flex-wrap gap-2'}>
+        {options.map((o) => {
+          const selected = value === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(o.value)}
+              className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                selected ? 'border-primary bg-primary/10 font-semibold text-foreground' : 'border-border/60 text-foreground hover:bg-muted/60'
+              }`}
+            >
+              {selected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />}
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -273,7 +273,6 @@ export default function MemberRequests() {
         member={member}
         activeMembership={activeMembership}
         userId={user!.id}
-        trainerName={(member as any)?.trainer?.full_name || null}
         freezeDaysAllowance={freezeDaysAllowance}
       />
     </AppLayout>
