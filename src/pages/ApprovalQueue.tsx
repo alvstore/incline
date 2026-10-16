@@ -67,6 +67,7 @@ export default function ApprovalQueuePage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [lockerApproval, setLockerApproval] = useState<LockerRequestRow | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch approval requests
@@ -514,6 +515,7 @@ export default function ApprovalQueuePage() {
           </CardContent>
         </Card>
       </div>
+      <ApproveLockerRequestSheet request={lockerApproval} onOpenChange={(o) => !o && setLockerApproval(null)} />
     </AppLayout>
   );
 }
