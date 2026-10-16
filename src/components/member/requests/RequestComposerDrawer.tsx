@@ -377,8 +377,13 @@ export function RequestComposerDrawer({
     onError: (e: any) => toast.error(e?.message || 'Failed to submit request'),
   });
 
-  const copy = kind ? COPY[kind] : null;
-  const canSubmit = !!kind && (!copy?.requireText || note.trim().length > 0);
+  const baseCopy = kind ? COPY[kind] : null;
+  const copy = kind === 'trainer' && baseCopy
+    ? hasTrainer
+      ? { ...baseCopy, title: 'Change trainer', description: 'Tell us what isn’t working so the manager can help.', note: 'The branch manager reviews your request and follows up.' }
+      : { ...baseCopy, title: 'Request a trainer', description: 'Get matched with a coach for your goals.', note: 'The front desk will match you with a suitable trainer.' }
+    : baseCopy;
+  const canSubmit = !!kind && (kind === 'trainer' ? !trainerError : (!copy?.requireText || note.trim().length > 0));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -429,10 +434,96 @@ export function RequestComposerDrawer({
               )}
 
               {kind === 'trainer' && (
-                <div className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-                  {trainerName
-                    ? <>Current trainer: <span className="font-semibold text-foreground">{trainerName}</span></>
-                    : 'No trainer is assigned to you yet.'}
+                <div className="space-y-5">
+                  {hasTrainer ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {currentTrainers.length > 1 ? 'Which trainer is this about?' : 'Your current trainer'}
+                      </p>
+                      <div className="grid gap-2" role="radiogroup" aria-label="Current trainer">
+                        {currentTrainers.map((t) => {
+                          const selected = (targetTrainerId ?? currentTrainers[0].trainer_id) === t.trainer_id;
+                          const initials = t.full_name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+                          return (
+                            <button
+                              key={t.trainer_id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={currentTrainers.length === 1}
+                              onClick={() => setTargetTrainerId(t.trainer_id)}
+                              className={`flex min-h-[56px] items-center gap-3 rounded-xl border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default ${
+                                selected ? 'border-primary bg-primary/5' : 'cursor-pointer border-border/60 hover:bg-muted/60'
+                              }`}
+                            >
+                              <Avatar className="h-10 w-10">
+                                {t.avatar_url && <AvatarImage src={t.avatar_url} alt={`Photo of ${t.full_name}`} />}
+                                <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">{initials}</AvatarFallback>
+                              </Avatar>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-foreground">{t.full_name}</span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {t.relation === 'assigned' ? 'General coach' : 'Personal training'}
+                                  {t.trainer_code ? ` · ${t.trainer_code}` : ''}
+                                </span>
+                              </span>
+                              {selected && currentTrainers.length > 1 && <Check className="h-4 w-4 text-primary" aria-hidden="true" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/40 p-4">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <UserPlus className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">You don't have a trainer yet</p>
+                        <p className="text-xs text-muted-foreground">Tell us your goal and we'll match you with the right coach.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {reasonFlagOn && hasTrainer && (
+                    <ChipGroup
+                      label="Why do you want to change? (required)"
+                      options={TRAINER_CHANGE_REASONS.map((r) => ({ value: r.code, label: r.label }))}
+                      value={reasonCode}
+                      onChange={(v) => setReasonCode(v as TrainerChangeReason)}
+                      columns
+                    />
+                  )}
+
+                  {reasonFlagOn && !hasTrainer && (
+                    <ChipGroup
+                      label="Your main goal"
+                      options={TRAINER_GOALS.map((g) => ({ value: g, label: g }))}
+                      value={goal}
+                      onChange={setGoal}
+                    />
+                  )}
+
+                  {reasonFlagOn && (
+                    <>
+                      <ChipGroup
+                        label="Preferred time (optional)"
+                        options={TRAINER_SLOTS.map((s) => ({ value: s, label: s }))}
+                        value={slot}
+                        onChange={(v) => setSlot(slot === v ? null : v)}
+                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="pref-trainer">Preferred trainer (optional)</Label>
+                        <Input
+                          id="pref-trainer"
+                          value={preferredTrainer}
+                          maxLength={80}
+                          onChange={(e) => setPreferredTrainer(e.target.value)}
+                          placeholder="No preference"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
