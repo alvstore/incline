@@ -431,6 +431,7 @@ async function markAttendance(
       _member_id: person.id,
       _branch_id: person.branch_id,
       _method: "biometric",
+      _at: scanTime,
     });
     const result = data as { valid?: boolean; message?: string } | null;
     return result?.message ?? null;
@@ -585,6 +586,7 @@ Deno.serve(async (req) => {
     let skipped = 0;
     let attendanceUpdated = 0;
     let unmatched = 0;
+    const importedTimes: number[] = [];
     const errors: string[] = [];
     const latestRecordAt = records.reduce<string | null>((latest, record) => {
       const iso = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
@@ -677,6 +679,34 @@ Deno.serve(async (req) => {
         else errors.push(`insert ${recordKey}: ${insertError.message}`);
       } else {
         imported++;
+        importedTimes.push(new Date(scanTime).getTime());
+      }
+    }
+
+    // Clock + outage visibility. Gate time is trusted; we only flag anomalies.
+    if (!dryRun && imported > 0) {
+      const nowMs = Date.now();
+      const times = records.map((r) => new Date(normalizeScanTime(r.createTime ?? r.time ?? r.timestamp ?? r.eventTime)).getTime());
+      const future = times.filter((t) => t - nowMs > 5 * 60_000);
+      const branch = resolvedConnection.branch_id || branchId || null;
+      if (future.length) {
+        const aheadMin = Math.round((Math.max(...future) - nowMs) / 60_000);
+        await supabase.from("access_device_health_events").insert({
+          branch_id: branch, event_type: "clock_drift",
+          details: { ahead_minutes: aheadMin, records: future.length },
+        });
+        await supabase.rpc("log_error_event", {
+          p_source: "mips_clock", p_severity: "warning",
+          p_message: `Gate clock off by ${aheadMin} min (scan times in the future)`,
+          p_context: { branch_id: branch, records: future.length },
+        }).catch(() => null);
+      }
+      const oldestMs = Math.min(...importedTimes.filter((t) => Number.isFinite(t)));
+      if (Number.isFinite(oldestMs) && nowMs - oldestMs > 15 * 60_000 && imported >= 1) {
+        await supabase.from("access_device_health_events").insert({
+          branch_id: branch, event_type: "backlog_recovered",
+          details: { imported, oldest_scan: new Date(oldestMs).toISOString(), latest_scan: latestRecordAt, delay_minutes: Math.round((nowMs - oldestMs) / 60_000) },
+        });
       }
     }
 

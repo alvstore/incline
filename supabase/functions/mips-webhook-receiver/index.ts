@@ -290,6 +290,7 @@ async function handleMemberCheckin(
   branchId: string,
   personName: string,
   passType: string,
+  scanTime?: string,
 ) {
   let result = "member";
   let message = `Member ${personName} checked in via ${passType}`;
@@ -327,6 +328,7 @@ async function handleMemberCheckin(
       _member_id: memberId,
       _branch_id: branchId,
       _method: "biometric",
+      _at: scanTime ?? null,
     });
     if (checkinResult && !(checkinResult as any).valid) {
       result = "member_denied";
@@ -821,7 +823,7 @@ Deno.serve(async (req) => {
               ? await handleMemberGateRefusal(supabase, person.id, person.branch_id, personName)
               : doorRole === "exit"
               ? await handleMemberCheckout(supabase, person.id, person.branch_id, personName, scanTime)
-              : await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType);
+              : await handleMemberCheckin(supabase, person.id, person.branch_id, personName, passType, scanTime);
           result = outcome.result;
           message = outcome.message;
         } else {
