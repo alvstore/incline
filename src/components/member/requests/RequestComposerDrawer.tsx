@@ -622,10 +622,48 @@ export function RequestComposerDrawer({
             data-testid="btn-submit-request"
           >
             {submit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submit.isPending ? 'Submitting…' : `Send ${kind ? REQUEST_TITLES[kind].toLowerCase() : ''} request`}
+            {submit.isPending ? 'Submitting…' : kind === 'trainer' ? (hasTrainer ? 'Send change request' : 'Request a trainer') : `Send ${kind ? REQUEST_TITLES[kind].toLowerCase() : ''} request`}
           </Button>
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+interface ChipGroupProps {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string | null;
+  onChange: (value: string) => void;
+  columns?: boolean;
+}
+
+/** Accessible single-select chip group (radio semantics, arrow-key friendly via Tab). */
+function ChipGroup({ label, options, value, onChange, columns }: ChipGroupProps) {
+  const id = label.replace(/\W+/g, '-').toLowerCase();
+  return (
+    <div className="space-y-2">
+      <p id={id} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div role="radiogroup" aria-labelledby={id} className={columns ? 'grid grid-cols-1 gap-2 sm:grid-cols-2' : 'flex flex-wrap gap-2'}>
+        {options.map((o) => {
+          const selected = value === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(o.value)}
+              className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                selected ? 'border-primary bg-primary/10 font-semibold text-foreground' : 'border-border/60 text-foreground hover:bg-muted/60'
+              }`}
+            >
+              {selected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />}
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
