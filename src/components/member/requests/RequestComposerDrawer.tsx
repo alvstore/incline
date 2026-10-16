@@ -1,15 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLockerPricing } from '@/hooks/useLockerPricing';
 import { track } from '@/lib/analytics';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Loader2, ChevronLeft, ChevronRight, Check, UserPlus, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { LOCKER_SIZES, REQUEST_TITLES, lockerPricing } from './requestTypes';
+import { fetchMyTrainers } from '@/lib/members/myTrainers';
+import {
+  LOCKER_SIZES,
+  REQUEST_TITLES,
+  lockerPricing,
+  TRAINER_CHANGE_REASONS,
+  TRAINER_GOALS,
+  TRAINER_SLOTS,
+  isEscalationReason,
+  reasonNeedsDetails,
+  trainerReasonLabel,
+  validateTrainerChange,
+  type TrainerChangeReason,
+} from './requestTypes';
 import {
   MEMBER_REQUEST_LABEL,
   memberRequestTaskTitle,
@@ -105,15 +120,62 @@ export function RequestComposerDrawer({
   const [kind, setKind] = useState<RequestKind | null>(initialKind);
   const [note, setNote] = useState('');
   const [lockerSize, setLockerSize] = useState<LockerSize>('Medium');
+  const [reasonCode, setReasonCode] = useState<TrainerChangeReason | null>(null);
+  const [goal, setGoal] = useState<string | null>(null);
+  const [slot, setSlot] = useState<string | null>(null);
+  const [preferredTrainer, setPreferredTrainer] = useState('');
+  const [targetTrainerId, setTargetTrainerId] = useState<string | null>(null);
   const { data: lockerCfg } = useLockerPricing(member?.branch_id);
+
+  // Same cache as useMemberData — includes general coach and PT-package trainers.
+  const { data: myTrainers = [] } = useQuery({
+    queryKey: ['my-trainers', userId],
+    enabled: open && !!userId,
+    queryFn: fetchMyTrainers,
+    staleTime: 5 * 60 * 1000,
+  });
+  const currentTrainers = useMemo(() => {
+    const seen = new Set<string>();
+    return myTrainers
+      .filter((t) => t.relation === 'assigned' || t.relation === 'pt_package')
+      .filter((t) => (seen.has(t.trainer_id) ? false : (seen.add(t.trainer_id), true)));
+  }, [myTrainers]);
+  const hasTrainer = currentTrainers.length > 0;
+
+  // Kill switch: settings key `trainer_change_reason_required` (global row). Default ON.
+  const { data: reasonFlagOn = true } = useQuery({
+    queryKey: ['setting', 'trainer_change_reason_required'],
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'trainer_change_reason_required')
+        .is('branch_id', null)
+        .maybeSingle();
+      const v = (data as any)?.value;
+      if (v === false || v === 'false' || v?.enabled === false) return false;
+      return true;
+    },
+  });
 
   useEffect(() => {
     if (open) {
       setKind(initialKind);
       setNote('');
       setLockerSize('Medium');
+      setReasonCode(null);
+      setGoal(null);
+      setSlot(null);
+      setPreferredTrainer('');
+      setTargetTrainerId(null);
     }
   }, [open, initialKind]);
+
+  const trainerError = kind === 'trainer'
+    ? validateTrainerChange({ flagOn: reasonFlagOn, hasTrainer, reason: reasonCode, details: note })
+    : null;
 
   
 
@@ -125,14 +187,14 @@ export function RequestComposerDrawer({
       const memberName = await resolveMemberDisplayName(member || {});
 
       /** Every member request gets a task so staff/trainers see it in their queue. */
-      const createRequestTask = async (title: string, description: string, assignedTo: string | null) => {
+      const createRequestTask = async (title: string, description: string, assignedTo: string | null, priority: 'medium' | 'high' = 'medium') => {
         const { data, error } = await supabase
           .from('tasks')
           .insert({
             branch_id: member.branch_id,
             title,
             description,
-            priority: 'medium',
+            priority,
             status: 'pending',
             assigned_to: assignedTo,
             assigned_by: userId,
@@ -239,28 +301,43 @@ export function RequestComposerDrawer({
       }
 
       if (kind === 'trainer') {
+        const target = currentTrainers.find((t) => t.trainer_id === targetTrainerId) ?? currentTrainers[0] ?? null;
+        const reasonLabel = trainerReasonLabel(reasonCode);
         const { error } = await supabase.from('approval_requests').insert({
           ...base,
           approval_type: 'complimentary' as const,
           reference_type: 'trainer_change',
           request_data: {
-            current_trainer_id: member.assigned_trainer_id,
-            reason: note,
+            memberName,
+            memberCode: member.member_code,
+            request_mode: target ? 'change' : 'new',
+            current_trainer_id: target?.trainer_id ?? member.assigned_trainer_id ?? null,
+            current_trainer_name: target?.full_name ?? null,
+            currentTrainerName: target?.full_name ?? null,
+            current_trainer_source: target ? (target.relation === 'assigned' ? 'general' : 'personal_training') : null,
+            reason_code: reasonCode,
+            reason_label: reasonLabel,
+            reason: note.trim(),
+            goal: goal,
+            preferred_trainer_name: preferredTrainer.trim() || null,
+            preferred_slot: slot,
             requested_at: new Date().toISOString(),
           },
-        });
+        } as any);
         if (error) throw error;
 
-        let trainerUserId: string | null = null;
-        if (member.assigned_trainer_id) {
-          const { data: t } = await (supabase as any)
-            .from('trainers_directory')
-            .select('user_id')
-            .eq('id', member.assigned_trainer_id)
-            .maybeSingle();
-          trainerUserId = t?.user_id ?? null;
-        }
-        await queueTask('trainer_change', trainerUserId);
+        // Escalate to branch staff/manager queue — never to the trainer being reviewed.
+        const priority = isEscalationReason(reasonCode) ? 'high' : 'medium';
+        const parts = [
+          target ? `Current trainer: ${target.full_name}` : 'No trainer assigned — wants one',
+          reasonLabel ? `Reason: ${reasonLabel}` : null,
+          goal ? `Goal: ${goal}` : null,
+          slot ? `Preferred time: ${slot}` : null,
+          preferredTrainer.trim() ? `Preferred trainer: ${preferredTrainer.trim()}` : null,
+          note.trim() ? `Details: ${note.trim()}` : null,
+        ].filter(Boolean);
+        await createRequestTask(memberRequestTaskTitle('trainer_change', memberName), parts.join(' · '), null, priority);
+        track('trainer_request_submitted', { mode: target ? 'change' : 'new', reason: reasonCode ?? 'none' });
         return;
       }
 
