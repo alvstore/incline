@@ -39,8 +39,10 @@ function useWhatsAppUnreadCount() {
       if (error) return 0;
       return count ?? 0;
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 30000,
+    // Realtime invalidation above keeps this fresh; slow poll is only a safety net.
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 }
 
