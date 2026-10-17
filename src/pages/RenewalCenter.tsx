@@ -56,10 +56,13 @@ const queues: Array<{ value: RenewalQueue; label: string }> = [
   { value: 'due_soon', label: 'Due soon' },
   { value: 'lapsed', label: 'Lapsed' },
   { value: 'callback', label: 'Callbacks' },
-  { value: 'voice', label: 'Voice AI' },
+  { value: 'voice', label: 'AI call queue' },
   { value: 'won', label: 'Renewed' },
   { value: 'lost', label: 'Lost' },
 ];
+
+/** Voice call budget per membership cycle — mirrors the server-side cap. */
+const VOICE_CALL_LIMIT = 3;
 
 /**
  * Human wording for what staff actually record after speaking to a member.
@@ -81,7 +84,7 @@ const outcomes: Array<[string, string]> = [
 const STAGE_LOOK: Record<string, { label: string; className: string }> = {
   eligible: { label: 'Not contacted', className: 'bg-muted text-muted-foreground' },
   reminding: { label: 'Reminders sent', className: 'bg-primary/10 text-primary' },
-  voice_escalation: { label: 'Voice AI queue', className: 'bg-violet-100 text-violet-700' },
+  voice_escalation: { label: 'AI call queued', className: 'bg-violet-100 text-violet-700' },
   staff_followup: { label: 'Staff follow-up', className: 'bg-amber-100 text-amber-700' },
   callback: { label: 'Callback booked', className: 'bg-blue-100 text-blue-700' },
   lapsed: { label: 'Lapsed', className: 'bg-red-100 text-red-700' },
