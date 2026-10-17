@@ -1,3 +1,4 @@
+// dispatch-communication v1.42.0 — signed-in staff/trainers may only message known contacts on phone channels.
 // dispatch-communication v1.41.0 — email attachment fetch is SSRF-guarded (public hosts, no redirects, 5 MB cap).
 // dispatch-communication v1.40.0 — annual-upgrade sends/retries recheck live deadlines.
 // dispatch-communication v1.39.0 — fix in_app insert: notifications table uses
@@ -796,7 +797,8 @@ Deno.serve(async (req) => {
       }
       const last10 = String(input.recipient).replace(/\D/g, '').slice(-10);
       const like = `%${last10}`;
-      const scope = <T extends { in: (c: string, v: string[]) => T }>(q: T) => branchIds ? q.in('branch_id', branchIds) : q;
+      // deno-lint-ignore no-explicit-any
+      const scope = (q: any) => branchIds ? q.in('branch_id', branchIds) : q;
       const [{ data: lead }, { data: chat }, { data: profs }] = await Promise.all([
         scope(authz.from('leads').select('id').ilike('phone', like)).limit(1),
         scope(authz.from('whatsapp_chat_settings').select('id').ilike('phone_number', like)).limit(1),
