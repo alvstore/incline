@@ -1429,7 +1429,7 @@ Deno.serve(async (req) => {
       if (__scopedUid) {
         const tbl = person_type === "trainer" ? "trainers" : "employees";
         const { data: person } = await supabase.from(tbl).select("branch_id").eq("id", person_id).maybeSingle();
-        if (!person || !(await canActOnBranch(person.branch_id)) || (branch_id && branch_id !== person.branch_id)) {
+        if (!person || !(await canActOnBranch(person.branch_id)) || (branch_id && !(await canActOnBranch(branch_id)))) {
           return forbid("No access to this person's branch");
         }
       }
@@ -1465,7 +1465,7 @@ Deno.serve(async (req) => {
     // send `evaluate`; the worker derives revoke/restore from committed state.
     if (__scopedUid) {
       const { data: mem } = await supabase.from("members").select("branch_id").eq("id", member_id).maybeSingle();
-      if (!mem || !(await canActOnBranch(mem.branch_id)) || (branch_id && branch_id !== mem.branch_id)) {
+      if (!mem || !(await canActOnBranch(mem.branch_id)) || (branch_id && !(await canActOnBranch(branch_id)))) {
         return forbid("No access to this member's branch");
       }
     }
