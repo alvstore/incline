@@ -1,3 +1,4 @@
+// v1.2.0 — caller must belong to the target branch.
 // v1.1.0 — Notify staff on personal WhatsApp when a chat handoff is requested.
 // Supports targeted (staff_user_id) or broadcast (omit staff_user_id → all available staff in branch).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -10,11 +11,21 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
+  const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] });
+  if (!__caller.ok) return __caller.response;
   try {
     const { staff_user_id, member_phone, reason, branch_id, skip_notification } = await req.json();
     if (!member_phone) return json({ error: "member_phone required" }, 400);
     if (!branch_id) return json({ error: "branch_id required" }, 400);
+
+    const isGlobal = __caller.internal || __caller.roles.some((r) => r === "owner" || r === "admin");
+    if (!isGlobal && __caller.userId) {
+      const [{ data: bm }, { data: sb }] = await Promise.all([
+        __caller.admin.from("branch_managers").select("branch_id").eq("user_id", __caller.userId).eq("branch_id", branch_id).limit(1),
+        __caller.admin.from("staff_branches").select("branch_id").eq("user_id", __caller.userId).eq("branch_id", branch_id).limit(1),
+      ]);
+      if (!(bm?.length || sb?.length)) return json({ error: "No access to this branch" }, 403);
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

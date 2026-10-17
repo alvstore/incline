@@ -1,3 +1,4 @@
+// v1.2.0 — branch authorization for non-global staff.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {

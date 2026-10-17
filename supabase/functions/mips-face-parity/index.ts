@@ -1,3 +1,4 @@
+// mips-face-parity v2.1.1 — diagnose verifies the person belongs to the branch.
 // mips-face-parity v2.1.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
