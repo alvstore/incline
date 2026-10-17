@@ -464,6 +464,16 @@ serve(async (req) => {
       const { name, category, body_text, trigger_event } = template_data;
       let localId = template_data.local_template_id;
 
+      // A caller-supplied template id must belong to the authorized branch.
+      if (localId) {
+        const { data: owned } = await supabase.from("templates").select("id")
+          .eq("id", localId).eq("branch_id", branch_id).maybeSingle();
+        if (!owned) {
+          return new Response(JSON.stringify({ error: "Template not found in this branch" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+
       // 1. Create or ensure local template row exists
       if (!localId) {
         const { data: existing } = await supabase
