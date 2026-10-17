@@ -780,6 +780,38 @@ Deno.serve(async (req) => {
         input.payload.body = String(input.payload.body ?? '')
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
+    } else if (!caller.internal && caller.userId && ['whatsapp', 'sms', 'rcs'].includes(input.channel)) {
+      // v1.42.0 — signed-in staff/trainers may only message known contacts:
+      // a member, lead, staff profile or existing chat thread in a branch they can act on.
+      const authz = caller.admin;
+      const isGlobal = caller.roles.some((r) => r === 'owner' || r === 'admin');
+      let branchIds: string[] | null = null;
+      if (!isGlobal) {
+        const [{ data: bm }, { data: sb }] = await Promise.all([
+          authz.from('branch_managers').select('branch_id').eq('user_id', caller.userId),
+          authz.from('staff_branches').select('branch_id').eq('user_id', caller.userId),
+        ]);
+        branchIds = [...new Set([...(bm ?? []), ...(sb ?? [])].map((x: { branch_id: string }) => x.branch_id))];
+        if (!branchIds.length) return bad(403, { error: 'no_branch_access' });
+      }
+      const last10 = String(input.recipient).replace(/\D/g, '').slice(-10);
+      const like = `%${last10}`;
+      const scope = <T extends { in: (c: string, v: string[]) => T }>(q: T) => branchIds ? q.in('branch_id', branchIds) : q;
+      const [{ data: lead }, { data: chat }, { data: profs }] = await Promise.all([
+        scope(authz.from('leads').select('id').ilike('phone', like)).limit(1),
+        scope(authz.from('whatsapp_chat_settings').select('id').ilike('phone_number', like)).limit(1),
+        authz.from('profiles').select('id').ilike('phone', like).limit(5),
+      ]);
+      let known = (lead?.length ?? 0) > 0 || (chat?.length ?? 0) > 0;
+      if (!known && profs?.length) {
+        const ids = profs.map((p: { id: string }) => p.id);
+        const [{ data: mem }, { data: staffRoles }] = await Promise.all([
+          scope(authz.from('members').select('id').in('user_id', ids)).limit(1),
+          authz.from('user_roles').select('user_id').in('user_id', ids).neq('role', 'member').limit(1),
+        ]);
+        known = (mem?.length ?? 0) > 0 || (staffRoles?.length ?? 0) > 0;
+      }
+      if (!known) return bad(403, { error: 'recipient_not_a_known_contact' });
     }
   }
 
