@@ -199,6 +199,15 @@ Deno.serve(async (req) => {
     // gate's photoCount — the only device-side truth this firmware exposes.
     if (action === "diagnose") {
       if (!person_type || !person_id) return json({ error: "person_type and person_id are required" }, 400);
+      // v2.1.1 — the person must belong to the branch being diagnosed.
+      const personTable = person_type === "member" ? "members" : person_type === "employee" ? "employees" : person_type === "trainer" ? "trainers" : null;
+      if (!personTable) return json({ error: "Invalid person_type" }, 400);
+      if (!__global || branch_id) {
+        const { data: person } = await supabase.from(personTable).select("branch_id").eq("id", person_id).maybeSingle();
+        if (!person || (branch_id && person.branch_id !== branch_id)) {
+          return json({ error: "Person not found in this branch" }, 403);
+        }
+      }
       const before = devices.map((d) => ({ id: d.id, name: d.name, faces: d.faces, persons: d.persons }));
 
       const syncRes = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {

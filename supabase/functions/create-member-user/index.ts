@@ -110,6 +110,21 @@ Deno.serve(async (req) => {
       )
     }
 
+    // v1.2.0 — non-global staff may only create members in branches they belong to.
+    const isGlobal = callerRoles.some((r: { role: string }) => r.role === 'owner' || r.role === 'admin')
+    if (!isGlobal) {
+      const [{ data: bm }, { data: sb }] = await Promise.all([
+        supabaseAdmin.from('branch_managers').select('branch_id').eq('user_id', callingUser.id).eq('branch_id', branchId).limit(1),
+        supabaseAdmin.from('staff_branches').select('branch_id').eq('user_id', callingUser.id).eq('branch_id', branchId).limit(1),
+      ])
+      if (!(bm?.length || sb?.length)) {
+        return new Response(
+          JSON.stringify({ error: 'You do not have access to this branch' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Check if user with this email already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
     const existingUser = existingUsers?.users?.find(
