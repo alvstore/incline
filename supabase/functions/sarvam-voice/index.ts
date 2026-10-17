@@ -944,12 +944,16 @@ Deno.serve(async (req) => {
       if (memberId) {
         const ctx = await memberCallContext(sb, memberId);
         if (!ctx) return json({ ok: false, error: "Member not found.", code: "not_found" });
-        to = to || ctx.phone;
+        to = normalizePhone(String(ctx.phone || "")); // always the member's own number
         vars = ctx.vars;
         callBranch = ctx.branch_id;
       }
       if (!isValidIndianMobile(to)) {
         return json({ ok: false, error: "No valid mobile number for this member.", code: "invalid_number" });
+      }
+      if (!memberId) {
+        const ownDenied = await ownPhoneOnly(to);
+        if (ownDenied) return ownDenied;
       }
       const res = await placeOne({
         to,
