@@ -463,6 +463,13 @@
       "when": 1792217586824,
       "tag": "0065_atomic_renewal_voice_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792217717396,
+      "tag": "0066_testable_voice_decision_and_staff_policy_view",
+      "breakpoints": true
     }
   ]
 }

@@ -19328,7 +19328,21 @@ export type Database = {
         Args: { _cooldown?: number; _member_id: string; _reason?: string }
         Returns: Json
       }
+      voice_member_outreach_policy: {
+        Args: { _member_id: string }
+        Returns: Json
+      }
       voice_ops_summary: { Args: { p_branch?: string }; Returns: Json }
+      voice_outreach_decision: {
+        Args: {
+          _attempts: number
+          _cooldown?: number
+          _last_attempt: string
+          _now?: string
+          _stop: string
+        }
+        Returns: Json
+      }
       voice_outreach_stop_reason: {
         Args: { _disposition: string; _vars: Json }
         Returns: string
