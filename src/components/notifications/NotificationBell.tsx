@@ -71,7 +71,9 @@ export function NotificationBell() {
     queryKey: ['notification-count', user?.id],
     queryFn: () => fetchUnreadCount(user!.id),
     enabled: !!user?.id,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    // Realtime INSERT subscription keeps this live; slow poll is a safety net only.
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 
   // Sound for inbound chats is owned globally by useGlobalChatSound in

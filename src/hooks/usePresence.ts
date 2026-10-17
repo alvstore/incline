@@ -178,7 +178,8 @@ export function useOnlineUsers(): OnlineUser[] {
   const { data: dbUsers } = useQuery({
     queryKey: ['online-users-db'],
     enabled: !!user,
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     staleTime: 15_000,
     queryFn: async (): Promise<OnlineUser[]> => {
