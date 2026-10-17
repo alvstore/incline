@@ -477,6 +477,13 @@
       "when": 1792217787154,
       "tag": "0067_preserve_voice_stops_on_duplicate_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792218558872,
+      "tag": "0068_renewal_voice_call_budget_handoff",
+      "breakpoints": true
     }
   ]
 }

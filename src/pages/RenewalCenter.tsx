@@ -56,10 +56,13 @@ const queues: Array<{ value: RenewalQueue; label: string }> = [
   { value: 'due_soon', label: 'Due soon' },
   { value: 'lapsed', label: 'Lapsed' },
   { value: 'callback', label: 'Callbacks' },
-  { value: 'voice', label: 'Voice AI' },
+  { value: 'voice', label: 'AI call queue' },
   { value: 'won', label: 'Renewed' },
   { value: 'lost', label: 'Lost' },
 ];
+
+/** Voice call budget per membership cycle — mirrors the server-side cap. */
+const VOICE_CALL_LIMIT = 3;
 
 /**
  * Human wording for what staff actually record after speaking to a member.
@@ -81,7 +84,7 @@ const outcomes: Array<[string, string]> = [
 const STAGE_LOOK: Record<string, { label: string; className: string }> = {
   eligible: { label: 'Not contacted', className: 'bg-muted text-muted-foreground' },
   reminding: { label: 'Reminders sent', className: 'bg-primary/10 text-primary' },
-  voice_escalation: { label: 'Voice AI queue', className: 'bg-violet-100 text-violet-700' },
+  voice_escalation: { label: 'AI call queued', className: 'bg-violet-100 text-violet-700' },
   staff_followup: { label: 'Staff follow-up', className: 'bg-amber-100 text-amber-700' },
   callback: { label: 'Callback booked', className: 'bg-blue-100 text-blue-700' },
   lapsed: { label: 'Lapsed', className: 'bg-red-100 text-red-700' },
@@ -186,7 +189,7 @@ export default function RenewalCenter() {
     { label: 'Open cases', value: Number(stats.open ?? 0), icon: Users, tint: 'bg-indigo-50 text-indigo-600' },
     { label: 'Contacted', value: Number(stats.contacted ?? 0), icon: Headphones, tint: 'bg-blue-50 text-blue-600' },
     { label: 'Renewed', value: Number(stats.renewed ?? 0), icon: CheckCircle2, tint: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Voice AI queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-violet-50 text-violet-600' },
+    { label: 'AI call queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-violet-50 text-violet-600' },
     { label: 'Conversion', value: `${conversion}%`, icon: UserCheck, tint: 'bg-amber-50 text-amber-600' },
   ];
 
@@ -419,14 +422,23 @@ export default function RenewalCenter() {
                       <p className="text-xs text-muted-foreground">
                         {row.claimed_name ? `Owned by ${row.claimed_name}` : 'Unassigned'} · {row.attempts_count} contact{row.attempts_count === 1 ? '' : 's'}
                       </p>
+                      <p className={`text-xs font-medium ${row.voice_attempts_count >= VOICE_CALL_LIMIT ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                        {row.voice_attempts_count >= VOICE_CALL_LIMIT
+                          ? 'AI call budget used — follow up in person'
+                          : `AI calls used: ${row.voice_attempts_count} of ${VOICE_CALL_LIMIT}`}
+                      </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
                         className="cursor-pointer gap-2 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                        disabled={!voiceLive || voiceCall.isPending}
-                        title={voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet'}
+                        disabled={!voiceLive || voiceCall.isPending || row.voice_attempts_count >= VOICE_CALL_LIMIT}
+                        title={
+                          row.voice_attempts_count >= VOICE_CALL_LIMIT
+                            ? 'Call budget used (3 calls). Follow up in person to save calling cost.'
+                            : voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet'
+                        }
                         onClick={() => callNow(row)}
                       >
                         {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
@@ -531,18 +543,26 @@ export default function RenewalCenter() {
             <section className="space-y-3 rounded-xl bg-card p-4 shadow-lg shadow-muted/30">
               <div className="flex items-center justify-between gap-2">
                 <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="rounded-full bg-indigo-50 p-1.5 text-indigo-600"><PhoneCall className="h-4 w-4" /></span>Voice AI calls
+                  <span className="rounded-full bg-indigo-50 p-1.5 text-indigo-600"><PhoneCall className="h-4 w-4" /></span>
+                  Voice AI calls · {selected?.voice_attempts_count ?? 0} of {VOICE_CALL_LIMIT} used
                 </p>
                 <Button
                   size="sm"
                   variant="secondary"
                   className="cursor-pointer gap-2 rounded-xl"
-                  disabled={!voiceLive || voiceCall.isPending}
+                  disabled={!voiceLive || voiceCall.isPending || (selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT}
+                  title={(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT ? 'Call budget used (3 calls). Follow up in person to save calling cost.' : undefined}
                   onClick={() => selected && callNow(selected)}
                 >
                   {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
                 </Button>
               </div>
+              {(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT && (
+                <p className="flex items-start gap-2 text-xs text-amber-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Automatic calling has stopped for this member after 3 attempts to save calling cost. Reach out in person or record an outcome below.
+                </p>
+              )}
               {!voiceLive && (
                 <p className="flex items-start gap-2 text-xs text-muted-foreground">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -591,10 +611,11 @@ export default function RenewalCenter() {
             <Button
               variant="outline"
               className="cursor-pointer rounded-xl"
-              disabled={action.isPending}
-              onClick={() => selected && run({ caseId: selected.case_id, action: 'voice_escalate', note }, 'Added to Voice AI review queue')}
+              disabled={action.isPending || (selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT}
+              title={(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT ? 'Call budget used (3 calls). Follow up in person instead.' : 'Queue one Voice AI call for this member'}
+              onClick={() => selected && run({ caseId: selected.case_id, action: 'voice_escalate', note }, 'Voice AI call queued')}
             >
-              <PhoneCall className="mr-2 h-4 w-4" />Voice AI queue
+              <PhoneCall className="mr-2 h-4 w-4" />Queue AI call
             </Button>
             <Button
               className="cursor-pointer rounded-xl"
