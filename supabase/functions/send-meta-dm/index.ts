@@ -1,3 +1,5 @@
+// v1.3.0 — Send only the stored text of a pending, not-yet-sent outbound row
+//          (request content must match), blocking arbitrary-content DMs.
 // v1.2.0 — Strip leading `+` from recipient_id so Meta Graph API never gets a
 //          phone-style key and the send-lock cache hits regardless of caller
 //          format. Fixes duplicate "another send in flight" misses seen in
@@ -121,9 +123,17 @@ Deno.serve(async (req) => {
     {
       // The message row must belong to this branch and be addressed to this recipient.
       const { data: msgRow } = await supabase.from("whatsapp_messages")
-        .select("id, branch_id, phone_number, direction").eq("id", messageId).maybeSingle();
+        .select("id, branch_id, phone_number, direction, content, status, platform, platform_message_id, is_internal_note, created_at")
+        .eq("id", messageId).maybeSingle();
       const rowPhone = String(msgRow?.phone_number ?? "").replace(/^\+/, "");
-      if (!msgRow || msgRow.branch_id !== branchId || msgRow.direction !== "outbound" || rowPhone !== recipientId) {
+      const rowContent = String(msgRow?.content ?? "").trim();
+      const ageMs = msgRow?.created_at ? Date.now() - new Date(msgRow.created_at).getTime() : Infinity;
+      if (
+        !msgRow || msgRow.branch_id !== branchId || msgRow.direction !== "outbound" ||
+        rowPhone !== recipientId || msgRow.platform !== platform || msgRow.is_internal_note ||
+        msgRow.status !== "pending" || msgRow.platform_message_id ||
+        !rowContent || rowContent !== content || ageMs > 10 * 60 * 1000
+      ) {
         messageId = null;
         return json(403, { error: "Forbidden" });
       }
