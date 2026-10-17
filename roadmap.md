@@ -8,8 +8,8 @@
 - [ ] Promotional email blocked: requires a dedicated external marketing service; never use app-email infrastructure.
 
 # Voice automation repair & workspace (9 Oct 2026)
-- [ ] Enforce shared 3-call / 2-follow-up limits and seven-day spacing; suppress declines and relocation, including historical calls.
-- [ ] Verify Kiran is blocked without dialing; test limits and authenticated Voice AI states.
+- [x] Enforce shared 3-call / 2-follow-up limits and seven-day spacing at atomic reservation; decline/relocation outcomes stop calls, including historical cases. Bind renewal case before provider dial; retain automation pause switches.
+- [x] Verify Kiran is blocked without dialing: guarded live policy returns outreach_relocated with no next attempt; 11 policy/status tests pass, signed-in page shows limits and stopped decline labels.
 - [ ] Restore automatic retention, repair renewal escalation selection and preserve pause/window/DND/cap safeguards.
 - [ ] Clarify automation health, last actual call, next check and member last-call/next-attempt timing in themed bento cards.
 - [ ] Run rule tests and verify authenticated voice page and non-dialing worker checks.

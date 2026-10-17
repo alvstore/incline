@@ -1134,6 +1134,10 @@ Deno.serve(async (req) => {
           if (["concurrency_limit", "duplicate_live_call", "daily_cap_reached"].includes(res.code ?? "")) break;
           attempted++;
           if (res.ok) placed++;
+          else if (["cooldown_active", "member_attempt_limit", "outreach_declined", "outreach_relocated", "outreach_staff_followup", "outreach_do_not_contact"].includes(res.code ?? "")) {
+            // Safety suppression is an expected skip, not a broken scheduler.
+            continue;
+          }
           else {
             errors++;
             lastError = `${res.code ?? "error"}: ${res.error ?? ""}`.slice(0, 500);
