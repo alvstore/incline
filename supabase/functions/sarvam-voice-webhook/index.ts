@@ -1,4 +1,4 @@
-// v1.2.0 — Sarvam Instant Outbound webhook receiver.
+// v1.3.0 — outcome stops enforced by DB; relocation creates one review task.
 //
 // Public endpoint, authenticated by the ?t=<webhook_token> shared secret stored
 // in the integration config (constant-time compared). Persists the full
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
     // Locate the ledger row first so we can merge (never clobber) context.
     const finder = sb.from("voice_call_attempts").select(
-      "id, branch_id, member_id, lead_id, phone, context_payload",
+      "id, branch_id, member_id, lead_id, phone, context_payload, disposition",
     );
     const { data: existing } = ref
       ? await finder.eq("id", ref).maybeSingle()
@@ -126,6 +126,10 @@ Deno.serve(async (req) => {
 
       const makeTask = async (title: string, description: string, priority: string) => {
         if (!branchId) return;
+        const { data: prior, error: priorError } = await sb.from("tasks").select("id")
+          .eq("branch_id", branchId).eq("title", title).eq("linked_entity_id", existing.member_id ?? existing.lead_id).limit(1);
+        if (priorError) throw priorError;
+        if (prior?.length) return;
         await sb.from("tasks").insert({
           branch_id: branchId,
           title,
@@ -137,7 +141,13 @@ Deno.serve(async (req) => {
         });
       };
 
-      if (disposition === "callback_requested") {
+      if (disposition === "renewal_declined" || disposition === "not_interested") {
+        // Database trigger closes the renewal case and stops future calls,
+        // including unlinked and late webhooks. Never globally opt out messages.
+        if (/(shifting (to|in)|moving (away|from|to)|leaving (from )?udaipur|relocat)/i.test(`${reason ?? ""} ${summary ?? ""}`)) {
+          await makeTask("Voice AI: member relocated — review only", `Automated member outreach stopped. ${trail}`, "high");
+        }
+      } else if (disposition === "callback_requested") {
         await makeTask(
           "Voice AI: member requested a callback",
           `Retention call outcome: callback requested${callback ? ` for ${callback}` : ""}. Phone ${phone}. ${trail}`,
@@ -171,9 +181,7 @@ Deno.serve(async (req) => {
         await notifyStaff("Voice AI wrong number / DND", "A Voice AI call reached the wrong person; the number is now do-not-contact.");
       }
 
-      // "not_interested" and "no_clear_outcome" intentionally trigger no CRM
-      // action: the attempt row itself enforces the retention cooldown. Opting
-      // a member out of every channel is a decision only a human should make.
+      // Unclear outcomes may use the bounded follow-up allowance; declines stop.
     } catch (followUpError) {
       console.error("sarvam-voice-webhook follow-up failed:", redact((followUpError as Error)?.message));
     }
