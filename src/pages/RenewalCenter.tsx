@@ -189,7 +189,7 @@ export default function RenewalCenter() {
     { label: 'Open cases', value: Number(stats.open ?? 0), icon: Users, tint: 'bg-indigo-50 text-indigo-600' },
     { label: 'Contacted', value: Number(stats.contacted ?? 0), icon: Headphones, tint: 'bg-blue-50 text-blue-600' },
     { label: 'Renewed', value: Number(stats.renewed ?? 0), icon: CheckCircle2, tint: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Voice AI queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-violet-50 text-violet-600' },
+    { label: 'AI call queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-violet-50 text-violet-600' },
     { label: 'Conversion', value: `${conversion}%`, icon: UserCheck, tint: 'bg-amber-50 text-amber-600' },
   ];
 
@@ -422,14 +422,23 @@ export default function RenewalCenter() {
                       <p className="text-xs text-muted-foreground">
                         {row.claimed_name ? `Owned by ${row.claimed_name}` : 'Unassigned'} · {row.attempts_count} contact{row.attempts_count === 1 ? '' : 's'}
                       </p>
+                      <p className={`text-xs font-medium ${row.voice_attempts_count >= VOICE_CALL_LIMIT ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                        {row.voice_attempts_count >= VOICE_CALL_LIMIT
+                          ? 'AI call budget used — follow up in person'
+                          : `AI calls used: ${row.voice_attempts_count} of ${VOICE_CALL_LIMIT}`}
+                      </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
                         className="cursor-pointer gap-2 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                        disabled={!voiceLive || voiceCall.isPending}
-                        title={voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet'}
+                        disabled={!voiceLive || voiceCall.isPending || row.voice_attempts_count >= VOICE_CALL_LIMIT}
+                        title={
+                          row.voice_attempts_count >= VOICE_CALL_LIMIT
+                            ? 'Call budget used (3 calls). Follow up in person to save calling cost.'
+                            : voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet'
+                        }
                         onClick={() => callNow(row)}
                       >
                         {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
