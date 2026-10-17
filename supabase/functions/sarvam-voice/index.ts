@@ -1,3 +1,4 @@
+// v1.7.0 — test calls (and member-less calls by signed-in users) only to the caller's own profile phone.
 // v1.6.0 — mandatory outreach limits and pre-dial renewal case binding.
 // v1.4.0 — call recording import (get_recording). v1.3.0 — purpose-specific opening line (renewal vs retention). Sarvam Voice AI control plane (owner/admin only).
 //
@@ -887,6 +888,16 @@ Deno.serve(async (req) => {
       return { key: key! };
     };
 
+    const ownPhoneOnly = async (to: string): Promise<Response | null> => {
+      if (!userId) return null;
+      const { data: prof } = await sb.from("profiles").select("phone").eq("id", userId).maybeSingle();
+      const mine = normalizePhone(String(prof?.phone || ""));
+      if (!mine || mine.replace(/\D/g, "").slice(-10) !== to.replace(/\D/g, "").slice(-10)) {
+        return json({ ok: false, error: "Test calls can only go to your own phone number on your profile.", code: "own_number_only" }, 403);
+      }
+      return null;
+    };
+
     if (action === "test_call") {
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       if (body.confirmed !== true) {
@@ -896,6 +907,8 @@ Deno.serve(async (req) => {
       if (!isValidIndianMobile(to)) {
         return json({ ok: false, error: "Enter a valid Indian mobile number (+91XXXXXXXXXX).", code: "invalid_number" });
       }
+      const ownDenied = await ownPhoneOnly(to);
+      if (ownDenied) return ownDenied;
       const gate = await dialGate();
       if (gate.blocked) return gate.blocked;
       const res = await placeOne({ to, source: "manual_test", reason: "manual_test", apiKey: gate.key! });
