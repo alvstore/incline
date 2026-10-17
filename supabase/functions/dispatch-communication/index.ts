@@ -1,3 +1,4 @@
+// dispatch-communication v1.41.0 — email attachment fetch is SSRF-guarded (public hosts, no redirects, 5 MB cap).
 // dispatch-communication v1.40.0 — annual-upgrade sends/retries recheck live deadlines.
 // dispatch-communication v1.39.0 — fix in_app insert: notifications table uses
 //          `message` (not `body`); resolve user_id from a UUID recipient when
@@ -1884,7 +1885,10 @@ Deno.serve(async (req) => {
               attachmentHtml = `<p style="margin:24px 0 0;"><a href="${safeUrl}" style="color:#EAB308;font-weight:700;">Open ${safeName}</a></p>`;
             } else {
               try {
-                const res = await fetch(input.attachment.url);
+                const guarded = await assertPublicUrl(String(input.attachment.url));
+                const res = await fetch(guarded.toString(), { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+                const declared = Number(res.headers.get('content-length') || 0);
+                if (declared > 5_000_000) throw new Error('attachment_too_large');
                 if (!res.ok) throw new Error(`attachment_fetch_${res.status}`);
                 const buf = new Uint8Array(await res.arrayBuffer());
                 if (buf.byteLength < 1024) {

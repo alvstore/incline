@@ -1,3 +1,4 @@
+// v1.2.1 — identical response for new, existing lead and existing member (no enumeration).
 // v1.2.0 — phoneVariants dedupe (leads + members)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { normalizePhone, phoneVariants } from '../_shared/phone.ts';
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
     }
     const { data: existingMember } = await supabase.from('profiles').select('id').in('phone', variants).limit(1).maybeSingle();
     if (existingMember) {
-      return new Response(JSON.stringify({ success: true, message: 'Thank you! We already have your details on file.' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: true, message: 'Thank you! We will contact you soon.' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Branch resolution: explicit > slug > first active
