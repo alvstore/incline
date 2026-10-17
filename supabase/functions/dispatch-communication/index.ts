@@ -156,6 +156,7 @@
 //   2. member channel + category preferences
 //   3. quiet hours (deferred to communication_retry_queue)
 //   4. provider routing (whatsapp / sms / email / in_app)
+import { assertPublicUrl } from "../_shared/safeFetch.ts";
 import { requireCaller } from "../_shared/requireCaller.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import {
