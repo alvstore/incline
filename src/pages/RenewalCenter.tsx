@@ -543,18 +543,26 @@ export default function RenewalCenter() {
             <section className="space-y-3 rounded-xl bg-card p-4 shadow-lg shadow-muted/30">
               <div className="flex items-center justify-between gap-2">
                 <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="rounded-full bg-indigo-50 p-1.5 text-indigo-600"><PhoneCall className="h-4 w-4" /></span>Voice AI calls
+                  <span className="rounded-full bg-indigo-50 p-1.5 text-indigo-600"><PhoneCall className="h-4 w-4" /></span>
+                  Voice AI calls · {selected?.voice_attempts_count ?? 0} of {VOICE_CALL_LIMIT} used
                 </p>
                 <Button
                   size="sm"
                   variant="secondary"
                   className="cursor-pointer gap-2 rounded-xl"
-                  disabled={!voiceLive || voiceCall.isPending}
+                  disabled={!voiceLive || voiceCall.isPending || (selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT}
+                  title={(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT ? 'Call budget used (3 calls). Follow up in person to save calling cost.' : undefined}
                   onClick={() => selected && callNow(selected)}
                 >
                   {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
                 </Button>
               </div>
+              {(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT && (
+                <p className="flex items-start gap-2 text-xs text-amber-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Automatic calling has stopped for this member after 3 attempts to save calling cost. Reach out in person or record an outcome below.
+                </p>
+              )}
               {!voiceLive && (
                 <p className="flex items-start gap-2 text-xs text-muted-foreground">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -603,10 +611,11 @@ export default function RenewalCenter() {
             <Button
               variant="outline"
               className="cursor-pointer rounded-xl"
-              disabled={action.isPending}
-              onClick={() => selected && run({ caseId: selected.case_id, action: 'voice_escalate', note }, 'Added to Voice AI review queue')}
+              disabled={action.isPending || (selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT}
+              title={(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT ? 'Call budget used (3 calls). Follow up in person instead.' : 'Queue one Voice AI call for this member'}
+              onClick={() => selected && run({ caseId: selected.case_id, action: 'voice_escalate', note }, 'Voice AI call queued')}
             >
-              <PhoneCall className="mr-2 h-4 w-4" />Voice AI queue
+              <PhoneCall className="mr-2 h-4 w-4" />Queue AI call
             </Button>
             <Button
               className="cursor-pointer rounded-xl"
