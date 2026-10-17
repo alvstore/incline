@@ -1,3 +1,4 @@
+// v6.2.0 — broadcasts by non-owner/admin need an owner/admin-approved campaign (manual and scheduled).
 // v6.1.0 — Canonical v2 audience resolver; Meta 131049 is terminal per recipient.
 // v6.0.0 — Replaced every from-edge `adminClient.functions.invoke(...)` with a
 //          raw-fetch `invokeEdge` helper (25s AbortController timeout, real
@@ -113,6 +114,17 @@ Deno.serve(async (req) => {
       const { data: bm } = await adminClient.from("branch_managers").select("branch_id").eq("user_id", userId!).eq("branch_id", branch_id).limit(1);
       const { data: sb } = await adminClient.from("staff_branches").select("branch_id").eq("user_id", userId!).eq("branch_id", branch_id).limit(1);
       if (!(bm?.length || sb?.length)) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+    }
+    // v6.2.0 — owner/admin approval gate for manager-created broadcasts.
+    if (!isSystem && !callerIsGlobal && !campaign_id) {
+      return new Response(JSON.stringify({ error: "Broadcasts by managers need owner approval. Save it as a scheduled campaign and ask an owner or admin to approve it.", code: "approval_required" }), { status: 403, headers: corsHeaders });
+    }
+    if (campaign_id) {
+      const { data: gate } = await adminClient.from('campaigns').select('approval_required, approved_at').eq('id', campaign_id).maybeSingle();
+      const g = gate as { approval_required: boolean; approved_at: string | null } | null;
+      if (g?.approval_required && !g.approved_at && !(callerIsGlobal && !isSystem)) {
+        return new Response(JSON.stringify({ error: "This broadcast is waiting for owner/admin approval.", code: "approval_required" }), { status: isSystem ? 409 : 403, headers: corsHeaders });
+      }
     }
     // Campaign must belong to the caller's authorised branch.
     if (!isSystem && campaign_id) {

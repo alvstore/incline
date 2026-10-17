@@ -1,3 +1,4 @@
+// v1.2.0 — image types only, 5 MB cap (header precheck + body).
 // v1.1.1 — Server-side image fetcher: staff-only, SSRF-hardened, bucket hardcoded
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -99,8 +100,10 @@ Deno.serve(async (req) => {
       return json({ error: `Unsupported content type: ${ct || "unknown"}. Allowed: JPEG, PNG, WebP, GIF` }, 400);
     }
 
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (Number(resp.headers.get("content-length") || 0) > MAX_BYTES) return json({ error: "Image too large (max 5 MB)" }, 400);
     const buf = await resp.arrayBuffer();
-    if (buf.byteLength > 10 * 1024 * 1024) return json({ error: "Image too large (max 10 MB)" }, 400);
+    if (buf.byteLength > MAX_BYTES) return json({ error: "Image too large (max 5 MB)" }, 400);
 
     const ext = ct.split("/")[1].replace("jpeg", "jpg");
     const filename = `${crypto.randomUUID()}.${ext}`;
