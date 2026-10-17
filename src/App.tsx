@@ -359,7 +359,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter future={{ v7_startTransition: true }}>
+      <BrowserRouter>
         <AuthProvider>
           <BranchProvider>
           

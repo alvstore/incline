@@ -2353,6 +2353,9 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          approval_required: boolean
+          approved_at: string | null
+          approved_by: string | null
           attachment_filename: string | null
           attachment_kind: string | null
           attachment_url: string | null
@@ -2392,6 +2395,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approval_required?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
           attachment_filename?: string | null
           attachment_kind?: string | null
           attachment_url?: string | null
@@ -2431,6 +2437,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approval_required?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
           attachment_filename?: string | null
           attachment_kind?: string | null
           attachment_url?: string | null
@@ -16376,6 +16385,7 @@ export type Database = {
         Returns: Json
       }
       apply_late_gate_exits: { Args: { p_since?: string }; Returns: number }
+      approve_campaign: { Args: { p_campaign_id: string }; Returns: Json }
       approve_locker_request: {
         Args: {
           p_locker_id: string

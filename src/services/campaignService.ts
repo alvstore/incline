@@ -146,6 +146,9 @@ export async function getAudienceBreakdown(
 
 export interface Campaign {
   id: string;
+  approval_required?: boolean;
+  approved_by?: string | null;
+  approved_at?: string | null;
   branch_id: string;
   name: string;
   channel: CampaignChannel;
@@ -708,3 +711,10 @@ export async function getCampaignReport(campaignId: string): Promise<{
   return { recipients: rows, groups };
 }
 
+
+
+/** Owner/admin approval for a manager-created broadcast (server-enforced). */
+export async function approveCampaign(campaignId: string): Promise<void> {
+  const { error } = await supabase.rpc('approve_campaign', { p_campaign_id: campaignId });
+  if (error) throw error;
+}
