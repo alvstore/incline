@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Megaphone, Plus, MessageSquare, Mail, CheckCircle2, Clock, AlertTriangle,
   Loader2, MoreVertical, Pencil, Trash2, Copy, CalendarX, Search, BarChart3,
-  RotateCw,
+  RotateCw, ShieldCheck, ShieldAlert,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -18,9 +18,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useBranchContext } from '@/contexts/BranchContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import {
   listCampaigns, deleteCampaign, duplicateCampaign, cancelScheduledCampaign,
-  retryFailedCampaign,
+  retryFailedCampaign, approveCampaign,
   type Campaign,
 } from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
@@ -55,6 +57,14 @@ export function CampaignsPanel() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [announceClassId, setAnnounceClassId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { roles } = useAuth();
+  const canApprove = can.crossBranchView(roles);
+  const approveQc = useQueryClient();
+  const approveMut = useMutation({
+    mutationFn: approveCampaign,
+    onSuccess: () => { toast.success('Broadcast approved'); approveQc.invalidateQueries({ queryKey: ['campaigns'] }); },
+    onError: (e: Error) => toast.error(e.message || 'Could not approve broadcast'),
+  });
 
   // Deep-link from the Classes page: /campaigns?announce_class=<id>
   useEffect(() => {
@@ -198,6 +208,11 @@ export function CampaignsPanel() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {c.approval_required && !c.approved_at && (
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 rounded-full text-[10px] uppercase">
+                        <ShieldAlert className="h-3 w-3 mr-1" /> Needs approval
+                      </Badge>
+                    )}
                     <Badge variant="outline" className={`${sb.c} rounded-full text-[10px] uppercase`}>
                       <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {sb.label}
                     </Badge>
@@ -220,6 +235,11 @@ export function CampaignsPanel() {
                         <DropdownMenuItem onClick={() => dupMut.mutate(c.id)} disabled={dupMut.isPending}>
                           <Copy className="h-4 w-4 mr-2" /> Duplicate
                         </DropdownMenuItem>
+                        {canApprove && c.approval_required && !c.approved_at && (
+                          <DropdownMenuItem onClick={() => approveMut.mutate(c.id)} disabled={approveMut.isPending}>
+                            <ShieldCheck className="h-4 w-4 mr-2" /> Approve broadcast
+                          </DropdownMenuItem>
+                        )}
                         {c.status === 'scheduled' && (
                           <DropdownMenuItem onClick={() => cancelMut.mutate(c.id)} disabled={cancelMut.isPending}>
                             <CalendarX className="h-4 w-4 mr-2" /> Cancel schedule
