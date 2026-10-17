@@ -9,6 +9,7 @@ export type VoiceDisposition =
   | 'coming_back'
   | 'callback_requested'
   | 'not_interested'
+  | 'renewal_declined'
   | 'wrong_person'
   | 'complaint'
   | 'needs_human'
@@ -22,6 +23,7 @@ export interface BadgeLook {
 }
 
 const DISPOSITIONS: Record<string, BadgeLook> = {
+  renewal_declined: { label: 'Renewal declined · stopped', className: 'bg-muted text-muted-foreground' },
   coming_back:        { label: 'Coming back',      className: 'bg-emerald-100 text-emerald-700' },
   callback_requested: { label: 'Callback',         className: 'bg-indigo-100 text-indigo-700' },
   not_interested:     { label: 'Not interested',   className: 'bg-slate-100 text-slate-600' },

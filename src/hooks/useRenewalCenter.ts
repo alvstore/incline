@@ -161,20 +161,15 @@ export function useRenewalVoiceCall() {
           action: 'place_call',
           confirmed: true,
           member_id: input.memberId,
+          renewal_case_id: input.caseId,
           reason: 'member_renewal',
-          cooldown_days: 0,
+          cooldown_days: 7,
         },
       });
       if (error) throw error;
       const res = (data ?? {}) as { ok?: boolean; error?: string; call_record_id?: string };
       if (res.ok === false) throw new Error(res.error || 'Voice AI could not start the call');
-      if (res.call_record_id) {
-        const { error: linkError } = await (supabase as any).rpc('renewal_link_voice_call', {
-          _case_id: input.caseId,
-          _attempt_id: res.call_record_id,
-        });
-        if (linkError) throw linkError;
-      }
+      // Linked atomically before contacting the provider.
       return res;
     },
     onSuccess: async () => {

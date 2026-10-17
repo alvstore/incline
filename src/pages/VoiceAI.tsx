@@ -153,7 +153,7 @@ function CallsTable({
                 onClick={() => onOpen(r.id)}
               >
                 <TableCell>
-                  <div className="font-medium text-foreground">{r.member_name ?? 'Unknown'}</div>
+                  <Button variant="link" className="h-auto justify-start p-0 text-left font-medium text-foreground" onClick={(event) => { event.stopPropagation(); onOpen(r.id); }} aria-label={`Open call for ${r.member_name ?? 'unknown member'}`}>{r.member_name ?? 'Unknown'}</Button>
                   <div className="text-xs text-muted-foreground">{r.member_code ?? r.masked_phone ?? '—'}</div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{r.branch_name ?? '—'}</TableCell>
@@ -347,7 +347,9 @@ export default function VoiceAIPage() {
                 <div><p className="text-xs text-muted-foreground">Calling number</p><p className="mt-1 text-sm font-semibold">{integration?.agent_phone_number ?? '—'}</p></div>
                 <div><p className="text-xs text-muted-foreground">Calling hours · IST</p><p className="mt-1 text-sm font-semibold">{integration?.window_start ?? '—'}–{integration?.window_end ?? '—'}</p></div>
                 <div><p className="text-xs text-muted-foreground">Absence threshold</p><p className="mt-1 text-sm font-semibold">{integration?.min_absent_days ?? '—'} days</p></div>
-                <div><p className="text-xs text-muted-foreground">Call cooldown</p><p className="mt-1 text-sm font-semibold">{integration?.cooldown_days ?? '—'} days</p></div>
+                <div><p className="text-xs text-muted-foreground">Minimum follow-up gap</p><p className="mt-1 text-sm font-semibold">7 days</p></div>
+                <div><p className="text-xs text-muted-foreground">Calls per membership cycle</p><p className="mt-1 text-sm font-semibold">3 maximum</p></div>
+                <div><p className="text-xs text-muted-foreground">Follow-ups</p><p className="mt-1 text-sm font-semibold">2 maximum</p></div>
               </CardContent>
             </Card>
             <div className="grid grid-cols-2 gap-4">
