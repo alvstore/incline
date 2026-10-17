@@ -442,6 +442,41 @@
       "when": 1792152019141,
       "tag": "0062_due_date_fix_log_call",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792217483074,
+      "tag": "0063_voice_outreach_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792217506571,
+      "tag": "0064_enforce_voice_limits_at_atomic_claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792217586824,
+      "tag": "0065_atomic_renewal_voice_binding",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792217717396,
+      "tag": "0066_testable_voice_decision_and_staff_policy_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792217787154,
+      "tag": "0067_preserve_voice_stops_on_duplicate_webhooks",
+      "breakpoints": true
     }
   ]
 }

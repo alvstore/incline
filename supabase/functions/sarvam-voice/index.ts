@@ -1,4 +1,4 @@
-// v1.5.0 — renewal calls honour operator pause; capacity deferrals are not failures.
+// v1.6.0 — mandatory outreach limits and pre-dial renewal case binding.
 // v1.4.0 — call recording import (get_recording). v1.3.0 — purpose-specific opening line (renewal vs retention). Sarvam Voice AI control plane (owner/admin only).
 //
 // Actions: get_state | get_readiness | run_eligibility_check | save_config |
@@ -26,6 +26,7 @@ import {
   type SarvamConfig,
 } from "../_shared/sarvam.ts";
 import { normalizePhone, isValidIndianMobile } from "../_shared/phone.ts";
+import { z } from "npm:zod@3";
 
 
 const PROVIDER = "sarvam";
@@ -734,6 +735,7 @@ Deno.serve(async (req) => {
         source: string;
         reason: string;
         memberId?: string | null;
+        renewalCaseId?: string | null;
         branchIdForCall?: string | null;
         cooldownDays?: number;
         vars?: Record<string, string>;
@@ -781,6 +783,7 @@ Deno.serve(async (req) => {
         _max_concurrent: cfg.max_concurrent_calls ?? 1,
         _cooldown_days: opts.cooldownDays ?? 0,
         _eligibility: {
+          renewal_case_id: opts.renewalCaseId ?? null,
           checked: ["readiness", "window", "do_not_contact", "daily_cap", "concurrency", "duplicate"],
           window: `${cfg.window_start}-${cfg.window_end} IST`,
         },
@@ -791,7 +794,8 @@ Deno.serve(async (req) => {
       if (!claimed?.ok) {
         return { ok: false, error: claimed?.error ?? "Unable to start the call.", code: claimed?.error_code, phone: to };
       }
-      const attemptRowId = claimed.attempt_row_id!;
+      const attemptRowId = claimed.attempt_row_id;
+      if (!attemptRowId) return { ok: false, code: "claim_failed", error: "Call reservation was not confirmed." };
 
       // Personalisation: greet the callee by name when the number is known.
       const callerProfile = (dncProfiles || [])[0] as
@@ -900,6 +904,8 @@ Deno.serve(async (req) => {
 
     // Operator-triggered single call to one member (no automation, no cron).
     if (action === "place_call") {
+      const parsed = z.object({ member_id: z.string().uuid().optional(), renewal_case_id: z.string().uuid().optional(), reason: z.enum(["member_renewal", "member_retention", "manual_test"]).optional() }).passthrough().safeParse(body);
+      if (!parsed.success) return json({ ok: false, error: "invalid_input", message: "Invalid member or renewal case." }, 400);
       if (!row?.id) return json({ ok: false, error: "Save the Sarvam configuration first.", code: "not_configured" });
       if (body.confirmed !== true) {
         return json({ ok: false, error: "Confirmation is required before placing a call.", code: "not_confirmed" });
@@ -937,8 +943,9 @@ Deno.serve(async (req) => {
         source: memberId ? "member_retention" : "manual_test",
         reason: String(body.reason || (memberId ? "member_retention" : "manual_test")),
         memberId,
+        renewalCaseId: parsed.data.renewal_case_id ?? null,
         branchIdForCall: callBranch,
-        cooldownDays: memberId ? Number(body.cooldown_days ?? 7) : 0,
+        cooldownDays: memberId ? 7 : 0,
         vars,
         apiKey: gate.key ?? "",
       });
@@ -1127,6 +1134,10 @@ Deno.serve(async (req) => {
           if (["concurrency_limit", "duplicate_live_call", "daily_cap_reached"].includes(res.code ?? "")) break;
           attempted++;
           if (res.ok) placed++;
+          else if (["cooldown_active", "member_attempt_limit", "outreach_declined", "outreach_relocated", "outreach_staff_followup", "outreach_do_not_contact"].includes(res.code ?? "")) {
+            // Safety suppression is an expected skip, not a broken scheduler.
+            continue;
+          }
           else {
             errors++;
             lastError = `${res.code ?? "error"}: ${res.error ?? ""}`.slice(0, 500);

@@ -14571,6 +14571,7 @@ export type Database = {
           id: string
           lead_id: string | null
           member_id: string | null
+          outreach_stop_reason: string | null
           phone: string
           provider: string
           provider_call_id: string | null
@@ -14600,6 +14601,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           member_id?: string | null
+          outreach_stop_reason?: string | null
           phone: string
           provider?: string
           provider_call_id?: string | null
@@ -14629,6 +14631,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           member_id?: string | null
+          outreach_stop_reason?: string | null
           phone?: string
           provider?: string
           provider_call_id?: string | null
@@ -19321,7 +19324,29 @@ export type Database = {
         Returns: Json
       }
       voice_mask_phone: { Args: { _phone: string }; Returns: string }
+      voice_member_outreach_check: {
+        Args: { _cooldown?: number; _member_id: string; _reason?: string }
+        Returns: Json
+      }
+      voice_member_outreach_policy: {
+        Args: { _member_id: string }
+        Returns: Json
+      }
       voice_ops_summary: { Args: { p_branch?: string }; Returns: Json }
+      voice_outreach_decision: {
+        Args: {
+          _attempts: number
+          _cooldown?: number
+          _last_attempt: string
+          _now?: string
+          _stop: string
+        }
+        Returns: Json
+      }
+      voice_outreach_stop_reason: {
+        Args: { _disposition: string; _vars: Json }
+        Returns: string
+      }
       voice_retention_blocked: {
         Args: { p_branch?: string; p_limit?: number }
         Returns: {

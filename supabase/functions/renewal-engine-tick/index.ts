@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
               category: "membership_reminder",
               recipient,
               member_id: c.member_id,
+              renewal_case_id: c.case_id,
               payload: {
                 subject: c.days_to_expiry >= 0 ? "Your membership is expiring" : "Come back to The Incline",
                 body: message,
@@ -185,25 +186,19 @@ Deno.serve(async (req) => {
               action: "place_call",
               confirmed: true,
               member_id: c.member_id,
+              renewal_case_id: c.case_id,
               reason: "member_renewal",
-              cooldown_days: 3,
+              cooldown_days: 7,
             }),
           });
           const body = await res.json().catch(() => ({}));
           if (body?.ok === true && body?.call_record_id) {
-            const { error: linkError } = await admin.rpc("renewal_link_voice_call", {
-              _case_id: c.case_id,
-              _attempt_id: body.call_record_id,
-            });
-            if (linkError) {
-              if (/does not match|not open/i.test(linkError.message)) { voiceCalls++; continue; }
-              throw linkError;
-            }
+            // Reservation binds the case before calling the provider.
             voiceCalls++;
           } else if (body?.code === "concurrency_limit") {
             // Line busy with another call — expected; remaining cases retry next tick.
             break;
-          } else if (["cooldown_active", "outside_window", "daily_cap_reached", "do_not_contact", "duplicate_live_call", "paused_by_operator", "automation_disabled"].includes(body?.code)) {
+          } else if (["member_attempt_limit", "outreach_declined", "outreach_relocated", "outreach_staff_followup", "outreach_do_not_contact", "cooldown_active", "outside_window", "daily_cap_reached", "do_not_contact", "duplicate_live_call", "paused_by_operator", "automation_disabled"].includes(body?.code)) {
             continue;
           } else {
             await captureEdgeError(

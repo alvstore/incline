@@ -403,7 +403,7 @@ export function useVoicePauseAutomation() {
   });
 }
 
-/** Call one member now, ignoring the cooldown the operator just overrode. */
+/** Call one member now, subject to mandatory server-side calling limits. */
 export function useVoiceCallMemberNow() {
   const qc = useQueryClient();
   return useMutation({
@@ -413,7 +413,7 @@ export function useVoiceCallMemberNow() {
         confirmed: true,
         member_id: memberId,
         reason: 'member_retention',
-        cooldown_days: 0,
+        cooldown_days: 7,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['voice-calls'] });
@@ -464,7 +464,7 @@ export function useVoiceRetryFailedToday(branchId?: string | null, cap = 15) {
             confirmed: true,
             member_id: t.member_id,
             reason: 'member_retention',
-            cooldown_days: 0,
+            cooldown_days: 7,
           });
           placed += 1;
         } catch {
