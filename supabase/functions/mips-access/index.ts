@@ -1,3 +1,4 @@
+// v2.22.0 — managers may only act on people/branches they manage.
 // v2.21.0 — DELTA-ONLY: a gate push is skipped when its target state matches the last successful push.
 // v2.20.0 — OOM guard: 25s per-gate gap; all bulk loops strictly sequential.
 // v2.18.0 — opt-in time-zone revoke (acTzNumber1=2) keeps blocked faces enrolled
@@ -1334,6 +1335,7 @@ Deno.serve(async (req) => {
 
 
 
+  let __scopedUid: string | null = null;
   if (!isService) {
 
 
@@ -1358,7 +1360,21 @@ Deno.serve(async (req) => {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (!(roles || []).some((r: any) => r.role === "owner" || r.role === "admin")) __scopedUid = uid;
   }
+
+  const forbid = (msg: string) => new Response(JSON.stringify({ error: msg }), {
+    status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+  const canActOnBranch = async (branchId: string | null | undefined): Promise<boolean> => {
+    if (!__scopedUid) return true;
+    if (!branchId) return false;
+    const [{ data: bm }, { data: sb }] = await Promise.all([
+      supabase.from("branch_managers").select("branch_id").eq("user_id", __scopedUid).eq("branch_id", branchId).limit(1),
+      supabase.from("staff_branches").select("branch_id").eq("user_id", __scopedUid).eq("branch_id", branchId).limit(1),
+    ]);
+    return !!(bm?.length || sb?.length);
+  };
 
 
 
@@ -1381,6 +1397,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "sweep_expired") {
+      if (__scopedUid) return forbid("Only owners/admins can run a full sweep");
       const { revoked, restored, errors } = await sweepExpired(supabase);
       return new Response(
         JSON.stringify({
@@ -1408,6 +1425,13 @@ Deno.serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      if (__scopedUid) {
+        const tbl = person_type === "trainer" ? "trainers" : "employees";
+        const { data: person } = await supabase.from(tbl).select("branch_id").eq("id", person_id).maybeSingle();
+        if (!person || !(await canActOnBranch(person.branch_id)) || (branch_id && !(await canActOnBranch(branch_id)))) {
+          return forbid("No access to this person's branch");
+        }
       }
       const result = await applyStaffAction(supabase, person_type, person_id, action, reason, branch_id);
       const status = result.success ? 200 : 400;
@@ -1439,6 +1463,12 @@ Deno.serve(async (req) => {
 
     // v2.15.0 — every member path runs under the per-member lock. DB webhooks
     // send `evaluate`; the worker derives revoke/restore from committed state.
+    if (__scopedUid) {
+      const { data: mem } = await supabase.from("members").select("branch_id").eq("id", member_id).maybeSingle();
+      if (!mem || !(await canActOnBranch(mem.branch_id)) || (branch_id && !(await canActOnBranch(branch_id)))) {
+        return forbid("No access to this member's branch");
+      }
+    }
     const result = await runMemberActionLocked(supabase, member_id, action, reason, branch_id);
     const status = result.success ? 200 : result.error === "Member not found" ? 404 : 400;
     return new Response(JSON.stringify(result), {

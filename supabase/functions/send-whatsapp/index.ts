@@ -1,3 +1,4 @@
+// v2.10.0 — signed-in callers: branch access + recipient must match the queued message row.
 // v2.9.0 — Downgrade Meta 131000/133000 echoes from process-comm-retry-queue to
 //           severity=warning so a single flaky send doesn't spam SystemHealth.
 // v2.8.0 — MM API for WhatsApp routing: when the caller sets `use_mm_api: true` on a
@@ -112,7 +113,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-  { const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] }); if (!__caller.ok) return __caller.response; }
+  const __caller = await requireCaller(req, corsHeaders, { roles: ["owner","admin","manager","staff"] });
+  if (!__caller.ok) return __caller.response;
 
   try {
     const body = await req.json();
@@ -155,6 +157,25 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    if (!__caller.internal && __caller.userId) {
+      const deny = (m: string) => new Response(JSON.stringify({ error: m }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const isGlobal = __caller.roles.some((r) => r === "owner" || r === "admin");
+      if (!isGlobal) {
+        const [{ data: bm }, { data: sb }] = await Promise.all([
+          supabase.from("branch_managers").select("branch_id").eq("user_id", __caller.userId).eq("branch_id", branch_id).limit(1),
+          supabase.from("staff_branches").select("branch_id").eq("user_id", __caller.userId).eq("branch_id", branch_id).limit(1),
+        ]);
+        if (!(bm?.length || sb?.length)) return deny("No access to this branch");
+      }
+      const { data: msgRow } = await supabase.from("whatsapp_messages")
+        .select("phone_number, branch_id").eq("id", message_id).maybeSingle();
+      const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
+      if (!msgRow || msgRow.branch_id !== branch_id || digits(msgRow.phone_number) !== digits(phone_number)) {
+        return deny("Recipient does not match the queued message");
+      }
+    }
 
     // Fetch WhatsApp integration settings — branch-specific then global
     let integration: any = null;

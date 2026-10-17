@@ -1,3 +1,4 @@
+// notify-class-session v1.1.1 — cancellation reason stripped of links/markup/control chars, 120-char cap.
 // notify-class-session v1.1.0
 // v1.0.1: member deep-link → /book (member booking route); dispatcher provenance fields.
 // Tells booked members when a class session is cancelled or changed (trainer /
@@ -69,7 +70,15 @@ Deno.serve(async (req) => {
     const explicitMembers = Array.isArray(body.member_ids)
       ? body.member_ids.filter((m) => typeof m === "string" && UUID_RE.test(m)).slice(0, 500)
       : null;
-    const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+    const reason = typeof body.reason === "string"
+      ? body.reason
+          .replace(/[\u0000-\u001f\u007f]+/g, " ")
+          .replace(/(https?:\/\/|www\.)\S+/gi, "")
+          .replace(/[<>{}*_~`]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 120)
+      : "";
 
     // ---- authz: staff who can manage the class's branch ------------------
     const authHeader = req.headers.get("Authorization") ?? "";
