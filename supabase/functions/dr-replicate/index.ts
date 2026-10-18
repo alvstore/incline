@@ -25,7 +25,7 @@ type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
 
 interface MirrorReport {
   ok: boolean;
-  version: "1.5.0";
+  version: "1.6.0";
   mode: Mode;
   startedAt: string;
   finishedAt?: string;
@@ -582,6 +582,61 @@ Deno.serve(async (req) => {
 
     // Schema bootstrap for an empty standby: direct Postgres via DR_DB_URL.
     const rawBody = req.headers.get("content-type")?.includes("application/json") ? await req.clone().json().catch(() => ({})) : {};
+    if (rawBody?.mode === "rows-pg") {
+      // Row mirror straight into standby Postgres with triggers + FK checks off
+      // (session_replication_role=replica) so load order and standby-side
+      // business triggers can't reject a faithful copy. One-way only.
+      const dbUrl = Deno.env.get("DR_DB_URL");
+      if (!dbUrl) throw new Error("DR_DB_URL not configured");
+      if (new URL(dbUrl).hostname !== new URL(DR_URL).hostname) throw new Error("refusing: DR_DB_URL is not the standby host");
+      const only: string[] = Array.isArray(rawBody.only) ? rawBody.only.map(String) : [];
+      const { data: allTables, error: tErr } = await primary.rpc("dr_get_replication_tables");
+      if (tErr) throw new Error(tErr.message);
+      const tables = (allTables as Array<{ table_name: string; has_id_pk: boolean }>).filter((t) => !only.length || only.includes(t.table_name));
+      const { default: postgres } = await import("npm:postgres@3.4.4");
+      const sql = postgres(dbUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+      const out: Array<{ table: string; rows: number; deleted: number; error?: string }> = [];
+      try {
+        for (const t of tables) {
+          const name = t.table_name.replace(/"/g, "");
+          let rows = 0, deleted = 0;
+          try {
+            await sql.begin(async (tx: any) => {
+              await tx.unsafe("SET LOCAL session_replication_role = replica");
+              const keep: string[] = [];
+              if (!t.has_id_pk) await tx.unsafe(`DELETE FROM public."${name}"`);
+              for (let off = 0; ; off += 500) {
+                let q = primary.from(name).select("*").range(off, off + 499);
+                if (t.has_id_pk) q = q.order("id", { ascending: true });
+                const { data, error } = await q;
+                if (error) throw new Error(error.message);
+                const page = (data ?? []) as Array<Record<string, unknown>>;
+                if (!page.length) break;
+                if (t.has_id_pk) {
+                  const ids = page.map((r) => String(r.id));
+                  keep.push(...ids);
+                  await tx.unsafe(`DELETE FROM public."${name}" WHERE id::text = ANY($1::text[])`, [ids]);
+                }
+                await tx.unsafe(`INSERT INTO public."${name}" SELECT * FROM json_populate_recordset(null::public."${name}", $1::json)`, [JSON.stringify(page)]);
+                rows += page.length;
+                if (page.length < 500) break;
+              }
+              if (t.has_id_pk) {
+                const r = await tx.unsafe(`DELETE FROM public."${name}" WHERE NOT (id::text = ANY($1::text[]))`, [keep]);
+                deleted = r.count ?? 0;
+              }
+            });
+          } catch (e) {
+            out.push({ table: name, rows, deleted, error: (e as Error).message });
+            continue;
+          }
+          out.push({ table: name, rows, deleted });
+        }
+      } finally { await sql.end(); }
+      const failed = out.filter((o) => o.error);
+      return new Response(JSON.stringify({ ok: failed.length === 0, tables: out.length, failed: failed.length, results: out }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (rawBody?.mode === "probe" || rawBody?.mode === "apply-schema") {
       const dbUrl = Deno.env.get("DR_DB_URL");
       if (!dbUrl) throw new Error("DR_DB_URL not configured");
@@ -638,7 +693,7 @@ Deno.serve(async (req) => {
 
     const report: MirrorReport = {
       ok: true,
-      version: "1.5.0",
+      version: "1.6.0",
       mode,
       startedAt: new Date().toISOString(),
       mirrored: {},
