@@ -599,13 +599,16 @@ Deno.serve(async (req) => {
         const errors: string[] = [];
         // Statement-by-statement so one incompatible object doesn't abort the rest.
         const stmts = dump.split(/;\s*\n(?=(?:CREATE|ALTER|GRANT|REVOKE|COMMENT|DO|SET|SELECT|INSERT|DROP|--))/i);
-        for (const st of stmts) {
-          const q = st.trim(); if (!q) continue;
+        const from = Number(rawBody.from ?? 0), count = Number(rawBody.count ?? 300);
+        const started = Date.now();
+        let i = from;
+        for (; i < Math.min(stmts.length, from + count) && Date.now() - started < 110_000; i++) {
+          const q = stmts[i].trim(); if (!q) continue;
           try { await sql.unsafe(q.endsWith(";") ? q : q + ";"); } catch (e) { errors.push(`${(e as Error).message} :: ${q.slice(0, 90)}`); }
         }
         await sql.unsafe("NOTIFY pgrst, 'reload schema'");
         const [{ n: after }] = await sql`select count(*)::int as n from pg_tables where schemaname='public'`;
-        return new Response(JSON.stringify({ ok: errors.length === 0, host, before: n, after, statements: stmts.length, failed: errors.length, errors: errors.slice(0, 40) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ok: errors.length === 0, host, before: n, after, statements: stmts.length, next: i < stmts.length ? i : null, failed: errors.length, errors: errors.slice(0, 40) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } finally { await sql.end(); }
     }
 
