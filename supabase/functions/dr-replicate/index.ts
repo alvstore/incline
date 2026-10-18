@@ -392,41 +392,56 @@ async function syncRows(
     return copied;
   };
 
-  const oneWay = opts.oneWay === true;
-
-  for (let pass = 1; pass <= 2; pass++) {
-    for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
-      const table = row.table_name;
-      const hasId = row.has_id_pk;
-      let perTableRows = 0;
-      let perTableFailed = 0;
-      let lastErr: string | undefined;
-
-      try {
-        if (!oneWay) perTableRows += await copyRows(dr, primary, table, hasId, false);
-        perTableRows += await copyRows(primary, dr, table, hasId, false);
-        if (pass === 2) perTableRows += await copyRows(primary, dr, table, hasId, false);
-
-        const primaryCount = await countRows(primary, table);
-        const standbyCount = await countRows(dr, table);
-        if (oneWay ? standbyCount < primaryCount : primaryCount !== standbyCount) {
-          throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
-        }
-      } catch (e) {
-        lastErr = (e as Error).message;
-        perTableFailed++;
-      }
-
-      if (pass === 2) {
-        stat.tables++;
-        stat.rowsUpserted += perTableRows;
-        if (perTableFailed > 0) {
-          stat.tablesFailed++;
-          report.errors.push(`rows ${table}: ${lastErr}`);
-        }
-        stat.perTable.push({ table, rows: perTableRows, failed: perTableFailed, error: lastErr });
-      }
+  // Strictly one-way: the standby must NEVER write back into production.
+  // Rows are overwritten (so edits propagate) and standby-only rows are deleted.
+  const listIds = async (client: SupabaseClient, table: string): Promise<Set<string>> => {
+    const ids = new Set<string>();
+    const ID_PAGE = 5000;
+    for (let offset = 0; ; offset += ID_PAGE) {
+      const { data, error } = await withRetry(`ids ${table} ${offset}`, () =>
+        client.from(table).select("id").order("id", { ascending: true }).range(offset, offset + ID_PAGE - 1),
+      );
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []) as Array<{ id: string | number }>;
+      for (const r of rows) ids.add(String(r.id));
+      if (rows.length < ID_PAGE) break;
     }
+    return ids;
+  };
+
+  for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
+    const table = row.table_name;
+    const hasId = row.has_id_pk;
+    let perTableRows = 0;
+    let lastErr: string | undefined;
+
+    try {
+      perTableRows += await copyRows(primary, dr, table, hasId, true);
+      if (hasId) {
+        const [pIds, sIds] = await Promise.all([listIds(primary, table), listIds(dr, table)]);
+        const extra = [...sIds].filter((id) => !pIds.has(id));
+        for (let i = 0; i < extra.length; i += 200) {
+          const { error } = await dr.from(table).delete().in("id", extra.slice(i, i + 200));
+          if (error) throw new Error(`delete extras: ${error.message}`);
+        }
+      }
+      const primaryCount = await countRows(primary, table);
+      const standbyCount = await countRows(dr, table);
+      // Live tables keep growing during the copy; small positive lag is tolerated.
+      if (standbyCount > primaryCount || (!hasId && standbyCount !== primaryCount)) {
+        throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
+      }
+    } catch (e) {
+      lastErr = (e as Error).message;
+    }
+
+    stat.tables++;
+    stat.rowsUpserted += perTableRows;
+    if (lastErr) {
+      stat.tablesFailed++;
+      report.errors.push(`rows ${table}: ${lastErr}`);
+    }
+    stat.perTable.push({ table, rows: perTableRows, failed: lastErr ? 1 : 0, error: lastErr });
   }
 
   report.mirrored.rows = stat;

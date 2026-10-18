@@ -66,4 +66,5 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] Verify the owner view at desktop and phone widths with no failed requests or layout overflow; the program-off state correctly blocks creation.
 - [ ] Verify the same page through a branch-manager account when a manager session is available; no live referral was created while the program remains off.
 
-- [ ] Point DR replication at https://api.joinincline.in and monitor a full copy (data, users, storage, crons, edge functions) until verified
+- [x] Point DR replication at https://api.joinincline.in (one-way, delete propagation, v1.6.0)
+- [ ] Full 1:1 copy to self-hosted standby — BLOCKED: standby has no database tables yet; needs schema applied (user to provide standby DB connection string or apply dump). Edge functions + crons need deploy on the self-hosted side.
