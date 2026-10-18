@@ -10,7 +10,9 @@ import SEO from '@/components/seo/SEO';
 
 export default function AuthPage() {
   const { user, isLoading, mustSetPassword, roles } = useAuth();
-  const [checkingSetup, setCheckingSetup] = useState(true);
+  // Setup check runs in the background; never block the sign-in screen on it
+  // (blocking caused a loader -> page flash on every visit).
+  const [, setCheckingSetup] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -53,7 +55,7 @@ export default function AuthPage() {
     checkSetup();
   }, []);
 
-  if (isLoading || checkingSetup) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <GymLoader text="Warming up..." />
