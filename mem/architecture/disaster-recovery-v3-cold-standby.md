@@ -4,7 +4,7 @@ description: DR is a direct Cloud→external Supabase dump (dr-replicate nightly
 type: feature
 ---
 
-- DR = **cold standby dump**, primary → external Supabase project `pmznpbsahetwmogezhff`, direct from the `dr-replicate` edge function (v1.5.0). No GitHub/CLI in the data path.
+- DR = **cold standby dump**, primary → self-hosted standby at `https://api.joinincline.in` (DR_URL secret, code default), direct from the `dr-replicate` edge function (v1.5.0). No GitHub/CLI in the data path.
 - Schedule: pg_cron job `dr-replicate-nightly`, `0 21 * * *` UTC (02:30 IST), mode `all` (schema + auth users + rows + storage).
 - Manual controls live in `src/components/system/DisasterRecoveryCard.tsx` (owner-only, inside Settings → Backup & Restore): **Run dump now** (`mode: all`) and **Verify parity** (`mode: verify`).
 - Removed Aug 2026: `scripts/dr/sync-edge-functions.sh`, `docs/dr-runbook.md`, `docs/dr-secrets-checklist.md`, `src/components/system/DrBanner.tsx`, `src/hooks/useDrMode.ts`. Do NOT re-add unless hot failover is explicitly requested.

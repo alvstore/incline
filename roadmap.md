@@ -65,3 +65,5 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] Create Referral Sheet with searchable member selector, validated Indian phone/email, saved email, and referrer-derived branch scope.
 - [x] Verify the owner view at desktop and phone widths with no failed requests or layout overflow; the program-off state correctly blocks creation.
 - [ ] Verify the same page through a branch-manager account when a manager session is available; no live referral was created while the program remains off.
+
+- [ ] Point DR replication at https://api.joinincline.in and monitor a full copy (data, users, storage, crons, edge functions) until verified
