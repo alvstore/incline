@@ -580,6 +580,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Schema bootstrap for an empty standby: direct Postgres via DR_DB_URL.
+    const rawBody = req.headers.get("content-type")?.includes("application/json") ? await req.clone().json().catch(() => ({})) : {};
+    if (rawBody?.mode === "probe" || rawBody?.mode === "apply-schema") {
+      const dbUrl = Deno.env.get("DR_DB_URL");
+      if (!dbUrl) throw new Error("DR_DB_URL not configured");
+      const host = new URL(dbUrl).hostname;
+      const { default: postgres } = await import("npm:postgres@3.4.4");
+      const sql = postgres(dbUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+      try {
+        const [{ n }] = await sql`select count(*)::int as n from pg_tables where schemaname='public'`;
+        if (rawBody.mode === "probe") {
+          return new Response(JSON.stringify({ ok: true, host, publicTables: n }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (!host.endsWith("joinincline.in") && host !== new URL(DR_URL).hostname) throw new Error(`refusing: DR_DB_URL host ${host} is not the standby`);
+        const { data: dump, error } = await primary.rpc("dr_dump_schema");
+        if (error || typeof dump !== "string") throw new Error(`dr_dump_schema: ${error?.message}`);
+        const errors: string[] = [];
+        // Statement-by-statement so one incompatible object doesn't abort the rest.
+        const stmts = dump.split(/;\s*\n(?=(?:CREATE|ALTER|GRANT|REVOKE|COMMENT|DO|SET|SELECT|INSERT|DROP|--))/i);
+        for (const st of stmts) {
+          const q = st.trim(); if (!q) continue;
+          try { await sql.unsafe(q.endsWith(";") ? q : q + ";"); } catch (e) { errors.push(`${(e as Error).message} :: ${q.slice(0, 90)}`); }
+        }
+        await sql.unsafe("NOTIFY pgrst, 'reload schema'");
+        const [{ n: after }] = await sql`select count(*)::int as n from pg_tables where schemaname='public'`;
+        return new Response(JSON.stringify({ ok: errors.length === 0, host, before: n, after, statements: stmts.length, failed: errors.length, errors: errors.slice(0, 40) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } finally { await sql.end(); }
+    }
+
     const drServiceKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
     if (!drServiceKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
     const dr = createClient(DR_URL, drServiceKey, { auth: { persistSession: false } });
