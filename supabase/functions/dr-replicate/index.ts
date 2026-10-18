@@ -590,6 +590,14 @@ Deno.serve(async (req) => {
       const sql = postgres(dbUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
       try {
         const [{ n }] = await sql`select count(*)::int as n from pg_tables where schemaname='public'`;
+        if (rawBody.mode === "probe" && rawBody.grants === true) {
+          // Standby only: service_role must reach every table/function the mirror uses.
+          await sql.unsafe(`GRANT USAGE ON SCHEMA public TO service_role;
+            GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+            GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+            GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
+            NOTIFY pgrst, 'reload schema';`);
+        }
         if (rawBody.mode === "probe") {
           return new Response(JSON.stringify({ ok: true, host, publicTables: n }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
