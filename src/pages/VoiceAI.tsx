@@ -357,7 +357,8 @@ export default function VoiceAIPage() {
               <Kpi label="Connected" value={today.connected ?? 0} icon={PhoneIncoming} />
             </div>
           </div>
-          <div className="col-span-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="col-span-12 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <Kpi label="Not reached" value={(today.no_answer ?? 0) + (today.failed ?? 0)} sub="No answer + failed" icon={PhoneOutgoing} tone="slate" />
             <Kpi label="Coming back" value={today.coming_back ?? 0} icon={CheckCircle2} />
             <Kpi label="Callbacks" value={today.callbacks ?? 0} icon={Clock} />
             <Kpi label="Complaints" value={today.complaints ?? 0} icon={AlertTriangle} tone="red" />
@@ -482,6 +483,10 @@ export default function VoiceAIPage() {
             <Card className="rounded-2xl shadow-sm">
               <CardHeader>
                 <CardTitle className="text-base">Retention queue <span className="ml-2 text-sm font-normal text-muted-foreground">{queueQ.data?.[0]?.total_count ?? 0} eligible</span></CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Why we call: members absent at least {integration?.min_absent_days ?? 10} days, with a working number, outside cooldown.
+                  Members who have never visited are never auto-called — they appear under Skipped instead.
+                </p>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-6 border-b border-border pb-4 text-sm">
@@ -515,7 +520,7 @@ export default function VoiceAIPage() {
                           <TableHead>Trainer</TableHead>
                           <TableHead>Last call · IST</TableHead>
                           <TableHead>Last outcome</TableHead>
-                          <TableHead>Tries</TableHead>
+                          <TableHead>Tries (max 3)</TableHead>
                           <TableHead>Next eligible attempt · IST</TableHead>
                           {canControl && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
