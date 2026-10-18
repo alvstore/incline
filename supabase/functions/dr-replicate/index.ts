@@ -19,7 +19,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-dr-secret",
 };
 
-const DR_URL = "https://pmznpbsahetwmogezhff.supabase.co";
+const DR_URL = (Deno.env.get("DR_URL") ?? "https://api.joinincline.in").replace(/\/+$/, "");
 
 type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
 
