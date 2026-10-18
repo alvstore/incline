@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { ChevronDown, ChevronRight, PhoneCall, ShieldAlert } from 'lucide-react';
 import { useVoiceCallDetail } from '@/hooks/useVoiceOps';
 import { dispositionLook, statusLook, formatDuration } from '@/lib/voice/voiceOutcomes';
-import { format } from 'date-fns';
+import { voiceTime } from '@/lib/voice/automationStatus';
 import { VoiceCallRecording } from './VoiceCallRecording';
 
 interface Props {
@@ -34,10 +34,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** All call times in IST, matching how the desk reads them. */
 function fmt(value?: string | null, pattern = 'dd MMM yyyy, HH:mm') {
   if (!value) return '—';
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : format(d, pattern);
+  if (Number.isNaN(d.getTime())) return value;
+  if (pattern === 'dd MMM yyyy') {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+  }
+  return `${voiceTime(value)} IST`;
+}
+
+/** A call only has a recording when it actually connected. */
+function callConnected(status?: string | null, duration?: number | null): boolean {
+  if ((duration ?? 0) > 0) return true;
+  return ['answered', 'in_progress', 'completed'].includes(String(status ?? ''));
 }
 
 interface TranscriptTurn { who: 'agent' | 'member'; text: string }
@@ -92,8 +103,7 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
         {data && (
           <div className="space-y-5">
             <div className="flex flex-wrap gap-2">
-              <Badge className={`rounded-full ${status.className}`}>{status.label}</Badge>
-              {disposition && <Badge className={`rounded-full ${disposition.className}`}>{disposition.label}</Badge>}
+              <Badge className={`rounded-full ${(disposition ?? status).className}`}>{(disposition ?? status).label}</Badge>
             </div>
 
             <Section title="Member">
@@ -147,7 +157,7 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
             <div>
               {data.can_view_transcript ? (
                 <>
-                  {callId && <div className="mb-4"><VoiceCallRecording callId={callId} /></div>}
+                  {callId && callConnected(data.status, data.duration_seconds) && <div className="mb-4"><VoiceCallRecording callId={callId} /></div>}
                   <Button
                     variant="ghost"
                     size="sm"

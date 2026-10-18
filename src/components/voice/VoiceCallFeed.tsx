@@ -1,8 +1,8 @@
 import { Activity, PhoneCall } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { dispositionLook, formatDuration, isLiveStatus, statusLook } from '@/lib/voice/voiceOutcomes';
+import { voiceTime } from '@/lib/voice/automationStatus';
 import type { VoiceCallRow } from '@/hooks/useVoiceOps';
-import { format } from 'date-fns';
 
 interface VoiceCallFeedProps {
   rows: VoiceCallRow[];
@@ -14,7 +14,14 @@ interface VoiceCallFeedProps {
 function when(value?: string | null) {
   if (!value) return '—';
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : format(d, 'dd MMM · HH:mm');
+  return Number.isNaN(d.getTime()) ? '—' : `${voiceTime(value)} IST`;
+}
+
+function lastVisit(value?: string | null) {
+  if (!value) return 'Never visited';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' }).format(d);
 }
 
 /** Scrollable list of calls — the left pane of the Voice AI command center. */
@@ -50,14 +57,14 @@ export function VoiceCallFeed({ rows, isLoading, selectedId, onSelect }: VoiceCa
               role="option"
               aria-selected={active}
               onClick={() => onSelect(r.id)}
-              className={`min-h-[44px] w-full cursor-pointer px-4 py-3.5 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                active ? 'bg-indigo-50' : 'hover:bg-slate-50'
+              className={`min-h-[44px] w-full cursor-pointer px-4 py-3.5 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                active ? 'bg-secondary' : 'hover:bg-muted/50'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{r.member_name ?? 'Unknown caller'}</p>
-                  <p className="truncate text-xs text-slate-500">{r.member_code ?? r.masked_phone ?? '—'}</p>
+                  <p className="truncate text-sm font-semibold text-foreground">{r.member_name ?? 'Unknown caller'}</p>
+                  <p className="truncate text-xs text-muted-foreground">{r.member_code ?? r.masked_phone ?? '—'}</p>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -68,8 +75,12 @@ export function VoiceCallFeed({ rows, isLoading, selectedId, onSelect }: VoiceCa
                   {disposition?.label ?? status.label}
                 </span>
               </div>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-muted-foreground">
                 {when(r.call_started_at)} · {formatDuration(r.duration_seconds)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {r.days_absent_at_call != null ? `Absent ${r.days_absent_at_call}d at call` : 'Retention call'}
+                {' · '}Last visit: {lastVisit(r.last_visit)}
               </p>
             </button>
           </li>

@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useVoiceCallDetail } from '@/hooks/useVoiceOps';
-import { dispositionLook, formatDuration, statusLook } from '@/lib/voice/voiceOutcomes';
+import { dispositionLook, formatDuration, isLiveStatus, statusLook } from '@/lib/voice/voiceOutcomes';
+import { voiceTime } from '@/lib/voice/automationStatus';
 import { createTask } from '@/services/taskService';
 import { VoiceCallRecording } from './VoiceCallRecording';
-import { format } from 'date-fns';
 
 interface VoiceCallWorkspaceProps {
   callId: string | null;
@@ -37,13 +37,37 @@ function parseTranscript(transcript: unknown): TranscriptTurn[] {
     .filter((x): x is TranscriptTurn => x !== null);
 }
 
-function fmt(value?: string | null, pattern = 'dd MMM yyyy, HH:mm') {
+/** All call times are shown in IST, matching how the desk reads them. */
+function fmt(value?: string | null) {
   if (!value) return null;
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : format(d, pattern);
+  return Number.isNaN(d.getTime()) ? value : `${voiceTime(value)} IST`;
 }
 
-/** Centre pane: who was called, how it went, the recording and the transcript. */
+function fmtDate(value?: string | null) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+}
+
+/** A call only has a recording when it actually connected. */
+function callConnected(status?: string | null, duration?: number | null): boolean {
+  if ((duration ?? 0) > 0) return true;
+  return ['answered', 'in_progress', 'completed'].includes(String(status ?? ''));
+}
+
+/** Plain-language reason the agent rang this member. */
+function whyCalled(reason?: string | null): string {
+  switch (reason) {
+    case 'member_retention': return 'Absence retention — the member had not visited for a while.';
+    case 'renewal_reminder': return 'Membership renewal reminder.';
+    case 'membership_renewal': return 'Membership renewal reminder.';
+    default: return reason ? `Reason: ${reason.replace(/_/g, ' ')}.` : 'Retention call.';
+  }
+}
+
+/** Centre pane: who was called, why, how it went, the recording and the transcript. */
 export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorkspaceProps) {
   const { data, isLoading, isError } = useVoiceCallDetail(callId);
   const [showTranscript, setShowTranscript] = useState(false);
@@ -97,10 +121,10 @@ export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorksp
   if (!callId) {
     return (
       <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-3 p-10 text-center">
-        <span className="rounded-full bg-indigo-50 p-3 text-indigo-600"><PhoneCall className="h-6 w-6" aria-hidden /></span>
-        <p className="text-sm font-medium text-slate-900">Pick a call to review it</p>
-        <p className="max-w-sm text-xs text-slate-500">
-          You'll see the member, how the call went, the recording and the full transcript here.
+        <span className="rounded-full bg-primary/10 p-3 text-primary"><PhoneCall className="h-6 w-6" aria-hidden /></span>
+        <p className="text-sm font-medium text-foreground">Pick a call to review it</p>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          You'll see the member, why we called, how the call went, the recording and the full transcript here.
         </p>
       </div>
     );
@@ -119,7 +143,7 @@ export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorksp
 
   if (isError || !data) {
     return (
-      <div className="m-6 rounded-2xl bg-red-50 p-5 text-sm text-red-700">
+      <div className="m-6 rounded-2xl bg-destructive/10 p-5 text-sm text-destructive">
         You do not have access to this call, or it could not be loaded.
       </div>
     );
@@ -127,54 +151,72 @@ export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorksp
 
   const status = statusLook(data.status);
   const disposition = dispositionLook(data.disposition);
+  const connected = callConnected(data.status, data.duration_seconds);
 
   return (
     <div className="space-y-5 p-5 md:p-6">
-      {/* Caller header */}
+      {/* Caller header — one badge only: the outcome when there is one, else the call status. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-xl font-bold text-slate-900">{data.member_name ?? 'Unknown caller'}</h2>
-          <p className="mt-0.5 truncate text-sm text-slate-500">
+          <h2 className="truncate text-xl font-bold text-foreground">{data.member_name ?? 'Unknown caller'}</h2>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {[data.member_code, data.masked_phone, data.branch_name].filter(Boolean).join(' · ') || '—'}
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted-foreground">
             {fmt(data.started_at) ?? '—'} · {formatDuration(data.duration_seconds)}
             {data.plan_name ? ` · ${data.plan_name}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge className={`rounded-full ${status.className}`}>{status.label}</Badge>
-          {disposition && <Badge className={`rounded-full ${disposition.className}`}>{disposition.label}</Badge>}
+          <Badge className={`rounded-full ${(disposition ?? status).className}`}>
+            {isLiveStatus(data.status) && 'Live · '}
+            {(disposition ?? status).label}
+          </Badge>
         </div>
       </div>
 
-      {/* Recording */}
-      <div className="rounded-2xl bg-slate-50 p-4">
-        {data.can_view_transcript ? (
-          <VoiceCallRecording callId={callId} />
-        ) : (
-          <p className="flex items-center gap-2 text-xs text-slate-500">
+      {/* Why we called + member context */}
+      <div className="rounded-2xl bg-muted/40 p-4 text-sm">
+        <p className="font-medium text-foreground">{whyCalled(data.reason)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Last visit: {fmtDate(data.last_visit) ?? 'Never visited'}
+          {data.plan_expiry ? ` · Plan ends ${fmtDate(data.plan_expiry)}` : ''}
+          {data.trainer_name ? ` · Trainer ${data.trainer_name}` : ''}
+        </p>
+      </div>
+
+      {/* Recording — only when the call actually connected */}
+      <div className="rounded-2xl bg-muted/40 p-4">
+        {!data.can_view_transcript ? (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Headphones className="h-4 w-4" aria-hidden />
             Recordings are limited to managers and above.
+          </p>
+        ) : connected ? (
+          <VoiceCallRecording callId={callId} />
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Headphones className="h-4 w-4" aria-hidden />
+            No recording — the call did not connect ({status.label.toLowerCase()}).
           </p>
         )}
       </div>
 
       {/* At a glance */}
-      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-700">
+      <div className="rounded-2xl border border-border bg-secondary/40 p-4">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
           <Sparkles className="h-4 w-4" aria-hidden /> Call at a glance
         </p>
         <ul className="mt-3 space-y-2">
           {highlights.map((line, i) => (
-            <li key={i} className="flex gap-2 text-sm leading-relaxed text-slate-700">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />
+            <li key={i} className="flex gap-2 text-sm leading-relaxed text-foreground">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
               {line}
             </li>
           ))}
         </ul>
         {data.callback_datetime && (
-          <p className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-700">
+          <p className="mt-3 flex items-center gap-2 text-xs font-medium text-accent">
             <CalendarClock className="h-4 w-4" aria-hidden /> Callback due: {data.callback_datetime}
           </p>
         )}
@@ -185,7 +227,7 @@ export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorksp
         <Button
           onClick={logFollowUp}
           disabled={creatingTask}
-          className="min-h-[44px] cursor-pointer rounded-xl transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="min-h-[44px] cursor-pointer rounded-xl transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring"
         >
           {creatingTask ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <ClipboardList className="mr-2 h-4 w-4" aria-hidden />}
           Create follow-up task
@@ -221,12 +263,12 @@ export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorksp
               Transcript ({turns.length})
             </Button>
             {showTranscript && (
-              <div className="mt-2 max-h-[420px] space-y-2 overflow-y-auto rounded-2xl bg-slate-50 p-3">
-                {turns.length === 0 && <p className="text-xs text-slate-500">No transcript was returned for this call.</p>}
+              <div className="mt-2 max-h-[420px] space-y-2 overflow-y-auto rounded-2xl bg-muted/40 p-3">
+                {turns.length === 0 && <p className="text-xs text-muted-foreground">No transcript was returned for this call.</p>}
                 {turns.map((t, i) => (
                   <div key={i} className={`flex ${t.who === 'agent' ? 'justify-start' : 'justify-end'}`}>
                     <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                      t.who === 'agent' ? 'bg-white text-slate-900 shadow-sm' : 'bg-indigo-600 text-white'
+                      t.who === 'agent' ? 'bg-card text-foreground shadow-sm' : 'bg-primary text-primary-foreground'
                     }`}>
                       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider opacity-70">
                         {t.who === 'agent' ? 'Ananya (AI)' : 'Member'}
@@ -239,7 +281,7 @@ export function VoiceCallWorkspace({ callId, onOpenFullDetail }: VoiceCallWorksp
             )}
           </>
         ) : (
-          <p className="flex items-center gap-2 text-xs text-slate-500">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <ShieldAlert className="h-4 w-4" aria-hidden />
             Transcripts are limited to managers and above.
           </p>
