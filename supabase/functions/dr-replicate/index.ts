@@ -67,6 +67,24 @@ async function getOrCreateToken(primary: SupabaseClient): Promise<string> {
   return data;
 }
 
+// Self-hosted storage can lack the ON CONFLICT target for upserts (42P10):
+// fall back to remove + plain upload so replacement still works.
+async function drUpload(
+  dr: SupabaseClient,
+  bucket: string,
+  path: string,
+  body: Blob,
+  contentType: string,
+): Promise<{ error: { message: string } | null }> {
+  const first = await dr.storage.from(bucket).upload(path, body, { upsert: true, contentType });
+  if (!first.error) return { error: null };
+  const msg = first.error.message ?? "";
+  if (!/42P10|database error|already exists|Duplicate/i.test(msg)) return { error: first.error };
+  await dr.storage.from(bucket).remove([path]);
+  const second = await dr.storage.from(bucket).upload(path, body, { upsert: false, contentType });
+  return { error: second.error };
+}
+
 // ── Auth users ────────────────────────────────────────────────────────────────
 
 async function syncAuthUsers(
@@ -255,10 +273,7 @@ async function syncStorage(
           report.errors.push(`dl ${b.name}/${f.path}: ${dl.error?.message ?? "no body"}`);
           continue;
         }
-        const up = await dr.storage.from(b.name).upload(f.path, dl.data, {
-          upsert: true,
-          contentType: f.mimetype ?? dl.data.type,
-        });
+        const up = await drUpload(dr, b.name, f.path, dl.data, f.mimetype ?? dl.data.type);
         if (up.error) {
           stat.objects.failed++;
           bucketFailed++;
@@ -442,10 +457,7 @@ async function syncSchemaSnapshot(
   const dateKey = new Date().toISOString().slice(0, 10);
   const objectPath = `${dateKey}.sql`;
   const blob = new Blob([dump], { type: "text/plain" });
-  const { error: upErr } = await dr.storage.from(bucketId).upload(objectPath, blob, {
-    upsert: true,
-    contentType: "text/plain",
-  });
+  const { error: upErr } = await drUpload(dr, bucketId, objectPath, blob, "text/plain");
 
   report.mirrored.schema = {
     dumpedBytes: dump.length,
