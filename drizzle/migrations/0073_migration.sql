@@ -1,0 +1,1 @@
+ALTER TABLE public.purchase_attempts ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();

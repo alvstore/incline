@@ -11821,6 +11821,7 @@ export type Database = {
           member_id: string
           result: Json | null
           status: string
+          updated_at: string
         }
         Insert: {
           branch_id: string
@@ -11833,6 +11834,7 @@ export type Database = {
           member_id: string
           result?: Json | null
           status?: string
+          updated_at?: string
         }
         Update: {
           branch_id?: string
@@ -11845,6 +11847,7 @@ export type Database = {
           member_id?: string
           result?: Json | null
           status?: string
+          updated_at?: string
         }
         Relationships: [
           {
