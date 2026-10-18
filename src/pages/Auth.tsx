@@ -94,7 +94,7 @@ export default function AuthPage() {
           <div className="absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-info/10 blur-3xl" />
         </div>
 
-        <div className="relative w-full max-w-[440px] space-y-6 animate-fade-in">
+        <div className="relative w-full max-w-[440px] space-y-6">
           <div className="rounded-2xl bg-card p-6 sm:p-8 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <LoginForm onSuccess={handleLoginSuccess} />
           </div>
