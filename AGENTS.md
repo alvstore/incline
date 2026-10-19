@@ -20,3 +20,5 @@ Body progress places the render before a full-width summary; historical measurem
 - Read nested AGENTS.md before edits.
 - Voice limits run in atomic voice_claim_call_slot; bind renewal cases before dialing and process stops in DB triggers so workers/manual calls cannot bypass safety.
 - Dedicated locker prices/GST/portal toggle live per branch in `locker_pricing_settings` (edited only via audited `update_locker_pricing_settings`); member locker requests are approved via atomic `approve_locker_request`, so assignment, invoice and approval never drift apart.
+
+- Auth screens share AuthVisualPanel; folder artwork uses finite CSS transitions isolated from an untransformed form surface to avoid continuous rendering work during native autofill.
