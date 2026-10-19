@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { parseStorageUrl } from '@/lib/storage/storageUrl';
 
 interface MediaMeta {
   meta_id?: string | null;
@@ -19,13 +20,13 @@ interface Props {
   direction: 'inbound' | 'outbound';
 }
 
-// Resolves a signed URL when mediaUrl is a storage path inside the
-// `whatsapp-media` bucket. If it's already an http(s) URL, passes through.
+// Signs storage paths on demand. Stored signed storage URLs are re-signed
+// too, because their tokens expire (old campaign videos showed InvalidJWT).
+// External http(s) URLs pass through unchanged.
 function useResolvedUrl(path: string, bucket: string | null | undefined) {
-  const isHttp = /^https?:\/\//i.test(path);
   return useQuery({
     queryKey: ['wa-media-signed', bucket ?? 'wa', path],
-    enabled: !isHttp && !!path && !!bucket,
+    enabled: !!path && !!bucket,
     staleTime: 4 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase.storage
@@ -39,9 +40,12 @@ function useResolvedUrl(path: string, bucket: string | null | undefined) {
 
 export function WhatsAppMediaAttachment({ mediaUrl, mediaMeta, messageType, direction }: Props) {
   const isHttp = /^https?:\/\//i.test(mediaUrl);
-  const bucket = mediaMeta?.bucket ?? (isHttp ? null : 'whatsapp-media');
-  const { data: signedUrl, isLoading, isError } = useResolvedUrl(mediaUrl, bucket);
-  const url = isHttp ? mediaUrl : signedUrl;
+  const parsed = isHttp ? parseStorageUrl(mediaUrl) : null;
+  const objectPath = parsed?.path ?? (isHttp ? '' : mediaUrl);
+  const bucket = parsed?.bucket ?? mediaMeta?.bucket ?? (isHttp ? null : 'whatsapp-media');
+  const { data: signedUrl, isLoading, isError } = useResolvedUrl(objectPath, bucket);
+  const url = isHttp && !parsed ? mediaUrl : signedUrl;
+  const displayName = parsed ? parsed.path.split('/').pop() || 'file' : mediaUrl.split('/').pop() || 'file';
 
   // Meta media expired or download failed at webhook time
   if (mediaMeta?.error) {
