@@ -1,5 +1,5 @@
 # Sign-in redesign (19 Oct 2026)
-- [ ] Replace animated login artwork with reference-inspired folder; isolate inputs, remove obsolete files/imports and verify focus, autofill-style fill, validation and layouts.
+- [x] Replace animated login artwork with reference-inspired folder; isolate inputs, remove obsolete files/imports. Browser checks passed for fill/focus, validation, password visibility, folder selection/Escape, reset link, four widths and dark/reduced motion; no runtime errors. Native macOS Chrome autofill dropout needs confirmation on the affected device.
 
 # Annual upgrade Analytics (15 Oct 2026)
 - [ ] Missing recent live records (18 Oct): owner Members page and direct live reads agree on 214 members; no member/auth registration today; Shrishti INC-26-0200 still has only her original monthly membership and ₹5,000 paid invoice. Published app, preview and tools use the same live backend; Cloud is healthy and attendance is still arriving. BLOCKED: no evidence of today's registration/upgrade in current records or available request logs; requires Lovable support to investigate lifecycle/restore history and the member's registration confirmation before any recovery or financial re-entry. No restoration or replacement transactions performed.
