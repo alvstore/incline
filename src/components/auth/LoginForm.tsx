@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, AtSign, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AtSign, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { classifyIdentifier } from '@/lib/auth/identifier';
 
@@ -23,7 +23,7 @@ const passwordLoginSchema = z.object({
 
 type PasswordLoginData = z.infer<typeof passwordLoginSchema>;
 
-interface LoginFormProps {
+export interface LoginFormProps {
   onSuccess?: () => void;
 }
 
@@ -38,6 +38,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   });
 
   const handlePasswordSubmit = async (data: PasswordLoginData) => {
+    form.clearErrors('root');
     setIsLoading(true);
     try {
       const id = classifyIdentifier(data.identifier);
@@ -69,6 +70,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       shadToast({ title: 'Welcome back!', description: 'Successfully signed in.' });
       onSuccess?.();
     } catch (error) {
+      form.setError('root', { message: error instanceof Error ? error.message : 'Unable to sign in. Please try again.' });
       shadToast({
         title: 'Sign in failed',
         description: error instanceof Error ? error.message : 'Invalid credentials',
@@ -81,12 +83,12 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-          Rise. Reflect. Repeat.
+    <div className="space-y-7">
+      <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          Member & team access
         </p>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h1>
+        <h1 className="text-3xl font-semibold text-foreground">Welcome back.</h1>
         <p className="text-sm text-muted-foreground">
           Sign in with your email or mobile number to continue.
         </p>
@@ -94,13 +96,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handlePasswordSubmit)} className="space-y-3.5">
+        <form onSubmit={form.handleSubmit(handlePasswordSubmit)} className="space-y-5">
           <FormField
             control={form.control}
             name="identifier"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground font-medium text-sm">Email or mobile</FormLabel>
+                <FormLabel className="text-foreground font-medium text-sm">Email or mobile <span aria-hidden="true">*</span></FormLabel>
                 <FormControl>
                   <div className="relative">
                     <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -108,6 +110,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                       type="text"
                       placeholder="you@example.com  or  9876543210"
                       autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      aria-required="true"
                       data-testid="input-identifier"
                       className="h-12 pl-10 text-base rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
                       {...field}
@@ -124,7 +129,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground font-medium text-sm">Password</FormLabel>
+                <FormLabel className="text-foreground font-medium text-sm">Password <span aria-hidden="true">*</span></FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -132,18 +137,22 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       autoComplete="current-password"
+                      aria-required="true"
                       data-testid="input-password"
                       className="h-12 pl-10 pr-11 text-base rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
                       {...field}
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                      className="absolute right-1 top-1/2 h-11 w-11 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-foreground transition-colors duration-200 focus-visible:ring-ring"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                    </Button>
                   </div>
                 </FormControl>
                 <FormMessage />
@@ -151,16 +160,21 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             )}
           />
 
+          {form.formState.errors.root?.message && (
+            <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{form.formState.errors.root.message}
+            </p>
+          )}
           <Button
             type="submit"
             data-testid="btn-sign-in"
-            className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base shadow-[0_10px_30px_-10px_hsl(217_91%_50%/0.6)] hover:shadow-[0_14px_36px_-12px_hsl(217_91%_50%/0.7)] transition-all"
+            className="w-full h-12 cursor-pointer rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base transition-colors duration-200"
             disabled={isLoading}
           >
             {isLoading ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</>
             ) : (
-              'Sign In'
+              <>Sign in <ArrowRight className="ml-2 h-4 w-4" /></>
             )}
           </Button>
         </form>
@@ -170,7 +184,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <Link
           to="/auth/forgot-password"
           data-testid="link-forgot-password"
-          className="text-sm text-muted-foreground hover:text-primary font-medium transition-colors"
+          className="flex min-h-11 items-center rounded-sm cursor-pointer text-sm text-muted-foreground hover:text-primary font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Forgot your password?
         </Link>
