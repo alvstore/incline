@@ -86,9 +86,29 @@ export function WhatsAppMediaAttachment({ mediaUrl, mediaMeta, messageType, dire
     );
   }
 
+  if (messageType === 'video') {
+    if (!url) {
+      return (
+        <div className="mb-2 -mx-1 h-40 w-full max-w-[260px] rounded-lg bg-muted flex items-center justify-center">
+          {isError ? <AlertCircle className="h-5 w-5 text-muted-foreground" /> : <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+        </div>
+      );
+    }
+    return (
+      <video
+        src={url}
+        controls
+        preload="metadata"
+        playsInline
+        aria-label={mediaMeta?.filename || 'Video'}
+        className="mb-2 -mx-1 rounded-lg max-h-64 w-full max-w-[260px] bg-muted"
+      />
+    );
+  }
+
   // document / pdf / other
   const filename = mediaMeta?.filename
-    || (isHttp ? decodeURIComponent(mediaUrl.split('/').pop() || 'document') : 'Document');
+    || decodeURIComponent(displayName.split('?')[0] || 'Document');
   const sizeLabel = mediaMeta?.size
     ? ` · ${(mediaMeta.size / 1024).toFixed(0)} KB`
     : '';
