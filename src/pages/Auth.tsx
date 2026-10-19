@@ -1,78 +1,49 @@
-import { useState, useEffect } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { AuthVisualPanel } from '@/components/auth/AuthVisualPanel';
 import { supabase } from '@/integrations/supabase/client';
-import { GymLoader } from '@/components/ui/gym-loader';
 import { getHomePath } from '@/lib/roleRedirect';
 import SEO from '@/components/seo/SEO';
 
 export default function AuthPage() {
   const { user, isLoading, mustSetPassword, roles } = useAuth();
-  // Setup check runs in the background; never block the sign-in screen on it
-  // (blocking caused a loader -> page flash on every visit).
-  const [, setCheckingSetup] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Public form paints independently; session hydration only gates redirects.
+  const { data: needsSetup } = useQuery({
+    queryKey: ['auth-setup-check'],
+    queryFn: async () => {
+      const cacheKey = '__incline_setup_check';
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached !== null) return cached === '1';
+      const { data, error } = await supabase.functions.invoke<{ needsSetup?: boolean }>('check-setup', {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (error) throw error;
+      const needs = data?.needsSetup === true;
+      sessionStorage.setItem(cacheKey, needs ? '1' : '0');
+      return needs;
+    },
+    staleTime: Infinity,
+    retry: false,
+  });
 
   useEffect(() => {
     const refCode = searchParams.get('ref');
     if (refCode) sessionStorage.setItem('referral_code', refCode);
   }, [searchParams]);
 
-  useEffect(() => {
-    // Cache result for the session — avoids a 1–3s blocking edge-fn call
-    // on every Auth mount (and works fine offline / when the fn is blocked).
-    const CACHE_KEY = '__incline_setup_check';
-    const cached = sessionStorage.getItem(CACHE_KEY);
-    if (cached !== null) {
-      if (cached === '1') setNeedsSetup(true);
-      setCheckingSetup(false);
-      return;
-    }
-    const checkSetup = async () => {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const { data, error } = await supabase.functions.invoke('check-setup', {
-          signal: controller.signal as any,
-        });
-        clearTimeout(timeout);
-        if (error) throw error;
-        const needs = !!data?.needsSetup;
-        sessionStorage.setItem(CACHE_KEY, needs ? '1' : '0');
-        if (needs) setNeedsSetup(true);
-      } catch (error) {
-        // Non-fatal: assume no setup needed so the user isn't blocked.
-        sessionStorage.setItem(CACHE_KEY, '0');
-        console.warn('Setup check skipped:', error);
-      } finally {
-        setCheckingSetup(false);
-      }
-    };
-    checkSetup();
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <GymLoader text="Warming up..." />
-      </div>
-    );
-  }
-
   if (needsSetup) return <Navigate to="/setup" replace />;
   const refParam = searchParams.get('ref');
-  if (refParam && !user) return <Navigate to={`/register?ref=${encodeURIComponent(refParam)}`} replace />;
-  if (user && !mustSetPassword) return <Navigate to={getHomePath(roles)} replace />;
-  if (user && mustSetPassword) return <Navigate to="/auth/set-password" replace />;
-
-  const handleLoginSuccess = () => navigate('/home');
+  if (!isLoading && refParam && !user) return <Navigate to={`/register?ref=${encodeURIComponent(refParam)}`} replace />;
+  if (!isLoading && user && !mustSetPassword) return <Navigate to={getHomePath(roles)} replace />;
+  if (!isLoading && user && mustSetPassword) return <Navigate to="/auth/set-password" replace />;
 
   return (
-    <div className="incline-auth min-h-dvh w-full bg-background lg:grid lg:grid-cols-2">
+    <div className="incline-auth isolate min-h-dvh w-full bg-card lg:grid lg:grid-cols-2">
       <SEO
         title="Sign in | The Incline Life"
         description="Sign in to your Incline membership portal to book classes, manage your plan, view invoices and access recovery sessions."
@@ -82,35 +53,29 @@ export default function AuthPage() {
 
       {/* Visual panel — mounted ONCE (desktop full height, mobile compact hero).
           Two copies doubled the animated layers and caused repaint flicker. */}
-      <div className="relative h-[210px] overflow-hidden lg:h-auto lg:min-h-dvh">
+      <div className="relative isolate h-24 overflow-hidden sm:h-28 lg:h-auto lg:min-h-dvh">
         <AuthVisualPanel />
       </div>
 
       {/* RIGHT — Auth card */}
-      <div className="relative flex flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
-        {/* Soft decorative bg blobs (right side, behind card) */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-28 -right-24 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-info/10 blur-3xl" />
-        </div>
-
-        <div className="relative w-full max-w-[440px] space-y-6">
-          <div className="rounded-2xl bg-card p-6 sm:p-8 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
-            <LoginForm onSuccess={handleLoginSuccess} />
+      <main className="relative isolate flex min-w-0 flex-col items-center justify-center px-6 py-10 sm:px-10 lg:px-12">
+        <div className="relative w-full max-w-sm space-y-8">
+          <div className="auth-form-surface bg-card">
+            <LoginForm />
           </div>
 
-          <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <Link to="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+          <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-3 text-xs text-muted-foreground">
+            <Link to="/privacy-policy" className="flex min-h-11 items-center rounded-sm cursor-pointer hover:text-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Privacy Policy</Link>
             <span aria-hidden className="text-muted-foreground">·</span>
-            <Link to="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+            <Link to="/terms" className="flex min-h-11 items-center rounded-sm cursor-pointer hover:text-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Terms of Service</Link>
             <span aria-hidden className="text-muted-foreground">·</span>
-            <Link to="/data-deletion" className="hover:text-foreground transition-colors">Data Deletion</Link>
+            <Link to="/data-deletion" className="flex min-h-11 items-center rounded-sm cursor-pointer hover:text-foreground transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Data Deletion</Link>
           </nav>
           <p className="text-center text-[11px] text-muted-foreground">
             © {new Date().getFullYear()} The Incline Life by Incline
           </p>
         </div>
-      </div>
+      </main>
 
     </div>
   );

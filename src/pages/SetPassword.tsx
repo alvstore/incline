@@ -30,27 +30,19 @@ export default function SetPasswordPage() {
   return (
     <div className="min-h-dvh w-full bg-background lg:grid lg:grid-cols-2">
       {/* LEFT — brand visual */}
-      <div className="hidden lg:block relative min-h-dvh">
-        <AuthVisualPanel />
-      </div>
-      <div className="lg:hidden relative h-[220px] overflow-hidden">
+      <div className="relative isolate h-24 overflow-hidden lg:h-auto lg:min-h-dvh">
         <AuthVisualPanel />
       </div>
 
       {/* RIGHT — form */}
       <div className="relative flex flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute bottom-0 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
-        </div>
-
         <div className="relative w-full flex justify-end">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleSignOut}
             aria-label="Sign out"
-            className="cursor-pointer text-slate-500 hover:text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            className="min-h-11 cursor-pointer text-muted-foreground hover:text-foreground transition-colors duration-200 focus-visible:ring-ring"
           >
             <LogOut className="h-4 w-4 mr-2" /> Sign out
           </Button>

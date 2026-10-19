@@ -1,0 +1,1 @@
+- Auth screens share AuthVisualPanel; folder artwork uses finite CSS transitions isolated from an untransformed form surface to avoid continuous rendering work during native autofill.
