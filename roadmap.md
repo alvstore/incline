@@ -1,3 +1,7 @@
+# Current requests (19 Oct 2026)
+- [ ] Repair expired video attachments in saved WhatsApp messages.
+- [ ] Connect Google Search Console fresh in the new workspace; previous workspace connections do not apply.
+
 # Sign-in redesign (19 Oct 2026)
 - [x] Replace animated login artwork with reference-inspired folder; isolate inputs, remove obsolete files/imports. Browser checks passed for fill/focus, validation, password visibility, folder selection/Escape, reset link, four widths and dark/reduced motion; no runtime errors. Native macOS Chrome autofill dropout needs confirmation on the affected device.
 
