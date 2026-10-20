@@ -25,7 +25,7 @@ export function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [linkState, setLinkState] = useState<LinkState>('verifying');
-  const { updatePassword } = useAuth();
+  const { setPassword: completeSetup } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -90,14 +90,22 @@ export function ResetPasswordForm() {
       return;
     }
     setIsLoading(true);
-    const { error } = await updatePassword(password);
+    // Uses the setup path so a pending "must set password" flag is cleared too —
+    // otherwise the app forces the set-password screen again after a reset.
+    const { error } = await completeSetup(password);
     setIsLoading(false);
     if (error) {
-      toast.error(error.message);
+      if (/different from the old password/i.test(error.message || '')) {
+        toast.error('This is already your current password. Choose a new one, or go back and sign in with it.');
+        setPassword('');
+        setConfirmPassword('');
+        return;
+      }
+      toast.error(error.message || 'Could not update your password. Please try again.');
       return;
     }
     toast.success('Password updated successfully!');
-    navigate('/auth');
+    navigate('/auth', { replace: true });
   };
 
   if (linkState === 'verifying') {
