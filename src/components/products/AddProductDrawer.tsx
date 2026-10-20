@@ -528,6 +528,11 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
           </div>
         </form>
       </SheetContent>
+      <AddCategoryDrawer
+        open={categoryDrawerOpen}
+        onOpenChange={setCategoryDrawerOpen}
+        onCreated={(id) => setFormData((prev: any) => ({ ...prev, category_id: id }))}
+      />
     </Sheet>
   );
 }
