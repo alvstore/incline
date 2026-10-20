@@ -25,3 +25,12 @@ describe('trainer earnings', () => {
     expect(t.onHold).toBe(4000);
   });
 });
+
+describe('trainer GST cut on commission', () => {
+  test('₹12,000 at 50% = ₹6,000, minus 5% = ₹5,700', () => {
+    expect(ptCommission(12000, 50, 5).net).toBe(5700);
+  });
+  test('trainer with 0% deduction keeps full commission', () => {
+    expect(ptCommission(12000, 50, 0).net).toBe(6000);
+  });
+});
