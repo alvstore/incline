@@ -519,6 +519,13 @@
       "when": 1792337718580,
       "tag": "0073_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792509570488,
+      "tag": "0074_stock_adjustments_and_pos_restock",
+      "breakpoints": true
     }
   ]
 }
