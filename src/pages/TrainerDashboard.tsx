@@ -34,15 +34,16 @@ export default function TrainerDashboard() {
   const monthStart = startOfMonth(new Date()).toISOString();
   const manualMark = usePtManualMark(trainer?.branch_id);
 
-  const { data: monthEarnings } = useQuery({
+  const earningsQ = useQuery({
     queryKey: ['trainer-earnings-summary', trainer?.id, monthStart.slice(0, 7)],
     enabled: !!trainer,
-    queryFn: async () => {
+    queryFn: async (): Promise<EarningsKpiData> => {
       const monthDate = format(startOfMonth(new Date()), 'yyyy-MM-dd');
       const { data, error } = await supabase.rpc('trainer_earnings_summary', { p_trainer_id: trainer!.id, p_month: monthDate });
       if (error) throw error;
-      const t = summarize(((data as unknown as { installments: EarningsInstallment[] })?.installments) ?? [], monthDate);
-      return { estimated: t.payable + t.paid };
+      const d = data as unknown as { installments?: EarningsInstallment[]; trend?: EarningsKpiData['trend'] };
+      const t = summarize(d?.installments ?? [], monthDate);
+      return { ...t, trend: d?.trend ?? [] };
     },
   });
 
