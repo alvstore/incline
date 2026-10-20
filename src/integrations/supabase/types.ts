@@ -19132,6 +19132,10 @@ export type Database = {
         Args: { _member_id: string; _user_id: string }
         Returns: boolean
       }
+      trainer_earnings_summary: {
+        Args: { p_month: string; p_trainer_id: string }
+        Returns: Json
+      }
       trainers_directory_rows: {
         Args: never
         Returns: {
