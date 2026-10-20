@@ -1,3 +1,9 @@
+# Store, stock & POS (20 Oct 2026)
+- [ ] Restore stock deduction on every POS/member-store sale (lost in an earlier checkout rewrite); return stock when a sale's invoice is cancelled.
+- [ ] Stock adjustment drawer (add / remove / set exact count, reason, batch) with full stock history.
+- [ ] Activation: standard Incline photo option, price-above-₹0 rule, clear POS on/off switch; fix -Infinity margin and hidden row actions.
+- [ ] Verify end-to-end as owner: activate → adjust → sell on POS → stock drops → history shows it.
+
 # Current requests (19 Oct 2026)
 - [ ] Repair expired video attachments in saved WhatsApp messages.
 - [ ] Connect Google Search Console fresh in the new workspace; previous workspace connections do not apply.
