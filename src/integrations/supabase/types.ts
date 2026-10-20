@@ -16293,6 +16293,18 @@ export type Database = {
         }
         Returns: Json
       }
+      adjust_product_stock: {
+        Args: {
+          p_batch_id?: string
+          p_branch_id: string
+          p_mode: string
+          p_notes?: string
+          p_product_id: string
+          p_quantity: number
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_run_automation_now: {
         Args: { _rule_id: string }
         Returns: undefined
@@ -18717,6 +18729,10 @@ export type Database = {
           shift_date: string
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
         }[]
+      }
+      restore_pos_sale_stock: {
+        Args: { p_pos_sale_id: string }
+        Returns: number
       }
       retry_ig_comment_run: { Args: { p_id: string }; Returns: undefined }
       reverse_payment: {

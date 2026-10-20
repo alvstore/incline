@@ -519,6 +519,20 @@
       "when": 1792337718580,
       "tag": "0073_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792509570488,
+      "tag": "0074_stock_adjustments_and_pos_restock",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792509639074,
+      "tag": "0075_pos_sale_deducts_stock",
+      "breakpoints": true
     }
   ]
 }
