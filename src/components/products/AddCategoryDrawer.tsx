@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,21 +13,31 @@ interface AddCategoryDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   category?: any;
+  onCreated?: (id: string) => void;
 }
 
-export function AddCategoryDrawer({ open, onOpenChange, category }: AddCategoryDrawerProps) {
+const EMPTY_FORM = { name: '', description: '', image_url: '', sort_order: 0 };
+
+export function AddCategoryDrawer({ open, onOpenChange, category, onCreated }: AddCategoryDrawerProps) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!category;
 
-  const [formData, setFormData] = useState({
-    name: category?.name || '',
-    description: category?.description || '',
-    image_url: category?.image_url || '',
-    sort_order: category?.sort_order || 0,
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState(category?.image_url || '');
+  const [imagePreview, setImagePreview] = useState('');
+
+  // Sync form whenever the drawer opens or the edited category changes
+  useEffect(() => {
+    if (!open) return;
+    setFormData({
+      name: category?.name || '',
+      description: category?.description || '',
+      image_url: category?.image_url || '',
+      sort_order: category?.sort_order || 0,
+    });
+    setImagePreview(category?.image_url || '');
+  }, [open, category]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -45,7 +55,7 @@ export function AddCategoryDrawer({ open, onOpenChange, category }: AddCategoryD
       setImagePreview(publicUrl);
       toast.success('Image uploaded');
     } catch (error: any) {
-      toast.error('Failed to upload image');
+      toast.error(error.message || 'Failed to upload image');
     } finally {
       setUploading(false);
     }
@@ -63,25 +73,20 @@ export function AddCategoryDrawer({ open, onOpenChange, category }: AddCategoryD
 
       if (isEditing) {
         return updateCategory(category.id, payload);
-      } else {
-        return createCategory(payload as any);
       }
+      return createCategory(payload as any);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(isEditing ? 'Category updated' : 'Category created');
       queryClient.invalidateQueries({ queryKey: ['product-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['product-categories-all'] });
+      if (!isEditing && data?.id) onCreated?.(data.id);
       onOpenChange(false);
-      resetForm();
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to save category');
     },
   });
-
-  const resetForm = () => {
-    setFormData({ name: '', description: '', image_url: '', sort_order: 0 });
-    setImagePreview('');
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

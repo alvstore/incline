@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { AddCategoryDrawer } from '@/components/products/AddCategoryDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Upload, Loader2, Link as LinkIcon } from 'lucide-react';
+import { Upload, Loader2, Link as LinkIcon, Plus } from 'lucide-react';
 import { uploadProductImage, createProduct, updateProduct } from '@/services/productService';
 import { adjustStock } from '@/services/inventoryService';
 import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products/productRules';
@@ -50,6 +51,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
   const [fetchingUrl, setFetchingUrl] = useState(false);
   const [imagePreview, setImagePreview] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
 
   // Sync form when drawer opens or product changes (fixes "edit doesn't pre-fill" bug)
   useEffect(() => {
@@ -329,7 +331,18 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="category">Category</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setCategoryDrawerOpen(true)}
+                >
+                  <Plus className="h-3 w-3 mr-1" aria-hidden />New category
+                </Button>
+              </div>
               <Select
                 value={formData.category_id}
                 onValueChange={(v) => setFormData({ ...formData, category_id: v })}
@@ -515,6 +528,11 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
           </div>
         </form>
       </SheetContent>
+      <AddCategoryDrawer
+        open={categoryDrawerOpen}
+        onOpenChange={setCategoryDrawerOpen}
+        onCreated={(id) => setFormData((prev: any) => ({ ...prev, category_id: id }))}
+      />
     </Sheet>
   );
 }
