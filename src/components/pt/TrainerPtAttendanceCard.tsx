@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { ScanFace, Loader2, PencilLine } from 'lucide-react';
+import { ScanFace, Loader2, PencilLine, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { toast } from 'sonner';
@@ -35,7 +35,9 @@ const CORR: Record<string, string> = {
   rejected: 'bg-destructive/10 text-destructive border border-destructive/20',
 };
 
-export function TrainerPtAttendanceCard() {
+export type PtClientLite = { id: string; member?: { profile?: { full_name?: string | null } | null; member_code?: string | null } | null; package?: { name?: string | null } | null };
+
+export function TrainerPtAttendanceCard({ ptClients = [] }: { ptClients?: PtClientLite[] }) {
   const qc = useQueryClient();
   const today = format(new Date(), 'yyyy-MM-dd');
   const [correcting, setCorrecting] = useState<MyBoardRow | null>(null);
@@ -69,6 +71,9 @@ export function TrainerPtAttendanceCard() {
   });
 
   const rows = board.data ?? [];
+  const norm = (n?: string | null) => (n ?? '').trim().toLowerCase();
+  const scanned = new Set(rows.map(r => norm(r.member_name)));
+  const waiting = ptClients.filter(c => !scanned.has(norm(c.member?.profile?.full_name ?? c.member?.member_code)));
 
   return (
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
@@ -85,10 +90,21 @@ export function TrainerPtAttendanceCard() {
           <div className="space-y-2">{[0, 1].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : board.isError ? (
           <p className="text-sm text-destructive">Could not load. Please refresh.</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">None of your PT clients have scanned in yet today.</p>
+        ) : rows.length === 0 && waiting.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">You have no active PT clients.</p>
         ) : (
           <ul className="divide-y divide-border">
+            {waiting.map(c => (
+              <li key={`w-${c.id}`} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{c.member?.profile?.full_name ?? c.member?.member_code ?? 'Member'}</p>
+                  <p className="text-xs text-muted-foreground truncate">{c.package?.name ?? 'PT package'} · Marked automatically when you both scan in</p>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground border border-border">
+                  <Clock className="h-3 w-3" aria-hidden /> Waiting for scan
+                </span>
+              </li>
+            ))}
             {rows.map(r => {
               const o = OUTCOME[r.outcome] ?? OUTCOME.dismissed;
               const Icon = o.icon;

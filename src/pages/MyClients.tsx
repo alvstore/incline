@@ -28,6 +28,7 @@ import { Link } from 'react-router-dom';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
+import { usePtManualMark } from '@/hooks/usePtManualMark';
 import { TrainerBillingTab } from '@/components/pt/TrainerBillingTab';
 import { ClientVisitRhythm } from '@/components/pt/ClientVisitRhythm';
 import { useTrainerClientVisits } from '@/hooks/useTrainerClientVisits';
@@ -38,6 +39,7 @@ const cardShell =
 
 export default function MyClients() {
   const { trainer, generalClients, ptClients, isLoading: trainerLoading } = useTrainerData();
+  const manualMark = usePtManualMark(trainer?.branch_id);
   const [measurementDrawer, setMeasurementDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
   const [progressDrawer, setProgressDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
 
@@ -377,11 +379,13 @@ export default function MyClients() {
                           >
                             <Ruler className="h-4 w-4" aria-hidden /> Record
                           </Button>
-                          <MarkPtStatusMenu
-                            memberPackageId={client.id}
-                            trainerId={trainer.id}
-                            memberName={clientName}
-                          />
+                          {manualMark && (
+                            <MarkPtStatusMenu
+                              memberPackageId={client.id}
+                              trainerId={trainer.id}
+                              memberName={clientName}
+                            />
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
