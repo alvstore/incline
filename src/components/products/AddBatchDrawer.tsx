@@ -123,8 +123,11 @@ export function AddBatchDrawer({ open, onOpenChange, product }: Props) {
     onSuccess: () => {
       toast.success('Batch added');
       qc.invalidateQueries({ queryKey: ['product-batches', product.id] });
+      qc.invalidateQueries({ queryKey: ['product-batches'] });
       qc.invalidateQueries({ queryKey: ['products'] });
-      qc.invalidateQueries({ queryKey: ['inventory'] });
+      ['inventory', 'pos-products', 'pos-active-batches', 'stock-movements', 'inventory-row'].forEach((k) =>
+        qc.invalidateQueries({ queryKey: [k] }),
+      );
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to add batch'),

@@ -1,8 +1,9 @@
 # Store, stock & POS (20 Oct 2026)
-- [ ] Restore stock deduction on every POS/member-store sale (lost in an earlier checkout rewrite); return stock when a sale's invoice is cancelled.
-- [ ] Stock adjustment drawer (add / remove / set exact count, reason, batch) with full stock history.
-- [ ] Activation: standard Incline photo option, price-above-₹0 rule, clear POS on/off switch; fix -Infinity margin and hidden row actions.
-- [ ] Verify end-to-end as owner: activate → adjust → sell on POS → stock drops → history shows it.
+- [x] Restore stock deduction on every POS/member-store sale (lost in an earlier checkout rewrite); return stock when a sale's invoice is cancelled. Verified in a rolled-back live test: 10→7, over-sell and unsellable items refused, cancel restores.
+- [x] Stock adjustment drawer (add / remove / set exact count, reason, batch) with full stock history; past batch receipts backfilled into history.
+- [x] Activation: standard Incline photo option, price-above-₹0 rule, clear POS on/off switch; margin shows — at ₹0; row actions always visible; delete asks first.
+- [x] Owner browser check: products, stock, ready-to-sell, history, POS load without errors; a stock count saved successfully. A real paid sale through the screen was not rung up (would create a real invoice).
+- [ ] Stock counts on the shelf were never reduced by the 2 earlier POS sales (7 Oct); staff should do one physical count with Set count.
 
 # Current requests (19 Oct 2026)
 - [ ] Repair expired video attachments in saved WhatsApp messages.
