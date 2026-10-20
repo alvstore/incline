@@ -392,7 +392,8 @@ export function useTrainerData() {
           *,
           member_pt_packages!inner(
             member_id,
-            members!inner(id, member_code, user_id, profiles:user_id(full_name))
+            package:pt_packages(name),
+            members!inner(id, member_code, user_id, profiles:user_id(full_name, avatar_url))
           )
         `)
         .eq('trainer_id', trainer!.id)
