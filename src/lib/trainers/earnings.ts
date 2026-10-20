@@ -29,12 +29,11 @@ export function installmentState(i: Pick<EarningsInstallment, 'status' | 'invoic
   return 'payable';
 }
 
-/** GST-exclusive commission: base = price / (1 + gst%), gross = base × share%, net = gross − deduction%. */
-export function ptCommission(pricePaid: number, gstPct: number, sharePct: number, deductionPct: number) {
-  const base = pricePaid / (1 + gstPct / 100);
-  const gross = round2(base * sharePct / 100);
-  const deduction = round2(gross * deductionPct / 100);
-  return { base: round2(base), gross, deduction, net: round2(gross - deduction) };
+/** Mirrors backend generate_pt_commission: gross = sale × share%, trainer pays GST% on the commission only. */
+export function ptCommission(saleAmount: number, sharePct: number, trainerGstPct: number) {
+  const gross = round2(saleAmount * sharePct / 100);
+  const deduction = round2(gross * trainerGstPct / 100);
+  return { gross, deduction, net: round2(gross - deduction) };
 }
 
 export function summarize(rows: EarningsInstallment[], monthStart: string) {

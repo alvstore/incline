@@ -2,10 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { installmentState, ptCommission, summarize, type EarningsInstallment } from '../../src/lib/trainers/earnings';
 
 describe('trainer earnings', () => {
-  test('₹10,000 PT sale at 40% with 5% GST and 5% deduction nets ₹3,619.04', () => {
-    const c = ptCommission(10000, 5, 40, 5);
-    expect(c.gross).toBe(3809.52);
-    expect(c.net).toBe(3619.04);
+  test('₹10,000 PT sale at 40% = ₹4,000 commission, trainer pays 5% (₹200), nets ₹3,800', () => {
+    const c = ptCommission(10000, 40, 5);
+    expect(c.gross).toBe(4000);
+    expect(c.deduction).toBe(200);
+    expect(c.net).toBe(3800);
   });
 
   test('instalment is on hold while the PT invoice has a balance', () => {
