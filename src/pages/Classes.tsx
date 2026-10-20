@@ -22,6 +22,7 @@ import { can } from "@/lib/auth/permissions";
 import { AddClassDrawer } from "@/components/classes/AddClassDrawer";
 import { EditClassDrawer } from "@/components/classes/EditClassDrawer";
 import { ClassTypesPanel } from "@/components/classes/ClassTypesPanel";
+import { useTrainerScope } from "@/hooks/useTrainerScope";
 import { MasterClassCalendar } from "@/components/classes/MasterClassCalendar";
 import { ClassTypeDrawer } from "@/components/classes/ClassTypeDrawer";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -41,6 +42,7 @@ export default function ClassesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { effectiveBranchId: branchId = '' } = useBranchContext();
   const canManageRules = can.manageClassSchedule(roles);
+  const { isTrainerOnly, trainerId: myTrainerId, canSelfManage } = useTrainerScope(branchId);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTypeCreateOpen, setIsTypeCreateOpen] = useState(false);
@@ -52,7 +54,12 @@ export default function ClassesPage() {
   const [classTypeFilter, setClassTypeFilter] = useState<string>("all");
   const [trainerFilter, setTrainerFilter] = useState<string>("all");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("upcoming");
-  const { data: classes, isLoading } = useClasses(branchId, { activeOnly: false });
+  const { data: allClasses, isLoading } = useClasses(branchId, { activeOnly: false });
+  // Trainers only ever see their own classes on this page.
+  const classes = useMemo(
+    () => (isTrainerOnly ? (allClasses || []).filter((c) => !!myTrainerId && c.trainer_id === myTrainerId) : allClasses),
+    [allClasses, isTrainerOnly, myTrainerId],
+  );
   const { data: trainers } = useTrainers(branchId);
   const { data: bookings } = useClassBookings(selectedClass || "");
   const { data: rosterBookings } = useClassBookings(rosterClassId || "");
@@ -60,7 +67,8 @@ export default function ClassesPage() {
   const cancelBooking = useCancelBooking();
 
   const tabParam = searchParams.get("tab");
-  const activeTab: PageTab = PAGE_TABS.includes(tabParam as PageTab) ? (tabParam as PageTab) : "schedule";
+  const allowedTabs: PageTab[] = isTrainerOnly ? ["schedule", "attendance"] : PAGE_TABS;
+  const activeTab: PageTab = allowedTabs.includes(tabParam as PageTab) ? (tabParam as PageTab) : "schedule";
   const setActiveTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     if (tab === "schedule") next.delete("tab"); else next.set("tab", tab);
@@ -228,7 +236,9 @@ export default function ClassesPage() {
     const upcoming = (classes || []).filter(cls => isAfter(addMinutes(new Date(cls.scheduled_at), cls.duration_minutes || 60), now) && cls.is_active);
     const todayClasses = upcoming.filter(cls => isToday(new Date(cls.scheduled_at)));
     const totalBookings = upcoming.reduce((acc, cls) => acc + (cls.bookings_count || 0), 0);
-    return { upcoming: upcoming.length, today: todayClasses.length, totalBookings };
+    const weekEnd = addMinutes(now, 7 * 24 * 60);
+    const thisWeek = upcoming.filter(cls => isBefore(new Date(cls.scheduled_at), weekEnd)).length;
+    return { upcoming: upcoming.length, today: todayClasses.length, totalBookings, thisWeek };
   }, [classes]);
 
   return (
@@ -240,10 +250,17 @@ export default function ClassesPage() {
               <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
               <LivePill />
             </div>
-            <p className="text-muted-foreground">Recurring classes, the master calendar and attendance</p>
+            <p className="text-muted-foreground">{isTrainerOnly ? "Your classes and their attendance" : "Recurring classes, the master calendar and attendance"}</p>
           </div>
           <div className="flex items-center gap-2">
-            {canManageRules ? (
+            {isTrainerOnly ? (
+              canSelfManage ? (
+                <Button className="cursor-pointer" onClick={() => setIsCreateOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New session
+                </Button>
+              ) : null
+            ) : canManageRules ? (
               <>
                 <Button className="cursor-pointer" onClick={() => setIsTypeCreateOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -274,7 +291,7 @@ export default function ClassesPage() {
           </div>
         </div>
 
-        <AddClassDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={branchId} />
+        <AddClassDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={branchId} lockedTrainerId={isTrainerOnly ? myTrainerId : null} />
         <ClassTypeDrawer
           open={isTypeCreateOpen}
           onOpenChange={setIsTypeCreateOpen}
@@ -285,6 +302,7 @@ export default function ClassesPage() {
           open={isEditOpen} 
           onOpenChange={setIsEditOpen} 
           classData={classToEdit}
+          lockedTrainerId={isTrainerOnly ? myTrainerId : null}
           branchId={branchId}
         />
 
@@ -328,11 +346,11 @@ export default function ClassesPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <User className="h-4 w-4 text-info" />
-                Active Trainers
+                {isTrainerOnly ? "My sessions this week" : "Active Trainers"}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{trainers?.filter((t: any) => t.is_active).length || 0}</div>
+              <div className="text-3xl font-bold">{isTrainerOnly ? stats.thisWeek : (trainers?.filter((t: any) => t.is_active).length || 0)}</div>
             </CardContent>
           </Card>
         </div>
@@ -393,7 +411,7 @@ export default function ClassesPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={trainerFilter} onValueChange={setTrainerFilter}>
+                {!isTrainerOnly && <Select value={trainerFilter} onValueChange={setTrainerFilter}>
                   <SelectTrigger className="w-[180px]">
                     <User className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="Trainer" />
@@ -407,7 +425,7 @@ export default function ClassesPage() {
                       </SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
+                </Select>}
               </div>
             </div>
           </CardContent>
@@ -417,8 +435,8 @@ export default function ClassesPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="h-auto flex-wrap">
             <TabsTrigger value="schedule" className="cursor-pointer"><CalendarDays className="mr-1.5 h-4 w-4" />Sessions ({filteredClasses.length})</TabsTrigger>
-            <TabsTrigger value="calendar" className="cursor-pointer"><CalendarRange className="mr-1.5 h-4 w-4" />Master calendar</TabsTrigger>
-            <TabsTrigger value="rules" className="cursor-pointer"><Layers className="mr-1.5 h-4 w-4" />Classes & rules</TabsTrigger>
+            {!isTrainerOnly && <TabsTrigger value="calendar" className="cursor-pointer"><CalendarRange className="mr-1.5 h-4 w-4" />Master calendar</TabsTrigger>}
+            {!isTrainerOnly && <TabsTrigger value="rules" className="cursor-pointer"><Layers className="mr-1.5 h-4 w-4" />Classes & rules</TabsTrigger>}
             <TabsTrigger value="attendance" className="cursor-pointer"><ClipboardList className="mr-1.5 h-4 w-4" />Attendance</TabsTrigger>
           </TabsList>
 
@@ -444,7 +462,7 @@ export default function ClassesPage() {
                         ? "No upcoming classes scheduled."
                         : "No classes found."}
                   </p>
-                  {timeFilter === "upcoming" && (
+                  {timeFilter === "upcoming" && (!isTrainerOnly || canSelfManage) && (
                     <Button variant="outline" className="mt-4" onClick={() => setIsCreateOpen(true)}>
                       <Plus className="h-4 w-4 mr-2" />
                       Schedule a Class
@@ -515,6 +533,7 @@ export default function ClassesPage() {
                               size="icon"
                               className="h-9 w-9 cursor-pointer"
                               onClick={(e) => { e.stopPropagation(); handleEditClass(cls); }}
+                              hidden={isTrainerOnly && !canSelfManage}
                               aria-label={`Edit ${cls.name}`}
                               title="Edit Class"
                             >
@@ -632,7 +651,7 @@ export default function ClassesPage() {
                         )}
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => handleEditClass(selectedClassData)}>
+                    <Button variant="outline" size="sm" hidden={isTrainerOnly && !canSelfManage} onClick={() => handleEditClass(selectedClassData)}>
                       <Edit className="h-4 w-4 mr-2" />
                       Edit Class
                     </Button>

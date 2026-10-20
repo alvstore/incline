@@ -392,7 +392,8 @@ export function useTrainerData() {
           *,
           member_pt_packages!inner(
             member_id,
-            members!inner(id, member_code, user_id, profiles:user_id(full_name))
+            package:pt_packages(name),
+            members!inner(id, member_code, user_id, profiles:user_id(full_name, avatar_url))
           )
         `)
         .eq('trainer_id', trainer!.id)
@@ -417,7 +418,7 @@ export function useTrainerData() {
         .eq('is_active', true)
         .gte('scheduled_at', new Date().toISOString())
         .order('scheduled_at', { ascending: true })
-        .limit(10);
+        .limit(60);
       
       if (error) throw error;
       return data || [];

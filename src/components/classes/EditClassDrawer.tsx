@@ -21,6 +21,8 @@ import { ClassBannerUpload } from './ClassBannerUpload';
 import { TrainerPicker } from './TrainerPicker';
 
 interface EditClassDrawerProps {
+  /** Trainer-only callers: class is always theirs, picker hidden. */
+  lockedTrainerId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   classData: ClassWithDetails | null;
@@ -29,7 +31,7 @@ interface EditClassDrawerProps {
 
 type ChargingMode = 'free' | 'benefit' | 'paid';
 
-export function EditClassDrawer({ open, onOpenChange, classData, branchId }: EditClassDrawerProps) {
+export function EditClassDrawer({ open, onOpenChange, lockedTrainerId, classData, branchId }: EditClassDrawerProps) {
   const updateClass = useUpdateClass();
   const cancelSession = useCancelClassSession();
   const { data: trainers } = useTrainers(branchId);
@@ -111,8 +113,8 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
           duration_minutes: formData.duration_minutes,
           class_type: formData.class_type,
           is_active: formData.is_active,
-          trainer_id: formData.trainer_id || null,
-          external_trainer_name: formData.trainer_id ? null : (formData.external_trainer_name.trim() || null),
+          trainer_id: lockedTrainerId || formData.trainer_id || null,
+          external_trainer_name: (lockedTrainerId || formData.trainer_id) ? null : (formData.external_trainer_name.trim() || null),
           venue: formData.venue.trim() || null,
           banner_url: formData.banner_url,
           scheduled_at: new Date(formData.scheduled_at).toISOString(),
@@ -259,14 +261,14 @@ export function EditClassDrawer({ open, onOpenChange, classData, branchId }: Edi
             </div>
           </div>
 
-          <TrainerPicker
+          {!lockedTrainerId && <TrainerPicker
             trainers={trainers}
             trainerId={formData.trainer_id}
             guestName={formData.external_trainer_name}
             onChange={({ trainerId, guestName }) =>
               setFormData({ ...formData, trainer_id: trainerId, external_trainer_name: guestName })
             }
-          />
+          />}
 
           <div className="space-y-2">
             <Label htmlFor="edit-class-venue">Venue / Studio</Label>
