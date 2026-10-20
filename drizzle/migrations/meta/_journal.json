@@ -547,6 +547,13 @@
       "when": 1792520272324,
       "tag": "0077_trainer_earnings_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792521318690,
+      "tag": "0078_pt_commission_on_full_sale",
+      "breakpoints": true
     }
   ]
 }
