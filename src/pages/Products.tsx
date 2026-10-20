@@ -22,10 +22,11 @@ import { ImportPurchaseBillDrawer } from '@/components/products/ImportPurchaseBi
 import { ProductsToActivate } from '@/components/products/ProductsToActivate';
 import { AdjustStockDrawer } from '@/components/products/AdjustStockDrawer';
 import { StockHistoryTab } from '@/components/products/StockHistoryTab';
+import { ManageCategoriesDrawer } from '@/components/products/ManageCategoriesDrawer';
 import {
   Plus, Package, AlertTriangle, TrendingUp, Search, MoreHorizontal, Pencil, Trash2,
   Image as ImageIcon, Archive, Layers, ShieldCheck, FileSpreadsheet, Sparkles, History,
-  SlidersHorizontal, Store, CheckCircle2, XCircle, CircleDashed,
+  SlidersHorizontal, Store, CheckCircle2, XCircle, CircleDashed, Tags,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,6 +65,7 @@ export default function ProductsPage() {
   const stockBranchName = branchFilter ? currentBranchName ?? undefined : branches.length === 1 ? branches[0].name : undefined;
 
   const [importOpen, setImportOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
   const [batchesProduct, setBatchesProduct] = useState<ProductRow | null>(null);
@@ -297,6 +299,9 @@ export default function ProductsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setCategoriesOpen(true)}>
+              <Tags className="mr-2 h-4 w-4" aria-hidden />Categories
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <FileSpreadsheet className="mr-2 h-4 w-4" aria-hidden />Import purchase bill
             </Button>
@@ -501,6 +506,7 @@ export default function ProductsPage() {
       </div>
 
       <ImportPurchaseBillDrawer open={importOpen} onOpenChange={setImportOpen} />
+      <ManageCategoriesDrawer open={categoriesOpen} onOpenChange={setCategoriesOpen} />
       <AddProductDrawer open={drawerOpen} onOpenChange={setDrawerOpen} product={editingProduct} />
 
       <AdjustStockDrawer
