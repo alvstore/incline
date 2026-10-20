@@ -73,7 +73,7 @@ export default function POSPage() {
   }, [watchingInvoiceId, queryClient]);
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['pos-products', categoryFilter],
+    queryKey: ['pos-products', categoryFilter, effectiveBranchId],
     queryFn: async () => {
       let query = supabase
         .from('products')
@@ -81,7 +81,10 @@ export default function POSPage() {
         .eq('is_active', true)
         .eq('is_sellable', true)
         .order('name');
-      
+
+      if (effectiveBranchId) {
+        query = query.or(`branch_id.is.null,branch_id.eq.${effectiveBranchId}`);
+      }
       if (categoryFilter) {
         query = query.eq('category_id', categoryFilter);
       }
@@ -300,6 +303,10 @@ export default function POSPage() {
       setCouponInput('');
       setUseWallet(false);
       queryClient.invalidateQueries({ queryKey: ['today-pos-sales'] });
+      // Stock was deducted server-side — refresh counts and FEFO batches.
+      ['pos-products', 'pos-active-batches', 'inventory', 'products', 'stock-movements'].forEach((k) =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      );
       queryClient.invalidateQueries({ queryKey: ['member-wallet'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
@@ -308,9 +315,16 @@ export default function POSPage() {
     },
     onError: (error: any) => {
       // Show the full backend reason in a toast that stays long enough to read.
-      const msg = error?.message || 'Unknown error';
+      const raw: string = error?.message || 'Unknown error';
+      const outOfStock = /OUT_OF_STOCK:/i.test(raw);
+      const msg = raw.replace(/^.*OUT_OF_STOCK:\s*/i, '').replace(/^only/, 'Only');
       console.error('[POS] create sale failed:', error);
-      toast.error('Failed to complete sale', {
+      if (outOfStock) {
+        // Someone else sold it or stock was adjusted — refresh counts so the cart can be fixed.
+        queryClient.invalidateQueries({ queryKey: ['pos-products'] });
+        queryClient.invalidateQueries({ queryKey: ['pos-active-batches'] });
+      }
+      toast.error(outOfStock ? 'Not enough stock' : 'Failed to complete sale', {
         description: msg,
         duration: 8000,
       });
@@ -322,13 +336,13 @@ export default function POSPage() {
       // Stock comes from active, non-expired batches only
       return batchMap.get(product.id)?.totalQty ?? 0;
     }
-    const inv = product.inventory?.[0];
-    if (!inv) return null; // No inventory tracked
+    const inv = (product.inventory ?? []).find((i: { branch_id: string }) => i.branch_id === effectiveBranchId);
+    if (!inv) return null; // No stock row for this branch → not counted
     return inv.quantity ?? 0;
   };
 
   const getMinStock = (product: any): number => {
-    return product.inventory?.[0]?.min_quantity ?? 5;
+    return (product.inventory ?? []).find((i: { branch_id: string }) => i.branch_id === effectiveBranchId)?.min_quantity ?? 5;
   };
 
   const addToCart = (product: any) => {

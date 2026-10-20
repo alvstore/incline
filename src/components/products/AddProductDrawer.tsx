@@ -11,6 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Upload, Loader2, Link as LinkIcon } from 'lucide-react';
 import { uploadProductImage, createProduct, updateProduct } from '@/services/productService';
+import { adjustStock } from '@/services/inventoryService';
+import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products/productRules';
+import { useBranchContext } from '@/contexts/BranchContext';
 
 interface AddProductDrawerProps {
   open: boolean;
@@ -27,7 +30,8 @@ const EMPTY_FORM = {
   tax_rate: 0,
   category_id: '',
   branch_id: '',
-  is_active: true,
+  is_sellable: true,
+  hsn_code: '',
   image_url: '',
   initial_quantity: '',
   requires_batch_tracking: false,
@@ -39,6 +43,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!product;
+  const { effectiveBranchId, branchFilter } = useBranchContext();
 
   const [formData, setFormData] = useState<any>(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
@@ -59,7 +64,8 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
         tax_rate: product.tax_rate ?? 0,
         category_id: product.category_id || '',
         branch_id: product.branch_id || '',
-        is_active: product.is_active ?? true,
+        is_sellable: product.is_sellable ?? false,
+        hsn_code: product.hsn_code || '',
         image_url: product.image_url || '',
         initial_quantity: '',
         requires_batch_tracking: product.requires_batch_tracking ?? false,
@@ -146,17 +152,20 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const sellable = !!formData.is_sellable;
+      const imageUrl = formData.image_url || (sellable ? DEFAULT_PRODUCT_IMAGE : null);
       const payload = {
-        name: formData.name,
+        name: formData.name.trim(),
         description: formData.description || null,
         sku: formData.sku || null,
-        price: Number(formData.price),
+        price: Number(formData.price) || 0,
         cost_price: formData.cost_price ? Number(formData.cost_price) : null,
         tax_rate: formData.tax_rate ? Number(formData.tax_rate) : null,
         category_id: formData.category_id || null,
         branch_id: formData.branch_id || null,
-        is_active: formData.is_active,
-        image_url: formData.image_url || null,
+        is_sellable: sellable,
+        hsn_code: formData.hsn_code?.trim() || null,
+        image_url: imageUrl,
         requires_batch_tracking: !!formData.requires_batch_tracking,
         requires_lab_report: !!formData.requires_batch_tracking && !!formData.requires_lab_report,
         default_shelf_life_days: formData.default_shelf_life_days
@@ -167,33 +176,27 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
       if (isEditing) return updateProduct(product.id, payload as any);
 
       const newProduct = await createProduct(payload as any);
-      // Skip seeding inventory directly when batch tracking is on — stock comes from batches.
+      // Batch-tracked products receive stock through batches; others get opening stock via the audited stock RPC.
       if (!formData.requires_batch_tracking && formData.initial_quantity && Number(formData.initial_quantity) > 0) {
-        const quantity = Number(formData.initial_quantity);
-        const branchId = formData.branch_id || branches[0]?.id;
+        const branchId = formData.branch_id || branchFilter || effectiveBranchId;
         if (branchId) {
-          await supabase.from('inventory').insert({
-            product_id: newProduct.id,
-            branch_id: branchId,
-            quantity,
-            min_quantity: 5,
-          });
-          await supabase.from('stock_movements').insert({
-            product_id: newProduct.id,
-            branch_id: branchId,
-            movement_type: 'initial',
-            quantity,
-            notes: 'Initial stock on product creation',
+          await adjustStock({
+            productId: newProduct.id,
+            branchId,
+            mode: 'add',
+            quantity: Math.floor(Number(formData.initial_quantity)),
+            reason: 'opening',
+            notes: 'Opening stock on product creation',
           });
         }
       }
       return newProduct;
     },
     onSuccess: () => {
-      toast.success(isEditing ? 'Product updated' : 'Product created with inventory');
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['pos-products'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success(isEditing ? 'Product updated' : 'Product created');
+      ['products', 'pos-products', 'inventory', 'products-to-activate', 'stock-movements'].forEach((k) =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      );
       onOpenChange(false);
     },
     onError: (error: any) => toast.error(error.message || 'Failed to save product'),
@@ -201,8 +204,12 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.price) {
-      toast.error('Name and price are required');
+    if (!formData.name?.trim()) {
+      toast.error('Product name is required');
+      return;
+    }
+    if (formData.is_sellable && !(Number(formData.price) > 0)) {
+      toast.error('Set a selling price above ₹0 to sell on POS, or switch off "Sell on POS"');
       return;
     }
     saveMutation.mutate();
@@ -222,9 +229,11 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
           {/* Image Upload */}
           <div className="space-y-2">
             <Label>Product Image</Label>
-            <div
-              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
+            <button
+              type="button"
+              className="w-full border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => fileInputRef.current?.click()}
+              aria-label={imagePreview ? 'Change product photo' : 'Upload product photo'}
             >
               {uploading ? (
                 <div className="flex flex-col items-center gap-2 py-4">
@@ -243,7 +252,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
                   <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 5MB</p>
                 </div>
               )}
-            </div>
+            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -251,6 +260,19 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
               onChange={handleImageUpload}
               className="hidden"
             />
+            {!imagePreview && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFormData((f: typeof EMPTY_FORM) => ({ ...f, image_url: DEFAULT_PRODUCT_IMAGE }));
+                  setImagePreview(DEFAULT_PRODUCT_IMAGE);
+                }}
+              >
+                Use standard Incline photo
+              </Button>
+            )}
 
             {/* Image URL fetch */}
             <div className="flex gap-2 pt-2">
@@ -324,7 +346,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="price">Selling Price (₹) *</Label>
+              <Label htmlFor="price">Selling Price (₹){formData.is_sellable ? ' *' : ''}</Label>
               <Input
                 id="price"
                 type="number"
@@ -333,7 +355,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 placeholder="999"
-                required
+                required={!!formData.is_sellable}
               />
             </div>
 
@@ -365,6 +387,16 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="hsn_code">HSN code</Label>
+              <Input
+                id="hsn_code"
+                value={formData.hsn_code}
+                onChange={(e) => setFormData({ ...formData, hsn_code: e.target.value })}
+                placeholder="2106"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="branch">Branch</Label>
               <Select
                 value={formData.branch_id || '__all__'}
@@ -384,7 +416,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
 
             {!isEditing && !formData.requires_batch_tracking && (
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="initial_quantity">Initial Stock Quantity *</Label>
+                <Label htmlFor="initial_quantity">Opening stock</Label>
                 <Input
                   id="initial_quantity"
                   type="number"
@@ -392,9 +424,8 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
                   value={formData.initial_quantity}
                   onChange={(e) => setFormData({ ...formData, initial_quantity: e.target.value })}
                   placeholder="50"
-                  required={!formData.requires_batch_tracking}
                 />
-                <p className="text-xs text-muted-foreground">Set the starting inventory for this product</p>
+                <p className="text-xs text-muted-foreground">Units on the shelf today. You can adjust stock any time.</p>
               </div>
             )}
           </div>
@@ -456,15 +487,21 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
             )}
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+          <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-border bg-muted/40">
             <div>
-              <Label htmlFor="is_active">Active</Label>
-              <p className="text-xs text-muted-foreground">Product is available for sale</p>
+              <Label htmlFor="is_sellable">Sell on POS & member store</Label>
+              <p className="text-xs text-muted-foreground">
+                {formData.is_sellable
+                  ? formData.image_url
+                    ? 'Shown at the counter and in the member store.'
+                    : 'No photo yet — the standard Incline photo will be used.'
+                  : 'Kept in the catalog and stock, but not offered for sale.'}
+              </p>
             </div>
             <Switch
-              id="is_active"
-              checked={formData.is_active}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+              id="is_sellable"
+              checked={!!formData.is_sellable}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_sellable: checked })}
             />
           </div>
 

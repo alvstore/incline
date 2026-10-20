@@ -97,15 +97,7 @@ export async function createBatch(input: CreateBatchInput): Promise<ProductBatch
     });
   }
 
-  await (supabase.from('stock_movements') as any).insert({
-    product_id: input.product_id,
-    branch_id: input.branch_id,
-    batch_id: (data as any).id,
-    movement_type: 'stock_in',
-    quantity: input.quantity_received,
-    notes: `Batch ${input.batch_number}`,
-    created_by: user?.id ?? null,
-  });
+  // Stock history row is written by the trg_product_batch_stock_in database trigger.
 
   return data as ProductBatch;
 }

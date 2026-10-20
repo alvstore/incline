@@ -533,6 +533,13 @@
       "when": 1792509639074,
       "tag": "0075_pos_sale_deducts_stock",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792510293593,
+      "tag": "0076_stock_movement_types",
+      "breakpoints": true
     }
   ]
 }
