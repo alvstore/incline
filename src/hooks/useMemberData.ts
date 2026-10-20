@@ -418,7 +418,7 @@ export function useTrainerData() {
         .eq('is_active', true)
         .gte('scheduled_at', new Date().toISOString())
         .order('scheduled_at', { ascending: true })
-        .limit(10);
+        .limit(60);
       
       if (error) throw error;
       return data || [];

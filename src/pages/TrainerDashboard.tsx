@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
+import { TaskPulseWidget } from '@/components/dashboard/TaskPulseWidget';
+import { TodaySessionsCard, MyClientsCard, TrainerClassDays } from '@/components/trainer/TrainerDashboardCards';
+import { gateLabel } from '@/lib/trainers/dashboard';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -75,7 +77,7 @@ export default function TrainerDashboard() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* ── Hero band ─────────────────────────────────────────────── */}
         <section className="relative overflow-hidden rounded-xl bg-primary px-6 py-7 text-primary-foreground">
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -109,10 +111,6 @@ export default function TrainerDashboard() {
           <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
           <MyShiftWeekCard userId={trainer.user_id} />
         </div>
-
-        {/* ── My tasks ──────────────────────────────────────────────── */}
-        <MyTasksWidget />
-
 
         {/* ── KPI row ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
@@ -169,167 +167,20 @@ export default function TrainerDashboard() {
         </div>
 
         {/* Mark Today's PT Sessions — works for session-based AND monthly packs */}
-        <TrainerPtAttendanceCard ptClients={ptClients as PtClientLite[]} />
+        <div className="grid gap-5 lg:grid-cols-12">
+          <div className="lg:col-span-7"><TrainerPtAttendanceCard ptClients={ptClients as PtClientLite[]} /></div>
+          <TaskPulseWidget className="lg:col-span-5" />
+        </div>
 
         {/* Legacy direct marking — only for branches whose gate isn't live (branch setting). */}
         {manualMark && <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Today's Sessions */}
-          <Card className="rounded-xl border border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-primary/10 p-2 text-primary">
-                  <Clock className="h-4 w-4" />
-                </span>
-                Today's sessions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {todaySessions.length === 0 ? (
-                <EmptyState icon={Calendar} text="No sessions scheduled for today" />
-              ) : (
-                <ol className="relative space-y-3 border-l border-dashed border-border pl-5">
-                  {todaySessions.map((session: any) => {
-                    const done = session.status === 'completed';
-                    return (
-                      <li key={session.id} className="relative">
-                        <span
-                          className={cn(
-                            'absolute -left-[27px] top-3 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-background',
-                            done ? 'bg-success' : 'bg-warning',
-                          )}
-                          aria-hidden="true"
-                        />
-                        <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3 transition-colors duration-150 hover:bg-muted">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">
-                              {session.member?.profiles?.full_name || session.member?.member_code}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(session.scheduled_at), 'HH:mm')} · {session.duration_minutes} min
-                            </p>
-                          </div>
-                          <Badge
-                            className={cn(
-                              'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
-                              done
-                                ? 'bg-success/10 text-success hover:bg-success/10'
-                                : 'bg-warning/10 text-warning hover:bg-warning/10',
-                            )}
-                          >
-                            {done ? 'Completed' : session.status}
-                          </Badge>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* My Clients */}
-          <Card className="rounded-xl border border-border">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-primary/10 p-2 text-primary">
-                  <Users className="h-4 w-4" />
-                </span>
-                My clients
-              </CardTitle>
-              <Button variant="ghost" size="sm" className="rounded-lg" asChild>
-                <Link to="/my-clients">View all</Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {generalClients.length === 0 && ptClients.length === 0 ? (
-                <EmptyState icon={Users} text="No clients assigned yet" />
-              ) : (
-                <div className="space-y-2">
-                  {generalClients.slice(0, 3).map((client: any) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-muted/60"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                          <User className="h-5 w-5" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {client.profile?.full_name || client.member_code}
-                          </p>
-                          <p className="text-xs text-muted-foreground">General training</p>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="shrink-0 rounded-full text-xs">General</Badge>
-                    </div>
-                  ))}
-                  {ptClients.slice(0, 3).map((client: any) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-muted/60"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
-                          <Dumbbell className="h-5 w-5" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {client.member?.profile?.full_name || client.member?.member_code}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">{client.package?.name}</p>
-                        </div>
-                      </div>
-                      <PtPackageBadge
-                        packageType={(client.package_type ?? client.package?.package_type ?? 'session_based') as 'session_based' | 'monthly'}
-                        sessionsRemaining={client.sessions_remaining}
-                        sessionsTotal={client.sessions_total}
-                        expiryDate={client.expiry_date}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Upcoming Classes */}
-          <Card className="rounded-xl border border-border lg:col-span-2">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-primary/10 p-2 text-primary">
-                  <Dumbbell className="h-4 w-4" />
-                </span>
-                My upcoming classes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {myClasses.length === 0 ? (
-                <EmptyState icon={Calendar} text="No upcoming classes assigned" />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {myClasses.slice(0, 4).map((classItem: any) => (
-                    <div
-                      key={classItem.id}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-4 transition-colors duration-150 hover:bg-muted"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{classItem.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(classItem.scheduled_at), 'EEE, dd MMM · HH:mm')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Capacity {classItem.capacity}</p>
-                      </div>
-                      <Badge variant="outline" className="shrink-0 rounded-full text-xs">{classItem.class_type}</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <TodaySessionsCard trainerId={trainer.id} sessions={todaySessions as any[]} />
+          <MyClientsCard ptClients={ptClients as any[]} generalClients={generalClients as any[]} />
         </div>
+
+        <TrainerClassDays classes={myClasses as any[]} />
       </div>
     </AppLayout>
   );
@@ -601,7 +452,7 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
               <CheckCircle className="h-4 w-4" />
               <span>
                 Last seen <strong>{format(lastSeenAt, 'HH:mm')}</strong>
-                {presence?.gate ? ` at ${presence.gate}` : ''}
+                {` at ${gateLabel(presence?.gate)}`}
               </span>
             </div>
             <Badge variant="outline" className="text-[10px] py-0">Turnstile</Badge>
