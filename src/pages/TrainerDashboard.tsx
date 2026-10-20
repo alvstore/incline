@@ -25,6 +25,7 @@ import { TrainerPtAttendanceCard, type PtClientLite } from '@/components/pt/Trai
 import { usePtManualMark } from '@/hooks/usePtManualMark';
 import { summarize, type EarningsInstallment } from '@/lib/trainers/earnings';
 import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
+import { KpiCard, TrainerEarningsKpi, type EarningsKpiData } from '@/components/trainer/TrainerKpis';
 
 export default function TrainerDashboard() {
   const { profile } = useAuth();
@@ -79,85 +80,53 @@ export default function TrainerDashboard() {
   return (
     <AppLayout>
       <div className="space-y-5">
-        {/* ── Hero band ─────────────────────────────────────────────── */}
-        <section className="relative overflow-hidden rounded-xl bg-primary px-6 py-7 text-primary-foreground">
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70">{greeting}</p>
+        {/* ── Row 1: greeting + duty (8) · earnings KPI (4) ─────────── */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <div className="flex flex-col gap-5 lg:col-span-8">
+            <section className="rounded-2xl bg-primary px-6 py-6 text-primary-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70">{greeting} · {format(new Date(), 'EEE, d MMM')}</p>
               <h1 className="mt-1 truncate text-3xl font-bold tracking-tight">{firstName}</h1>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-primary-foreground/80">
                 <span>{trainer.branch?.name ?? 'Incline'}</span>
                 <span aria-hidden="true">·</span>
                 <span>{trainer.specializations?.[0] || 'Personal Trainer'}</span>
-                <Badge
-                  className={cn(
-                    'rounded-full border-0 px-2.5 py-0.5 text-[11px] font-medium',
-                    trainer.is_active ? 'bg-success/20 text-primary-foreground' : 'bg-primary-foreground/20 text-primary-foreground',
-                  )}
-                >
+                <Badge className="rounded-full border-0 bg-primary-foreground/15 px-2.5 py-0.5 text-[11px] font-medium text-primary-foreground">
                   {trainer.is_active ? 'Active' : 'Inactive'}
                 </Badge>
               </p>
-            </div>
-            <div className="grid grid-cols-3 gap-3 sm:gap-5">
-              <HeroStat label="Clients" value={totalClients} />
-              <HeroStat label="Today" value={`${completedToday}/${todaySessions.length}`} />
-              <HeroStat label="Earnings" value={`₹${(monthEarnings?.estimated || 0).toLocaleString('en-IN')}`} />
-            </div>
+            </section>
+            <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
           </div>
-        </section>
-
-        {/* ── Duty + week roster ────────────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
-          <MyShiftWeekCard userId={trainer.user_id} />
+          <div className="lg:col-span-4">
+            <TrainerEarningsKpi data={earningsQ.data} isLoading={earningsQ.isLoading} isError={earningsQ.isError} onRetry={() => earningsQ.refetch()} />
+          </div>
         </div>
 
-        {/* ── KPI row ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-          <StatCard
-            title="General Clients"
-            value={generalClients.length}
-            icon={Users}
-            description="Assigned to you"
-            variant="default"
-            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
-          />
-          <StatCard
-            title="PT Clients"
-            value={ptClients.length}
-            icon={Dumbbell}
-            description="Active packages"
-            variant="warning"
-            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
-          />
-          <StatCard
-            title="Today's Sessions"
-            value={todaySessions.length}
-            icon={Calendar}
-            description={`${completedToday} done · ${pendingToday} pending`}
-            variant="accent"
-            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
-          />
-          <StatCard
-            title="My Classes"
-            value={myClasses.length}
-            icon={Dumbbell}
-            description="Upcoming"
-            variant="success"
-            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
-          />
-          <Link to="/trainer-earnings" aria-label="View detailed earnings" className="cursor-pointer">
-            <StatCard
-              title="My Earnings"
-              value={`₹${(monthEarnings?.estimated || 0).toLocaleString('en-IN')}`}
-              icon={Wallet}
-              description="This month"
-              variant="info"
-              className="h-full rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
-            />
-          </Link>
+        {/* ── Row 2: KPI cards ─────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <KpiCard label="PT clients" value={ptClients.length} hint={`${generalClients.length} general · ${totalClients} total`} icon={Dumbbell} tone="accent" to="/my-clients" />
+          <KpiCard label="Sessions today" value={`${completedToday}/${todaySessions.length}`} hint={`${pendingToday} still to come`} icon={Calendar} tone="primary" />
+          <KpiCard label="Classes ahead" value={myClasses.length} hint="Upcoming on your schedule" icon={Users} tone="success" to="/classes" />
+          <KpiCard label="Clients" value={totalClients} hint="Assigned to you" icon={TrendingUp} tone="info" to="/my-clients" />
         </div>
+
+        {/* ── Row 3: attendance (7) · tasks (5) ────────────────────── */}
+        <div className="grid gap-5 lg:grid-cols-12">
+          <div className="lg:col-span-7"><TrainerPtAttendanceCard ptClients={ptClients as PtClientLite[]} /></div>
+          <TaskPulseWidget className="lg:col-span-5" />
+        </div>
+
+        {manualMark && <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />}
+
+        {/* ── Row 4: sessions (5) · clients (7) ────────────────────── */}
+        <div className="grid gap-5 lg:grid-cols-12">
+          <div className="lg:col-span-5"><TodaySessionsCard trainerId={trainer.id} sessions={todaySessions as any[]} /></div>
+          <div className="lg:col-span-7"><MyClientsCard ptClients={ptClients as any[]} generalClients={generalClients as any[]} /></div>
+        </div>
+
+        <TrainerClassDays classes={myClasses as any[]} />
+
+        <MyShiftWeekCard userId={trainer.user_id} />
 
         {/* ── Quick actions ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -166,22 +135,6 @@ export default function TrainerDashboard() {
           <QuickActionLink to="/trainer-plan-builder" icon={TrendingUp} label="Fitness Plans" hint="Build & assign" tone="amber" />
           <QuickActionLink to="/member-store" icon={Wallet} label="Member Store" hint="Sell add-ons" tone="violet" />
         </div>
-
-        {/* Mark Today's PT Sessions — works for session-based AND monthly packs */}
-        <div className="grid gap-5 lg:grid-cols-12">
-          <div className="lg:col-span-7"><TrainerPtAttendanceCard ptClients={ptClients as PtClientLite[]} /></div>
-          <TaskPulseWidget className="lg:col-span-5" />
-        </div>
-
-        {/* Legacy direct marking — only for branches whose gate isn't live (branch setting). */}
-        {manualMark && <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />}
-
-        <div className="grid gap-5 lg:grid-cols-2">
-          <TodaySessionsCard trainerId={trainer.id} sessions={todaySessions as any[]} />
-          <MyClientsCard ptClients={ptClients as any[]} generalClients={generalClients as any[]} />
-        </div>
-
-        <TrainerClassDays classes={myClasses as any[]} />
       </div>
     </AppLayout>
   );
