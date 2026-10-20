@@ -250,7 +250,7 @@ export default function ClassesPage() {
               <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
               <LivePill />
             </div>
-            <p className="text-muted-foreground">Recurring classes, the master calendar and attendance</p>
+            <p className="text-muted-foreground">{isTrainerOnly ? "Your classes and their attendance" : "Recurring classes, the master calendar and attendance"}</p>
           </div>
           <div className="flex items-center gap-2">
             {isTrainerOnly ? (
@@ -411,7 +411,7 @@ export default function ClassesPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={trainerFilter} onValueChange={setTrainerFilter}>
+                {!isTrainerOnly && <Select value={trainerFilter} onValueChange={setTrainerFilter}>
                   <SelectTrigger className="w-[180px]">
                     <User className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="Trainer" />
@@ -425,7 +425,7 @@ export default function ClassesPage() {
                       </SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
+                </Select>}
               </div>
             </div>
           </CardContent>
