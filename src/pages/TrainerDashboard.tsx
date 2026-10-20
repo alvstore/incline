@@ -542,7 +542,7 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
 
   return (
     <Card className="rounded-xl border border-border overflow-hidden">
-      <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-4 text-primary-foreground">
+      <div className="bg-primary px-6 py-4 text-primary-foreground">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider opacity-80 font-semibold">Duty Status</p>
