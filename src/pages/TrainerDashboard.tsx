@@ -77,21 +77,19 @@ export default function TrainerDashboard() {
     <AppLayout>
       <div className="space-y-6">
         {/* ── Hero band ─────────────────────────────────────────────── */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/80 px-6 py-7 text-primary-foreground shadow-lg shadow-primary/20">
-          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-white/5 blur-3xl" />
+        <section className="relative overflow-hidden rounded-xl bg-primary px-6 py-7 text-primary-foreground">
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/70">{greeting}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70">{greeting}</p>
               <h1 className="mt-1 truncate text-3xl font-bold tracking-tight">{firstName}</h1>
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/80">
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-primary-foreground/80">
                 <span>{trainer.branch?.name ?? 'Incline'}</span>
                 <span aria-hidden="true">·</span>
                 <span>{trainer.specializations?.[0] || 'Personal Trainer'}</span>
                 <Badge
                   className={cn(
                     'rounded-full border-0 px-2.5 py-0.5 text-[11px] font-medium',
-                    trainer.is_active ? 'bg-success/20 text-primary-foreground' : 'bg-white/20 text-white',
+                    trainer.is_active ? 'bg-success/20 text-primary-foreground' : 'bg-primary-foreground/20 text-primary-foreground',
                   )}
                 >
                   {trainer.is_active ? 'Active' : 'Inactive'}
@@ -124,7 +122,7 @@ export default function TrainerDashboard() {
             icon={Users}
             description="Assigned to you"
             variant="default"
-            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
           />
           <StatCard
             title="PT Clients"
@@ -132,7 +130,7 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Active packages"
             variant="warning"
-            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
           />
           <StatCard
             title="Today's Sessions"
@@ -140,7 +138,7 @@ export default function TrainerDashboard() {
             icon={Calendar}
             description={`${completedToday} done · ${pendingToday} pending`}
             variant="accent"
-            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
           />
           <StatCard
             title="My Classes"
@@ -148,7 +146,7 @@ export default function TrainerDashboard() {
             icon={Dumbbell}
             description="Upcoming"
             variant="success"
-            className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+            className="rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
           />
           <Link to="/trainer-earnings" aria-label="View detailed earnings" className="cursor-pointer">
             <StatCard
@@ -157,7 +155,7 @@ export default function TrainerDashboard() {
               icon={Wallet}
               description="This month"
               variant="info"
-              className="h-full rounded-2xl border-0 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-200 hover:shadow-xl"
+              className="h-full rounded-xl border border-border transition-colors duration-150 hover:bg-secondary"
             />
           </Link>
         </div>
@@ -178,7 +176,7 @@ export default function TrainerDashboard() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Today's Sessions */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
+          <Card className="rounded-xl border border-border">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <span className="rounded-full bg-primary/10 p-2 text-primary">
@@ -217,7 +215,7 @@ export default function TrainerDashboard() {
                               'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
                               done
                                 ? 'bg-success/10 text-success hover:bg-success/10'
-                                : 'bg-amber-100 text-amber-700 hover:bg-amber-100',
+                                : 'bg-warning/10 text-warning hover:bg-warning/10',
                             )}
                           >
                             {done ? 'Completed' : session.status}
@@ -232,7 +230,7 @@ export default function TrainerDashboard() {
           </Card>
 
           {/* My Clients */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
+          <Card className="rounded-xl border border-border">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <span className="rounded-full bg-primary/10 p-2 text-primary">
@@ -274,7 +272,7 @@ export default function TrainerDashboard() {
                       className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-muted/60"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
                           <Dumbbell className="h-5 w-5" />
                         </span>
                         <div className="min-w-0">
@@ -298,7 +296,7 @@ export default function TrainerDashboard() {
           </Card>
 
           {/* Upcoming Classes */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5 lg:col-span-2">
+          <Card className="rounded-xl border border-border lg:col-span-2">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <span className="rounded-full bg-primary/10 p-2 text-primary">
@@ -339,8 +337,8 @@ export default function TrainerDashboard() {
 
 function HeroStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl bg-white/10 px-3 py-2 text-center backdrop-blur-sm sm:px-4">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+    <div className="rounded-xl bg-primary-foreground/10 px-3 py-2 text-center backdrop-blur-sm sm:px-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70">{label}</p>
       <p className="mt-0.5 truncate text-lg font-bold tabular-nums sm:text-xl">{value}</p>
     </div>
   );
@@ -361,13 +359,13 @@ function QuickActionLink({ to, icon: Icon, label, hint, tone }: { to: string; ic
   const tones: Record<string, string> = {
     indigo: 'text-primary bg-primary/10',
     emerald: 'text-success bg-success/10',
-    amber: 'text-amber-600 bg-amber-50',
+    amber: 'text-accent bg-accent/10',
     violet: 'text-primary bg-primary/10',
   };
 
   return (
     <Link to={to} className="group cursor-pointer rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary" aria-label={label}>
-      <Card className="h-full overflow-hidden rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
+      <Card className="h-full overflow-hidden rounded-xl border border-border transition-colors duration-150 hover:bg-secondary">
         <CardContent className="flex items-center gap-3 p-4">
           <span className={cn('shrink-0 rounded-xl p-3 transition-transform duration-200 group-hover:scale-105', tones[tone])}>
             <Icon className="h-5 w-5" />
@@ -509,7 +507,7 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
 
   if (shiftLoading || punchLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5">
+      <Card className="rounded-xl border border-border">
         <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading duty status…
         </CardContent>
@@ -543,8 +541,8 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   const onDuty = !!openPunch || seenRecently;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5 overflow-hidden">
-      <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-4 text-primary-foreground">
+    <Card className="rounded-xl border border-border overflow-hidden">
+      <div className="bg-primary px-6 py-4 text-primary-foreground">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider opacity-80 font-semibold">Duty Status</p>

@@ -11,3 +11,5 @@ type: feature
 - Commission is payable only when the PT invoice balance is zero. Otherwise installments stay `status='blocked'` with `blocked_reason`.
 - Release happens via `release_pt_commission_for_invoice`, fired both from the payments trigger and from `trg_invoice_release_pt_commission` on `invoices` (amount_paid/total_amount change to zero balance). Passed months move to the current payout month.
 - `pt_commission_due_for_period` returns only: pending, `payroll_item_id IS NULL`, commission not reversed/cancelled, invoice fully paid, within period. `payroll_mark_paid` stamps the same predicate — one installment can never land in two payroll runs.
+
+**SUPERSEDED 2026-10-20 (owner instruction):** commission = trainer share % × full PT sale amount (e.g. ₹10,000 × 40% = ₹4,000); trainer pays `commission_deduction_percentage` (5%) GST on the commission only, always (₹200 → net ₹3,800). Member-side GST is irrelevant to commission. Rules above about pre-GST base and GST-invoice-only deduction no longer apply.
