@@ -561,6 +561,13 @@
       "when": 1792522760857,
       "tag": "0079_trainer_own_classes_only",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1792522780559,
+      "tag": "0080_duty_presence_gate_name",
+      "breakpoints": true
     }
   ]
 }
