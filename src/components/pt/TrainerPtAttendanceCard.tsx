@@ -30,7 +30,7 @@ export type MyBoardRow = {
 };
 
 const CORR: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-600 border border-amber-500/20',
+  pending: 'bg-amber-500/10 text-amber-500 border border-amber-500/20',
   approved: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20',
   rejected: 'bg-destructive/10 text-destructive border border-destructive/20',
 };

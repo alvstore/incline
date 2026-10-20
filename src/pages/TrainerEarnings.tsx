@@ -22,7 +22,7 @@ const inr = (n: number) => `₹${(Number(n) || 0).toLocaleString('en-IN', { maxi
 const STATE_UI: Record<InstallmentState, { label: string; cls: string; icon: typeof CheckCircle }> = {
   paid: { label: 'Paid', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20', icon: CheckCircle },
   payable: { label: 'Payable', cls: 'bg-primary/10 text-primary border border-primary/20', icon: Wallet },
-  on_hold: { label: 'On hold', cls: 'bg-amber-500/10 text-amber-600 border border-amber-500/20', icon: Lock },
+  on_hold: { label: 'On hold', cls: 'bg-amber-500/10 text-amber-500 border border-amber-500/20', icon: Lock },
   upcoming: { label: 'Upcoming', cls: 'bg-muted text-muted-foreground border border-border', icon: CalendarClock },
 };
 
