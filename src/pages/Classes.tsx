@@ -651,7 +651,7 @@ export default function ClassesPage() {
                         )}
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => handleEditClass(selectedClassData)}>
+                    <Button variant="outline" size="sm" hidden={isTrainerOnly && !canSelfManage} onClick={() => handleEditClass(selectedClassData)}>
                       <Edit className="h-4 w-4 mr-2" />
                       Edit Class
                     </Button>
