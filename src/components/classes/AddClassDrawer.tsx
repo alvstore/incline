@@ -18,6 +18,8 @@ import { Gift, IndianRupee, Sparkles, CheckCircle2, Megaphone, Copy, Plus } from
 import { copyToClipboard } from '@/lib/utils/clipboard';
 
 interface AddClassDrawerProps {
+  /** Trainer-only callers: class is always theirs, picker hidden. */
+  lockedTrainerId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   branchId: string;
@@ -43,7 +45,7 @@ const EMPTY_FORM = {
   is_gst_inclusive: true,
 };
 
-export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerProps) {
+export function AddClassDrawer({ open, onOpenChange, lockedTrainerId, branchId }: AddClassDrawerProps) {
   const createClass = useCreateClass();
   const navigate = useNavigate();
   const { data: trainers } = useTrainers(branchId);
@@ -82,8 +84,8 @@ export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerP
         duration_minutes: formData.duration_minutes,
         class_type: formData.class_type,
         branch_id: branchId,
-        trainer_id: formData.trainer_id || null,
-        external_trainer_name: formData.trainer_id ? null : (formData.external_trainer_name.trim() || null),
+        trainer_id: lockedTrainerId || formData.trainer_id || null,
+        external_trainer_name: (lockedTrainerId || formData.trainer_id) ? null : (formData.external_trainer_name.trim() || null),
         venue: formData.venue.trim() || null,
         banner_url: formData.banner_url,
         scheduled_at: new Date(formData.scheduled_at).toISOString(),
@@ -228,14 +230,14 @@ export function AddClassDrawer({ open, onOpenChange, branchId }: AddClassDrawerP
             </div>
           </div>
 
-          <TrainerPicker
+          {!lockedTrainerId && <TrainerPicker
             trainers={trainers}
             trainerId={formData.trainer_id}
             guestName={formData.external_trainer_name}
             onChange={({ trainerId, guestName }) =>
               setFormData({ ...formData, trainer_id: trainerId, external_trainer_name: guestName })
             }
-          />
+          />}
 
           <div className="space-y-2">
             <Label htmlFor="class-venue">Venue / Studio</Label>
