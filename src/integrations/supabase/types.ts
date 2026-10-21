@@ -16200,6 +16200,10 @@ export type Database = {
         Args: { p_branch: string; p_user: string }
         Returns: boolean
       }
+      _pt_notify_trainer_checkin: {
+        Args: { p_at: string; p_member_id: string }
+        Returns: undefined
+      }
       _purchase_pt_package_impl: {
         Args: {
           _amount_paid?: number

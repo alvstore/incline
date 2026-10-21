@@ -24,6 +24,7 @@ import { TrainerTodayPanel } from '@/components/pt/TrainerTodayPanel';
 import { TrainerPtAttendanceCard, type PtClientLite } from '@/components/pt/TrainerPtAttendanceCard';
 import { usePtManualMark } from '@/hooks/usePtManualMark';
 import { summarize, type EarningsInstallment } from '@/lib/trainers/earnings';
+import { BrowserNotifications } from '@/components/member/BrowserNotifications';
 import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 import { KpiCard, TrainerEarningsKpi, type EarningsKpiData } from '@/components/trainer/TrainerKpis';
 
@@ -83,9 +84,13 @@ export default function TrainerDashboard() {
         {/* ── Row 1: greeting + duty (8) · earnings KPI (4) ─────────── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           <div className="flex flex-col gap-5 lg:col-span-8">
-            <section className="rounded-2xl bg-primary px-6 py-6 text-primary-foreground">
+            <section className="relative overflow-hidden rounded-2xl border border-border bg-primary px-6 py-6 text-primary-foreground">
+              <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/30 blur-3xl" />
+              <span aria-hidden className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-primary-foreground/10 blur-3xl" />
+              <div className="relative flex flex-wrap items-end justify-between gap-4">
+              <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70">{greeting} · {format(new Date(), 'EEE, d MMM')}</p>
-              <h1 className="mt-1 truncate text-3xl font-bold tracking-tight">{firstName}</h1>
+              <h1 className="mt-1 truncate text-3xl font-bold tracking-tight sm:text-4xl">{firstName}</h1>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-primary-foreground/80">
                 <span>{trainer.branch?.name ?? 'Incline'}</span>
                 <span aria-hidden="true">·</span>
@@ -94,7 +99,15 @@ export default function TrainerDashboard() {
                   {trainer.is_active ? 'Active' : 'Inactive'}
                 </Badge>
               </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <HeroStat label="Today" value={`${completedToday}/${todaySessions.length}`} />
+                <HeroStat label="PT" value={ptClients.length} />
+                <HeroStat label="Classes" value={myClasses.length} />
+              </div>
+              </div>
             </section>
+            <BrowserNotifications branchId={trainer.branch_id ?? ''} />
             <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
           </div>
           <div className="lg:col-span-4">
@@ -104,8 +117,8 @@ export default function TrainerDashboard() {
 
         {/* ── Row 2: KPI cards ─────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiCard label="PT clients" value={ptClients.length} hint={`${generalClients.length} general · ${totalClients} total`} icon={Dumbbell} tone="accent" to="/my-clients" />
-          <KpiCard label="Sessions today" value={`${completedToday}/${todaySessions.length}`} hint={`${pendingToday} still to come`} icon={Calendar} tone="primary" />
+          <KpiCard label="PT clients" value={ptClients.length} hint={`${generalClients.length} general · ${totalClients} total`} icon={Dumbbell} tone="accent" to="/my-clients" progress={totalClients ? (ptClients.length / totalClients) * 100 : 0} />
+          <KpiCard label="Sessions today" value={`${completedToday}/${todaySessions.length}`} hint={`${pendingToday} still to come`} icon={Calendar} tone="primary" progress={todaySessions.length ? (completedToday / todaySessions.length) * 100 : 0} />
           <KpiCard label="Classes ahead" value={myClasses.length} hint="Upcoming on your schedule" icon={Users} tone="success" to="/classes" />
           <KpiCard label="Clients" value={totalClients} hint="Assigned to you" icon={TrendingUp} tone="info" to="/my-clients" />
         </div>
@@ -142,7 +155,7 @@ export default function TrainerDashboard() {
 
 function HeroStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl bg-primary-foreground/10 px-3 py-2 text-center backdrop-blur-sm sm:px-4">
+    <div className="rounded-xl border border-primary-foreground/15 bg-primary-foreground/10 px-3 py-2 text-center sm:px-4">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70">{label}</p>
       <p className="mt-0.5 truncate text-lg font-bold tabular-nums sm:text-xl">{value}</p>
     </div>

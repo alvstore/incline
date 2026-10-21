@@ -29,10 +29,10 @@ export function installmentState(i: Pick<EarningsInstallment, 'status' | 'invoic
   return 'payable';
 }
 
-/** Mirrors backend generate_pt_commission: gross = sale × share%, trainer pays GST% on the commission only. */
-export function ptCommission(saleAmount: number, sharePct: number, trainerGstPct: number) {
+/** Mirrors backend generate_pt_commission: gross = sale × share%, trainer pays GST% on the commission only — and only when the sale invoice charged GST. */
+export function ptCommission(saleAmount: number, sharePct: number, trainerGstPct: number, invoiceTaxed = true) {
   const gross = round2(saleAmount * sharePct / 100);
-  const deduction = round2(gross * trainerGstPct / 100);
+  const deduction = invoiceTaxed ? round2(gross * trainerGstPct / 100) : 0;
   return { gross, deduction, net: round2(gross - deduction) };
 }
 

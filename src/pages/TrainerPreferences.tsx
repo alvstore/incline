@@ -16,6 +16,8 @@ import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchPreferences, upsertPreferences } from '@/services/notificationService';
 import { useToast } from '@/hooks/use-toast';
+import { BrowserNotifications } from '@/components/member/BrowserNotifications';
+import { supabase } from '@/integrations/supabase/client';
 import { Bell, MessageSquare, Palette, CalendarDays } from 'lucide-react';
 
 type PrefKey =
@@ -40,6 +42,15 @@ export default function TrainerPreferences() {
     whatsapp_task_notifications: true,
     email_class_notifications: true,
     email_announcements: true,
+  });
+
+  const { data: trainerBranch } = useQuery({
+    queryKey: ['trainer-branch', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase.from('trainers').select('branch_id').eq('user_id', user!.id).maybeSingle();
+      return (data?.branch_id as string | null) ?? null;
+    },
   });
 
   const { data, isLoading } = useQuery({
@@ -81,15 +92,16 @@ export default function TrainerPreferences() {
         </header>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+          <Card className="rounded-2xl border border-border">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><Bell className="h-4 w-4" /></span>
+                <span className="rounded-full bg-primary/10 p-2 text-primary"><Bell className="h-4 w-4" /></span>
                 Notifications
               </CardTitle>
               <CardDescription>Only coaching alerts — no admin or lead noise.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {trainerBranch && <BrowserNotifications branchId={trainerBranch} />}
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)
               ) : (
@@ -120,10 +132,10 @@ export default function TrainerPreferences() {
           </Card>
 
           <div className="space-y-6">
-            <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+            <Card className="rounded-2xl border border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><Palette className="h-4 w-4" /></span>
+                  <span className="rounded-full bg-primary/10 p-2 text-primary"><Palette className="h-4 w-4" /></span>
                   Appearance
                 </CardTitle>
                 <CardDescription>Theme for your dashboard.</CardDescription>
