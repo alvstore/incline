@@ -898,6 +898,9 @@ export async function runStaffAgent(state: AgentRunState): Promise<AgentResult> 
       : financial
         ? `6. You may look up any member or trainer.`
         : `6. You may look up members, but personal or financial details stay limited to what the tools return.`,
+    financial
+      ? `7. EXPENSES: when ${staffName} says they paid/gave money out (e.g. "paid 5000 to Dilip Meena cash today"), call draft_expense, show the summary and ask for YES. Only call confirm_expense with that draft_id after an explicit yes. Never say an expense is saved unless confirm_expense returned success; then reply it is recorded as Pending approval with the reference.`
+      : ``,
   ].join("\n");
 
   const tools = getOpsToolDefinitions(role);

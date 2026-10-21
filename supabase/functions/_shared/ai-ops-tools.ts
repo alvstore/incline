@@ -1,5 +1,9 @@
 // Internal-team (staff) operations tools — live business data over chat.
-// v1.0.0
+// v1.1.0 — WhatsApp expense capture (draft_expense → confirm_expense, pending approval)
+import {
+  normalizeExpenseMode, parseAmount, resolveExpenseDate, defaultExpenseType,
+  guessCategory, matchCategoryId, canCaptureExpense,
+} from "./expenseCapture.ts";
 //
 // SECURITY: these tools are ONLY wired into runStaffAgent, which is reached
 // exclusively when resolveMemberContext confirms the sender is internal team
@@ -107,6 +111,27 @@ export function getOpsToolDefinitions(role: StaffRole | undefined): any[] {
       "list_outstanding_dues",
       "Open invoices with money still to collect — member name, invoice number, total, paid, pending amount, invoice date and due date.",
       { limit: ["number", "Max invoices, default 20."] },
+    ),
+    tool(
+      "draft_expense",
+      "Prepare (NOT save) an expense the colleague paid out, e.g. 'paid 5000 to Dilip Meena in cash today'. Returns a draft summary to show them and ask 'Reply YES to save'. Call again with changes if they correct anything. Ask for missing amount or payment mode instead of guessing.",
+      {
+        amount: ["number", "Amount in rupees."],
+        payee: ["string", "Who was paid (person, vendor or bill name)."],
+        payment_mode: ["string", "cash | upi | card | bank_transfer | cheque. Leave empty if not stated."],
+        date: ["string", "today | yesterday | YYYY-MM-DD. Default today."],
+        note: ["string", "What it was for, in the colleague's words (e.g. 'housing', 'electricity bill')."],
+        expense_type: ["string", "general | salary_advance. Only set if the colleague said so."],
+        category: ["string", "Optional expense category name if the colleague named one."],
+        team_member_pick: ["string", "If several team members matched before, the exact name or code they picked."],
+      },
+      ["amount", "payee"],
+    ),
+    tool(
+      "confirm_expense",
+      "Save the most recent expense draft as Pending approval. ONLY call after the colleague explicitly replied yes/confirm to the draft summary.",
+      { draft_id: ["string", "The draft_id returned by draft_expense."] },
+      ["draft_id"],
     ),
   ];
 }
@@ -712,6 +737,96 @@ export async function executeOpsToolCall(
         return { date: isoDate, count: sessions.length, sessions };
       }
 
+
+      case "draft_expense":
+      case "confirm_expense": {
+        if (!canCaptureExpense(opts.role)) return { error: "Recording expenses over WhatsApp is limited to owners, admins and managers." };
+        if (!opts.staffUserId) return { error: "Could not identify your staff account." };
+        const branchId = opts.branchId;
+        if (!branchId) return { error: "No branch linked to your account." };
+        const { data: flag } = await supabase.from("settings").select("value")
+          .eq("key", "whatsapp_expense_capture").or(`branch_id.eq.${branchId},branch_id.is.null`).limit(1).maybeSingle();
+        const fv = (flag as any)?.value;
+        if (fv === false || fv === "false" || fv?.enabled === false) return { error: "WhatsApp expense recording is switched off for this branch." };
+
+        if (toolName === "confirm_expense") {
+          const { data: d } = await supabase.from("chat_expense_drafts").select("*")
+            .eq("id", String(args.draft_id || "")).eq("actor_user_id", opts.staffUserId).maybeSingle();
+          if (!d) return { error: "Draft not found. Please send the expense again." };
+          if ((d as any).status !== "pending") return { error: "This expense was already saved.", expense_id: (d as any).expense_id };
+          if (new Date((d as any).expires_at).getTime() < Date.now()) return { error: "Draft expired (15 min). Please send the expense again." };
+          const p = (d as any).payload;
+          const { data: res, error } = await supabase.rpc("record_expense_for_actor", {
+            p_actor_user_id: opts.staffUserId, p_branch_id: (d as any).branch_id, p_amount: p.amount,
+            p_description: p.description, p_expense_type: p.expense_type, p_category_id: p.category_id,
+            p_vendor: p.vendor, p_expense_date: p.date, p_payment_method: p.payment_mode,
+            p_employee_user_id: p.employee_user_id, p_source: "whatsapp",
+          });
+          if (error || !(res as any)?.success) return { error: (res as any)?.error || error?.message || "Could not save the expense." };
+          await supabase.from("chat_expense_drafts").update({ status: "saved", expense_id: (res as any).expense_id }).eq("id", (d as any).id);
+          return { success: true, status: "Pending approval", reference: String((res as any).expense_id).slice(0, 8).toUpperCase(), amount: p.amount, paid_to: p.payee_label, salary_advance: p.expense_type === "salary_advance" };
+        }
+
+        // draft
+        const amount = parseAmount(args.amount);
+        if (!amount) return { need: "amount", message: "Ask how much was paid." };
+        const payee = String(args.payee || "").trim();
+        if (!payee) return { need: "payee", message: "Ask who was paid." };
+        const mode = normalizeExpenseMode(args.payment_mode);
+        if (!mode) return { need: "payment_mode", message: "Ask how it was paid: cash, UPI, card, bank transfer or cheque." };
+        const todayIST = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+        const date = resolveExpenseDate(args.date, todayIST);
+        if (!date) return { need: "date", message: "Ask for the payment date (today, yesterday or a past date)." };
+        const note = String(args.note || "").trim();
+
+        // Team-member match (employees + trainers in this branch)
+        const pick = String(args.team_member_pick || payee).trim();
+        const { data: profs } = await supabase.from("profiles").select("id, full_name").ilike("full_name", `%${pick}%`).limit(10);
+        const ids = (profs ?? []).map((p: any) => p.id);
+        let staff: Array<{ id: string; name: string; kind: string }> = [];
+        if (ids.length) {
+          const [{ data: emps }, { data: trs }] = await Promise.all([
+            supabase.from("employees").select("user_id, employee_code").in("user_id", ids).eq("branch_id", branchId).eq("is_active", true),
+            supabase.from("trainers").select("user_id, trainer_code").in("user_id", ids).eq("branch_id", branchId).eq("is_active", true),
+          ]);
+          const nameOf = new Map((profs ?? []).map((p: any) => [p.id, p.full_name]));
+          const seen = new Set<string>();
+          for (const e of emps ?? []) if (!seen.has(e.user_id)) { seen.add(e.user_id); staff.push({ id: e.user_id, name: nameOf.get(e.user_id), kind: `staff ${e.employee_code ?? ""}`.trim() }); }
+          for (const t of trs ?? []) if (!seen.has(t.user_id)) { seen.add(t.user_id); staff.push({ id: t.user_id, name: nameOf.get(t.user_id), kind: `trainer ${t.trainer_code ?? ""}`.trim() }); }
+        }
+        if (staff.length > 1) return { need: "team_member_pick", matches: staff.map((s) => `${s.name} (${s.kind})`), message: "Several team members match — ask which one." };
+        const member = staff[0] ?? null;
+        const isStaff = !!member;
+        const reqType = String(args.expense_type || "").toLowerCase();
+        const expense_type = isStaff && reqType === "salary_advance" ? "salary_advance"
+          : reqType === "general" ? "general" : defaultExpenseType(note, isStaff);
+
+        const { data: cats } = await supabase.from("expense_categories").select("id, name");
+        const catName = String(args.category || "") || guessCategory(`${note} ${payee}`, isStaff);
+        const category_id = matchCategoryId(catName, (cats ?? []) as any);
+        const category = (cats ?? []).find((c: any) => c.id === category_id)?.name ?? null;
+
+        const payee_label = member ? `${member.name} (team member)` : payee;
+        const payload = {
+          amount, payee_label, payment_mode: mode, date, expense_type, category_id,
+          vendor: member ? member.name : payee,
+          employee_user_id: expense_type === "salary_advance" ? member?.id ?? null : null,
+          description: `${note || (expense_type === "salary_advance" ? "Salary advance" : "Payment")} — ${member ? member.name : payee} (via WhatsApp)`,
+        };
+        const { data: draft, error: dErr } = await supabase.from("chat_expense_drafts")
+          .insert({ actor_user_id: opts.staffUserId, branch_id: branchId, payload }).select("id").single();
+        if (dErr) return { error: "Could not prepare the draft." };
+        return {
+          draft_id: (draft as any).id,
+          summary: {
+            amount: `₹${inr(amount)}`, paid_to: payee_label,
+            type: expense_type === "salary_advance" ? "Salary advance (recovered from payroll)" : "General expense",
+            mode, date, category: category ?? "Uncategorised", note: note || null,
+          },
+          can_switch_type: isStaff,
+          instruction: "Show this summary and ask: 'Reply YES to save, or tell me what to change.' If the payee is a team member, mention they can reply 'advance' or 'general' to change the type. Do not call confirm_expense until they say yes.",
+        };
+      }
 
       default:
         return { error: `Unknown operations tool: ${toolName}` };
