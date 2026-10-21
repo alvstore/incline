@@ -65,7 +65,7 @@ export function ClientRail({ ptClients, generalClients, briefs, loading }: {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-semibold text-foreground">{r.name}</span>
-                        {flagged && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="Has health conditions" />}
+                        {flagged && <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-warning"><AlertTriangle className="h-3.5 w-3.5" aria-hidden />Health note</span>}
                       </span>
                       <span className="mt-0.5 flex items-center gap-1.5">
                         {goal ? (
