@@ -27,6 +27,11 @@ import { summarize, type EarningsInstallment } from '@/lib/trainers/earnings';
 import { BrowserNotifications } from '@/components/member/BrowserNotifications';
 import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 import { KpiCard, TrainerEarningsKpi, type EarningsKpiData } from '@/components/trainer/TrainerKpis';
+import { HeroTile } from '@/components/trainer/HeroTile';
+import { ClientRail } from '@/components/trainer/ClientRail';
+import { VisitsSummaryCard } from '@/components/trainer/VisitsSummaryCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useTrainerClientBriefs, useTrainerDashboardV2 } from '@/hooks/useTrainerClientBriefs';
 
 export default function TrainerDashboard() {
   const { profile } = useAuth();
@@ -48,6 +53,8 @@ export default function TrainerDashboard() {
       return { ...t, trend: d?.trend ?? [] };
     },
   });
+  const v2 = useTrainerDashboardV2(trainer?.branch_id);
+  const briefsQ = useTrainerClientBriefs(!!trainer);
 
   if (isLoading) {
     return (
@@ -77,6 +84,63 @@ export default function TrainerDashboard() {
   const totalClients = generalClients.length + ptClients.length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  if (v2) {
+    const e = earningsQ.data;
+    const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
+    return (
+      <AppLayout>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-8">
+            <header className="flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-3xl font-bold tracking-tight text-foreground">{greeting}, {firstName}</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {format(new Date(), 'EEEE, d MMM')} · {trainer.branch?.name ?? 'Incline'} · {trainer.specializations?.[0] || 'Personal Trainer'}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" asChild className="rounded-xl"><Link to="/schedule-session"><Calendar className="mr-2 h-4 w-4" />Schedule session</Link></Button>
+            </header>
+
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <HeroTile tone="accent" icon={Wallet} label={`Earnings · ${format(new Date(), 'MMM')}`} to="/trainer-earnings"
+                loading={earningsQ.isLoading} value={earningsQ.isError ? '—' : inr((e?.payable ?? 0) + (e?.paid ?? 0))}
+                sub={e ? `${inr(e.onHold)} on hold` : 'Net commission'} />
+              <HeroTile tone="primary" icon={Dumbbell} label="PT clients" to="/my-clients" value={ptClients.length} sub={`${generalClients.length} general · ${totalClients} total`} />
+              <HeroTile tone="info" icon={Clock} label="Sessions today" value={`${completedToday}/${todaySessions.length}`} sub={`${pendingToday} still to come`} />
+              <HeroTile tone="success" icon={Users} label="Classes ahead" to="/classes" value={myClasses.length} sub="On your schedule" />
+            </div>
+
+            <Tabs defaultValue="sessions" className="space-y-3">
+              <TabsList className="h-auto rounded-xl bg-muted p-1">
+                <TabsTrigger value="sessions" className="min-h-[40px] rounded-lg px-4">Today's sessions</TabsTrigger>
+                <TabsTrigger value="attendance" className="min-h-[40px] rounded-lg px-4">PT attendance</TabsTrigger>
+                <TabsTrigger value="classes" className="min-h-[40px] rounded-lg px-4">Classes</TabsTrigger>
+              </TabsList>
+              <TabsContent value="sessions" className="mt-0"><TodaySessionsCard trainerId={trainer.id} sessions={todaySessions as any[]} /></TabsContent>
+              <TabsContent value="attendance" className="mt-0"><TrainerPtAttendanceCard ptClients={ptClients as PtClientLite[]} /></TabsContent>
+              <TabsContent value="classes" className="mt-0"><TrainerClassDays classes={myClasses as any[]} /></TabsContent>
+            </Tabs>
+
+            {manualMark && <TrainerTodayPanel trainerId={trainer.id} ptClients={ptClients as any[]} />}
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <TaskPulseWidget />
+              <MyShiftWeekCard userId={trainer.user_id} />
+            </div>
+          </div>
+
+          <aside className="space-y-5 lg:col-span-4">
+            <ClientRail ptClients={ptClients as any[]} generalClients={generalClients as any[]} briefs={briefsQ.data} loading={briefsQ.isLoading} />
+            <VisitsSummaryCard />
+            <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
+            <BrowserNotifications branchId={trainer.branch_id ?? ''} />
+          </aside>
+        </div>
+      </AppLayout>
+    );
+  }
+
 
   return (
     <AppLayout>
