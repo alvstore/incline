@@ -14280,6 +14280,41 @@ export type Database = {
           },
         ]
       }
+      trainer_health_guidance: {
+        Row: {
+          conditions_hash: string
+          content: Json
+          created_at: string
+          generated_by: string | null
+          id: string
+          member_id: string
+        }
+        Insert: {
+          conditions_hash: string
+          content: Json
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          member_id: string
+        }
+        Update: {
+          conditions_hash?: string
+          content?: Json
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainer_health_guidance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trainers: {
         Row: {
           avatar_storage_path: string | null
@@ -16323,6 +16358,10 @@ export type Database = {
           m_start: string
         }[]
       }
+      _trainer_owns_member: {
+        Args: { p_member: string; p_user: string }
+        Returns: boolean
+      }
       abandon_online_addon_invoice: {
         Args: { _invoice_id: string }
         Returns: Json
@@ -17534,6 +17573,10 @@ export type Database = {
           health_conditions: string
           member_id: string
         }[]
+      }
+      get_trainer_client_health: {
+        Args: { p_member_id: string }
+        Returns: Json
       }
       get_trainer_client_visits: {
         Args: { p_days?: number }

@@ -624,6 +624,13 @@
       "when": 1792600493177,
       "tag": "0088_member_push_welcome_invoice",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1792607220651,
+      "tag": "0089_trainer_health_guidance",
+      "breakpoints": true
     }
   ]
 }

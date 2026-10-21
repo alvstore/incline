@@ -28,6 +28,9 @@ import { Link } from 'react-router-dom';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
+import { HealthFlagBadge } from '@/components/trainer/HealthFlagBadge';
+import { ClientBriefSheet, type BriefTarget } from '@/components/trainer/ClientBriefSheet';
+import { useTrainerClientBriefs } from '@/hooks/useTrainerClientBriefs';
 import { usePtManualMark } from '@/hooks/usePtManualMark';
 import { TrainerBillingTab } from '@/components/pt/TrainerBillingTab';
 import { ClientVisitRhythm } from '@/components/pt/ClientVisitRhythm';
@@ -42,6 +45,10 @@ export default function MyClients() {
   const manualMark = usePtManualMark(trainer?.branch_id);
   const [measurementDrawer, setMeasurementDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
   const [progressDrawer, setProgressDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
+  const [briefTarget, setBriefTarget] = useState<BriefTarget | null>(null);
+  const { data: briefs = {} } = useTrainerClientBriefs(!!trainer);
+  const openBrief = (memberId: string, name: string, avatarUrl?: string | null, packageName?: string | null, expiry?: string | null) =>
+    setBriefTarget({ memberId, name, avatarUrl, packageName, expiry });
 
   const { data: billingRows = [] } = useTrainerBilling(trainer?.id, !!trainer);
   const { data: visits = {}, isLoading: visitsLoading } = useTrainerClientVisits(!!trainer, 7);
@@ -185,6 +192,10 @@ export default function MyClients() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <h2 className="truncate font-semibold text-foreground">{clientName}</h2>
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  <HealthFlagBadge conditions={briefs[client.id]?.health_conditions} onClick={() => openBrief(client.id, clientName, client.profile?.avatar_url)} />
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => openBrief(client.id, clientName, client.profile?.avatar_url)}>Goals & health</Button>
+                                </div>
                                 <p className="truncate text-xs text-muted-foreground">{client.member_code}</p>
                               </div>
                               <Badge className="rounded-full border-0 bg-primary/10 text-xs text-primary">
@@ -305,6 +316,10 @@ export default function MyClients() {
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <h2 className="truncate font-semibold text-foreground">{clientName}</h2>
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  <HealthFlagBadge conditions={briefs[client.member_id]?.health_conditions} onClick={() => openBrief(client.member_id, clientName, client.member?.profile?.avatar_url, client.package?.name, client.expiry_date)} />
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => openBrief(client.member_id, clientName, client.member?.profile?.avatar_url, client.package?.name, client.expiry_date)}>Goals & health</Button>
+                                </div>
                                 <p className="truncate text-xs text-muted-foreground">
                                   {client.member?.member_code} · {client.package?.name}
                                 </p>
@@ -443,6 +458,7 @@ export default function MyClients() {
           </div>
         </SheetContent>
       </Sheet>
+      <ClientBriefSheet target={briefTarget} brief={briefTarget ? briefs[briefTarget.memberId] : undefined} onClose={() => setBriefTarget(null)} />
     </AppLayout>
   );
 }
