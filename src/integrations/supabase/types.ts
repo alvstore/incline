@@ -17459,6 +17459,18 @@ export type Database = {
           role_label: string
         }[]
       }
+      get_trainer_client_briefs: {
+        Args: { p_member_ids?: string[] }
+        Returns: {
+          cuisine_preference: string
+          dietary_preference: string
+          equipment_availability: string[]
+          fitness_goals: string
+          fitness_level: string
+          health_conditions: string
+          member_id: string
+        }[]
+      }
       get_trainer_client_visits: {
         Args: { p_days?: number }
         Returns: {
