@@ -1,5 +1,9 @@
 // Internal-team (staff) operations tools — live business data over chat.
-// v1.0.0
+// v1.1.0 — WhatsApp expense capture (draft_expense → confirm_expense, pending approval)
+import {
+  normalizeExpenseMode, parseAmount, resolveExpenseDate, defaultExpenseType,
+  guessCategory, matchCategoryId, canCaptureExpense,
+} from "./expenseCapture.ts";
 //
 // SECURITY: these tools are ONLY wired into runStaffAgent, which is reached
 // exclusively when resolveMemberContext confirms the sender is internal team
@@ -107,6 +111,27 @@ export function getOpsToolDefinitions(role: StaffRole | undefined): any[] {
       "list_outstanding_dues",
       "Open invoices with money still to collect — member name, invoice number, total, paid, pending amount, invoice date and due date.",
       { limit: ["number", "Max invoices, default 20."] },
+    ),
+    tool(
+      "draft_expense",
+      "Prepare (NOT save) an expense the colleague paid out, e.g. 'paid 5000 to Dilip Meena in cash today'. Returns a draft summary to show them and ask 'Reply YES to save'. Call again with changes if they correct anything. Ask for missing amount or payment mode instead of guessing.",
+      {
+        amount: ["number", "Amount in rupees."],
+        payee: ["string", "Who was paid (person, vendor or bill name)."],
+        payment_mode: ["string", "cash | upi | card | bank_transfer | cheque. Leave empty if not stated."],
+        date: ["string", "today | yesterday | YYYY-MM-DD. Default today."],
+        note: ["string", "What it was for, in the colleague's words (e.g. 'housing', 'electricity bill')."],
+        expense_type: ["string", "general | salary_advance. Only set if the colleague said so."],
+        category: ["string", "Optional expense category name if the colleague named one."],
+        team_member_pick: ["string", "If several team members matched before, the exact name or code they picked."],
+      },
+      ["amount", "payee"],
+    ),
+    tool(
+      "confirm_expense",
+      "Save the most recent expense draft as Pending approval. ONLY call after the colleague explicitly replied yes/confirm to the draft summary.",
+      { draft_id: ["string", "The draft_id returned by draft_expense."] },
+      ["draft_id"],
     ),
   ];
 }
