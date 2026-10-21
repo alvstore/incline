@@ -2502,6 +2502,39 @@ export type Database = {
           },
         ]
       }
+      chat_expense_drafts: {
+        Row: {
+          actor_user_id: string
+          branch_id: string
+          created_at: string
+          expense_id: string | null
+          expires_at: string
+          id: string
+          payload: Json
+          status: string
+        }
+        Insert: {
+          actor_user_id: string
+          branch_id: string
+          created_at?: string
+          expense_id?: string | null
+          expires_at?: string
+          id?: string
+          payload: Json
+          status?: string
+        }
+        Update: {
+          actor_user_id?: string
+          branch_id?: string
+          created_at?: string
+          expense_id?: string | null
+          expires_at?: string
+          id?: string
+          payload?: Json
+          status?: string
+        }
+        Relationships: []
+      }
       class_bookings: {
         Row: {
           attended_at: string | null
@@ -4929,6 +4962,7 @@ export type Database = {
           payment_reference: string | null
           receipt_url: string | null
           sgst_amount: number | null
+          source: string | null
           status: Database["public"]["Enums"]["approval_status"]
           submitted_by: string | null
           taxable_amount: number | null
@@ -4960,6 +4994,7 @@ export type Database = {
           payment_reference?: string | null
           receipt_url?: string | null
           sgst_amount?: number | null
+          source?: string | null
           status?: Database["public"]["Enums"]["approval_status"]
           submitted_by?: string | null
           taxable_amount?: number | null
@@ -4991,6 +5026,7 @@ export type Database = {
           payment_reference?: string | null
           receipt_url?: string | null
           sgst_amount?: number | null
+          source?: string | null
           status?: Database["public"]["Enums"]["approval_status"]
           submitted_by?: string | null
           taxable_amount?: number | null
@@ -18434,6 +18470,22 @@ export type Database = {
           p_payment_method?: Database["public"]["Enums"]["payment_method"]
           p_payment_reference?: string
           p_receipt_url?: string
+          p_vendor?: string
+        }
+        Returns: Json
+      }
+      record_expense_for_actor: {
+        Args: {
+          p_actor_user_id: string
+          p_amount: number
+          p_branch_id: string
+          p_category_id?: string
+          p_description: string
+          p_employee_user_id?: string
+          p_expense_date?: string
+          p_expense_type?: Database["public"]["Enums"]["expense_kind"]
+          p_payment_method?: Database["public"]["Enums"]["payment_method"]
+          p_source?: string
           p_vendor?: string
         }
         Returns: Json

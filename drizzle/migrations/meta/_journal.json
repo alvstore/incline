@@ -603,6 +603,13 @@
       "when": 1792595418072,
       "tag": "0085_todays_checkins_photo_path",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1792598084660,
+      "tag": "0086_whatsapp_expense_capture",
+      "breakpoints": true
     }
   ]
 }
