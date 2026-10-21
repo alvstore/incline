@@ -103,7 +103,7 @@ export function ProductsToActivate() {
   const { data = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['products-to-activate', branchFilter],
     queryFn: async () => {
-      let q = supabase.from('products').select('id, name, price, cost_price, image_url, hsn_code, tax_rate').eq('is_active', true).eq('is_sellable', false).order('name');
+      let q = supabase.from('products').select('id, name, price, cost_price, image_url, hsn_code, tax_rate').eq('is_active', true).eq('is_sellable', false).eq('is_variant_parent', false).order('name');
       if (branchFilter) q = q.or(`branch_id.is.null,branch_id.eq.${branchFilter}`);
       const { data, error } = await q;
       if (error) throw error;
