@@ -15,6 +15,8 @@ import { uploadProductImage, createProduct, updateProduct } from '@/services/pro
 import { adjustStock } from '@/services/inventoryService';
 import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products/productRules';
 import { useBranchContext } from '@/contexts/BranchContext';
+import { VariantsEditor } from '@/components/products/VariantsEditor';
+import { PRODUCT_VARIANTS_ENABLED, emptyVariant, validateVariants, variantName, type VariantDraft } from '@/lib/products/variantRules';
 
 interface AddProductDrawerProps {
   open: boolean;
@@ -52,10 +54,16 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
   const [imagePreview, setImagePreview] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
+  const [hasOptions, setHasOptions] = useState(false);
+  const [optionType, setOptionType] = useState('Flavour');
+  const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant(), emptyVariant()]);
 
   // Sync form when drawer opens or product changes (fixes "edit doesn't pre-fill" bug)
   useEffect(() => {
     if (!open) return;
+    setHasOptions(false);
+    setOptionType('Flavour');
+    setVariants([emptyVariant(), emptyVariant()]);
     if (product) {
       setFormData({
         name: product.name || '',
@@ -176,6 +184,41 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
       };
 
       if (isEditing) return updateProduct(product.id, payload as any);
+
+      if (hasOptions) {
+        const stockBranch = formData.branch_id || branchFilter || effectiveBranchId;
+        const prices = variants.map((v) => Number(v.price) || 0).filter((p) => p > 0);
+        const parent = await createProduct({
+          ...payload,
+          sku: payload.sku,
+          price: prices.length ? Math.min(...prices) : 0,
+          cost_price: null,
+          is_sellable: false,
+          image_url: formData.image_url || null,
+          is_variant_parent: true,
+          option_type: optionType.trim(),
+        } as any);
+        for (const [i, v] of variants.entries()) {
+          const child = await createProduct({
+            ...payload,
+            name: variantName(payload.name, v.value),
+            sku: v.sku.trim() || null,
+            price: Number(v.price) || 0,
+            cost_price: v.cost_price ? Number(v.cost_price) : null,
+            image_url: v.image_url || imageUrl,
+            parent_product_id: parent.id,
+            option_type: optionType.trim(),
+            option_value: v.value.trim(),
+            swatch_color: v.swatch_color || null,
+            variant_sort: i,
+          } as any);
+          const qty = Math.floor(Number(v.opening_stock) || 0);
+          if (!formData.requires_batch_tracking && qty > 0 && stockBranch) {
+            await adjustStock({ productId: child.id, branchId: stockBranch, mode: 'add', quantity: qty, reason: 'opening', notes: 'Opening stock on product creation' });
+          }
+        }
+        return parent;
+      }
 
       const newProduct = await createProduct(payload as any);
       // Batch-tracked products receive stock through batches; others get opening stock via the audited stock RPC.
