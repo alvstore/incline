@@ -458,6 +458,7 @@ export default function MyClients() {
           </div>
         </SheetContent>
       </Sheet>
+      <ClientBriefSheet target={briefTarget} brief={briefTarget ? briefs[briefTarget.memberId] : undefined} onClose={() => setBriefTarget(null)} />
     </AppLayout>
   );
 }
