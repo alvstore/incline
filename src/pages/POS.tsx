@@ -20,12 +20,14 @@ import { escapeHtml } from '@/utils/htmlEscape';
 import { buildPaymentReceiptPdf } from '@/utils/pdfBlob';
 import { blobToBase64 } from '@/utils/uploadAttachment';
 import { sendWhatsAppDocument } from '@/utils/whatsappDocumentSender';
+import { PRODUCT_VARIANTS_ENABLED, groupVariants, priceRange } from '@/lib/products/variantRules';
 
 export default function POSPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { effectiveBranchId, currentBranchName } = useBranchContext();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [transactionId, setTransactionId] = useState('');
   const [slipFile, setSlipFile] = useState<File | null>(null);
@@ -555,7 +557,55 @@ export default function POSPage() {
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-                {filteredProducts.map((product: any) => {
+                {groupVariants(filteredProducts as any[]).map((g) => {
+                  if (PRODUCT_VARIANTS_ENABLED && g.isGroup) {
+                    const items = [...g.items].sort((a: any, b: any) => (a.variant_sort ?? 0) - (b.variant_sort ?? 0));
+                    const sel: any = items.find((i: any) => i.id === selectedVariant[g.key]) ?? items[0];
+                    const selStock = getStock(sel);
+                    const selOut = selStock !== null && selStock <= 0;
+                    const title = sel.name.includes(' — ') ? sel.name.slice(0, sel.name.lastIndexOf(' — ')) : sel.name;
+                    return (
+                      <Card key={g.key} className="transition-colors hover:border-primary">
+                        <CardContent className="p-4 space-y-2">
+                          <div className="aspect-square bg-muted rounded flex items-center justify-center overflow-hidden">
+                            {sel.image_url ? <img src={sel.image_url} alt={sel.name} className="object-cover w-full h-full" /> : <Package className="h-8 w-8 text-muted-foreground" aria-hidden />}
+                          </div>
+                          <h3 className="font-medium text-sm truncate">{title}</h3>
+                          <div role="radiogroup" aria-label={`${sel.option_type || 'Option'} for ${title}`} className="flex flex-wrap gap-1.5">
+                            {items.map((v: any) => {
+                              const st = getStock(v);
+                              const out = st !== null && st <= 0;
+                              const active = v.id === sel.id;
+                              return (
+                                <button
+                                  key={v.id}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={active}
+                                  aria-label={`${v.option_value}, ₹${v.price}${out ? ', out of stock' : ''}`}
+                                  onClick={() => setSelectedVariant((s) => ({ ...s, [g.key]: v.id }))}
+                                  className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'border-primary bg-primary/10 text-foreground font-medium' : 'border-border text-muted-foreground hover:bg-secondary'} ${out ? 'line-through opacity-60' : ''}`}
+                                >
+                                  {v.swatch_color && <span aria-hidden className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: v.swatch_color }} />}
+                                  {v.option_value}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-lg font-bold text-primary leading-tight">₹{sel.price}</p>
+                              <p className="text-[10px] text-muted-foreground">{selOut ? 'Out of stock' : selStock !== null ? `${selStock} left` : priceRange(items.map((i: any) => Number(i.price)))}</p>
+                            </div>
+                            <Button size="sm" disabled={selOut} onClick={() => addToCart(sel)} aria-label={`Add ${sel.name} to cart`}>
+                              <Plus className="h-4 w-4" aria-hidden />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  const product: any = g.items[0];
                   const stock = getStock(product);
                   const isOutOfStock = stock !== null && stock <= 0;
                   const isLowStock = stock !== null && stock > 0 && stock < getMinStock(product);
