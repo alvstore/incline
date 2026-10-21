@@ -15,10 +15,8 @@ Body progress places the render before a full-width summary; historical measurem
 - Referral workspace analytics come from the branch-guarded `referral_workspace_summary` RPC; keep referral charts server-aggregated so managers cannot infer other branches and clients do not download rows for trends.
 - Gate denies only for base-membership causes; PT/store/add-on dues are AMBER (gate opens, desk alert, locks); per branch via settings.gate_tier_mode legacy|shadow|enforce.
 - DB triggers call edge functions with `x-internal-token`, because stored service keys go stale on rotation and cause silent 401s.
-- Stock moves only via RPCs/triggers (bill import, `adjust_product_stock`, `create_pos_sale`, cancel restock) logging `stock_movements`; POS lists only `is_sellable`: no drift.
+- Stock moves only via RPCs/triggers (bill import, `adjust_product_stock`, `create_pos_sale`, cancel restock) logging `stock_movements`; POS lists only `is_sellable`. Product options are child rows (`parent_product_id`) of a never-sold `is_variant_parent` row, so each keeps its own SKU/price/stock.
 - Annual-upgrade Analytics uses guarded deadline helpers and dispatcher states, never backfilled stages. Page-zero preview and independent Sheet paging share cache; photos use a branch-filtered batch with initials fallback. Drawer bars show elapsed time; preview bars show remaining time.
 - Subdirectories have their own AGENTS.md; read them before edits.
 - Voice limits run in atomic voice_claim_call_slot; bind renewal cases before dialing and process stops in DB triggers so workers/manual calls cannot bypass safety.
 - Dedicated locker prices/GST/portal toggle live per branch in `locker_pricing_settings` (edited only via audited `update_locker_pricing_settings`); member locker requests are approved via atomic `approve_locker_request`, so assignment, invoice and approval never drift apart.
-
-- Product options are child `products` rows (`parent_product_id`) under a never-sold `is_variant_parent` group row, so each option keeps its own SKU, price, photo, stock and POS sale path unchanged.
