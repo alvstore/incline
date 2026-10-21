@@ -17493,6 +17493,8 @@ export type Database = {
       }
       get_rcs_webhook_token: { Args: never; Returns: string }
       get_referral_enabled: { Args: { p_branch_id: string }; Returns: boolean }
+      get_registration_geofence: { Args: never; Returns: boolean }
+      get_registration_geofence_detail: { Args: never; Returns: Json }
       get_setting_numeric: {
         Args: { p_branch_id: string; p_default: number; p_key: string }
         Returns: number
@@ -19022,6 +19024,10 @@ export type Database = {
           }
       set_invoice_due_date: {
         Args: { p_due_date: string; p_invoice_id: string; p_reason?: string }
+        Returns: Json
+      }
+      set_registration_geofence: {
+        Args: { p_disabled_until?: string; p_enabled: boolean }
         Returns: Json
       }
       settle_payment: {

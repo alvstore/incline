@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, MapPin, Navigation, ShieldCheck, LocateFixed, Settings2 } from "lucide-react";
+import { Loader2, MapPin, Navigation, ShieldCheck, LocateFixed, Settings2, Zap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { CLUB_LOCATION, isInsideClub } from "@/lib/registration/geoFence";
+import { useGeofenceEnabled } from "@/lib/registration/useGeofenceSetting";
+import { GeofenceOffDialog } from "@/components/registration/GeofenceOffDialog";
 import inclineLogo from "@/assets/incline-logo.png";
 
 type GeoState = "intro" | "checking" | "inside" | "outside" | "denied" | "timeout" | "unsupported";
@@ -16,7 +18,10 @@ const isIOS = typeof navigator !== "undefined" &&
 export function InClubGate({ children }: { children: ReactNode }) {
   const { roles } = useAuth();
   const isDesk = roles.some((r) => STAFF_ROLES.includes(String(r.role)));
+  const canToggle = roles.some((r) => ["owner", "admin", "manager"].includes(String(r.role)));
+  const { data: geofenceOn = true } = useGeofenceEnabled();
   const [state, setState] = useState<GeoState>("intro");
+  const [offOpen, setOffOpen] = useState(false);
 
   const locate = useCallback((highAccuracy: boolean) => {
     navigator.geolocation.getCurrentPosition(
@@ -40,18 +45,36 @@ export function InClubGate({ children }: { children: ReactNode }) {
 
   // If permission was already granted earlier, check silently on load.
   useEffect(() => {
-    if (isDesk) return;
+    if (isDesk || !geofenceOn) return;
     navigator.permissions?.query({ name: "geolocation" as PermissionName })
       .then((s) => { if (s.state === "granted") check(); if (s.state === "denied") setState("denied"); })
       .catch(() => undefined);
-  }, [check, isDesk]);
+  }, [check, isDesk, geofenceOn]);
+
+  if (!geofenceOn) {
+    return (
+      <>
+        <div className="fixed left-1/2 top-3 z-50 -translate-x-1/2 rounded-full border border-border bg-muted/80 px-3 py-1 text-xs font-semibold text-muted-foreground backdrop-blur">
+          <span className="inline-flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" />Quick registration</span>
+        </div>
+        {children}
+      </>
+    );
+  }
 
   if (isDesk || state === "inside") {
     return (
       <>
         <div className="fixed left-1/2 top-3 z-50 -translate-x-1/2 rounded-full border border-success/30 bg-success/15 px-3 py-1 text-xs font-semibold text-success backdrop-blur">
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />{isDesk ? "Front desk registration" : "Verified at the club · Sector 14"}</span>
+          {canToggle && (
+            <button type="button" onClick={() => setOffOpen(true)}
+              className="ml-2 cursor-pointer underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
+              Location issues? Turn off check
+            </button>
+          )}
         </div>
+        {canToggle && <GeofenceOffDialog open={offOpen} onOpenChange={setOffOpen} />}
         {children}
       </>
     );
