@@ -9,6 +9,8 @@ export interface Product {
   category: string | null;
   sku: string | null;
   image_url: string | null;
+  option_type?: string | null;
+  option_value?: string | null;
   tax_rate: number | null;
   is_active: boolean | null;
   branch_id: string | null;
