@@ -791,7 +791,8 @@ export default function POSPage() {
                       {cart.map((item) => (
                         <div key={item.product.id} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{item.product.name}</p>
+                            <p className="font-medium text-sm truncate" title={item.product.name}>{item.product.option_value && item.product.name.includes(' — ') ? item.product.name.slice(0, item.product.name.lastIndexOf(' — ')) : item.product.name}</p>
+                            {item.product.option_value && <p className="text-xs font-medium text-primary">{item.product.option_type || 'Option'}: {item.product.option_value}</p>}
                             <p className="text-sm text-muted-foreground">₹{item.product.price}</p>
                             {item.product.requires_batch_tracking && (() => {
                               const info = batchMap.get(item.product.id);
