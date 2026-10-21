@@ -65,7 +65,7 @@ export default function AuthPage() {
 
           <main className="order-2 flex min-w-0 flex-col px-3 py-4 sm:px-6 lg:order-1 lg:px-10 lg:py-6">
             <header className="flex items-center justify-between gap-4">
-              <img src={inclineLogo} alt="Incline — Rise. Reflect. Repeat." width={200} height={100} className="h-10 w-auto object-contain lg:h-12" />
+              <img src={inclineLogo} alt="Incline — Rise. Reflect. Repeat." width={200} height={100} className="h-14 w-auto object-contain lg:h-16" />
               <p className="text-xs text-muted-foreground">
                 New here?{' '}
                 <Link to="/register" className="inline-flex min-h-11 items-center font-semibold text-foreground hover:text-primary transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">Join Incline</Link>
@@ -73,9 +73,7 @@ export default function AuthPage() {
             </header>
 
             <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-8">
-              <h1 className="text-4xl font-semibold tracking-tight lg:text-5xl">Welcome back.</h1>
-              <p className="mt-2 text-sm text-muted-foreground">Rise. Reflect. Repeat. — sign in to your club.</p>
-              <div className="auth-form-surface mt-8">
+              <div className="auth-form-surface">
                 <LoginForm />
               </div>
             </div>

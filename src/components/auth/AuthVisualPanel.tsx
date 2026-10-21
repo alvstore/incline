@@ -15,7 +15,7 @@ export function AuthVisualPanel() {
         alt="Athlete lifting at The Incline Life, Udaipur"
         width={1024}
         height={1280}
-        className="absolute inset-0 h-full w-full object-cover object-[50%_30%] transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+        className="absolute inset-0 h-full w-full object-cover object-[50%_20%] transition-transform duration-300 ease-out group-hover:scale-[1.03]"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-sidebar via-sidebar/30 to-transparent" aria-hidden="true" />
       <div className="relative flex h-full flex-col justify-end gap-3 p-4 sm:p-6">
