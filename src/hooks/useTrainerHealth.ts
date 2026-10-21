@@ -28,7 +28,7 @@ export function useClientHealthDetail(memberId: string | null) {
   });
 }
 
-type GuidanceResult = { guidance: HealthGuidance; generated_at?: string; cached?: boolean };
+type GuidanceResult = { guidance: HealthGuidance | null; none_needed?: boolean; can_regenerate?: boolean; generated_at?: string; cached?: boolean };
 
 async function invoke(memberId: string, refresh: boolean): Promise<GuidanceResult> {
   const { data, error } = await supabase.functions.invoke('trainer-health-guidance', { body: { member_id: memberId, refresh } });
@@ -41,18 +41,26 @@ async function invoke(memberId: string, refresh: boolean): Promise<GuidanceResul
   return data as GuidanceResult;
 }
 
+/** Auto-loads saved precautions (server creates once and reuses until goals/health change). */
 export function useHealthGuidance(memberId: string | null) {
   const qc = useQueryClient();
   const key = ['trainer-health-guidance', memberId];
-  const query = useQuery({ queryKey: key, enabled: false, queryFn: () => invoke(memberId!, false) });
-  const mutation = useMutation({
-    mutationFn: (refresh: boolean) => invoke(memberId!, refresh),
-    onSuccess: (res) => {
-      qc.setQueryData(key, res);
-      track('health_guidance_generated', { cached: !!res.cached });
+  const query = useQuery({
+    queryKey: key,
+    enabled: !!memberId,
+    staleTime: Infinity,
+    retry: false,
+    queryFn: async () => {
+      const res = await invoke(memberId!, false);
+      if (res.guidance && !res.cached) track('health_guidance_generated', { cached: false });
+      return res;
     },
   });
-  return { data: query.data, ...mutation };
+  const mutation = useMutation({
+    mutationFn: () => invoke(memberId!, true),
+    onSuccess: (res) => { qc.setQueryData(key, res); track('health_guidance_generated', { cached: false }); },
+  });
+  return { ...query, regenerate: () => mutation.mutate(), regenerating: mutation.isPending };
 }
 
 /** Branch kill switch `settings.trainer_health_ai` — ON unless explicitly false. */

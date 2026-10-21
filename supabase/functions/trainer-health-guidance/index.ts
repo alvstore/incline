@@ -1,3 +1,4 @@
+// v1.1.0 — owners/admins/branch managers may view; cache key = goals + health only; refresh for managers only.
 // v1.0.0 — AI precaution guide for a trainer's own client. Sends only health facts (no name/phone).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -47,12 +48,15 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const memberId = String(body?.member_id ?? "");
-    const refresh = body?.refresh === true;
+    const refreshRequested = body?.refresh === true;
     if (!UUID.test(memberId)) return json({ error: "member_id required" }, 400);
 
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: owns } = await admin.rpc("_trainer_owns_member", { p_user: uid, p_member: memberId });
-    if (!owns) return json({ error: "Not your client" }, 403);
+    const { data: canView } = await admin.rpc("_can_view_member_health", { p_user: uid, p_member: memberId });
+    if (!canView) return json({ error: "Not allowed to view this member" }, 403);
+    const { data: roleRows } = await admin.from("user_roles").select("role").eq("user_id", uid);
+    const isManager = (roleRows ?? []).some((r) => ["owner", "admin", "manager"].includes(String(r.role)));
+    const refresh = refreshRequested && isManager;
 
     const { data: m } = await admin.from("members")
       .select("branch_id, health_conditions, fitness_goals, fitness_level, user_id")
@@ -88,12 +92,15 @@ Deno.serve(async (req) => {
       goals: m.fitness_goals ?? "",
       age_band: ageBand,
     };
-    const hash = await sha(JSON.stringify(facts));
+    const hash = await sha(JSON.stringify({ goals: facts.goals, health: facts.health_conditions, parq: facts.parq_yes }));
+    if (!String(facts.health_conditions).split(",").map((x) => x.trim()).filter((x) => x && !/^none\b/i.test(x)).length && !parqYes.length) {
+      return json({ guidance: null, none_needed: true });
+    }
 
     if (!refresh) {
       const { data: cached } = await admin.from("trainer_health_guidance").select("content, created_at")
         .eq("member_id", memberId).eq("conditions_hash", hash).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (cached) return json({ guidance: cached.content, generated_at: cached.created_at, cached: true });
+      if (cached) return json({ guidance: cached.content, generated_at: cached.created_at, cached: true, can_regenerate: isManager });
     }
 
     const key = Deno.env.get("LOVABLE_API_KEY");
@@ -126,7 +133,7 @@ Deno.serve(async (req) => {
       action: "health_guidance.generated", table_name: "members", record_id: memberId,
       user_id: uid, branch_id: m.branch_id, action_description: "Trainer generated AI health precautions",
     });
-    return json({ guidance, generated_at: saved?.created_at, cached: false });
+    return json({ guidance, generated_at: saved?.created_at, cached: false, can_regenerate: isManager });
   } catch (e) {
     console.error("trainer-health-guidance", e);
     return json({ error: "Something went wrong" }, 500);
