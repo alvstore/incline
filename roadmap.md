@@ -1,3 +1,8 @@
+# Gate dispatch repair (21 Oct 2026)
+- [x] Removed the historical-delivery veto on changed photos/access, preserved targeted dispatch throttles, deployed v3.8.0; six policy tests pass.
+- [x] Re-sent Sweety Arora to both gates at 12:26 IST; new issue records 12865/12866 both report authorisation and photo success. Overall pushStatus remains 1 (pushing), so final completion is not confirmed.
+- [ ] Confirm physical recognition and final delivery; blocked on Sweety's next gate scan/device completion acknowledgement, not another speculative push.
+
 # Store, stock & POS (20 Oct 2026)
 - [x] Restore stock deduction on every POS/member-store sale (lost in an earlier checkout rewrite); return stock when a sale's invoice is cancelled. Verified in a rolled-back live test: 10→7, over-sell and unsellable items refused, cancel restores.
 - [x] Stock adjustment drawer (add / remove / set exact count, reason, batch) with full stock history; past batch receipts backfilled into history.
