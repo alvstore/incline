@@ -23,6 +23,7 @@ import { ProductsToActivate } from '@/components/products/ProductsToActivate';
 import { AdjustStockDrawer } from '@/components/products/AdjustStockDrawer';
 import { StockHistoryTab } from '@/components/products/StockHistoryTab';
 import { ManageCategoriesDrawer } from '@/components/products/ManageCategoriesDrawer';
+import { ManageOptionsDrawer } from '@/components/products/ManageOptionsDrawer';
 import {
   Plus, Package, AlertTriangle, TrendingUp, Search, MoreHorizontal, Pencil, Trash2,
   Image as ImageIcon, Archive, Layers, ShieldCheck, FileSpreadsheet, Sparkles, History,
@@ -71,6 +72,7 @@ export default function ProductsPage() {
   const [batchesProduct, setBatchesProduct] = useState<ProductRow | null>(null);
   const [addBatchProduct, setAddBatchProduct] = useState<ProductRow | null>(null);
   const [adjustProduct, setAdjustProduct] = useState<ProductRow | null>(null);
+  const [optionsParent, setOptionsParent] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -212,6 +214,11 @@ export default function ProductsPage() {
       <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setAdjustProduct(p)} aria-label={`Adjust stock for ${p.name}`} title="Adjust stock">
         <SlidersHorizontal className="h-4 w-4" aria-hidden />
       </Button>
+      {p.parent_product_id && (
+        <Button variant="outline" size="sm" className="h-9" onClick={() => setOptionsParent(p.parent_product_id as string)} aria-label={`Manage options for ${p.name}`}>
+          <Layers className="h-4 w-4 mr-1" aria-hidden />Options
+        </Button>
+      )}
       <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`}>
         <Pencil className="h-4 w-4" aria-hidden />
       </Button>
@@ -223,6 +230,9 @@ export default function ProductsPage() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="h-4 w-4 mr-2" aria-hidden />Edit details</DropdownMenuItem>
+          {p.parent_product_id && (
+            <DropdownMenuItem onClick={() => setOptionsParent(p.parent_product_id as string)}><Layers className="h-4 w-4 mr-2" aria-hidden />Manage options</DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => setAdjustProduct(p)}><SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden />Adjust stock</DropdownMenuItem>
           {p.requires_batch_tracking && (
             <>
@@ -507,6 +517,7 @@ export default function ProductsPage() {
 
       <ImportPurchaseBillDrawer open={importOpen} onOpenChange={setImportOpen} />
       <ManageCategoriesDrawer open={categoriesOpen} onOpenChange={setCategoriesOpen} />
+      <ManageOptionsDrawer open={!!optionsParent} onOpenChange={(o) => !o && setOptionsParent(null)} parentId={optionsParent} />
       <AddProductDrawer open={drawerOpen} onOpenChange={setDrawerOpen} product={editingProduct} />
 
       <AdjustStockDrawer
