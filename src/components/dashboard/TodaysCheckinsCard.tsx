@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQueryClient } from '@tanstack/react-query';
+import { avatarSrc, pickAvatar, useSignedBiometricBatch } from '@/lib/media/personAvatar';
 
 interface CheckinRow {
   person_kind: 'member' | 'staff';
@@ -21,6 +22,7 @@ interface CheckinRow {
   check_out: string | null;
   dues: number | null;
   days_remaining: number | null;
+  biometric_photo_path?: string | null;
 }
 
 interface Props {
@@ -37,13 +39,14 @@ function initials(name?: string | null) {
     .join('');
 }
 
-function PersonRow({ row }: { row: CheckinRow }) {
+function PersonRow({ row, signed }: { row: CheckinRow; signed: Record<string, string> }) {
+  const photo = avatarSrc({ profileAvatar: row.avatar_url, biometricPath: row.biometric_photo_path }, signed);
   const dues = Number(row.dues ?? 0);
   const days = row.days_remaining;
   return (
     <li className="flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors duration-150 hover:bg-slate-50">
       <Avatar className="h-9 w-9">
-        {row.avatar_url ? <AvatarImage src={row.avatar_url} alt={row.full_name ?? 'Member'} /> : null}
+        {photo ? <AvatarImage src={photo} alt={row.full_name ?? 'Member'} /> : null}
         <AvatarFallback className="bg-indigo-50 text-xs font-semibold text-indigo-600">
           {initials(row.full_name)}
         </AvatarFallback>
@@ -124,6 +127,7 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
     };
   }, [qc]);
 
+  const signed = useSignedBiometricBatch(data.map((r) => (pickAvatar({ profileAvatar: r.avatar_url, biometricPath: r.biometric_photo_path }).path)));
   const members = data.filter((r) => r.person_kind === 'member');
   const staff = data.filter((r) => r.person_kind === 'staff');
 
@@ -166,7 +170,7 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
               ) : (
                 <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
                   {members.map((r) => (
-                    <PersonRow key={`m-${r.person_id}`} row={r} />
+                    <PersonRow key={`m-${r.person_id}`} row={r} signed={signed} />
                   ))}
                 </ul>
               )}
@@ -178,7 +182,7 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
               ) : (
                 <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
                   {staff.map((r) => (
-                    <PersonRow key={`s-${r.person_id}`} row={r} />
+                    <PersonRow key={`s-${r.person_id}`} row={r} signed={signed} />
                   ))}
                 </ul>
               )}
