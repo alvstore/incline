@@ -80,7 +80,7 @@ export default function ProductsPage() {
   const productsQ = useQuery({
     queryKey: ['products', branchFilter],
     queryFn: async () => {
-      let q = supabase.from('products').select('*, product_categories(id, name)').eq('is_active', true).order('name');
+      let q = supabase.from('products').select('*, product_categories(id, name)').eq('is_active', true).eq('is_variant_parent', false).order('name');
       if (branchFilter) q = q.or(`branch_id.is.null,branch_id.eq.${branchFilter}`);
       const { data, error } = await q;
       if (error) throw error;

@@ -11211,13 +11211,19 @@ export type Database = {
           image_url: string | null
           is_active: boolean | null
           is_sellable: boolean
+          is_variant_parent: boolean
           name: string
+          option_type: string | null
+          option_value: string | null
+          parent_product_id: string | null
           price: number
           requires_batch_tracking: boolean
           requires_lab_report: boolean
           sku: string | null
+          swatch_color: string | null
           tax_rate: number | null
           updated_at: string
+          variant_sort: number
         }
         Insert: {
           branch_id?: string | null
@@ -11232,13 +11238,19 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean | null
           is_sellable?: boolean
+          is_variant_parent?: boolean
           name: string
+          option_type?: string | null
+          option_value?: string | null
+          parent_product_id?: string | null
           price: number
           requires_batch_tracking?: boolean
           requires_lab_report?: boolean
           sku?: string | null
+          swatch_color?: string | null
           tax_rate?: number | null
           updated_at?: string
+          variant_sort?: number
         }
         Update: {
           branch_id?: string | null
@@ -11253,13 +11265,19 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean | null
           is_sellable?: boolean
+          is_variant_parent?: boolean
           name?: string
+          option_type?: string | null
+          option_value?: string | null
+          parent_product_id?: string | null
           price?: number
           requires_batch_tracking?: boolean
           requires_lab_report?: boolean
           sku?: string | null
+          swatch_color?: string | null
           tax_rate?: number | null
           updated_at?: string
+          variant_sort?: number
         }
         Relationships: [
           {
@@ -11274,6 +11292,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]

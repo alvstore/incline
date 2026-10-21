@@ -15,6 +15,8 @@ import { uploadProductImage, createProduct, updateProduct } from '@/services/pro
 import { adjustStock } from '@/services/inventoryService';
 import { DEFAULT_PRODUCT_IMAGE } from '@/lib/products/productRules';
 import { useBranchContext } from '@/contexts/BranchContext';
+import { VariantsEditor } from '@/components/products/VariantsEditor';
+import { PRODUCT_VARIANTS_ENABLED, emptyVariant, validateVariants, variantName, type VariantDraft } from '@/lib/products/variantRules';
 
 interface AddProductDrawerProps {
   open: boolean;
@@ -52,10 +54,16 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
   const [imagePreview, setImagePreview] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
+  const [hasOptions, setHasOptions] = useState(false);
+  const [optionType, setOptionType] = useState('Flavour');
+  const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant(), emptyVariant()]);
 
   // Sync form when drawer opens or product changes (fixes "edit doesn't pre-fill" bug)
   useEffect(() => {
     if (!open) return;
+    setHasOptions(false);
+    setOptionType('Flavour');
+    setVariants([emptyVariant(), emptyVariant()]);
     if (product) {
       setFormData({
         name: product.name || '',
@@ -177,6 +185,41 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
 
       if (isEditing) return updateProduct(product.id, payload as any);
 
+      if (hasOptions) {
+        const stockBranch = formData.branch_id || branchFilter || effectiveBranchId;
+        const prices = variants.map((v) => Number(v.price) || 0).filter((p) => p > 0);
+        const parent = await createProduct({
+          ...payload,
+          sku: payload.sku,
+          price: prices.length ? Math.min(...prices) : 0,
+          cost_price: null,
+          is_sellable: false,
+          image_url: formData.image_url || null,
+          is_variant_parent: true,
+          option_type: optionType.trim(),
+        } as any);
+        for (const [i, v] of variants.entries()) {
+          const child = await createProduct({
+            ...payload,
+            name: variantName(payload.name, v.value),
+            sku: v.sku.trim() || null,
+            price: Number(v.price) || 0,
+            cost_price: v.cost_price ? Number(v.cost_price) : null,
+            image_url: v.image_url || imageUrl,
+            parent_product_id: parent.id,
+            option_type: optionType.trim(),
+            option_value: v.value.trim(),
+            swatch_color: v.swatch_color || null,
+            variant_sort: i,
+          } as any);
+          const qty = Math.floor(Number(v.opening_stock) || 0);
+          if (!formData.requires_batch_tracking && qty > 0 && stockBranch) {
+            await adjustStock({ productId: child.id, branchId: stockBranch, mode: 'add', quantity: qty, reason: 'opening', notes: 'Opening stock on product creation' });
+          }
+        }
+        return parent;
+      }
+
       const newProduct = await createProduct(payload as any);
       // Batch-tracked products receive stock through batches; others get opening stock via the audited stock RPC.
       if (!formData.requires_batch_tracking && formData.initial_quantity && Number(formData.initial_quantity) > 0) {
@@ -210,7 +253,11 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
       toast.error('Product name is required');
       return;
     }
-    if (formData.is_sellable && !(Number(formData.price) > 0)) {
+    if (hasOptions) {
+      if (!optionType.trim()) { toast.error('Choose or type an option type'); return; }
+      const problem = validateVariants(variants, !!formData.is_sellable);
+      if (problem) { toast.error(problem); return; }
+    } else if (formData.is_sellable && !(Number(formData.price) > 0)) {
       toast.error('Set a selling price above ₹0 to sell on POS, or switch off "Sell on POS"');
       return;
     }
@@ -358,6 +405,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
               </Select>
             </div>
 
+            {!hasOptions && (<>
             <div className="space-y-2">
               <Label htmlFor="price">Selling Price (₹){formData.is_sellable ? ' *' : ''}</Label>
               <Input
@@ -384,6 +432,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
                 placeholder="500"
               />
             </div>
+            </>)}
 
             <div className="space-y-2">
               <Label htmlFor="tax_rate">Tax Rate (%)</Label>
@@ -427,7 +476,7 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
               </Select>
             </div>
 
-            {!isEditing && !formData.requires_batch_tracking && (
+            {!isEditing && !hasOptions && !formData.requires_batch_tracking && (
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="initial_quantity">Opening stock</Label>
                 <Input
@@ -442,6 +491,29 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
               </div>
             )}
           </div>
+
+          {PRODUCT_VARIANTS_ENABLED && !isEditing && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border p-4">
+                <div>
+                  <Label htmlFor="has_options">This product has options</Label>
+                  <p className="text-xs text-muted-foreground">Flavours, sizes or colours — each with its own SKU, price, photo and stock.</p>
+                </div>
+                <Switch id="has_options" checked={hasOptions} onCheckedChange={setHasOptions} />
+              </div>
+              {hasOptions && (
+                <VariantsEditor
+                  optionType={optionType}
+                  onOptionTypeChange={setOptionType}
+                  variants={variants}
+                  onChange={setVariants}
+                  baseSku={formData.sku}
+                  showOpeningStock={!formData.requires_batch_tracking}
+                  sellable={!!formData.is_sellable}
+                />
+              )}
+            </div>
+          )}
 
           {/* Batch & Compliance */}
           <div className="space-y-3 rounded-xl border bg-muted/60 p-4">
