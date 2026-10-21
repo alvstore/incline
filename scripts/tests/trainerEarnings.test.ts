@@ -34,3 +34,12 @@ describe('trainer GST cut on commission', () => {
     expect(ptCommission(12000, 50, 0).net).toBe(6000);
   });
 });
+
+import { describe as d2, it as i2, expect as e2 } from 'bun:test';
+d2('non-tax PT sale', () => {
+  i2('₹10,000 cash/non-tax sale at 40% pays full ₹4,000 — no GST cut', () => {
+    const c = ptCommission(10000, 40, 5, false);
+    e2(c.deduction).toBe(0);
+    e2(c.net).toBe(4000);
+  });
+});
