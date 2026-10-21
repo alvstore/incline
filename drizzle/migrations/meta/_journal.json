@@ -631,6 +631,13 @@
       "when": 1792607220651,
       "tag": "0089_trainer_health_guidance",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1792607992730,
+      "tag": "0090_member_health_view_access",
+      "breakpoints": true
     }
   ]
 }

@@ -16252,6 +16252,10 @@ export type Database = {
       }
     }
     Functions: {
+      _can_view_member_health: {
+        Args: { p_member: string; p_user: string }
+        Returns: boolean
+      }
       _consume_benefit_for_booking: {
         Args: { p_allow_shortfall?: boolean; p_booking_id: string }
         Returns: Json
