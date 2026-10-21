@@ -7,7 +7,8 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
-import { ShieldAlert, AlertTriangle, DoorClosed } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, DoorClosed, DoorOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,8 @@ interface BlockedEntryAttemptsProps {
   description?: string;
   /** Show the member name column (branch-wide view). */
   showMemberColumn?: boolean;
+  /** Let the desk let this person in (audited force entry). */
+  onForceEntry?: (member: { id: string | null; name: string | null; code: string | null }) => void;
 }
 
 interface Row extends BlockedAttempt {
@@ -60,6 +63,7 @@ export function BlockedEntryAttempts({
   title = 'Blocked entry attempts',
   description = 'Scans where the person came to the club but was refused entry.',
   showMemberColumn = false,
+  onForceEntry,
 }: BlockedEntryAttemptsProps) {
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ['blocked-entry-attempts', branchId, memberId ?? 'all', from, to],
@@ -119,10 +123,15 @@ export function BlockedEntryAttempts({
           <div className="p-2 rounded-full bg-red-50 text-red-600">
             <ShieldAlert className="h-5 w-5" />
           </div>
-          <div>
+          <div className="flex-1">
             <CardTitle className="text-lg font-bold text-slate-900">{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
+          {onForceEntry && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onForceEntry({ id: null, name: null, code: null })}>
+              <DoorOpen className="h-4 w-4" />Force entry
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -141,6 +150,7 @@ export function BlockedEntryAttempts({
           <div className="py-12 text-center text-slate-500">
             <DoorClosed className="mx-auto mb-3 h-9 w-9 text-slate-300" />
             <p className="font-medium text-slate-400">No refused entries in this period.</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-slate-400">If the gate showed "permission denied" but nothing appears here, the gate refused on its own without telling the system. Use Force entry to let them in.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -152,6 +162,7 @@ export function BlockedEntryAttempts({
                   <TableHead className="font-bold text-slate-900 py-4">Reason</TableHead>
                   <TableHead className="font-bold text-slate-900 py-4">Details</TableHead>
                   <TableHead className="font-bold text-slate-900 py-4 text-right pr-6">Gate</TableHead>
+                  {onForceEntry && <TableHead className="py-4 text-right pr-6"><span className="sr-only">Action</span></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -188,6 +199,13 @@ export function BlockedEntryAttempts({
                           {row.device_sn || 'gate'}
                         </Badge>
                       </TableCell>
+                      {onForceEntry && (
+                        <TableCell className="text-right pr-6">
+                          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onForceEntry({ id: row.member_id, name: row.memberName ?? null, code: row.memberCode ?? null })}>
+                            <DoorOpen className="h-4 w-4" />Force entry
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}

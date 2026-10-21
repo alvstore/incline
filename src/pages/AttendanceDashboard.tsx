@@ -1189,6 +1189,11 @@ export default function AttendanceDashboard() {
                   showMemberColumn
                   title="Refused entries"
                   description="People who came to the club on this date but the gate turned away."
+                  onForceEntry={(m) => {
+                    setSelectedForceEntryMember(m.id ? { id: m.id, full_name: m.name, member_code: m.code, member_status: 'refused at gate' } : null);
+                    setForceEntrySearch(m.id ? (m.name || m.code || '') : '');
+                    setForceEntryOpen(true);
+                  }}
                 />
 
               </TabsContent>
