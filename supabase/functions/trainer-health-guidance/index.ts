@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     if (!refresh) {
       const { data: cached } = await admin.from("trainer_health_guidance").select("content, created_at")
         .eq("member_id", memberId).eq("conditions_hash", hash).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (cached) return json({ guidance: cached.content, generated_at: cached.created_at, cached: true });
+      if (cached) return json({ guidance: cached.content, generated_at: cached.created_at, cached: true, can_regenerate: isManager });
     }
 
     const key = Deno.env.get("LOVABLE_API_KEY");
@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
       action: "health_guidance.generated", table_name: "members", record_id: memberId,
       user_id: uid, branch_id: m.branch_id, action_description: "Trainer generated AI health precautions",
     });
-    return json({ guidance, generated_at: saved?.created_at, cached: false });
+    return json({ guidance, generated_at: saved?.created_at, cached: false, can_regenerate: isManager });
   } catch (e) {
     console.error("trainer-health-guidance", e);
     return json({ error: "Something went wrong" }, 500);

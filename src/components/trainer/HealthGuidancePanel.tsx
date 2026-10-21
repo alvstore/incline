@@ -1,5 +1,6 @@
-import { Loader2, OctagonAlert, RefreshCw, ShieldCheck, Sparkles, Stethoscope } from 'lucide-react';
+import { Loader2, OctagonAlert, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useHealthGuidance, type HealthGuidance } from '@/hooks/useTrainerHealth';
 
 function List({ title, items, tone }: { title: string; items: string[]; tone?: 'warn' }) {
@@ -12,33 +13,33 @@ function List({ title, items, tone }: { title: string; items: string[]; tone?: '
   );
 }
 
+/** Loads saved precautions automatically; creates them once if missing. Regenerates only when goals/health change (server-side). */
 export function HealthGuidancePanel({ memberId }: { memberId: string }) {
-  const { data, mutate, isPending, error } = useHealthGuidance(memberId);
-  const g: HealthGuidance | undefined = data?.guidance;
+  const { data, isLoading, isError, error, regenerate, regenerating } = useHealthGuidance(memberId);
+  const g: HealthGuidance | null | undefined = data?.guidance;
   return (
     <section className="rounded-xl border border-accent/20 bg-accent/5 p-4" aria-labelledby="ai-precautions-title">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 id="ai-precautions-title" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-accent">
           <Sparkles className="h-3.5 w-3.5" aria-hidden />AI precautions
         </h3>
-        {g && (
-          <Button variant="ghost" size="sm" className="min-h-[44px]" onClick={() => mutate(true)} disabled={isPending} aria-label="Regenerate AI precautions">
-            <RefreshCw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} aria-hidden />
+        {g && data?.can_regenerate && (
+          <Button variant="ghost" size="sm" className="min-h-[44px] text-xs" onClick={regenerate} disabled={regenerating}>
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} aria-hidden />Regenerate
           </Button>
         )}
       </div>
-      <div aria-live="polite" aria-busy={isPending}>
-        {!g && (
-          <>
-            <p className="mb-3 text-sm text-muted-foreground">Get a safety plan for this client: warning signs, exercises to avoid, safer swaps and questions to ask.</p>
-            <Button onClick={() => mutate(false)} disabled={isPending} className="min-h-[44px] w-full">
-              {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <Stethoscope className="mr-2 h-4 w-4" aria-hidden />}
-              {isPending ? 'Analysing…' : 'Get AI precautions'}
-            </Button>
-          </>
-        )}
-        {error && <p role="alert" className="mt-2 text-sm text-destructive">{(error as Error).message}</p>}
-        {g && (
+      <div aria-live="polite" aria-busy={isLoading || regenerating}>
+        {isLoading ? (
+          <div className="space-y-2">
+            <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden />Preparing precautions…</p>
+            <Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-4/5" /><Skeleton className="h-4 w-3/5" />
+          </div>
+        ) : isError ? (
+          <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>
+        ) : data?.none_needed || !g ? (
+          <p className="text-sm text-muted-foreground">No health precautions needed.</p>
+        ) : (
           <div className="space-y-3">
             <p className="text-sm text-foreground">{g.summary}</p>
             {g.needs_doctor_clearance && (
