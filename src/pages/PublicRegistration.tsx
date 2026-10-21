@@ -26,6 +26,7 @@ import inclineLogo from "@/assets/incline-logo.png";
 import { cn } from "@/lib/utils";
 
 import SEO from "@/components/seo/SEO";
+import { InClubGate } from "@/components/registration/InClubGate";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import {
   AGREEMENT_PARTS,
@@ -114,7 +115,7 @@ async function extractFunctionError(error: unknown): Promise<string> {
   return (error as Error)?.message || "registration_failed";
 }
 
-export default function PublicRegistration() {
+function RegistrationWizard() {
   const nav = useNavigate();
   const initialDraft = useInitialRegistrationDraft();
   const [newMember, setNewMember] = useState<{ memberId: string; userId: string; memberCode: string } | null>(null);
@@ -962,5 +963,14 @@ function Field({ label, error, children }: { label: string; error?: string; chil
       <div className="mt-1.5">{children}</div>
       {error && <p className="mt-1.5 text-xs font-medium text-destructive">{error}</p>}
     </div>
+  );
+}
+
+/** Registration is in-person only: the wizard opens inside the club (200 m) or for a signed-in desk account. */
+export default function PublicRegistration() {
+  return (
+    <InClubGate>
+      <RegistrationWizard />
+    </InClubGate>
   );
 }
