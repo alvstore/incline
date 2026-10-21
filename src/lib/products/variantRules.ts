@@ -69,7 +69,9 @@ export function priceRange(prices: number[]): string {
 }
 
 /** Groups sellable rows: options under their parent id, standalone products on their own. */
-export function groupVariants<T extends { id: string; parent_product_id?: string | null }>(rows: T[]) {
+export function groupVariants<T extends { id: string; parent_product_id?: string | null; is_variant_parent?: boolean | null }>(input: T[]) {
+  // Parent rows are display-only containers and must never render as a blank option.
+  const rows = input.filter((r) => !r.is_variant_parent);
   const groups = new Map<string, T[]>();
   const order: string[] = [];
   for (const r of rows) {
