@@ -1,8 +1,12 @@
-import { AlertTriangle, Dumbbell, Salad, Target, Wrench, X } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Dumbbell, Salad, Target, Wrench, X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MemberFace } from '@/components/trainer/TrainerDashboardCards';
+import { HealthGuidancePanel } from '@/components/trainer/HealthGuidancePanel';
+import { useBranch } from '@/contexts/BranchContext';
+import { useClientHealthDetail, useTrainerHealthAiEnabled } from '@/hooks/useTrainerHealth';
 import { goalList, healthFlags, humanize, type ClientBrief } from '@/lib/trainers/clientBrief';
 
 export interface BriefTarget {
@@ -27,6 +31,11 @@ export function ClientBriefSheet({ target, brief, onClose }: { target: BriefTarg
   const goals = goalList(brief?.fitness_goals);
   const flags = healthFlags(brief?.health_conditions);
   const equipment = brief?.equipment_availability ?? [];
+  const { effectiveBranchId } = useBranch();
+  const aiOn = useTrainerHealthAiEnabled(effectiveBranchId);
+  const health = useClientHealthDetail(target?.memberId ?? null);
+  const parqYes = health.data?.parqYes ?? [];
+  const hasHealthNote = flags.length > 0 || parqYes.length > 0;
   return (
     <Sheet open={!!target} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg [&>button]:hidden">
@@ -62,6 +71,22 @@ export function ClientBriefSheet({ target, brief, onClose }: { target: BriefTarg
               </div>
             ) : <p className="text-sm text-muted-foreground">{brief?.health_conditions ? 'No known conditions' : 'Not shared at registration'}</p>}
           </Section>
+          <Section icon={ClipboardList} title="Health questionnaire">
+            {health.isLoading ? <Skeleton className="h-10 w-full" /> : health.isError ? (
+              <p className="text-sm text-muted-foreground">Couldn't load questionnaire answers.</p>
+            ) : parqYes.length ? (
+              <ul className="space-y-1.5">
+                {parqYes.map((q) => (
+                  <li key={q} className="flex gap-2 text-sm text-foreground">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden />
+                    <span><span className="font-medium">Yes:</span> {q}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="text-sm text-muted-foreground">All answers "No" (or not filled).</p>}
+            {health.data?.age ? <p className="mt-2 text-xs text-muted-foreground">Age {health.data.age}</p> : null}
+          </Section>
+          {hasHealthNote && aiOn && target && <HealthGuidancePanel memberId={target.memberId} />}
           <Section icon={Salad} title="Diet">
             {brief?.dietary_preference || brief?.cuisine_preference ? (
               <p className="text-sm text-foreground">{[humanize(brief?.dietary_preference), humanize(brief?.cuisine_preference)].filter(Boolean).join(' · ')}</p>
