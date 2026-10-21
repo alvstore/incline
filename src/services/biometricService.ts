@@ -1,3 +1,4 @@
+import { isTemporaryPhotoUrl } from '@/lib/media/personAvatar';
 import { supabase } from "@/integrations/supabase/client";
 
 export interface BiometricSyncItem {
@@ -86,7 +87,7 @@ export const queueMemberSync = async (
   await supabase
     .from('members')
     .update({ 
-      biometric_photo_url: photoUrl,
+      ...(isTemporaryPhotoUrl(photoUrl) ? {} : { biometric_photo_url: photoUrl }),
       biometric_enrolled: false
     })
     .eq('id', memberId);
@@ -149,7 +150,7 @@ export const queueStaffSync = async (
   await supabase
     .from('employees')
     .update({ 
-      biometric_photo_url: photoUrl,
+      ...(isTemporaryPhotoUrl(photoUrl) ? {} : { biometric_photo_url: photoUrl }),
       biometric_enrolled: false
     })
     .eq('id', staffId);
@@ -198,7 +199,7 @@ export const queueTrainerSync = async (
   await supabase
     .from('trainers')
     .update({ 
-      biometric_photo_url: photoUrl,
+      ...(isTemporaryPhotoUrl(photoUrl) ? {} : { biometric_photo_url: photoUrl }),
       biometric_enrolled: false
     } as any)
     .eq('id', trainerId);
