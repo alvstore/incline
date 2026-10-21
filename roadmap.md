@@ -1,3 +1,7 @@
+# Auth & registration (21 Oct 2026)
+- [x] Animated Rise/Reflect/Repeat card stack on sign-in.
+- [x] Registration only inside the club (200 m of Sector 14) or for signed-in desk staff; elsewhere shows "please visit the club".
+
 # Gate dispatch repair (21 Oct 2026)
 - [x] Removed the historical-delivery veto on changed photos/access, preserved targeted dispatch throttles, deployed v3.8.0; six policy tests pass.
 - [x] Re-sent Sweety Arora to both gates at 12:26 IST; new issue records 12865/12866 both report authorisation and photo success. Overall pushStatus remains 1 (pushing), so final completion is not confirmed.
