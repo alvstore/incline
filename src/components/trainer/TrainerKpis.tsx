@@ -17,25 +17,35 @@ const toneCls: Record<Tone, string> = {
   info: 'bg-info/10 text-info',
 };
 
-export function KpiCard({ label, value, hint, icon: Icon, tone = 'primary', to, footer }: {
+const barCls: Record<Tone, string> = { primary: 'bg-primary', accent: 'bg-accent', success: 'bg-success', info: 'bg-info' };
+
+export function KpiCard({ label, value, hint, icon: Icon, tone = 'primary', to, footer, progress }: {
   label: string; value: ReactNode; hint?: string; icon: ComponentType<{ className?: string }>;
-  tone?: Tone; to?: string; footer?: ReactNode;
+  tone?: Tone; to?: string; footer?: ReactNode; progress?: number;
 }) {
+  const pct = progress === undefined ? undefined : Math.max(0, Math.min(100, progress));
   const body = (
-    <div className="flex h-full flex-col justify-between gap-3 rounded-2xl border border-border bg-card p-5 transition-colors duration-150 hover:bg-secondary">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-        <span className={cn('rounded-xl p-2', toneCls[tone])}><Icon className="h-4 w-4" /></span>
+    <div className="group relative flex h-full flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-secondary/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+      <span aria-hidden className={cn('pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-10 blur-2xl', barCls[tone])} />
+      <div className="relative flex items-start justify-between gap-2">
+        <span className={cn('flex h-10 w-10 items-center justify-center rounded-xl', toneCls[tone])}><Icon className="h-5 w-5" /></span>
+        {to && <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />}
       </div>
-      <div>
+      <div className="relative">
         <div className="text-3xl font-bold tabular-nums tracking-tight text-foreground">{value}</div>
+        <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
         {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
+        {pct !== undefined && (
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${label} progress`}>
+            <div className={cn('h-full rounded-full transition-all duration-500', barCls[tone])} style={{ width: `${pct}%` }} />
+          </div>
+        )}
       </div>
       {footer}
     </div>
   );
   return to ? (
-    <Link to={to} aria-label={`${label}: open details`} className="block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">{body}</Link>
+    <Link to={to} aria-label={`${label}: open details`} className="block h-full cursor-pointer rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">{body}</Link>
   ) : body;
 }
 
@@ -62,12 +72,13 @@ export function TrainerEarningsKpi({ data, isLoading, isError, onRetry }: {
   const thisMonth = data.payable + data.paid;
   return (
     <Link to="/trainer-earnings" aria-label="Open my earnings" className="group block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-5 transition-colors duration-150 hover:bg-secondary">
+      <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-5 transition-all duration-200 group-hover:border-accent/40">
+        <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/15 blur-3xl" />
         <div className="flex items-start justify-between">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">My earnings · {format(new Date(), 'MMMM')}</span>
             <div className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-foreground">{inr(thisMonth)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Net commission after your 5% GST</p>
+            <p className="mt-1 text-xs text-muted-foreground">Net commission · GST cut only on taxed sales</p>
           </div>
           <span className="rounded-xl bg-accent/10 p-2 text-accent"><Wallet className="h-5 w-5" /></span>
         </div>
