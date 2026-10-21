@@ -1,4 +1,4 @@
-// v1.0.1 — opt-in browser delivery of existing in-app notifications.
+// v1.1.0 — opt-in browser delivery of in-app notifications for members and trainers.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import webpush from 'npm:web-push@3.6.7';
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
