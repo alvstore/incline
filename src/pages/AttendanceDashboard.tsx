@@ -385,12 +385,13 @@ export default function AttendanceDashboard() {
   });
 
   const handleForceEntry = async () => {
-    if (!selectedForceEntryMember || !branchFilter) return;
+    const forceBranch = branchFilter || effectiveBranchId;
+    if (!selectedForceEntryMember || !forceBranch) return;
     setForceEntrySubmitting(true);
     try {
       const { data, error } = await supabase.rpc('member_force_check_in', {
         p_member_id: selectedForceEntryMember.id,
-        p_branch_id: branchFilter,
+        p_branch_id: forceBranch,
         p_reason: forceEntryReason || 'Override by reception',
         p_actor_user_id: user?.id || null,
       });
@@ -1189,6 +1190,11 @@ export default function AttendanceDashboard() {
                   showMemberColumn
                   title="Refused entries"
                   description="People who came to the club on this date but the gate turned away."
+                  onForceEntry={(m) => {
+                    setSelectedForceEntryMember(m.id ? { id: m.id, full_name: m.name, member_code: m.code, member_status: 'refused at gate' } : null);
+                    setForceEntrySearch(m.id ? (m.name || m.code || '') : '');
+                    setForceEntryOpen(true);
+                  }}
                 />
 
               </TabsContent>
