@@ -69,7 +69,12 @@ Deno.serve(async req => {
             await finish('suppressed', 'Unavailable or stale notification'); return;
           }
           const { data: member, error: memberLookupError } = await db.from('members').select('id,do_not_contact').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).maybeSingle();
-          if (memberLookupError || !member) { await finish('suppressed', 'Member access unavailable'); return; }
+          if (memberLookupError) { await finish('suppressed', 'Member access unavailable'); return; }
+          if (!member) {
+            // Trainers receive coaching alerts (client check-ins, PT dues) on opted-in devices.
+            const { data: coach } = await db.from('trainers').select('id').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).eq('is_active', true).maybeSingle();
+            if (!coach) { await finish('suppressed', 'Account access unavailable'); return; }
+          }
           if (member) {
             const { data: prefs, error: preferencesError } = await db.from('member_communication_preferences').select('*').eq('member_id', member.id).eq('branch_id', sub.branch_id).maybeSingle();
             if (preferencesError) { await finish('suppressed', 'Preferences unavailable'); return; }
@@ -85,8 +90,9 @@ Deno.serve(async req => {
               if (start !== end && (start < end ? time >= start && time < end : time >= start || time < end)) { await finish('suppressed', 'Quiet hours; notification remains in inbox'); return; }
             }
           }
-          const rawUrl = notice.action_url || '/member-dashboard';
-          const url = rawUrl.startsWith('/') && !rawUrl.startsWith('//') ? rawUrl : '/member-dashboard';
+          const home = member ? '/member-dashboard' : '/trainer-dashboard';
+          const rawUrl = notice.action_url || home;
+          const url = rawUrl.startsWith('/') && !rawUrl.startsWith('//') ? rawUrl : home;
           // Never expose names, prices, attendance, or health data on the lock screen.
           const payload = JSON.stringify({ title: 'Incline', body: 'You have a new update. Open Incline to view it.', url, tag: notice.id });
           for (let attempt = 0; attempt < 3; attempt++) {
@@ -116,19 +122,25 @@ Deno.serve(async req => {
       return respond(200, { ok: true });
     }
     const { data: member, error: memberError } = await db.from('members').select('id,branch_id').eq('user_id', user.id).eq('branch_id', input.branch_id).maybeSingle();
-    if (memberError || !member) return respond(403, { error: 'Member account required for this branch' });
+    let coachId: string | null = null;
+    if (!memberError && !member) {
+      const { data: coach } = await db.from('trainers').select('id').eq('user_id', user.id).eq('branch_id', input.branch_id).eq('is_active', true).maybeSingle();
+      coachId = coach?.id ?? null;
+    }
+    if (memberError || (!member && !coachId)) return respond(403, { error: 'Member or trainer account required for this branch' });
+    const accountBranch = member?.branch_id ?? String(input.branch_id);
     if (input.action === 'subscribe') {
       const sub = input.subscription;
       if (!sub || !endpointAllowed(sub.endpoint) || !/^[A-Za-z0-9_-]{80,100}$/.test(sub.keys?.p256dh || '') || !/^[A-Za-z0-9_-]{20,30}$/.test(sub.keys?.auth || '')) return respond(400, { error: 'Invalid browser subscription' });
       // A browser can belong to only the account currently signed in on it.
-      const { error } = await db.from('web_push_subscriptions').upsert({ user_id: user.id, branch_id: member.branch_id, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth_key: sub.keys.auth }, { onConflict: 'endpoint' });
+      const { error } = await db.from('web_push_subscriptions').upsert({ user_id: user.id, branch_id: accountBranch, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth_key: sub.keys.auth }, { onConflict: 'endpoint' });
       if (error) throw error;
       return respond(200, { ok: true });
     }
     if (input.action === 'test') {
-      const { data: subscription } = await db.from('web_push_subscriptions').select('id').eq('user_id', user.id).eq('branch_id', member.branch_id).eq('endpoint', String(input.endpoint || '')).maybeSingle();
+      const { data: subscription } = await db.from('web_push_subscriptions').select('id').eq('user_id', user.id).eq('branch_id', accountBranch).eq('endpoint', String(input.endpoint || '')).maybeSingle();
       if (!subscription) return respond(400, { error: 'Enable notifications on this device first' });
-      const result = await db.functions.invoke('dispatch-communication', { body: { branch_id: member.branch_id, channel: 'in_app', category: 'transactional', recipient: user.id, user_id: user.id, member_id: member.id, payload: { subject: 'Browser notification test', body: 'Your browser notification test was requested.' }, dedupe_key: `web-push-test:${user.id}:${Math.floor(Date.now() / 60000)}`, source_caller: 'web-push' } });
+      const result = await db.functions.invoke('dispatch-communication', { body: { branch_id: accountBranch, channel: 'in_app', category: 'transactional', recipient: user.id, user_id: user.id, member_id: member?.id ?? null, payload: { subject: 'Browser notification test', body: 'Your browser notification test was requested.' }, dedupe_key: `web-push-test:${user.id}:${Math.floor(Date.now() / 60000)}`, source_caller: 'web-push' } });
       if (result.error || result.data?.status === 'failed') return respond(502, { error: 'Test notification could not be queued' });
       return respond(200, { ok: true, status: result.data?.status });
     }
