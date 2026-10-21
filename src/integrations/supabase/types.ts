@@ -17472,6 +17472,7 @@ export type Database = {
         Args: { _branch_id?: string }
         Returns: {
           avatar_url: string
+          biometric_photo_path: string
           branch_id: string
           check_in: string
           check_out: string
