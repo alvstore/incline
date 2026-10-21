@@ -1,3 +1,4 @@
+import { pickAvatar } from '@/lib/media/personAvatar';
 /**
  * Access-feed session grouping.
  *
@@ -27,6 +28,7 @@ export interface RawAccessEvent {
     id: string;
     member_code: string;
     biometric_photo_url: string | null;
+    biometric_photo_path?: string | null;
     profiles: { full_name: string; avatar_url: string | null } | null;
     memberships: Array<{ status: string; end_date: string; membership_plans: { name: string } | null }>;
   } | null;
@@ -54,6 +56,8 @@ export interface PersonSession {
   code: string | null;
   kind: PersonKind;
   avatarUrl: string | null;
+  /** stored gate photo that needs a fresh link when no permanent photo exists */
+  biometricPath: string | null;
   memberId: string | null;
   profileId: string | null;
   memberships: Array<{ status: string; end_date: string; membership_plans: { name: string } | null }> | undefined;
@@ -177,11 +181,14 @@ export function groupAccessEvents(
         name: displayName(e),
         code: e.members?.member_code || str(e.payload?.personSn) || str(e.payload?.person_no),
         kind: personKind(e),
-        avatarUrl:
-          e.members?.biometric_photo_url ||
-          e.members?.profiles?.avatar_url ||
-          e.profiles?.avatar_url ||
-          null,
+        ...(() => {
+          const pick = pickAvatar({
+            profileAvatar: e.members?.profiles?.avatar_url || e.profiles?.avatar_url,
+            biometricUrl: e.members?.biometric_photo_url,
+            biometricPath: e.members?.biometric_photo_path,
+          });
+          return { avatarUrl: pick.url, biometricPath: pick.path };
+        })(),
         memberId: e.member_id,
         profileId: e.profile_id,
         memberships: e.members?.memberships,

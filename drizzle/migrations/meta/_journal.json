@@ -596,6 +596,13 @@
       "when": 1792594216790,
       "tag": "0084_product_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1792595418072,
+      "tag": "0085_todays_checkins_photo_path",
+      "breakpoints": true
     }
   ]
 }

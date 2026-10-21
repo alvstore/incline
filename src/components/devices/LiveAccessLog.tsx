@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useSignedBiometricBatch } from "@/lib/media/personAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,7 +143,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
         .from("access_logs")
         .select(
           `id, created_at, captured_at, branch_id, member_id, profile_id, device_sn, hardware_device_id, event_type, result, message, payload,
-           members:member_id(id, member_code, biometric_photo_url, profiles:user_id(full_name, avatar_url), memberships(status, end_date))`,
+           members:member_id(id, member_code, biometric_photo_url, biometric_photo_path, profiles:user_id(full_name, avatar_url), memberships(status, end_date))`,
         )
         .gte("created_at", istDayStartIso())
         .order("created_at", { ascending: false })
@@ -327,6 +328,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
   });
 
   const insidePeople = grouped.people.filter((p) => p.isInside);
+  const signedPhotos = useSignedBiometricBatch(grouped.people.map((p) => p.biometricPath));
 
   const filters: Array<{ key: FilterKey; label: string; count: number }> = [
     { key: "inside", label: "In gym now", count: counts.inside },
@@ -425,7 +427,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
             <div className="flex -space-x-2">
               {insidePeople.slice(0, 8).map((p) => (
                 <Avatar key={p.key} className="h-8 w-8 ring-2 ring-white/70" title={p.name}>
-                  {p.avatarUrl ? <AvatarImage src={p.avatarUrl} alt="" /> : null}
+                  {(p.avatarUrl || (p.biometricPath && signedPhotos[p.biometricPath])) ? <AvatarImage src={p.avatarUrl || signedPhotos[p.biometricPath!]} alt="" /> : null}
                   <AvatarFallback className="bg-white/20 text-[10px] font-semibold text-white">
                     {initials(p.name)}
                   </AvatarFallback>
@@ -500,7 +502,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                     <div className="flex items-start gap-3">
                       <div className="relative shrink-0">
                         <Avatar className="h-10 w-10 ring-1 ring-border">
-                          {p.avatarUrl ? <AvatarImage src={p.avatarUrl} alt="" /> : null}
+                          {(p.avatarUrl || (p.biometricPath && signedPhotos[p.biometricPath])) ? <AvatarImage src={p.avatarUrl || signedPhotos[p.biometricPath!]} alt="" /> : null}
                           <AvatarFallback className="bg-background text-xs font-semibold">
                             {initials(p.name)}
                           </AvatarFallback>
