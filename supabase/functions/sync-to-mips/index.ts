@@ -1,3 +1,5 @@
+// v3.8.0 — remove historical-delivery veto of real changes; honour explicit repair events.
+// v3.7.0 — future validity lock preserves enrolled faces when access is blocked.
 // v3.5.0 — internal-token auth for DB triggers; photo-hash state signature; cooldown counts as delivered.
 // v3.4.0 — DELTA-ONLY: gate push skipped when the person's state signature matches the last successful push.
 // v3.3.0 — OOM guard: 25s minimum gap between person pushes per gate and a
@@ -51,6 +53,7 @@ import { waitForDispatchSlot, dispatchPerson, releaseDispatchSlot } from "../_sh
 import { isInternalCall } from "../_shared/requireCaller.ts";
 import { getVerifiedMipsToken } from "../_shared/mipsTokenCache.ts";
 import { getCachedMipsDevices } from "../_shared/mipsDeviceCache.ts";
+import { canReuseGatePush, isGateRepair } from "./dispatchPolicy.ts";
 
 
 
@@ -549,28 +552,8 @@ async function dispatchToDevices(
   const results: any[] = [];
   const deliveredDeviceIds: number[] = [];
 
-  // v3.2.0 NO-OP GUARD — the terminals were rebuilding their face index all day
-  // because the same people were re-issued dozens of times per hour by the
-  // sweeps. A person that a gate already accepted in the last DEDUPE_WINDOW is
-  // NOT re-issued unless the caller passes `force` (manual repair / real change).
-  // Delivery does not expire merely because time passed. Real person/photo/access
-  // changes use the event-driven path with force=true.
-  const recentlyDelivered = new Set<string>();
-  if (!force && entityId) {
-    try {
-      const { data: recent } = await supabase
-        .from("mips_sync_attempts")
-        .select("device_id")
-        .eq("operation", "device_dispatch")
-        .eq("status", "success")
-        .eq("entity_id", entityId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      for (const r of recent || []) recentlyDelivered.add(String((r as any).device_id));
-    } catch (e) {
-      console.warn("[dispatchToDevices] dedupe lookup failed (continuing):", e);
-    }
-  }
+  // Reuse only the SAME state below. Historical delivery by itself must never
+  // veto a new photo or validity change, even if the person was sent before.
 
   // v3.3.0 — 3-minute per person/gate cooldown (applies even with force) so a
   // burst of duplicate triggers can never re-issue the same person to a gate.
@@ -630,7 +613,7 @@ async function dispatchToDevices(
     const local = localDevices.find((d: any) => Number(d.mips_device_id) === mipsDeviceId);
     const lastPush = local?.id ? lastSigByDevice.get(String(local.id)) : undefined;
     const fullAt = fullSyncAtByMips.get(mipsDeviceId);
-    if (lastPush?.sig && lastPush.sig === stateSig && !(fullAt && fullAt > lastPush.at)) {
+    if (canReuseGatePush(stateSig, lastPush, fullAt, force)) {
       console.log(`[dispatchToDevices] person ${personId} → gate ${mipsDeviceId}: Skipped: Member already in desired hardware state.`);
       deliveredDeviceIds.push(mipsDeviceId);
       results.push({ mipsDeviceId, status: "skipped", reason: "Skipped: Member already in desired hardware state." });
@@ -649,11 +632,6 @@ async function dispatchToDevices(
           last_error: "Skipped: 3-minute cooldown active", completed_at: new Date().toISOString(),
         });
       }
-      continue;
-    }
-    if (local?.id && recentlyDelivered.has(String(local.id))) {
-      deliveredDeviceIds.push(mipsDeviceId);
-      results.push({ mipsDeviceId, status: "skipped", reason: "already delivered recently" });
       continue;
     }
     const started = Date.now();
@@ -855,7 +833,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    let { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices, force } = body as {
+    let { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices, force, changed_fields } = body as {
 
       person_type: "member" | "employee" | "trainer";
       person_id: string;
@@ -866,7 +844,9 @@ Deno.serve(async (req) => {
       deploy_to_devices?: boolean;
       /** true = bypass the no-op dedupe guards (manual re-push / enrolment repair). */
       force?: boolean;
+      changed_fields?: unknown;
     };
+    force = isGateRepair(force, changed_fields);
 
 
     // Branch staff may only use the MIPS connection of a branch they belong to.

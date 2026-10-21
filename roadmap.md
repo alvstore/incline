@@ -1,3 +1,7 @@
+# Gate dispatch repair (21 Oct 2026)
+- [ ] Remove the historical-delivery veto on changed photos/access, preserve targeted dispatch throttles, and test explicit repairs.
+- [ ] Re-send Sweety Arora to both gates and verify the new issue records; physical recognition needs her next scan.
+
 # Store, stock & POS (20 Oct 2026)
 - [x] Restore stock deduction on every POS/member-store sale (lost in an earlier checkout rewrite); return stock when a sale's invoice is cancelled. Verified in a rolled-back live test: 10→7, over-sell and unsellable items refused, cancel restores.
 - [x] Stock adjustment drawer (add / remove / set exact count, reason, batch) with full stock history; past batch receipts backfilled into history.
