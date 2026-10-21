@@ -1,3 +1,4 @@
+// dispatch-communication v1.43.0 — prefer templates whose VIDEO/IMAGE header matches the attachment; never paste video/image links as "PDF".
 // dispatch-communication v1.42.0 — signed-in staff/trainers may only message known contacts on phone channels.
 // dispatch-communication v1.41.0 — email attachment fetch is SSRF-guarded (public hosts, no redirects, 5 MB cap).
 // dispatch-communication v1.40.0 — annual-upgrade sends/retries recheck live deadlines.
@@ -1348,10 +1349,14 @@ Deno.serve(async (req) => {
               const live = liveByName.get(r.meta_template_name);
               const cat = String(live?.category || '').toUpperCase();
               const liveHeader = (live?.components || []).find((c: any) => String(c?.type || '').toUpperCase() === 'HEADER');
-              const isDocument = String(liveHeader?.format || '').toUpperCase() === 'DOCUMENT';
+              const headerFmt = String(liveHeader?.format || '').toUpperCase();
+              const isDocument = headerFmt === 'DOCUMENT';
+              const attKind = String(input.attachment?.kind || '').toUpperCase();
+              const mediaMatch = (attKind === 'VIDEO' || attKind === 'IMAGE') && headerFmt === attKind;
               return (
                 (r.branch_id ? 2 : 0) +
                 (wantsDoc && isDocument ? 8 : 0) +
+                (mediaMatch ? 10 : 0) +
                 (cat === 'MARKETING' ? -6 : 0) +
                 (cat === 'UTILITY' ? 3 : 0) +
                 // Generic service-update template is a last resort only.
@@ -1601,9 +1606,9 @@ Deno.serve(async (req) => {
               const defaults = templateName === 'gym_closure_update' ? gymClosureDefaultValues(keys) : {};
               const baseValues = { ...defaults, ...inferred, ...(input.payload.variables ?? {}) };
               const hasMediaHeader = ['document', 'image', 'video'].includes(templateHeaderType);
-              // Body-only template + a PDF → paste a SHORT branded link rather
-              // than a 400-char signed storage URL.
-              const shortAttachmentUrl = hasMediaHeader
+              // v1.43.0: videos/images are never pasted into the body as a "PDF" link.
+              const attIsDocument = !['video', 'image'].includes(String(input.attachment?.kind || '').toLowerCase());
+              const shortAttachmentUrl = hasMediaHeader || !attIsDocument
                 ? input.attachment?.url
                 : await shortenDocumentLink(
                     supabase,
@@ -1611,7 +1616,7 @@ Deno.serve(async (req) => {
                     `whatsapp:${templateName}`,
                     input.branch_id,
                   );
-              const templateValues = hasMediaHeader
+              const templateValues = hasMediaHeader || !attIsDocument
                 ? baseValues
                 : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, shortAttachmentUrl);
 
