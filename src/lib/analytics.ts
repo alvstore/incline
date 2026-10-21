@@ -6,6 +6,8 @@
  * |---------------------|---------------------------------------|
  * | pt_renew_opened     | Renew opens the PT purchase drawer    |
  * | pt_renew_completed  | Server confirmed the renewal purchase |
+ * | health_brief_opened | Trainer opened a client health brief  |
+ * | health_guidance_generated | AI precautions returned          |
  */
 type Props = Record<string, string | number | boolean | null>;
 export function track(event: string, properties?: Props) {
