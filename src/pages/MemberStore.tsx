@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRODUCT_VARIANTS_ENABLED, groupVariants } from '@/lib/products/variantRules';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,6 +98,7 @@ export default function MemberStore() {
     },
   });
 
+  const [selectedOption, setSelectedOption] = useState<Record<string, string>>({});
   const filteredProducts = products.filter((p: any) =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.category?.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -335,7 +337,8 @@ export default function MemberStore() {
       {cart.map((item) => (
         <div key={item.product.id} className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 p-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{item.product.name}</p>
+            <p className="truncate text-sm font-semibold">{item.product.option_value && item.product.name.includes(' — ') ? item.product.name.slice(0, item.product.name.lastIndexOf(' — ')) : item.product.name}</p>
+            {item.product.option_value && <p className="text-xs font-medium text-primary">{item.product.option_type || 'Option'}: {item.product.option_value}</p>}
             <p className="text-xs text-muted-foreground">₹{item.product.price} × {item.quantity}</p>
           </div>
           <div className="text-right">
@@ -626,7 +629,7 @@ export default function MemberStore() {
 
                   return (
                     <Card
-                      key={product.id}
+                      key={g.key}
                       className="group overflow-hidden rounded-2xl border-border/60 shadow-sm transition-all duration-200 hover:shadow-lg hover:shadow-primary/10"
                     >
                       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
@@ -659,9 +662,10 @@ export default function MemberStore() {
                               {product.category.name}
                             </p>
                           )}
-                          <h3 className="truncate text-sm font-semibold">{product.name}</h3>
+                          <h3 className="line-clamp-2 text-sm font-semibold">{title}</h3>
                           <p className="text-xl font-bold">₹{Number(product.price).toLocaleString()}</p>
                         </div>
+                        {optionPicker}
                         {cartItem ? (
                           <div className="flex items-center justify-between rounded-xl bg-muted/50 p-1">
                             <Button
