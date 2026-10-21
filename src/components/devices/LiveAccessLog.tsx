@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useSignedBiometricBatch } from "@/lib/media/personAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -327,6 +328,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
   });
 
   const insidePeople = grouped.people.filter((p) => p.isInside);
+  const signedPhotos = useSignedBiometricBatch(grouped.people.map((p) => p.biometricPath));
 
   const filters: Array<{ key: FilterKey; label: string; count: number }> = [
     { key: "inside", label: "In gym now", count: counts.inside },
