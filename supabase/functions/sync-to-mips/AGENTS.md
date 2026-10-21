@@ -1,1 +1,2 @@
 - MIPS gate state signatures use the photo hash, not the storage path, because re-uploads reuse the same path.
+- The 3-minute per person/gate cooldown only folds pushes with the same state signature; a changed validity or photo always dispatches, because new members are first pushed revoked and their plan arrives seconds later.

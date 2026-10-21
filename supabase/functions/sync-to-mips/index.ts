@@ -578,14 +578,21 @@ async function dispatchToDevices(
   const coolingDevices = new Set<string>();
   if (personId) {
     try {
+      // v3.6.0 — the cooldown only folds IDENTICAL pushes. A new member is first
+      // pushed as revoked (no plan yet); when the plan lands seconds later the
+      // state changes and MUST reach the gate, or it stays "permission denied".
       const { data: hot } = await supabase
         .from("mips_sync_attempts")
-        .select("device_id")
+        .select("device_id, response_payload")
         .eq("operation", "device_dispatch")
         .eq("mips_person_id", personId)
         .in("status", ["success", "pending", "processing"])
         .gte("created_at", new Date(Date.now() - COOLDOWN_MS).toISOString());
-      for (const r of hot || []) if ((r as any).device_id) coolingDevices.add(String((r as any).device_id));
+      for (const r of hot || []) {
+        const dev = (r as any).device_id;
+        const sig = (r as any).response_payload?.state_sig ?? null;
+        if (dev && (!stateSig || sig === stateSig)) coolingDevices.add(String(dev));
+      }
     } catch (e) {
       console.warn("[dispatchToDevices] cooldown lookup failed (continuing):", e);
     }
