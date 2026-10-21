@@ -617,6 +617,13 @@
       "when": 1792599585743,
       "tag": "0087_registration_geofence_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1792600493177,
+      "tag": "0088_member_push_welcome_invoice",
+      "breakpoints": true
     }
   ]
 }
