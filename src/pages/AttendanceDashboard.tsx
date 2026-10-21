@@ -385,12 +385,13 @@ export default function AttendanceDashboard() {
   });
 
   const handleForceEntry = async () => {
-    if (!selectedForceEntryMember || !branchFilter) return;
+    const forceBranch = branchFilter || effectiveBranchId;
+    if (!selectedForceEntryMember || !forceBranch) return;
     setForceEntrySubmitting(true);
     try {
       const { data, error } = await supabase.rpc('member_force_check_in', {
         p_member_id: selectedForceEntryMember.id,
-        p_branch_id: branchFilter,
+        p_branch_id: forceBranch,
         p_reason: forceEntryReason || 'Override by reception',
         p_actor_user_id: user?.id || null,
       });
