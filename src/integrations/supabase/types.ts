@@ -18004,6 +18004,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      notify_member_event: {
+        Args: {
+          p_branch_id: string
+          p_category: string
+          p_event: string
+          p_message: string
+          p_title: string
+          p_url: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       onboard_member: {
         Args: {
           p_activity_level?: string
