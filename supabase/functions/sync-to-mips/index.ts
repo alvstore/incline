@@ -1081,6 +1081,24 @@ Deno.serve(async (req) => {
         console.error(`[sync-to-mips] access gate check failed: ${(e as Error).message}`);
       }
 
+      // v3.7.0 — LOCK MODE: a backdated end date makes the gate firmware erase
+      // the face within 60s ("Stranger"). When `mips_tz_revoke_mode` is on, a
+      // blocked member keeps their face with a far-future window instead, so the
+      // gate says "Permission Denied" and restores instantly when unblocked.
+      if (validTimeEnd === REVOKED_DATE) {
+        try {
+          const { data: tzFlag } = await supabase
+            .from("settings").select("value").eq("key", "mips_tz_revoke_mode").is("branch_id", null).maybeSingle();
+          const v = (tzFlag as any)?.value;
+          if (v === true || v === "true" || v?.enabled === true) {
+            validTimeBegin = "2099-01-01 00:00:00";
+            validTimeEnd = "2099-12-31 23:59:59";
+          }
+        } catch (e) {
+          console.warn(`[sync-to-mips] lock-mode flag read failed: ${(e as Error).message}`);
+        }
+      }
+
     } else if (person_type === "employee") {
       tableName = "employees";
       deptId = STAFF_DEPT_ID;
