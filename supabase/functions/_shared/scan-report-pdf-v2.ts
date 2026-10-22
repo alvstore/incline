@@ -233,7 +233,7 @@ export async function buildScanPdfV2(input: V2Input): Promise<Uint8Array> {
   // Body segment map
   if (input.segments) {
     section("3D segment body map", "Muscle and fat measured separately in each arm, each leg and the trunk. Colour shows muscle against the standard for your height.");
-    const h = 262;
+    const h = 290;
     need(h + 10);
     const cx = M + 120, top = y - 10;
     const labels = ["Left arm", "Right arm", "Trunk", "Left leg", "Right leg"];
