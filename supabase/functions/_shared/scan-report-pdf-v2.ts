@@ -6,6 +6,7 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, degrees } from "https://esm.sh/pdf-lib@1.17.1";
 import QRCode from "npm:qrcode@1.5.3";
 import { type GlossaryEntry, type Sex, type Zone, zoneFor } from "./scan-glossary.ts";
+import { BODY_FEMALE_PNG, BODY_MALE_PNG, BODY_ZONES } from "./scan-body-figures.ts";
 
 const A4: [number, number] = [595.28, 841.89];
 const M = 36;
@@ -243,22 +244,18 @@ export async function buildScanPdfV2(input: V2Input): Promise<Uint8Array> {
       const r = input.segments!.muscle[i] / std;
       return r < 0.9 ? AMBER : r > 1.1 ? INDIGO : EMERALD;
     };
-    // shapes: [x, y(top), w, h]
-    const shapes: Array<[number, number, number, number]> = [
-      [cx + 34, top - 46, 16, 82], // left arm (viewer right = member left)
-      [cx - 50, top - 46, 16, 82],
-      [cx - 30, top - 42, 60, 92],
-      [cx + 3, top - 136, 24, 92],
-      [cx - 27, top - 136, 24, 92],
-    ];
-    const depth = (x: number, yy: number, w: number, hh: number, c: ReturnType<typeof rgb>) => {
-      page.drawRectangle({ x: x + 4, y: yy - hh - 4, width: w, height: hh, color: DARK, opacity: 0.12 });
-      page.drawRectangle({ x, y: yy - hh, width: w, height: hh, color: c, opacity: 0.85 });
-      page.drawRectangle({ x, y: yy - hh, width: w * 0.3, height: hh, color: WHITE, opacity: 0.18 });
-    };
-    page.drawCircle({ x: cx + 3, y: top - 14, size: 14, color: DARK, opacity: 0.12 });
-    page.drawCircle({ x: cx, y: top - 10, size: 14, color: rgb(0.8, 0.82, 0.9) });
-    shapes.forEach(([x, yy, w, hh], i) => depth(x, yy - 18, w, hh, tone(i)));
+    // Realistic sex-matched figure with translucent segment glow zones.
+    const female = input.sex === "female";
+    const figH = h - 20, figW = figH / 2, fx = cx - figW / 2, fy = top - figH;
+    const png = await pdf.embedPng(Uint8Array.from(atob(female ? BODY_FEMALE_PNG : BODY_MALE_PNG), (c) => c.charCodeAt(0)));
+    page.drawEllipse({ x: cx, y: fy + 4, xScale: figW * 0.42, yScale: 6, color: DARK, opacity: 0.08 });
+    page.drawImage(png, { x: fx, y: fy, width: figW, height: figH });
+    BODY_ZONES[female ? "female" : "male"].forEach(([nx, ny, rx, ry], i) => {
+      const zx = fx + nx * figW, zy = fy + (1 - ny) * figH;
+      page.drawEllipse({ x: zx, y: zy, xScale: rx * figW * 1.3, yScale: ry * figH * 1.15, color: tone(i), opacity: 0.1 });
+      page.drawEllipse({ x: zx, y: zy, xScale: rx * figW, yScale: ry * figH, color: tone(i), opacity: 0.16, borderColor: tone(i), borderWidth: 0.8, borderOpacity: 0.7 });
+      page.drawCircle({ x: zx, y: zy, size: 2.2, color: WHITE, borderColor: tone(i), borderWidth: 1 });
+    });
     // table
     const tx = M + 250;
     let ty = top - 4;
