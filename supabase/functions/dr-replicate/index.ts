@@ -39,26 +39,43 @@ async function bootstrapStandby(): Promise<void> {
   }
 }
 
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
+/** Start the next worker run (fire-and-forget: the worker answers 202 immediately). */
+async function wakeSelf(primaryUrl: string, token: string): Promise<void> {
+  try {
+    const r = await fetch(`${primaryUrl.replace(/\/+$/, "")}/functions/v1/dr-replicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-dr-secret": token },
+      body: JSON.stringify({ mode: "tick" }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    await r.body?.cancel().catch(() => {});
+  } catch (e) {
+    // The hourly watchdog restarts a stalled copy.
+    console.error("dr-replicate wake failed", (e as Error).message);
+  }
+}
+
+const STATUS_SQL = `SELECT coalesce((SELECT to_jsonb(x) FROM (SELECT id, kind, trigger, status, step, report, ticks, created_at,
+  started_at, heartbeat_at, finished_at, lease_until FROM private.dr_sync_runs ORDER BY created_at DESC LIMIT 1) x), 'null'::jsonb)::text`;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  let primary: ReturnType<typeof connectPrimary> | null = null;
+  const primary = connectPrimary();
+  let background = false;
   try {
-    const body = (await req.json().catch(() => ({}))) as { mode?: string; budgetMs?: number };
+    const body = (await req.json().catch(() => ({}))) as { mode?: string; budgetMs?: number; wait?: boolean; kind?: string };
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const primaryUrl = Deno.env.get("SUPABASE_URL")!;
     const drKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
     if (!drKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
     if (new URL(DR_URL).hostname === new URL(primaryUrl).hostname) throw new Error("refusing: standby URL points at the live project");
 
-    primary = connectPrimary();
+    const token = await readOne(primary, "SELECT token FROM private.dr_config WHERE id = true");
     const secret = req.headers.get("x-dr-secret") ?? "";
     const isService = (req.headers.get("authorization") ?? "") === `Bearer ${serviceKey}`;
-    let authorized = isService;
-    if (!authorized && secret.length >= 32) {
-      const token = await readOne(primary, "SELECT token FROM private.dr_config WHERE id = true");
-      authorized = !!token && token === secret;
-    }
-    if (!authorized) return json({ error: "Unauthorized" }, 401);
+    if (!isService && !(token && secret.length >= 32 && secret === token)) return json({ error: "Unauthorized" }, 401);
 
     const standby = new Standby(DR_URL, drKey);
     const mode = body.mode ?? "tick";
@@ -71,20 +88,35 @@ Deno.serve(async (req) => {
       const [primaryUser] = await primary`select current_user as u`;
       return json({ ok: true, primary: primaryUser.u, standbyHelpers: ready, standbyStorageVersion: storage });
     }
+    if (mode === "status") {
+      return json({ ok: true, run: JSON.parse((await readOne(primary, STATUS_SQL)) ?? "null") });
+    }
     if (mode === "bootstrap") {
       await bootstrapStandby();
       return json({ ok: true, helpers: await standby.helpersReady() });
     }
     if (mode === "tick") {
       const budget = Math.max(15_000, Math.min(130_000, Number(body.budgetMs ?? 100_000)));
-      const result = await tick({ primary, standby, primaryUrl, serviceKey, bootstrap: bootstrapStandby }, budget);
-      return json({ ok: true, ...result });
+      const work = async () => {
+        const result = await tick({ primary, standby, primaryUrl, serviceKey, bootstrap: bootstrapStandby }, budget);
+        // Keep going while there is work: each run hands over to a fresh worker.
+        if (result.state === "progress" && token) await wakeSelf(primaryUrl, token);
+        return result;
+      };
+      if (body.wait === true || typeof EdgeRuntime === "undefined") return json({ ok: true, ...(await work()) });
+      background = true;
+      EdgeRuntime.waitUntil(
+        work()
+          .catch((e) => console.error("dr-replicate tick", (e as Error).message))
+          .finally(() => primary.end({ timeout: 5 }).catch(() => {})),
+      );
+      return json({ ok: true, accepted: true }, 202);
     }
     return json({ error: `Mode "${mode}" was retired — copies now run as resumable steps from the Disaster Recovery card.` }, 410);
   } catch (e) {
     console.error("dr-replicate", (e as Error).message);
     return json({ ok: false, error: (e as Error).message }, 500);
   } finally {
-    await primary?.end({ timeout: 5 }).catch(() => {});
+    if (!background) await primary.end({ timeout: 5 }).catch(() => {});
   }
 });
