@@ -219,7 +219,6 @@ export async function syncTables(ctx: SyncContext, specs: TableSpec[], start: nu
             rangePredicate(spec.pk, chunk.lo, chunk.hi), rows, spec.schema !== "storage");
           stats.chunksCopied++;
           stats.rowsWritten += res.written;
-          const key = `${spec.schema}.${spec.name}`;
           stats.copied = { ...(stats.copied ?? {}), [key]: (stats.copied?.[key] ?? 0) + res.written };
           stats.rowsDeleted += res.deleted;
           copied++;
