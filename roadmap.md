@@ -1,5 +1,5 @@
 # Mohit account cleanup (22 Oct 2026)
-- [ ] Remove the three specified cancelled invoices, assigned diet/workout plans and old requests; preserve INV-INC-26-0039, both payments, membership and audit history.
+- [x] Removed three cancelled invoices, three assigned diet/workout plans and four old requests; verified only INV-INC-26-0039 remains with both completed payments (₹20,000 total), account retained and cleanup archived in audit history.
 
 # Auth & registration (21 Oct 2026)
 - [x] Animated Rise/Reflect/Repeat card stack on sign-in.
