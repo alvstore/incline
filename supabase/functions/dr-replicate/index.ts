@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     if (mode === "queue") {
       const kind = body.kind === "verify" ? "verify" : "full";
       const [row] = await primary.unsafe("SELECT private.dr_queue_run($1, 'manual', NULL)::text AS id", [kind]);
-      return json({ ok: true, runId: (row as { id: string }).id });
+      return json({ ok: true, runId: (row as unknown as { id: string }).id });
     }
     if (mode === "bootstrap") {
       await bootstrapStandby();
