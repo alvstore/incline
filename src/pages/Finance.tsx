@@ -246,6 +246,10 @@ export default function FinancePage() {
   const posOnlyTotal = posSalesWithoutPayment.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0);
   const paymentsTotal = incomeData.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalIncome = paymentsTotal + posOnlyTotal;
+  // Store (counter) income kept separate from membership/service income
+  const storeIncome = posOnlyTotal + incomeData
+    .filter((p: { invoice?: { pos_sale_id?: string | null } | null }) => !!p.invoice?.pos_sale_id)
+    .reduce((sum: number, p: { amount?: number | null }) => sum + (p.amount || 0), 0);
   const totalExpenses = expenseData.reduce((sum, e) => sum + (e.amount || 0), 0);
   const netProfit = totalIncome - totalExpenses;
   const profitMargin = totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(1) : '0';
@@ -473,6 +477,9 @@ export default function FinancePage() {
             <CardContent className="pt-6 text-center">
               <p className="text-3xl font-bold text-foreground">{formatCurrency(totalIncome)}</p>
               <p className="text-xs text-muted-foreground mt-1">Total Income</p>
+              <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
+                Memberships &amp; services {formatCurrency(totalIncome - storeIncome)} · Store {formatCurrency(storeIncome)}
+              </p>
               <div className="h-[60px] mt-3">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={sparklineData}>
