@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
         if (!r.ok || !r.body) return { error: `${r.status}` };
         let size = 0;
         const counted = r.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({ transform(c, ctl) { size += c.byteLength; ctl.enqueue(c); } }));
-        const digest = await stdCrypto.subtle.digest("MD5", counted);
+        const digest = await stdCrypto.subtle.digest("MD5", counted as unknown as AsyncIterable<Uint8Array<ArrayBuffer>>);
         return { md5: encodeHex(digest), size };
       };
       const out = [];
