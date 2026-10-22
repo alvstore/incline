@@ -1,3 +1,11 @@
+# External standby 1:1 copy (22 Oct 2026)
+- [x] Standby file storage rejected every upload (storage service v1.74 vs newer storage tables); restored its expected index, upload/replace/download/delete verified.
+- [ ] Pause all standby scheduled jobs (they ran attendance/membership jobs on the copy) and mirror live jobs as paused definitions.
+- [ ] Resumable copy engine: structure (tables, columns, keys, indexes, functions, views, triggers, security rules, grants, realtime), sign-in users, all rows (chunk fingerprints, deletes included), counters, buckets + files (large files resumable).
+- [ ] Nightly 02:30 IST run in small resumable steps; Run now / Verify from Disaster Recovery card with live progress.
+- [ ] Full first copy + independent parity check (structure diff = 0, per-table row fingerprints, users, files/bytes per bucket).
+- [ ] Owner action: standby database connection has no encryption (TLS) — enable on the standby server; upgrade standby storage service to v1.80.2+ then drop the compat index.
+
 # Mohit account cleanup (22 Oct 2026)
 - [x] Removed three cancelled invoices, three assigned diet/workout plans and four old requests; verified only INV-INC-26-0039 remains with both completed payments (₹20,000 total), account retained and cleanup archived in audit history.
 
