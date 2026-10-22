@@ -12,6 +12,8 @@
 // Standby traffic is HTTPS only; the primary is read inside READ ONLY transactions.
 
 import postgres from "npm:postgres@3.4.4";
+import { crypto as stdCrypto } from "jsr:@std/crypto@1.0.3";
+import { encodeHex } from "jsr:@std/encoding@1.0.5/hex";
 import { connectPrimary, readOne } from "./primary.ts";
 import { tick } from "./run.ts";
 import { BOOTSTRAP_SQL, Standby } from "./standby.ts";
@@ -92,6 +94,30 @@ Deno.serve(async (req) => {
     }
     if (mode === "status") {
       return json({ ok: true, run: JSON.parse((await readOne(primary, STATUS_SQL)) ?? "null") });
+    }
+    if (mode === "checksum") {
+      // Byte-level comparison of up to 5 files (returns only MD5s and sizes).
+      const list = Array.isArray((body as { objects?: unknown }).objects) ? (body as { objects: Array<{ bucket: string; name: string }> }).objects.slice(0, 5) : [];
+      const objUrl = (base: string, b: string, n: string) =>
+        `${base}/storage/v1/object/authenticated/${encodeURIComponent(b)}/${n.split("/").map(encodeURIComponent).join("/")}`;
+      const md5Of = async (url: string, key: string) => {
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${key}`, apikey: key }, signal: AbortSignal.timeout(110_000) });
+        if (!r.ok || !r.body) return { error: `${r.status}` };
+        let size = 0;
+        const counted = r.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({ transform(c, ctl) { size += c.byteLength; ctl.enqueue(c); } }));
+        const digest = await stdCrypto.subtle.digest("MD5", counted);
+        return { md5: encodeHex(digest), size };
+      };
+      const out = [];
+      for (const o of list) {
+        if (typeof o?.bucket !== "string" || typeof o?.name !== "string") continue;
+        const [p, sb] = await Promise.all([
+          md5Of(objUrl(primaryUrl.replace(/\/+$/, ""), o.bucket, o.name), serviceKey),
+          md5Of(objUrl(DR_URL, o.bucket, o.name), drKey),
+        ]);
+        out.push({ object: `${o.bucket}/${o.name}`, primary: p, standby: sb, identical: "md5" in p && "md5" in sb && p.md5 === sb.md5 && p.size === sb.size });
+      }
+      return json({ ok: true, files: out });
     }
     if (mode === "queue") {
       const kind = body.kind === "verify" ? "verify" : "full";
