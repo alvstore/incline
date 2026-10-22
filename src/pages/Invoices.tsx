@@ -53,6 +53,7 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   // Renewal offers (proformas) are not statutory invoices — hidden by default
   const [docFilter, setDocFilter] = useState<'invoices' | 'offers' | 'all'>('invoices');
+  const [kindFilter, setKindFilter] = useState<'all' | 'services' | 'store'>('all');
   const [periodFilter, setPeriodFilter] = useState<string>('this_month');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
@@ -188,6 +189,8 @@ export default function InvoicesPage() {
     if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
     if (docFilter === 'invoices') q = q.eq('is_proforma', false);
     if (docFilter === 'offers') q = q.eq('is_proforma', true);
+    if (kindFilter === 'store') q = q.not('pos_sale_id', 'is', null);
+    if (kindFilter === 'services') q = q.is('pos_sale_id', null);
     if (range.from) q = q.gte('created_at', range.from.toISOString());
     if (range.to) q = q.lte('created_at', range.to.toISOString());
     return q;
@@ -214,7 +217,7 @@ export default function InvoicesPage() {
   });
 
   const { data: invoicesResult, isLoading } = useQuery({
-    queryKey: ['invoices', branchFilter, statusFilter, docFilter, rangeKey, isSearching ? 'search' : page],
+    queryKey: ['invoices', branchFilter, statusFilter, docFilter, kindFilter, rangeKey, isSearching ? 'search' : page],
     queryFn: async () => {
       const query = applyFilters(
         supabase
@@ -240,7 +243,7 @@ export default function InvoicesPage() {
   // Range-accurate KPI aggregates — status filter intentionally NOT applied so
   // paid/unpaid totals stay meaningful, only branch + date range scope them.
   const { data: rangeStats, isLoading: statsLoading } = useQuery({
-    queryKey: ['invoice-stats', branchFilter, rangeKey],
+    queryKey: ['invoice-stats', branchFilter, rangeKey, kindFilter],
     queryFn: async () => {
       let q = supabase
         .from('invoices')
@@ -249,6 +252,8 @@ export default function InvoicesPage() {
         .order('created_at', { ascending: false })
         .limit(5000);
       if (branchFilter) q = q.eq('branch_id', branchFilter);
+      if (kindFilter === 'store') q = q.not('pos_sale_id', 'is', null);
+      if (kindFilter === 'services') q = q.is('pos_sale_id', null);
       if (range.from) q = q.gte('created_at', range.from.toISOString());
       if (range.to) q = q.lte('created_at', range.to.toISOString());
       const { data, error } = await q;
@@ -458,6 +463,16 @@ export default function InvoicesPage() {
                   onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
+              <Select value={kindFilter} onValueChange={(v) => { setKindFilter(v as typeof kindFilter); setPage(0); }}>
+                <SelectTrigger className="w-[200px] rounded-xl" aria-label="Bill type filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All bills</SelectItem>
+                  <SelectItem value="services">Memberships &amp; services</SelectItem>
+                  <SelectItem value="store">Store</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={statusFilter} onValueChange={handleStatusChange}>
                 <SelectTrigger className="w-[180px] rounded-xl" aria-label="Status filter">
                   <SelectValue placeholder="Status" />
