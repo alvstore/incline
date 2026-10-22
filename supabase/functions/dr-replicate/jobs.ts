@@ -11,7 +11,7 @@ import type { Standby } from "./standby.ts";
 
 interface Job { id: number; name: string | null; schedule: string; command: string; active: boolean }
 
-const JOBS_SQL = `SELECT coalesce(json_agg(json_build_object('id', jobid, 'name', jobname, 'schedule', schedule,
+export const JOBS_SQL = `SELECT coalesce(json_agg(json_build_object('id', jobid, 'name', jobname, 'schedule', schedule,
   'command', command, 'active', active) ORDER BY jobid), '[]'::json)::text FROM cron.job`;
 
 const jobName = (j: Job) => j.name ?? `primary-job-${j.id}`;
