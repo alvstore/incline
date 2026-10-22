@@ -165,7 +165,7 @@ export function SystemAuditTab() {
                 const h = (Number(d.total) / maxTrend) * 100;
                 const crit = Number(d.critical_count) > 0;
                 return (
-                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1" title={`${d.day}: ${d.total} (${d.critical_count} critical)`}>
+                  <div key={d.day} className="flex-1 h-full flex flex-col justify-end items-center gap-1" title={`${d.day}: ${d.total} (${d.critical_count} critical)`}>
                     <div
                       className={`w-full rounded-t-md transition-all ${crit ? 'bg-destructive' : 'bg-info'}`}
                       style={{ height: `${Math.max(h, 4)}%` }}

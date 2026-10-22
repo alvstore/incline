@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isExpectedErrorOutcome } from '@/lib/audit/errorNoise';
 
 let initialized = false;
 const errorQueue: Array<{
@@ -42,7 +43,7 @@ async function flushErrors() {
 
 function shouldDrop(msg: string): boolean {
   if (!msg) return true;
-  if (/Invalid login credentials|Invalid Refresh Token|New password should be different|^otp_invalid$|^Fetch is aborted$|^\[(hmr|vite)\]/i.test(msg)) return true;
+  if (isExpectedErrorOutcome(msg)) return true;
   // Don't log connectivity issues — these are user-side (flaky wifi, tab
   // suspend/resume, captive portals), never actionable app bugs.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
