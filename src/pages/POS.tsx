@@ -6,13 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { ResponsiveSheet, ResponsiveSheetHeader, ResponsiveSheetTitle, ResponsiveSheetDescription, ResponsiveSheetFooter } from '@/components/ui/ResponsiveSheet';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Package, Wallet, Search, Receipt, User, Phone, Mail, UserPlus, FileText, Link2, Copy, Loader2, Tag, X, Check, MessageCircle } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Package, Wallet, Search, Receipt, User, Phone, Mail, UserPlus, FileText, Link2, Copy, Loader2, Tag, X, Check, MessageCircle, Percent } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { createPOSSale, type CartItem } from '@/services/storeService';
+import { createAuditedPOSSale, type CartItem, type PosSettlement } from '@/services/storeService';
+import { matchesProductSearch, computeManualDiscount } from '@/lib/products/posSearch';
+
+interface StaffBuyer { user_id: string; full_name: string | null; phone: string | null; code: string | null; kind: string }
 import { getOrCreateWallet } from '@/services/walletService';
 import { useNavigate } from 'react-router-dom';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -50,6 +53,14 @@ export default function POSPage() {
 
   // Wallet split: when on, deduct as much wallet as possible (up to balance & total) and bill the remainder
   const [useWallet, setUseWallet] = useState(false);
+
+  // Staff / trainer buyer + manual discount
+  const [buyerTab, setBuyerTab] = useState<'member' | 'staff'>('member');
+  const [selectedStaff, setSelectedStaff] = useState<StaffBuyer | null>(null);
+  const [manualMode, setManualMode] = useState<'amount' | 'percent'>('amount');
+  const [manualValue, setManualValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [discountNote, setDiscountNote] = useState('');
 
   // Realtime subscription for invoice status updates
   useEffect(() => {
@@ -175,6 +186,20 @@ export default function POSPage() {
     enabled: memberSearch.length >= 2,
   });
 
+  // Staff & trainers of this branch as buyers (they are not on the member list)
+  const { data: staffBuyers = [] } = useQuery({
+    queryKey: ['pos-staff-buyers', effectiveBranchId, memberSearch],
+    enabled: buyerTab === 'staff' && !!effectiveBranchId && memberSearch.trim().length >= 2,
+    queryFn: async (): Promise<StaffBuyer[]> => {
+      const { data, error } = await supabase.rpc('search_pos_staff_buyers', {
+        p_branch_id: effectiveBranchId as string,
+        p_term: memberSearch.trim(),
+      });
+      if (error) throw error;
+      return (data ?? []) as StaffBuyer[];
+    },
+  });
+
   const { data: walletBalance = 0 } = useQuery({
     queryKey: ['member-wallet', selectedMember?.id],
     queryFn: async () => {
@@ -241,20 +266,38 @@ export default function POSPage() {
         ? (isPaymentLink ? 'upi' : paymentMethod)
         : 'wallet'; // wallet-only sale
 
-      const sale = await createPOSSale({
+      const reasonText = discountReason === 'Other' ? discountNote.trim() : discountReason;
+      if (manualDiscount > 0 && !reasonText) {
+        throw new Error('Choose a reason for the manual discount');
+      }
+      if (paymentMethod === 'salary_deduction' && !selectedStaff) {
+        throw new Error('Salary deduction is only for staff and trainers');
+      }
+      const settlement: PosSettlement = remainderDue <= 0
+        ? 'paid'
+        : isPaymentLink ? 'link'
+        : paymentMethod === 'due' ? 'due'
+        : paymentMethod === 'salary_deduction' ? 'salary_deduction'
+        : 'paid';
+
+      const sale = await createAuditedPOSSale({
         branchId,
-        memberId: selectedMember?.id,
+        memberId: selectedStaff ? undefined : selectedMember?.id,
         items: cart,
-        paymentMethod: remainderMethod,
+        paymentMethod: settlement === 'due' || settlement === 'salary_deduction' ? 'cash' : remainderMethod,
+        settlement,
+        buyerType: selectedStaff ? 'staff' : selectedMember ? 'member' : 'walk_in',
+        staffUserId: selectedStaff?.user_id,
         transactionId: transactionId || undefined,
         slipUrl,
         guestName: !selectedMember ? guestInfo.name || undefined : undefined,
         guestPhone: !selectedMember ? guestInfo.phone || undefined : undefined,
         guestEmail: !selectedMember ? guestInfo.email || undefined : undefined,
-        awaitingPayment: isPaymentLink,
-        discountAmount: couponDiscount > 0 ? couponDiscount : undefined,
+        couponDiscount: couponDiscount > 0 ? couponDiscount : undefined,
         discountCode: appliedCoupon?.code,
         discountCodeId: appliedCoupon?.id,
+        manualDiscount: manualDiscount > 0 ? manualDiscount : undefined,
+        discountReason: manualDiscount > 0 ? reasonText : undefined,
         walletApplied: walletApplied > 0 ? walletApplied : undefined,
       });
 
@@ -296,6 +339,7 @@ export default function POSPage() {
       }
       setCart([]);
       setSelectedMember(null);
+      setSelectedStaff(null);
       if (!sale.isPaymentLink) setPaymentMethod('cash');
       setTransactionId('');
       setSlipFile(null);
@@ -304,6 +348,10 @@ export default function POSPage() {
       setAppliedCoupon(null);
       setCouponInput('');
       setUseWallet(false);
+      setManualValue('');
+      setDiscountReason('');
+      setDiscountNote('');
+      queryClient.invalidateQueries({ queryKey: ['salary-advances'] });
       queryClient.invalidateQueries({ queryKey: ['today-pos-sales'] });
       // Stock was deducted server-side — refresh counts and FEFO batches.
       ['pos-products', 'pos-active-batches', 'inventory', 'products', 'stock-movements'].forEach((k) =>
@@ -398,7 +446,17 @@ export default function POSPage() {
     return Math.min(cartSubtotal, value);
   })();
 
-  const cartTotal = Math.max(0, cartSubtotal - couponDiscount);
+  const manualDiscount = computeManualDiscount({
+    subtotal: cartSubtotal,
+    couponDiscount,
+    mode: manualMode,
+    value: Number(manualValue) || 0,
+  });
+  const cartTotal = Math.max(0, cartSubtotal - couponDiscount - manualDiscount);
+  const belowCost = manualDiscount > 0 && (() => {
+    const cost = cart.reduce((s, i) => s + (Number((i.product as { cost_price?: number }).cost_price) || 0) * i.quantity, 0);
+    return cost > 0 && cartTotal < cost;
+  })();
   const walletApplied = useWallet && selectedMember
     ? Math.min(walletBalance, cartTotal)
     : 0;
@@ -453,7 +511,7 @@ export default function POSPage() {
   };
 
   const filteredProducts = products.filter((p: any) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    matchesProductSearch(searchQuery, [p.name, p.brand, p.sku, p.barcode, p.option_value])
   );
 
   const printInvoice = () => {
@@ -675,7 +733,23 @@ export default function POSPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedMember ? (
+                {selectedStaff ? (
+                  <div className="bg-muted/50 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{selectedStaff.full_name}</p>
+                        <Badge variant="outline" className="text-[10px] capitalize">{selectedStaff.kind}</Badge>
+                      </div>
+                      <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                        {selectedStaff.code && <span>{selectedStaff.code}</span>}
+                        {selectedStaff.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{selectedStaff.phone}</span>}
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" aria-label="Remove buyer" onClick={() => { setSelectedStaff(null); if (paymentMethod === 'salary_deduction') setPaymentMethod('cash'); }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : selectedMember ? (
                   <div className="bg-muted/50 p-3 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
@@ -729,16 +803,26 @@ export default function POSPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    <div className="grid grid-cols-2 rounded-lg border border-border p-0.5 text-xs" role="tablist" aria-label="Buyer type">
+                      {(['member', 'staff'] as const).map((t) => (
+                        <button key={t} type="button" role="tab" aria-selected={buyerTab === t}
+                          onClick={() => { setBuyerTab(t); setMemberSearch(''); }}
+                          className={`rounded-md py-1.5 font-medium cursor-pointer transition-colors ${buyerTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
+                          {t === 'member' ? 'Member' : 'Staff & Trainers'}
+                        </button>
+                      ))}
+                    </div>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search by code, name, phone, email..."
+                        placeholder={buyerTab === 'member' ? 'Search by code, name, phone, email...' : 'Search team by name, phone or code...'}
                         value={memberSearch}
                         onChange={(e) => setMemberSearch(e.target.value)}
                         className="pl-9"
+                        aria-label={buyerTab === 'member' ? 'Search members' : 'Search staff and trainers'}
                       />
                     </div>
-                    {members.length > 0 && (
+                    {buyerTab === 'member' && members.length > 0 && (
                       <div className="border rounded divide-y max-h-40 overflow-y-auto">
                         {members.map((m: any) => {
                           const info = getMemberDisplayInfo(m);
@@ -760,6 +844,27 @@ export default function POSPage() {
                           );
                         })}
                       </div>
+                    )}
+                    {buyerTab === 'staff' && memberSearch.length >= 2 && (
+                      staffBuyers.length > 0 ? (
+                        <div className="border rounded divide-y max-h-40 overflow-y-auto">
+                          {staffBuyers.map((s) => (
+                            <button key={s.user_id} type="button" className="w-full text-left p-2 hover:bg-muted cursor-pointer"
+                              onClick={() => { setSelectedStaff(s); setMemberSearch(''); setUseWallet(false); }}>
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-medium text-sm">{s.full_name}</p>
+                                <Badge variant="outline" className="text-[10px] capitalize">{s.kind}</Badge>
+                              </div>
+                              <div className="flex gap-3 text-xs text-muted-foreground">
+                                {s.code && <span>{s.code}</span>}
+                                {s.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{s.phone}</span>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground px-1">No team member found in this branch.</p>
+                      )
                     )}
                     <Button 
                       variant="ghost" 
@@ -896,6 +1001,50 @@ export default function POSPage() {
                         </div>
                       )}
 
+                      {/* Manual discount — audited server-side with reason and seller */}
+                      <div className="space-y-2 rounded-lg border border-border p-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs flex items-center gap-1.5"><Percent className="h-3.5 w-3.5" />Manual discount</Label>
+                          <div className="flex rounded-md border border-border overflow-hidden text-xs" role="group" aria-label="Discount type">
+                            {(['amount', 'percent'] as const).map((m) => (
+                              <button key={m} type="button" onClick={() => setManualMode(m)}
+                                className={`px-2.5 py-1 cursor-pointer ${manualMode === m ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}>
+                                {m === 'amount' ? '₹' : '%'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Input type="number" inputMode="decimal" min={0} placeholder={manualMode === 'amount' ? 'Amount off' : 'Percent off'}
+                            value={manualValue} onChange={(e) => setManualValue(e.target.value)} className="h-9" aria-label="Discount value" />
+                          <Input type="number" inputMode="decimal" min={0} placeholder="Final price"
+                            value={manualDiscount > 0 ? String(Math.max(0, cartSubtotal - couponDiscount - manualDiscount)) : ''}
+                            onChange={(e) => {
+                              const target = Number(e.target.value);
+                              setManualMode('amount');
+                              setManualValue(e.target.value === '' ? '' : String(Math.max(0, cartSubtotal - couponDiscount - target)));
+                            }}
+                            className="h-9" aria-label="Final price after discount" />
+                        </div>
+                        {manualDiscount > 0 && (
+                          <>
+                            <Select value={discountReason} onValueChange={setDiscountReason}>
+                              <SelectTrigger className="h-9" aria-label="Discount reason"><SelectValue placeholder="Reason (required)" /></SelectTrigger>
+                              <SelectContent>
+                                {['Staff purchase', 'Loyal member', 'Damaged / open box', 'Manager approval', 'Other'].map((r) => (
+                                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {discountReason === 'Other' && (
+                              <Input placeholder="Describe the reason" value={discountNote} onChange={(e) => setDiscountNote(e.target.value)} className="h-9" />
+                            )}
+                            {belowCost && <p className="text-xs text-destructive">This price is below the purchase cost of at least one item.</p>}
+                            <p className="text-[11px] text-muted-foreground">Recorded with your name, the reason and the payment mode.</p>
+                          </>
+                        )}
+                      </div>
+
                       {/* Totals breakdown */}
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between text-muted-foreground">
@@ -906,6 +1055,12 @@ export default function POSPage() {
                           <div className="flex justify-between text-success">
                             <span>Discount {appliedCoupon?.code ? `(${appliedCoupon.code})` : ''}</span>
                             <span>−₹{couponDiscount.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {manualDiscount > 0 && (
+                          <div className="flex justify-between text-success">
+                            <span>Manual discount</span>
+                            <span>−₹{manualDiscount.toLocaleString()}</span>
                           </div>
                         )}
                         {walletApplied > 0 && (
@@ -921,17 +1076,28 @@ export default function POSPage() {
                       </div>
 
                       {remainderDue > 0 ? (
+                        <div className="space-y-1.5">
+                        <Label className="text-xs">Payment</Label>
                         <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                          <SelectTrigger>
+                          <SelectTrigger aria-label="Payment method">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="cash">💵 Cash</SelectItem>
-                            <SelectItem value="card">💳 Credit / Debit Card</SelectItem>
-                            <SelectItem value="upi">📱 UPI</SelectItem>
-                            <SelectItem value="razorpay_link">🔗 Payment Link</SelectItem>
+                            <SelectItem value="cash">Cash</SelectItem>
+                            <SelectItem value="card">Credit / Debit Card</SelectItem>
+                            <SelectItem value="upi">UPI</SelectItem>
+                            <SelectItem value="razorpay_link">Payment Link</SelectItem>
+                            <SelectItem value="due">Due – pay later</SelectItem>
+                            {selectedStaff && <SelectItem value="salary_deduction">Deduct from salary</SelectItem>}
                           </SelectContent>
                         </Select>
+                        {paymentMethod === 'due' && (
+                          <p className="text-xs text-muted-foreground">The bill stays unpaid and shows as a due until it is collected.</p>
+                        )}
+                        {paymentMethod === 'salary_deduction' && selectedStaff && (
+                          <p className="text-xs text-muted-foreground">₹{remainderDue.toLocaleString()} will be recovered from {selectedStaff.full_name}'s next salary (listed under Advances).</p>
+                        )}
+                        </div>
                       ) : (
                         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary text-center font-medium">
                           {walletApplied > 0 ? '✓ Fully covered by wallet' : '✓ No payment due'}
