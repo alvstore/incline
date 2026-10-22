@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { BadgePercent, Search } from 'lucide-react';
+import { BadgePercent, Download, Search, TriangleAlert } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { discountPercent, isHighDiscount } from '@/lib/audit/actorLabel';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +36,8 @@ const SETTLEMENT_LABEL: Record<string, string> = {
 /** Every counter sale with a manual discount, a due, or a salary deduction — who, why, how paid. */
 export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
   const [q, setQ] = useState('');
+  const [seller, setSeller] = useState('all');
+  const [month, setMonth] = useState('all');
   const { data: sales = [], isLoading, isError } = useQuery({
     queryKey: ['pos-exceptions', branchId],
     queryFn: async () => {
@@ -63,12 +68,34 @@ export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
     },
   });
 
+  const months = useMemo(() => Array.from(new Set(sales.map((s) => s.sale_date.slice(0, 7)))), [sales]);
   const rows = sales.filter((s) => {
+    if (seller !== 'all' && s.sold_by !== seller && s.discount_by !== seller) return false;
+    if (month !== 'all' && !s.sale_date.startsWith(month)) return false;
     if (!q.trim()) return true;
     const hay = [s.customer_name, s.discount_reason, names[s.sold_by ?? ''], s.invoices?.invoice_number].join(' ').toLowerCase();
     return hay.includes(q.trim().toLowerCase());
   });
   const totalDiscount = rows.reduce((s, r) => s + Number(r.manual_discount || 0), 0);
+  const orig = (s: ExceptionSale) => Number(s.original_amount ?? s.total_amount);
+  const highCount = rows.filter((s) => isHighDiscount(Number(s.manual_discount), orig(s))).length;
+
+  const downloadCsv = () => {
+    const head = ['Date', 'Invoice', 'Buyer', 'Sold by', 'Discount by', 'Price', 'Discount', 'Discount %', 'High discount', 'Reason', 'Charged', 'Payment'];
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = rows.map((s) => [
+      format(new Date(s.sale_date), 'yyyy-MM-dd HH:mm'), s.invoices?.invoice_number, s.customer_name,
+      names[s.sold_by ?? ''], names[s.discount_by ?? ''], orig(s), s.manual_discount,
+      discountPercent(Number(s.manual_discount), orig(s)), isHighDiscount(Number(s.manual_discount), orig(s)) ? 'Yes' : 'No',
+      s.discount_reason, s.total_amount, SETTLEMENT_LABEL[s.settlement ?? ''] ?? s.payment_method,
+    ].map(esc).join(','));
+    const blob = new Blob([[head.join(','), ...lines].join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `discount-audit-${month}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
     <Card className="rounded-xl">
@@ -77,10 +104,30 @@ export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Discounts given</p>
             <p className="text-2xl font-bold tabular-nums">₹{totalDiscount.toLocaleString('en-IN')}</p>
+            <p className="text-xs text-muted-foreground">{highCount} above 10% (flagged)</p>
           </div>
-          <div className="relative w-full sm:w-72">
+          <div className="flex flex-wrap items-center gap-2">
+          <Select value={seller} onValueChange={setSeller}>
+            <SelectTrigger className="w-44" aria-label="Filter by staff"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All staff</SelectItem>
+              {userIds.map((id) => <SelectItem key={id} value={id}>{names[id] ?? 'Unknown'}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={month} onValueChange={setMonth}>
+            <SelectTrigger className="w-36" aria-label="Filter by month"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All months</SelectItem>
+              {months.map((m) => <SelectItem key={m} value={m}>{format(new Date(`${m}-01`), 'MMM yyyy')}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={downloadCsv} disabled={rows.length === 0}>
+            <Download className="h-4 w-4 mr-1" aria-hidden /> CSV
+          </Button>
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="pl-9" placeholder="Search seller, buyer, reason, invoice" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search discounts and dues" />
+          </div>
           </div>
         </div>
         {isLoading ? (
@@ -101,6 +148,7 @@ export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
                   <TableHead>Invoice</TableHead>
                   <TableHead>Buyer</TableHead>
                   <TableHead>Sold by</TableHead>
+                  <TableHead>Discount by</TableHead>
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Discount</TableHead>
                   <TableHead>Reason</TableHead>
@@ -118,8 +166,20 @@ export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
                       {s.buyer_type === 'staff' && <Badge variant="outline" className="text-[10px]">Team</Badge>}
                     </TableCell>
                     <TableCell>{names[s.sold_by ?? ''] ?? '—'}</TableCell>
+                    <TableCell>{s.discount_by ? names[s.discount_by] ?? '—' : '—'}</TableCell>
                     <TableCell className="text-right tabular-nums">₹{Number(s.original_amount ?? s.total_amount).toLocaleString('en-IN')}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.manual_discount > 0 ? `−₹${Number(s.manual_discount).toLocaleString('en-IN')}` : '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.manual_discount > 0 ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span>−₹{Number(s.manual_discount).toLocaleString('en-IN')} ({discountPercent(Number(s.manual_discount), orig(s))}%)</span>
+                          {isHighDiscount(Number(s.manual_discount), orig(s)) && (
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/20">
+                              <TriangleAlert className="h-3 w-3 mr-1" aria-hidden />High discount
+                            </Badge>
+                          )}
+                        </div>
+                      ) : '—'}
+                    </TableCell>
                     <TableCell className="max-w-[180px] truncate" title={s.discount_reason ?? ''}>{s.discount_reason ?? '—'}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">₹{Number(s.total_amount).toLocaleString('en-IN')}</TableCell>
                     <TableCell>
