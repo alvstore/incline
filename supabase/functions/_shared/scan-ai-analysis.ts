@@ -54,14 +54,14 @@ export async function getOrCreateAnalysis(
         : "Plan must cover strength training, cardio, protein/hydration habits and sleep, with concrete numbers where sensible. ") +
       "Never diagnose, never name diseases, medication or medical conditions, never quote prices. Warm, direct, second person. English only.";
     const { content } = await callAI({
-      scope: "all", supabase, temperature: 0.3, max_tokens: 2600, timeoutMs: 45000,
+      scope: "all", supabase, temperature: 0.3, max_tokens: 6000, timeoutMs: 55000,
       messages: [
         { role: "system", content: sys },
         { role: "user", content: `Member first name: ${opts.firstName}.\n${opts.facts}` },
       ],
     });
     const a = parseAnalysis(String(content || ""));
-    if (!a) return null;
+    if (!a) { console.warn("scan AI analysis unparsable, length", String(content || "").length, String(content || "").slice(-200)); return null; }
     await supabase.from("scan_report_ai_analysis").upsert({
       report_id: opts.reportId, kind: opts.kind, member_id: opts.memberId, branch_id: opts.branchId,
       input_hash: hash, analysis: a, updated_at: new Date().toISOString(),
