@@ -52,7 +52,7 @@ export function zoneFor(e: GlossaryEntry, value: number | null | undefined, sex:
 export function round1(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n * 10) / 10 : null;
+  return Number.isFinite(n) ? (Math.abs(n) < 2 ? Math.round(n * 100) / 100 : Math.round(n * 10) / 10) : null;
 }
 
 /** Segment arrays from HOWBODY payload: [leftArm, rightArm, trunk, leftLeg, rightLeg]. */

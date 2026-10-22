@@ -69,7 +69,7 @@ function win(x: unknown): string {
     .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
 }
 const f1 = (v: number | null | undefined) =>
-  v === null || v === undefined || !Number.isFinite(Number(v)) ? "-" : (Math.round(Number(v) * 10) / 10).toString();
+  v === null || v === undefined || !Number.isFinite(Number(v)) ? "-" : (Math.abs(Number(v)) < 2 ? Math.round(Number(v) * 100) / 100 : Math.round(Number(v) * 10) / 10).toString();
 
 function wrap(text: string, font: PDFFont, size: number, maxW: number): string[] {
   const out: string[] = [];
@@ -233,7 +233,7 @@ export async function buildScanPdfV2(input: V2Input): Promise<Uint8Array> {
   // Body segment map
   if (input.segments) {
     section("3D segment body map", "Muscle and fat measured separately in each arm, each leg and the trunk. Colour shows muscle against the standard for your height.");
-    const h = 230;
+    const h = 262;
     need(h + 10);
     const cx = M + 120, top = y - 10;
     const labels = ["Left arm", "Right arm", "Trunk", "Left leg", "Right leg"];
