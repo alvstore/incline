@@ -645,6 +645,13 @@
       "when": 1792608101703,
       "tag": "0091_fix_health_brief_audit_record_id",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1792642595875,
+      "tag": "0092_scan_report_ai_analysis",
+      "breakpoints": true
     }
   ]
 }

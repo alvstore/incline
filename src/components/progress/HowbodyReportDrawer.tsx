@@ -8,6 +8,8 @@ import { Loader2, Scan, PersonStanding, FileCheck2, FileText, Images } from 'luc
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import type { HowbodyReportRow } from '@/hooks/useHowbodyReports';
+import { ScanAiAnalysisPanel } from './ScanAiAnalysisPanel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   report: HowbodyReportRow | null;
@@ -58,6 +60,8 @@ export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
 
   const isBody = report?.type === 'body';
   const isOriginal = report?.pdf_source === 'howbody_original';
+  const { hasAnyRole } = useAuth();
+  const canRegenerate = hasAnyRole(['owner', 'admin', 'manager', 'staff']);
 
   return (
     <>
@@ -100,6 +104,7 @@ export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
           ) : (
             <PostureMetrics r={full} onZoom={setZoomImg} />
           )}
+          {report ? <ScanAiAnalysisPanel reportId={report.id} kind={report.type} canRegenerate={canRegenerate} /> : null}
         </SheetContent>
       </Sheet>
 

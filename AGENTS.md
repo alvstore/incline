@@ -1,7 +1,7 @@
 Attendance operations views consolidate same-day member attendance rows by member while retaining raw rows as expandable audit detail, because turnstile bounce scans must not inflate visit counts.
 Browser push mirrors existing in-app notifications through an event-driven queue; all new notification creation uses dispatchCommunication, keeping existing paid delivery channels unchanged.
 Web Push signing keys are stored in a service-role-only table; endpoints are provider-allowlisted and lock-screen payloads contain no personal, financial, or health data.
-Historical body-measurement silhouettes never fetch the latest scanner model, avoiding false before/after comparisons.
+Historical body silhouettes never fetch the latest scanner model; scan AI analysis is cached per report by input hash (no regeneration per send).
 - Privileged (SECURITY DEFINER) functions used only by scheduled jobs, triggers or backend functions must have EXECUTE revoked from PUBLIC/anon/authenticated and granted to service_role only — signed-in users could otherwise call them directly.
 - Public functions are closed by default: explicitly grant app/policy functions to authenticated. SECURITY DEFINER RPCs require visible `rpc_guard_applies()` + branch/self/role checks; CI verifies these to prevent cross-member access.
 - Direct-entry guards use `rpc_guard_applies(function_name)` (reads `request.path = /rpc/<fn>`, skips service-role/no-JWT, triggers, nested definer calls and Storage/Realtime policy evaluation) so authorization is enforced only where a user calls the RPC directly — nested internal calls keep working without duplicated checks.

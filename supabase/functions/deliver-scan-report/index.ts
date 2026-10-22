@@ -1,3 +1,4 @@
+// v2.4.0 — visual v2 report (3D views, segment map, structured AI analysis), regenerate flag, branch toggle scan_report_v2.
 // v2.3.0 — staff/trainer callers are limited to reports of members in their branch.
 // v2.2.0 — Preserve original HOWBODY PDFs and dispatch every external channel centrally.
 // Triggered fire-and-forget by howbody-body-webhook / howbody-posture-webhook after a row is upserted.
@@ -8,6 +9,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireCaller, canActOnBranch, type CallerResult } from "../_shared/requireCaller.ts";
 import { buildScanPdf, type MetricGroup } from "../_shared/scan-report-pdf.ts";
 import { callAI } from "../_shared/ai-dispatcher.ts";
+import { buildScanPdfV2, type MetricRow } from "../_shared/scan-report-pdf-v2.ts";
+import { getOrCreateAnalysis } from "../_shared/scan-ai-analysis.ts";
+import { BODY_GLOSSARY, POSTURE_GLOSSARY, parseSegments, round1, zoneFor, type Sex } from "../_shared/scan-glossary.ts";
 
 
 const corsHeaders = {
@@ -170,11 +174,144 @@ async function buildAiNote(
 }
 
 
+async function scanReportV2Enabled(supabase: any, branchId: string | null): Promise<boolean> {
+  try {
+    const { data } = await supabase.from("settings").select("branch_id, value").eq("key", "scan_report_v2");
+    const rows = (data || []) as Array<{ branch_id: string | null; value: unknown }>;
+    const row = rows.find((r) => r.branch_id === branchId) || rows.find((r) => r.branch_id === null);
+    if (!row) return true;
+    const v: any = row.value;
+    return !(v === false || v?.enabled === false || v === "false");
+  } catch { return true; }
+}
+
+async function onlineReportUrl(supabase: any, kind: Kind, dataKey: string | null): Promise<string | null> {
+  if (!dataKey) return null;
+  try {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    const token = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const { error } = await supabase.from("howbody_public_report_tokens").insert({
+      data_key: dataKey, report_type: kind, token, expires_at: new Date(Date.now() + 30 * 864e5).toISOString(),
+    });
+    if (error) { console.warn("public token failed", error.message); return null; }
+    return `https://theincline.in/reports/${kind}/${token}`;
+  } catch { return null; }
+}
+
+async function buildV2(supabase: any, o: {
+  kind: Kind; report: any; payload: any; member: any; memberName: string; branchName: string; scanDateLabel: string;
+  sex: Sex; heightCm: number | null; age: number | null; title: string; force: boolean;
+}): Promise<Uint8Array | null> {
+  try {
+    const r = o.report, p = o.payload || {};
+    const glossary = o.kind === "body" ? BODY_GLOSSARY : POSTURE_GLOSSARY;
+    const metrics: MetricRow[] = glossary
+      .map((e) => ({ entry: e, value: round1(r[e.key] ?? p[e.key]) }))
+      .filter((m) => m.value !== null && !(o.kind === "body" && m.entry.key === "health_score") && !(o.kind === "posture" && m.entry.key === "score"));
+    const factsLines = [
+      o.heightCm ? `Height: ${o.heightCm} cm` : "", o.age ? `Age: ${o.age}` : "", `Sex: ${o.sex}`,
+      ...metrics.map((m) => {
+        const z = zoneFor(m.entry, m.value, o.sex);
+        const b = m.entry.band?.(o.sex);
+        return `${m.entry.label}: ${m.value}${m.entry.unit ? ` ${m.entry.unit}` : ""}${b ? ` (reference ${m.entry.absolute ? "0" : b.low}-${b.high}${m.entry.absolute ? " either side of neutral" : ""}; ${z})` : ""}`;
+      }),
+    ];
+    let segments: { fat: number[]; muscle: number[]; muscleStd: number[] | null } | null = null;
+    if (o.kind === "body") {
+      const fat = parseSegments(p.jdzf), muscle = parseSegments(p.jrjh);
+      if (fat && muscle) {
+        segments = { fat, muscle, muscleStd: parseSegments(p.jrjhTop) };
+        const names = ["left arm", "right arm", "trunk", "left leg", "right leg"];
+        factsLines.push("Segment muscle kg (standard): " + names.map((n, i) => `${n} ${muscle[i]}${segments!.muscleStd ? ` (${segments!.muscleStd[i]})` : ""}`).join(", "));
+        factsLines.push("Segment fat kg: " + names.map((n, i) => `${n} ${fat[i]}`).join(", "));
+      }
+      for (const [k, l] of [["target_weight", "Target weight"], ["weight_control", "Weight to adjust"], ["fat_control", "Fat to adjust"], ["muscle_control", "Muscle to adjust"]]) {
+        if (round1(r[k]) !== null) factsLines.push(`${l}: ${round1(r[k])} kg`);
+      }
+    } else {
+      for (const [k, l] of [["waist", "Waist"], ["hip", "Hip"], ["bust", "Chest"]]) if (round1(r[k]) !== null) factsLines.push(`${l}: ${round1(r[k])} cm`);
+      if (round1(r.calf_left) !== null) factsLines.push(`Calf L/R: ${round1(r.calf_left)} / ${round1(r.calf_right)} cm`);
+      if (round1(r.left_thigh) !== null) factsLines.push(`Thigh L/R: ${round1(r.left_thigh)} / ${round1(r.right_thigh)} cm`);
+    }
+    const scoreValue = o.kind === "body" ? num(r.health_score) : num(r.score);
+    if (scoreValue !== null) factsLines.unshift(`${o.kind === "body" ? "Health" : "Posture"} score: ${scoreValue}/100`);
+    const facts = factsLines.filter(Boolean).join("\n");
+
+    // previous scan for progress
+    const table = o.kind === "body" ? "howbody_body_reports" : "howbody_posture_reports";
+    const { data: prev } = await supabase.from(table).select("*").eq("member_id", r.member_id)
+      .lt("created_at", r.created_at).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+    const [ai, onlineUrl] = await Promise.all([
+      getOrCreateAnalysis(supabase, {
+        reportId: r.id, kind: o.kind, memberId: o.member.id, branchId: o.member.branch_id,
+        firstName: String(o.memberName).split(" ")[0], facts, force: o.force,
+      }),
+      onlineReportUrl(supabase, o.kind, r.data_key),
+    ]);
+    const aiFallback = ai ? null : await buildAiNote(supabase, o.kind, o.memberName, facts);
+
+    const facts2: Array<[string, string]> = [];
+    if (o.heightCm) facts2.push(["Height", `${o.heightCm} cm`]);
+    if (o.age) facts2.push(["Age", String(o.age)]);
+    facts2.push(["Sex", o.sex === "female" ? "Female" : "Male"]);
+
+    const pz = (key: string) => {
+      const e = POSTURE_GLOSSARY.find((g) => g.key === key)!;
+      return zoneFor(e, num(r[key]), o.sex);
+    };
+    const statusWord = (z: string | null) => (z === "normal" ? "in range" : z ? "needs attention" : "");
+    const verdict = o.kind === "body"
+      ? `Body fat ${round1(r.pbf) ?? "-"}% (${statusWord(zoneFor(BODY_GLOSSARY.find((g) => g.key === "pbf")!, num(r.pbf), o.sex))}), muscle ${round1(r.smm) ?? "-"} kg, visceral fat rating ${round1(r.vfr) ?? "-"}. ${ai?.summary?.split(/(?<=\.)\s/)[0] || ""}`
+      : `${metrics.filter((m) => zoneFor(m.entry, m.value, o.sex) === "normal").length} of ${metrics.filter((m) => m.entry.band).length} alignment checks in range. ${ai?.summary?.split(/(?<=\.)\s/)[0] || ""}`;
+
+    return await buildScanPdfV2({
+      kind: o.kind,
+      title: o.title,
+      subtitle: o.kind === "body" ? "3D body composition and BMI assessment" : "3D posture and alignment assessment",
+      memberName: o.memberName, memberCode: o.member.member_code, branchName: o.branchName, scanDateLabel: o.scanDateLabel,
+      sex: o.sex, facts: facts2,
+      score: scoreValue === null ? null : { value: scoreValue, label: o.kind === "body" ? "Health score" : "Posture score" },
+      kpis: o.kind === "body"
+        ? [["Weight", `${round1(r.weight) ?? "-"} kg`], ["BMI", `${round1(r.bmi) ?? "-"}`], ["Body fat", `${round1(r.pbf) ?? "-"}%`], ["Muscle", `${round1(r.smm) ?? "-"} kg`]]
+        : [["Body lean", `${round1(r.body_slope) ?? "-"}\u00b0`], ["Shoulders", `${round1(r.high_low_shoulder) ?? "-"}\u00b0`], ["Head fwd", `${round1(r.head_forward) ?? "-"} cm`], ["Pelvis", `${round1(r.pelvis_forward) ?? "-"}\u00b0`]],
+      verdict,
+      metrics,
+      views: o.kind === "posture" ? [
+        { label: "Front", url: r.front_img || p.frontImg || null, note: `Shoulders ${round1(r.high_low_shoulder) ?? "-"}\u00b0 ${statusWord(pz("high_low_shoulder"))}`, zone: pz("high_low_shoulder"), tilt: num(r.high_low_shoulder) ?? 0, mode: "shoulder" },
+        { label: "Left side", url: r.left_img || p.leftImg || null, note: `Head forward ${round1(r.head_forward) ?? "-"} cm ${statusWord(pz("head_forward"))}`, zone: pz("head_forward"), tilt: num(r.head_forward) ?? 0, mode: "plumb" },
+        { label: "Right side", url: r.right_img || p.rightImg || null, note: `Pelvis ${round1(r.pelvis_forward) ?? "-"}\u00b0 ${statusWord(pz("pelvis_forward"))}`, zone: pz("pelvis_forward"), tilt: (num(r.pelvis_forward) ?? 180) - 180, mode: "plumb" },
+        { label: "Back", url: r.back_img || p.backImg || null, note: `Body lean ${round1(r.body_slope) ?? "-"}\u00b0 ${statusWord(pz("body_slope"))}`, zone: pz("body_slope"), tilt: num(r.body_slope) ?? 0, mode: "lean" },
+      ] : undefined,
+      circumferences: o.kind === "posture" ? ([
+        ["Chest", round1(r.bust), null], ["Waist", round1(r.waist), null], ["Hip", round1(r.hip), null],
+        ["Upper arm", round1(r.up_arm_left), round1(r.up_arm_right)], ["Thigh", round1(r.left_thigh), round1(r.right_thigh)],
+        ["Calf", round1(r.calf_left), round1(r.calf_right)],
+      ] as Array<[string, number | null, number | null]>).filter((c) => c[1] !== null) : undefined,
+      segments,
+      bmi: o.kind === "body" ? round1(r.bmi) : null,
+      targets: o.kind === "body" ? [
+        ["Fat to change", round1(r.fat_control), "Negative = reduce"],
+        ["Muscle to change", round1(r.muscle_control), "Positive = build"],
+        ["Weight to change", round1(r.weight_control), `Target ${round1(r.target_weight) ?? "-"} kg`],
+      ] : undefined,
+      previous: prev ? (o.kind === "body"
+        ? [["Weight", round1(prev.weight), round1(r.weight), "kg"], ["Body fat", round1(prev.pbf), round1(r.pbf), "%"], ["Muscle", round1(prev.smm), round1(r.smm), "kg"], ["Health score", round1(prev.health_score), round1(r.health_score), ""]]
+        : [["Posture score", round1(prev.score), round1(r.score), ""], ["Body lean", round1(prev.body_slope), round1(r.body_slope), "deg"], ["Head forward", round1(prev.head_forward), round1(r.head_forward), "cm"]]) as Array<[string, number | null, number | null, string]>
+        : undefined,
+      ai, aiFallback, onlineUrl,
+    });
+  } catch (e) {
+    console.error("scan v2 render failed, falling back:", e instanceof Error ? e.stack : e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { report_id, kind, resend, channels } = await req.json();
+    const { report_id, kind, resend, channels, regenerate } = await req.json();
     if (!report_id || !kind || (kind !== "body" && kind !== "posture")) {
       return jr({ error: "Missing or invalid report_id/kind" }, 400);
     }
@@ -236,8 +373,9 @@ Deno.serve(async (req) => {
       .eq("report_id", report_id)
       .eq("kind", kind)
       .maybeSingle();
+    const isRegenerate = Boolean(regenerate) && !!staffCaller && staffCaller.roles.some((r) => ["owner", "admin", "manager", "staff"].includes(r));
     if (
-      !isResend &&
+      !isResend && !isRegenerate &&
       existing &&
       existing.email_status === "sent" &&
       ["sent", "delivered", "read"].includes(existing.whatsapp_status || "") &&
@@ -310,7 +448,8 @@ Deno.serve(async (req) => {
         .map((m) => `${m.label}: ${m.value}${m.suffix ? ` ${m.suffix}` : ""}`)
         .join("\n");
       const scoreValue = kind === "body" ? num(report.health_score) : num(report.score);
-      const aiNote = await buildAiNote(
+      const useV2 = await scanReportV2Enabled(supabase, member.branch_id);
+      const aiNote = useV2 ? null : await buildAiNote(
         supabase,
         kind as Kind,
         memberName,
@@ -328,7 +467,10 @@ Deno.serve(async (req) => {
       if (age) facesStrip.push(["Age", String(age)]);
       facesStrip.push(["Sex", sex === "female" ? "Female" : "Male"]);
 
-      const pdfBytes = await buildScanPdf({
+      const v2Bytes = useV2
+        ? await buildV2(supabase, { kind: kind as Kind, report, payload, member, memberName, branchName, scanDateLabel, sex, heightCm, age, title, force: isRegenerate })
+        : null;
+      const pdfBytes = v2Bytes ?? await buildScanPdf({
         title,
         subtitle: kind === "body"
           ? "In-club body composition analysis"
@@ -377,6 +519,7 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     const deliveryId = delivery?.id;
+    if (isRegenerate) return jr({ ok: true, regenerated: true, pdf_url: pdfUrl });
 
     // Build human-readable summary + template variables
     let summaryLines: string[] = [];
