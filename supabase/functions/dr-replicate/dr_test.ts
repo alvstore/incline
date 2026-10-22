@@ -175,3 +175,8 @@ Deno.test("scheduled jobs: mirror changed/missing definitions, remove standby-on
   assertEquals(plan.schedule.length, 2);
   assertEquals(plan.unschedule, ["SELECT cron.unschedule(10)::text"]);
 });
+
+Deno.test("the copy's own progress log is never mirrored or compared", () => {
+  const sql = specSql(["public", "private"], ["auth.users"]);
+  assert(sql.includes("NOT (n.nspname || '.' || c.relname) = ANY(ARRAY['private.dr_sync_runs']"), sql);
+});
