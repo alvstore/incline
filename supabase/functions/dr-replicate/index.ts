@@ -4,6 +4,8 @@
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
 //   { "mode": "probe" }                     connectivity + helper status
+//   { "mode": "status" }                    latest run (operators)
+//   { "mode": "queue", "kind"?: "full"|"verify" }  queue a run (same as the owner button)
 //   { "mode": "bootstrap" }                 (re)install the standby helper functions
 // Runs are queued by pg_cron (02:30 IST) or by owners via public.dr_request_sync().
 // Auth: x-dr-secret (private.dr_config token) or the service-role bearer.
@@ -90,6 +92,11 @@ Deno.serve(async (req) => {
     }
     if (mode === "status") {
       return json({ ok: true, run: JSON.parse((await readOne(primary, STATUS_SQL)) ?? "null") });
+    }
+    if (mode === "queue") {
+      const kind = body.kind === "verify" ? "verify" : "full";
+      const [row] = await primary.unsafe("SELECT private.dr_queue_run($1, 'manual', NULL)::text AS id", [kind]);
+      return json({ ok: true, runId: (row as { id: string }).id });
     }
     if (mode === "bootstrap") {
       await bootstrapStandby();
