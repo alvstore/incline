@@ -1,7 +1,7 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
@@ -27,6 +27,26 @@ export function PayrollProcessPreviewDrawer({ open, onOpenChange, item }: Payrol
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Store purchases due in this payroll month (recovered in full inside "advance")
+  const { data: storeRows = [] } = useQuery({
+    queryKey: ['payroll-store-purchases', item?.user_id, item?.run_id],
+    enabled: open && !!item?.user_id && !!item?.run_id,
+    queryFn: async () => {
+      const { data: run } = await supabase.from('payroll_runs').select('period_end').eq('id', item.run_id).maybeSingle();
+      let q = supabase.from('salary_advances')
+        .select('id, outstanding, payment_reference, carried_from, recover_in_month')
+        .eq('user_id', item.user_id).eq('source', 'pos').eq('status', 'outstanding');
+      if (run?.period_end) q = q.lte('recover_in_month', run.period_end);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const storeTotal = Math.min(
+    Number(item?.final_advance ?? 0),
+    storeRows.reduce((s, r) => s + Number(r.outstanding || 0), 0),
+  );
 
   if (!item) return null;
 
@@ -81,9 +101,21 @@ export function PayrollProcessPreviewDrawer({ open, onOpenChange, item }: Payrol
                 <span>Statutory Deductions</span>
                 <span className="font-mono font-medium">-₹{Number(item.final_deductions).toLocaleString()}</span>
               </div>
-              <div className="flex justify-between items-center text-sm text-red-600">
+              {storeTotal > 0 && (
+                <div className="text-sm text-destructive">
+                  <div className="flex justify-between items-center">
+                    <span>Store purchases</span>
+                    <span className="font-mono font-medium">-₹{storeTotal.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {storeRows.map((r) => r.payment_reference ?? 'POS').join(', ')}
+                    {storeRows.some((r) => r.carried_from) && ' · includes carried-over purchases'}
+                  </p>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-sm text-destructive">
                 <span>Advance Recovery</span>
-                <span className="font-mono font-medium">-₹{Number(item.final_advance).toLocaleString()}</span>
+                <span className="font-mono font-medium">-₹{Math.max(0, Number(item.final_advance) - storeTotal).toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-sm text-red-600">
                 <span>Penalties</span>
