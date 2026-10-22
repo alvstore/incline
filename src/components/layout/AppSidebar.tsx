@@ -130,16 +130,6 @@ export function AppSidebar({
   const location = useLocation();
   const { data: unreadCount = 0 } = useWhatsAppUnreadCount();
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const source = (e as CustomEvent<{ source?: string }>).detail?.source ?? 'bottom_more';
-      setOpen(true);
-      track('mobile_menu_opened', { source });
-    };
-    window.addEventListener(OPEN_MOBILE_MENU_EVENT, handler);
-    return () => window.removeEventListener(OPEN_MOBILE_MENU_EVENT, handler);
-  }, []);
-  useEffect(() => { setOpen(false); }, [location.pathname]);
 
   const resolvedMode: NavMode = mode ?? (collapsedProp ? 'collapsed' : 'vertical');
   const collapsed = resolvedMode === 'collapsed';
@@ -321,6 +311,17 @@ export function MobileNav() {
   const { signOut, roles } = useAuth();
   const location = useLocation();
   const { data: unreadCount = 0 } = useWhatsAppUnreadCount();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const source = (e as CustomEvent<{ source?: string }>).detail?.source ?? 'bottom_more';
+      setOpen(true);
+      track('mobile_menu_opened', { source });
+    };
+    window.addEventListener(OPEN_MOBILE_MENU_EVENT, handler);
+    return () => window.removeEventListener(OPEN_MOBILE_MENU_EVENT, handler);
+  }, []);
+  useEffect(() => { setOpen(false); }, [location.pathname]);
 
   const userRoleSet = new Set(roles.map(r => r.role));
   const { hasPt } = useMemberHasPtPackage();
