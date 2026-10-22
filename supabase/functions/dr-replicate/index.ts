@@ -637,6 +637,20 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: failed.length === 0, tables: out.length, failed: failed.length, results: out }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (rawBody?.mode === "probe-primary") {
+      const pUrl = Deno.env.get("SUPABASE_DB_URL");
+      const out: Record<string, unknown> = { hasPrimaryDbUrl: Boolean(pUrl) };
+      if (pUrl) {
+        const { default: postgres } = await import("npm:postgres@3.4.4");
+        const psql = postgres(pUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+        try {
+          const [r] = await psql`select current_user as u, (select rolsuper from pg_roles where rolname=current_user) as su, (select rolbypassrls from pg_roles where rolname=current_user) as bypass, (select count(*)::int from auth.users) as users, has_table_privilege('vault.decrypted_secrets','SELECT') as vault`;
+          out.primary = r;
+        } catch (e) { out.primaryError = (e as Error).message; } finally { await psql.end(); }
+      }
+      return new Response(JSON.stringify(out), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (rawBody?.mode === "probe" || rawBody?.mode === "apply-schema") {
       const dbUrl = Deno.env.get("DR_DB_URL");
       if (!dbUrl) throw new Error("DR_DB_URL not configured");
