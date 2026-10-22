@@ -1,751 +1,129 @@
 // supabase/functions/dr-replicate/index.ts
-// v1.5.0 — Full 1:1 mirror PRIMARY → DR with chunk-safe row sync & Edge Function parity (metadata only).
+// v2.0.0 — 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
-// Passes (controlled via body.mode):
-//   "all"      → schema-snapshot + auth + storage + rows  (default; nightly cron)
-//   "auth"     → auth.users only
-//   "storage"  → storage buckets + object bytes only (BFS, arbitrary depth)
-//   "rows"     → public.* table rows only (uses public.dr_get_replication_tables())
-//   "schema"   → real DDL dump via public.dr_dump_schema() → standby Storage
-//   "verify"   → parity diff: per-table counts + per-bucket counts/bytes
-//
-// Auth: service-role JWT, owner user JWT, OR shared secret in x-dr-secret.
+// Modes (POST JSON body):
+//   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
+//   { "mode": "probe" }                     connectivity + helper status
+//   { "mode": "status" }                    latest run (operators)
+//   { "mode": "queue", "kind"?: "full"|"verify" }  queue a run (same as the owner button)
+//   { "mode": "bootstrap" }                 (re)install the standby helper functions
+// Runs are queued by pg_cron (02:30 IST) or by owners via public.dr_request_sync().
+// Auth: x-dr-secret (private.dr_config token) or the service-role bearer.
+// Standby traffic is HTTPS only; the primary is read inside READ ONLY transactions.
 
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import postgres from "npm:postgres@3.4.4";
+import { connectPrimary, readOne } from "./primary.ts";
+import { tick } from "./run.ts";
+import { BOOTSTRAP_SQL, Standby } from "./standby.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-dr-secret",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-dr-secret",
 };
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const DR_URL = (Deno.env.get("DR_URL") ?? "https://api.joinincline.in").replace(/\/+$/, "");
 
-type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
-
-interface MirrorReport {
-  ok: boolean;
-  version: "1.6.0";
-  mode: Mode;
-  startedAt: string;
-  finishedAt?: string;
-  mirrored: {
-    schema?: { dumpedBytes: number; uploadedPath: string | null };
-    authUsers?: { listed: number; created: number; updated: number; failed: number };
-    storage?: {
-      buckets: { ensured: number; failed: number };
-      objects: { copied: number; skipped: number; failed: number; bytes: number };
-      perBucket: Array<{ bucket: string; objects: number; bytes: number; failed: number }>;
-    };
-    rows?: {
-      tables: number;
-      rowsUpserted: number;
-      tablesFailed: number;
-      perTable: Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>;
-    };
-    verify?: {
-      tables: Array<{ table: string; primary: number; standby: number; delta: number }>;
-      storage: Array<{
-        bucket: string;
-        primaryObjects: number;
-        standbyObjects: number;
-        primaryBytes: number;
-        standbyBytes: number;
-        deltaObjects: number;
-        deltaBytes: number;
-      }>;
-      allInSync: boolean;
-    };
-  };
-  errors: string[];
-}
-
-async function getOrCreateToken(primary: SupabaseClient): Promise<string> {
-  const { data, error } = await primary.rpc("dr_get_or_create_token");
-  if (error) throw new Error(`dr_get_or_create_token: ${error.message}`);
-  if (!data || typeof data !== "string") throw new Error("dr_get_or_create_token returned no token");
-  return data;
-}
-
-// Self-hosted storage can lack the ON CONFLICT target for upserts (42P10):
-// fall back to remove + plain upload so replacement still works.
-async function drUpload(
-  dr: SupabaseClient,
-  bucket: string,
-  path: string,
-  body: Blob,
-  contentType: string,
-): Promise<{ error: { message: string } | null }> {
-  const first = await dr.storage.from(bucket).upload(path, body, { upsert: true, contentType });
-  if (!first.error) return { error: null };
-  const msg = first.error.message ?? "";
-  if (!/42P10|database error|already exists|Duplicate/i.test(msg)) return { error: first.error };
-  await dr.storage.from(bucket).remove([path]);
-  const second = await dr.storage.from(bucket).upload(path, body, { upsert: false, contentType });
-  return { error: second.error };
-}
-
-// ── Auth users ────────────────────────────────────────────────────────────────
-
-async function syncAuthUsers(
-  primary: SupabaseClient,
-  dr: SupabaseClient,
-  report: MirrorReport,
-): Promise<void> {
-  const stat = { listed: 0, created: 0, updated: 0, failed: 0 };
-  let page = 1;
-  const perPage = 1000;
-  while (true) {
-    const { data, error } = await primary.auth.admin.listUsers({ page, perPage });
-    if (error) {
-      report.errors.push(`auth.list p${page}: ${error.message}`);
-      break;
-    }
-    const users = data?.users ?? [];
-    if (users.length === 0) break;
-    stat.listed += users.length;
-
-    for (const u of users) {
-      try {
-        const { error: createErr } = await dr.auth.admin.createUser({
-          id: u.id,
-          email: u.email ?? undefined,
-          phone: u.phone ?? undefined,
-          email_confirm: !!u.email_confirmed_at,
-          phone_confirm: !!u.phone_confirmed_at,
-          user_metadata: u.user_metadata ?? {},
-          app_metadata: u.app_metadata ?? {},
-        });
-        if (createErr) {
-          const msg = createErr.message?.toLowerCase() ?? "";
-          if (msg.includes("already") || msg.includes("duplicate") || msg.includes("exists")) {
-            const { error: updErr } = await dr.auth.admin.updateUserById(u.id, {
-              email: u.email ?? undefined,
-              phone: u.phone ?? undefined,
-              user_metadata: u.user_metadata ?? {},
-              app_metadata: u.app_metadata ?? {},
-            });
-            if (updErr) { stat.failed++; report.errors.push(`user ${u.id}: ${updErr.message}`); }
-            else stat.updated++;
-          } else {
-            stat.failed++;
-            report.errors.push(`user ${u.id}: ${createErr.message}`);
-          }
-        } else {
-          stat.created++;
-        }
-      } catch (e) {
-        stat.failed++;
-        report.errors.push(`user ${u.id}: ${(e as Error).message}`);
-      }
-    }
-    if (users.length < perPage) break;
-    page++;
+/** Install the two standby helpers over the direct DB port (function code only, no data). */
+async function bootstrapStandby(): Promise<void> {
+  const raw = Deno.env.get("DR_DB_URL");
+  if (!raw) throw new Error("DR_DB_URL not configured");
+  const u = new URL(raw);
+  if (u.hostname !== new URL(DR_URL).hostname) throw new Error("refusing: DR_DB_URL is not the standby host");
+  u.searchParams.delete("sslmode");
+  const sql = postgres(u.toString(), { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+  try {
+    await sql.unsafe(BOOTSTRAP_SQL);
+  } finally {
+    await sql.end();
   }
-  report.mirrored.authUsers = stat;
 }
 
-// ── Storage: BFS walker of arbitrary depth ────────────────────────────────────
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
-interface StorageItem {
-  name: string;
-  id: string | null;
-  metadata: { size?: number; mimetype?: string } | null;
-}
-
-async function listPrefix(
-  primaryUrl: string,
-  serviceRoleKey: string,
-  bucket: string,
-  prefix: string,
-): Promise<StorageItem[]> {
-  // Paginate. Storage REST default returns up to 1000 items.
-  const PAGE = 1000;
-  let offset = 0;
-  const out: StorageItem[] = [];
-  while (true) {
-    const r = await fetch(`${primaryUrl}/storage/v1/object/list/${bucket}`, {
+/** Start the next worker run (fire-and-forget: the worker answers 202 immediately). */
+async function wakeSelf(primaryUrl: string, token: string): Promise<void> {
+  try {
+    const r = await fetch(`${primaryUrl.replace(/\/+$/, "")}/functions/v1/dr-replicate`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
-        apikey: serviceRoleKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        limit: PAGE,
-        offset,
-        prefix,
-        sortBy: { column: "name", order: "asc" },
-      }),
+      headers: { "Content-Type": "application/json", "x-dr-secret": token },
+      body: JSON.stringify({ mode: "tick" }),
+      signal: AbortSignal.timeout(20_000),
     });
-    if (!r.ok) break;
-    const items = (await r.json()) as StorageItem[];
-    out.push(...items);
-    if (items.length < PAGE) break;
-    offset += PAGE;
+    await r.body?.cancel().catch(() => {});
+  } catch (e) {
+    // The hourly watchdog restarts a stalled copy.
+    console.error("dr-replicate wake failed", (e as Error).message);
   }
-  return out;
 }
 
-async function walkBucket(
-  primaryUrl: string,
-  serviceRoleKey: string,
-  bucket: string,
-): Promise<Array<{ path: string; size: number; mimetype?: string }>> {
-  const files: Array<{ path: string; size: number; mimetype?: string }> = [];
-  const queue: string[] = [""]; // BFS over prefixes
-  const seenPrefix = new Set<string>([""]);
-
-  while (queue.length > 0) {
-    const prefix = queue.shift()!;
-    const items = await listPrefix(primaryUrl, serviceRoleKey, bucket, prefix);
-    for (const item of items) {
-      // Folders: id is null AND metadata is null
-      const isFolder = item.id === null && item.metadata === null;
-      if (isFolder) {
-        const childPrefix = prefix ? `${prefix}${item.name}/` : `${item.name}/`;
-        if (!seenPrefix.has(childPrefix)) {
-          seenPrefix.add(childPrefix);
-          queue.push(childPrefix);
-        }
-      } else if (item.metadata?.size != null) {
-        const fullPath = prefix ? `${prefix}${item.name}` : item.name;
-        files.push({
-          path: fullPath,
-          size: item.metadata.size,
-          mimetype: item.metadata.mimetype,
-        });
-      }
-    }
-  }
-  return files;
-}
-
-async function syncStorage(
-  primary: SupabaseClient,
-  dr: SupabaseClient,
-  primaryUrl: string,
-  serviceRoleKey: string,
-  report: MirrorReport,
-): Promise<void> {
-  const stat = {
-    buckets: { ensured: 0, failed: 0 },
-    objects: { copied: 0, skipped: 0, failed: 0, bytes: 0 },
-    perBucket: [] as Array<{ bucket: string; objects: number; bytes: number; failed: number }>,
-  };
-
-  const { data: buckets, error: bErr } = await primary.storage.listBuckets();
-  if (bErr) {
-    report.errors.push(`list buckets: ${bErr.message}`);
-    report.mirrored.storage = stat;
-    return;
-  }
-
-  const { data: drBucketsAll } = await dr.storage.listBuckets();
-  const drBucketNames = new Set((drBucketsAll ?? []).map((b) => b.name));
-
-  for (const b of buckets ?? []) {
-    if (!drBucketNames.has(b.name)) {
-      const { error: cErr } = await dr.storage.createBucket(b.name, {
-        public: b.public,
-        fileSizeLimit: b.file_size_limit ?? undefined,
-        allowedMimeTypes: b.allowed_mime_types ?? undefined,
-      });
-      if (cErr) {
-        stat.buckets.failed++;
-        report.errors.push(`bucket ${b.name}: ${cErr.message}`);
-        continue;
-      }
-    }
-    stat.buckets.ensured++;
-
-    const files = await walkBucket(primaryUrl, serviceRoleKey, b.name);
-    let bucketObjs = 0;
-    let bucketBytes = 0;
-    let bucketFailed = 0;
-
-    for (const f of files) {
-      try {
-        const dl = await primary.storage.from(b.name).download(f.path);
-        if (dl.error || !dl.data) {
-          stat.objects.failed++;
-          bucketFailed++;
-          report.errors.push(`dl ${b.name}/${f.path}: ${dl.error?.message ?? "no body"}`);
-          continue;
-        }
-        const up = await drUpload(dr, b.name, f.path, dl.data, f.mimetype ?? dl.data.type);
-        if (up.error) {
-          stat.objects.failed++;
-          bucketFailed++;
-          report.errors.push(`up ${b.name}/${f.path}: ${up.error.message}`);
-        } else {
-          stat.objects.copied++;
-          stat.objects.bytes += f.size;
-          bucketObjs++;
-          bucketBytes += f.size;
-        }
-      } catch (e) {
-        stat.objects.failed++;
-        bucketFailed++;
-        report.errors.push(`${b.name}/${f.path}: ${(e as Error).message}`);
-      }
-    }
-    stat.perBucket.push({ bucket: b.name, objects: bucketObjs, bytes: bucketBytes, failed: bucketFailed });
-  }
-  report.mirrored.storage = stat;
-}
-
-// ── Row mirror ────────────────────────────────────────────────────────────────
-
-interface RowSliceOpts {
-  from?: number;      // index into the replication table list (inclusive)
-  count?: number;     // how many tables to process in this call
-  only?: string[];    // explicit table subset
-  oneWay?: boolean;   // primary → standby only (no standby → primary merge)
-}
-
-async function syncRows(
-  primary: SupabaseClient,
-  dr: SupabaseClient,
-  report: MirrorReport,
-  opts: RowSliceOpts = {},
-): Promise<void> {
-  const stat = {
-    tables: 0,
-    rowsUpserted: 0,
-    tablesFailed: 0,
-    perTable: [] as Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>,
-  };
-
-  const { data: allTables, error: tErr } = await primary.rpc("dr_get_replication_tables");
-  if (tErr || !Array.isArray(allTables)) {
-    report.errors.push(`dr_get_replication_tables: ${tErr?.message ?? "no data"}`);
-    report.mirrored.rows = stat;
-    return;
-  }
-
-  // Slice the table list so a single invocation always finishes inside the
-  // edge-function wall-clock limit. Callers drive the cursor.
-  let tables = allTables as Array<{ table_name: string; has_id_pk: boolean }>;
-  if (opts.only?.length) {
-    const wanted = new Set(opts.only);
-    tables = tables.filter((t) => wanted.has(t.table_name));
-  } else if (typeof opts.from === "number" || typeof opts.count === "number") {
-    const from = Math.max(0, opts.from ?? 0);
-    const count = Math.max(1, opts.count ?? tables.length);
-    tables = tables.slice(from, from + count);
-  }
-  (report as any).slice = {
-    totalTables: (allTables as unknown[]).length,
-    from: opts.from ?? 0,
-    processing: tables.length,
-    oneWay: opts.oneWay === true,
-  };
-
-  const PAGE = 500;
-
-  const countRows = async (client: SupabaseClient, table: string): Promise<number> => {
-    const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
-    if (error) throw new Error(error.message);
-    return count ?? 0;
-  };
-
-  const withRetry = async <T,>(label: string, work: () => Promise<T>): Promise<T> => {
-    let last: unknown;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try { return await work(); }
-      catch (e) {
-        last = e;
-        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
-      }
-    }
-    throw new Error(`${label}: ${(last as Error)?.message ?? String(last)}`);
-  };
-
-  const copyRows = async (
-    source: SupabaseClient,
-    target: SupabaseClient,
-    table: string,
-    hasId: boolean,
-    overwriteExisting: boolean,
-  ): Promise<number> => {
-    const sourceCount = await countRows(source, table);
-    let copied = 0;
-    for (let offset = 0; offset < sourceCount; offset += PAGE) {
-      const { data, error } = await withRetry(`read ${table} ${offset}`, () => {
-        const query = source.from(table).select("*").range(offset, offset + PAGE - 1);
-        return hasId ? query.order("id", { ascending: true }) : query;
-      });
-      if (error) throw new Error(error.message);
-      const rows = data ?? [];
-      if (rows.length === 0) break;
-
-      const upsertOpts = hasId
-        ? { onConflict: "id" as const, ignoreDuplicates: !overwriteExisting }
-        : { ignoreDuplicates: !overwriteExisting };
-      const { error: upErr } = await withRetry(`upsert ${table} ${offset}`, () =>
-        target.from(table).upsert(rows, upsertOpts),
-      );
-      if (upErr) throw new Error(upErr.message);
-      copied += rows.length;
-    }
-    return copied;
-  };
-
-  // Strictly one-way: the standby must NEVER write back into production.
-  // Rows are overwritten (so edits propagate) and standby-only rows are deleted.
-  const listIds = async (client: SupabaseClient, table: string): Promise<Set<string>> => {
-    const ids = new Set<string>();
-    const ID_PAGE = 5000;
-    for (let offset = 0; ; offset += ID_PAGE) {
-      const { data, error } = await withRetry(`ids ${table} ${offset}`, () =>
-        client.from(table).select("id").order("id", { ascending: true }).range(offset, offset + ID_PAGE - 1),
-      );
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []) as Array<{ id: string | number }>;
-      for (const r of rows) ids.add(String(r.id));
-      if (rows.length < ID_PAGE) break;
-    }
-    return ids;
-  };
-
-  for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
-    const table = row.table_name;
-    const hasId = row.has_id_pk;
-    let perTableRows = 0;
-    let lastErr: string | undefined;
-
-    try {
-      perTableRows += await copyRows(primary, dr, table, hasId, true);
-      if (hasId) {
-        const [pIds, sIds] = await Promise.all([listIds(primary, table), listIds(dr, table)]);
-        const extra = [...sIds].filter((id) => !pIds.has(id));
-        for (let i = 0; i < extra.length; i += 200) {
-          const { error } = await dr.from(table).delete().in("id", extra.slice(i, i + 200));
-          if (error) throw new Error(`delete extras: ${error.message}`);
-        }
-      }
-      const primaryCount = await countRows(primary, table);
-      const standbyCount = await countRows(dr, table);
-      // Live tables keep growing during the copy; small positive lag is tolerated.
-      if (standbyCount > primaryCount || (!hasId && standbyCount !== primaryCount)) {
-        throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
-      }
-    } catch (e) {
-      lastErr = (e as Error).message;
-    }
-
-    stat.tables++;
-    stat.rowsUpserted += perTableRows;
-    if (lastErr) {
-      stat.tablesFailed++;
-      report.errors.push(`rows ${table}: ${lastErr}`);
-    }
-    stat.perTable.push({ table, rows: perTableRows, failed: lastErr ? 1 : 0, error: lastErr });
-  }
-
-  report.mirrored.rows = stat;
-}
-
-// ── Schema snapshot via real RPC ──────────────────────────────────────────────
-
-async function syncSchemaSnapshot(
-  primary: SupabaseClient,
-  dr: SupabaseClient,
-  report: MirrorReport,
-): Promise<void> {
-  const { data, error } = await primary.rpc("dr_dump_schema");
-  if (error || typeof data !== "string") {
-    report.errors.push(`dr_dump_schema: ${error?.message ?? "no data"}`);
-    report.mirrored.schema = { dumpedBytes: 0, uploadedPath: null };
-    return;
-  }
-  const dump = data;
-
-  const bucketId = "dr-snapshots";
-  const { data: bks } = await dr.storage.listBuckets();
-  if (!(bks ?? []).some((b) => b.name === bucketId)) {
-    const { error: cErr } = await dr.storage.createBucket(bucketId, { public: false });
-    if (cErr) report.errors.push(`create bucket ${bucketId}: ${cErr.message}`);
-  }
-
-  const dateKey = new Date().toISOString().slice(0, 10);
-  const objectPath = `${dateKey}.sql`;
-  const blob = new Blob([dump], { type: "text/plain" });
-  const { error: upErr } = await drUpload(dr, bucketId, objectPath, blob, "text/plain");
-
-  report.mirrored.schema = {
-    dumpedBytes: dump.length,
-    uploadedPath: upErr ? null : `${bucketId}/${objectPath}`,
-  };
-  if (upErr) report.errors.push(`schema upload: ${upErr.message}`);
-}
-
-// ── Verify: parity diff ───────────────────────────────────────────────────────
-
-async function verifyParity(
-  primary: SupabaseClient,
-  dr: SupabaseClient,
-  primaryUrl: string,
-  serviceRoleKey: string,
-  drServiceKey: string,
-  report: MirrorReport,
-): Promise<void> {
-  const tables: Array<{ table: string; primary: number; standby: number; delta: number }> = [];
-  const storage: Array<{
-    bucket: string; primaryObjects: number; standbyObjects: number;
-    primaryBytes: number; standbyBytes: number; deltaObjects: number; deltaBytes: number;
-  }> = [];
-
-  // Table counts
-  const { data: pCounts, error: pErr } = await primary.rpc("dr_table_counts");
-  const { data: sCounts, error: sErr } = await dr.rpc("dr_table_counts");
-  if (pErr) report.errors.push(`primary dr_table_counts: ${pErr.message}`);
-  if (sErr) report.errors.push(`standby dr_table_counts: ${sErr.message}`);
-
-  const sMap = new Map<string, number>();
-  for (const r of (sCounts ?? []) as Array<{ table_name: string; row_count: number }>) {
-    sMap.set(r.table_name, Number(r.row_count));
-  }
-  for (const r of (pCounts ?? []) as Array<{ table_name: string; row_count: number }>) {
-    const p = Number(r.row_count);
-    const s = sMap.get(r.table_name) ?? 0;
-    tables.push({ table: r.table_name, primary: p, standby: s, delta: p - s });
-  }
-
-  // Storage: walk both sides
-  const { data: pBuckets } = await primary.storage.listBuckets();
-  for (const b of pBuckets ?? []) {
-    const pFiles = await walkBucket(primaryUrl, serviceRoleKey, b.name);
-    const sFiles = await walkBucket(DR_URL, drServiceKey, b.name);
-    const pBytes = pFiles.reduce((a, f) => a + f.size, 0);
-    const sBytes = sFiles.reduce((a, f) => a + f.size, 0);
-    storage.push({
-      bucket: b.name,
-      primaryObjects: pFiles.length,
-      standbyObjects: sFiles.length,
-      primaryBytes: pBytes,
-      standbyBytes: sBytes,
-      deltaObjects: pFiles.length - sFiles.length,
-      deltaBytes: pBytes - sBytes,
-    });
-  }
-
-  const allInSync =
-    tables.every((t) => t.delta === 0) &&
-    storage.every((s) => s.deltaObjects === 0 && s.deltaBytes === 0);
-
-  report.mirrored.verify = { tables, storage, allInSync };
-}
-
-// ── HTTP handler ──────────────────────────────────────────────────────────────
+const STATUS_SQL = `SELECT coalesce((SELECT to_jsonb(x) FROM (SELECT id, kind, trigger, status, step, report, ticks, created_at,
+  started_at, heartbeat_at, finished_at, lease_until FROM private.dr_sync_runs ORDER BY created_at DESC LIMIT 1) x), 'null'::jsonb)::text`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
+  const primary = connectPrimary();
+  let background = false;
   try {
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const body = (await req.json().catch(() => ({}))) as { mode?: string; budgetMs?: number; wait?: boolean; kind?: string };
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const primaryUrl = Deno.env.get("SUPABASE_URL")!;
-    const primary = createClient(primaryUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const drKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
+    if (!drKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
+    if (new URL(DR_URL).hostname === new URL(primaryUrl).hostname) throw new Error("refusing: standby URL points at the live project");
 
-    const auth = req.headers.get("authorization") ?? "";
-    const sharedSecret = req.headers.get("x-dr-secret") ?? "";
-    const isServiceJwt = auth === `Bearer ${serviceRoleKey}`;
-    let isSharedSecret = false;
-    if (sharedSecret.length > 0) {
-      const expected = await getOrCreateToken(primary);
-      isSharedSecret = sharedSecret === expected;
+    const token = await readOne(primary, "SELECT token FROM private.dr_config WHERE id = true");
+    const secret = req.headers.get("x-dr-secret") ?? "";
+    const isService = (req.headers.get("authorization") ?? "") === `Bearer ${serviceKey}`;
+    if (!isService && !(token && secret.length >= 32 && secret === token)) return json({ error: "Unauthorized" }, 401);
+
+    const standby = new Standby(DR_URL, drKey);
+    const mode = body.mode ?? "tick";
+
+    if (mode === "probe") {
+      const [ready, storage] = await Promise.all([
+        standby.helpersReady().catch((e) => `error: ${(e as Error).message}`),
+        fetch(`${DR_URL}/storage/v1/version`).then((r) => r.text()).catch(() => null),
+      ]);
+      const [primaryUser] = await primary`select current_user as u`;
+      return json({ ok: true, primary: primaryUser.u, standbyHelpers: ready, standbyStorageVersion: storage });
     }
-
-    let isOwnerUser = false;
-    if (!isServiceJwt && !isSharedSecret && auth.startsWith("Bearer ")) {
-      const token = auth.replace("Bearer ", "");
-      const userClient = createClient(primaryUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-        auth: { persistSession: false },
-      });
-      const { data: userData } = await userClient.auth.getUser(token);
-      const uid = userData?.user?.id;
-      if (uid) {
-        const { data: hasOwner } = await primary.rpc("has_role", {
-          _user_id: uid, _role: "owner",
-        });
-        isOwnerUser = Boolean(hasOwner);
-      }
+    if (mode === "status") {
+      return json({ ok: true, run: JSON.parse((await readOne(primary, STATUS_SQL)) ?? "null") });
     }
-
-    if (!isServiceJwt && !isSharedSecret && !isOwnerUser) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (mode === "queue") {
+      const kind = body.kind === "verify" ? "verify" : "full";
+      const [row] = await primary.unsafe("SELECT private.dr_queue_run($1, 'manual', NULL)::text AS id", [kind]);
+      return json({ ok: true, runId: (row as { id: string }).id });
     }
-
-    // Schema bootstrap for an empty standby: direct Postgres via DR_DB_URL.
-    const rawBody = req.headers.get("content-type")?.includes("application/json") ? await req.clone().json().catch(() => ({})) : {};
-    if (rawBody?.mode === "rows-pg") {
-      // Row mirror straight into standby Postgres with triggers + FK checks off
-      // (session_replication_role=replica) so load order and standby-side
-      // business triggers can't reject a faithful copy. One-way only.
-      const dbUrl = Deno.env.get("DR_DB_URL");
-      if (!dbUrl) throw new Error("DR_DB_URL not configured");
-      if (new URL(dbUrl).hostname !== new URL(DR_URL).hostname) throw new Error("refusing: DR_DB_URL is not the standby host");
-      const only: string[] = Array.isArray(rawBody.only) ? rawBody.only.map(String) : [];
-      const { data: allTables, error: tErr } = await primary.rpc("dr_get_replication_tables");
-      if (tErr) throw new Error(tErr.message);
-      const tables = (allTables as Array<{ table_name: string; has_id_pk: boolean }>).filter((t) => !only.length || only.includes(t.table_name));
-      const { default: postgres } = await import("npm:postgres@3.4.4");
-      const sql = postgres(dbUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
-      const out: Array<{ table: string; rows: number; deleted: number; error?: string }> = [];
-      try {
-        for (const t of tables) {
-          const name = t.table_name.replace(/"/g, "");
-          let rows = 0, deleted = 0;
-          try {
-            await sql.begin(async (tx: any) => {
-              await tx.unsafe("SET LOCAL session_replication_role = replica");
-              const keep: string[] = [];
-              if (!t.has_id_pk) await tx.unsafe(`DELETE FROM public."${name}"`);
-              for (let off = 0; ; off += 500) {
-                let q = primary.from(name).select("*").range(off, off + 499);
-                if (t.has_id_pk) q = q.order("id", { ascending: true });
-                const { data, error } = await q;
-                if (error) throw new Error(error.message);
-                const page = (data ?? []) as Array<Record<string, unknown>>;
-                if (!page.length) break;
-                if (t.has_id_pk) {
-                  const ids = page.map((r) => String(r.id));
-                  keep.push(...ids);
-                  await tx.unsafe(`DELETE FROM public."${name}" WHERE id::text = ANY($1::text[])`, [ids]);
-                }
-                await tx.unsafe(`INSERT INTO public."${name}" SELECT * FROM json_populate_recordset(null::public."${name}", $1::json)`, [JSON.stringify(page)]);
-                rows += page.length;
-                if (page.length < 500) break;
-              }
-              if (t.has_id_pk) {
-                const r = await tx.unsafe(`DELETE FROM public."${name}" WHERE NOT (id::text = ANY($1::text[]))`, [keep]);
-                deleted = r.count ?? 0;
-              }
-            });
-          } catch (e) {
-            out.push({ table: name, rows, deleted, error: (e as Error).message });
-            continue;
-          }
-          out.push({ table: name, rows, deleted });
-        }
-      } finally { await sql.end(); }
-      const failed = out.filter((o) => o.error);
-      return new Response(JSON.stringify({ ok: failed.length === 0, tables: out.length, failed: failed.length, results: out }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (mode === "bootstrap") {
+      await bootstrapStandby();
+      return json({ ok: true, helpers: await standby.helpersReady() });
     }
-
-    if (rawBody?.mode === "probe-primary") {
-      const pUrl = Deno.env.get("SUPABASE_DB_URL");
-      const out: Record<string, unknown> = { hasPrimaryDbUrl: Boolean(pUrl) };
-      if (pUrl) {
-        const { default: postgres } = await import("npm:postgres@3.4.4");
-        const psql = postgres(pUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
-        try {
-          const [r] = await psql`select current_user as u, (select rolsuper from pg_roles where rolname=current_user) as su, (select rolbypassrls from pg_roles where rolname=current_user) as bypass, (select count(*)::int from auth.users) as users, has_table_privilege('vault.decrypted_secrets','SELECT') as vault`;
-          out.primary = r;
-        } catch (e) { out.primaryError = (e as Error).message; } finally { await psql.end(); }
-      }
-      return new Response(JSON.stringify(out), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (mode === "tick") {
+      const budget = Math.max(15_000, Math.min(130_000, Number(body.budgetMs ?? 100_000)));
+      const work = async () => {
+        const result = await tick({ primary, standby, primaryUrl, serviceKey, bootstrap: bootstrapStandby }, budget);
+        // Keep going while there is work: each run hands over to a fresh worker.
+        if (result.state === "progress" && token) await wakeSelf(primaryUrl, token);
+        return result;
+      };
+      if (body.wait === true || typeof EdgeRuntime === "undefined") return json({ ok: true, ...(await work()) });
+      background = true;
+      EdgeRuntime.waitUntil(
+        work()
+          .catch((e) => console.error("dr-replicate tick", (e as Error).message))
+          .finally(() => primary.end({ timeout: 5 }).catch(() => {})),
+      );
+      return json({ ok: true, accepted: true }, 202);
     }
-
-    if (rawBody?.mode === "probe" || rawBody?.mode === "apply-schema") {
-      const dbUrl = Deno.env.get("DR_DB_URL");
-      if (!dbUrl) throw new Error("DR_DB_URL not configured");
-      const host = new URL(dbUrl).hostname;
-      const { default: postgres } = await import("npm:postgres@3.4.4");
-      const sql = postgres(dbUrl, { max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
-      try {
-        const [{ n }] = await sql`select count(*)::int as n from pg_tables where schemaname='public'`;
-        if (rawBody.mode === "probe" && rawBody.grants === true) {
-          // Standby only: service_role must reach every table/function the mirror uses.
-          await sql.unsafe(`GRANT USAGE ON SCHEMA public TO service_role;
-            GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
-            GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
-            GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
-            NOTIFY pgrst, 'reload schema';`);
-        }
-        if (rawBody.mode === "probe") {
-          return new Response(JSON.stringify({ ok: true, host, publicTables: n }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        if (!host.endsWith("joinincline.in") && host !== new URL(DR_URL).hostname) throw new Error(`refusing: DR_DB_URL host ${host} is not the standby`);
-        const { data: dump, error } = await primary.rpc("dr_dump_schema");
-        if (error || typeof dump !== "string") throw new Error(`dr_dump_schema: ${error?.message}`);
-        const errors: string[] = [];
-        // Statement-by-statement so one incompatible object doesn't abort the rest.
-        const stmts = dump.split(/;\s*\n(?=(?:CREATE|ALTER|GRANT|REVOKE|COMMENT|DO|SET|SELECT|INSERT|DROP|--))/i);
-        const from = Number(rawBody.from ?? 0), count = Number(rawBody.count ?? 300);
-        const started = Date.now();
-        let i = from;
-        for (; i < Math.min(stmts.length, from + count) && Date.now() - started < 110_000; i++) {
-          const q = stmts[i].trim(); if (!q) continue;
-          try { await sql.unsafe(q.endsWith(";") ? q : q + ";"); } catch (e) { errors.push(`${(e as Error).message} :: ${q.slice(0, 90)}`); }
-        }
-        await sql.unsafe("NOTIFY pgrst, 'reload schema'");
-        const [{ n: after }] = await sql`select count(*)::int as n from pg_tables where schemaname='public'`;
-        return new Response(JSON.stringify({ ok: errors.length === 0, host, before: n, after, statements: stmts.length, next: i < stmts.length ? i : null, failed: errors.length, errors: errors.slice(0, 40) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      } finally { await sql.end(); }
-    }
-
-    const drServiceKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
-    if (!drServiceKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
-    const dr = createClient(DR_URL, drServiceKey, { auth: { persistSession: false } });
-
-    // Handle optional JSON body
-    let body: any = {};
-    if (req.headers.get("content-type")?.includes("application/json")) {
-      try {
-        body = await req.json();
-      } catch (e) {
-        console.error("Failed to parse body:", e.message);
-      }
-    }
-
-    const mode: Mode | "functions" = (body?.mode as Mode) ?? "all";
-
-    const report: MirrorReport = {
-      ok: true,
-      version: "1.6.0",
-      mode,
-      startedAt: new Date().toISOString(),
-      mirrored: {},
-      errors: [],
-    };
-
-    if (mode === "schema" || mode === "all") {
-      await syncSchemaSnapshot(primary, dr, report);
-    }
-    if (mode === "auth" || mode === "all") {
-      await syncAuthUsers(primary, dr, report);
-    }
-    if (mode === "rows" || mode === "all") {
-      await syncRows(primary, dr, report, {
-        from: typeof body?.from === "number" ? body.from : undefined,
-        count: typeof body?.count === "number" ? body.count : undefined,
-        only: Array.isArray(body?.only) ? body.only.map(String) : undefined,
-        oneWay: body?.one_way === true,
-      });
-    }
-    if (mode === "storage" || mode === "all") {
-      await syncStorage(primary, dr, primaryUrl, serviceRoleKey, report);
-    }
-    if (mode === "verify") {
-      await verifyParity(primary, dr, primaryUrl, serviceRoleKey, drServiceKey, report);
-    }
-
-    report.finishedAt = new Date().toISOString();
-    report.ok = report.errors.length === 0;
-
-    return new Response(JSON.stringify(report, null, 2), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: `Mode "${mode}" was retired — copies now run as resumable steps from the Disaster Recovery card.` }, 410);
   } catch (e) {
-    return new Response(
-      JSON.stringify({ ok: false, error: (e as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    console.error("dr-replicate", (e as Error).message);
+    return json({ ok: false, error: (e as Error).message }, 500);
+  } finally {
+    if (!background) await primary.end({ timeout: 5 }).catch(() => {});
   }
 });

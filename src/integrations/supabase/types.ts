@@ -17169,6 +17169,8 @@ export type Database = {
         }[]
       }
       dr_is_operational: { Args: never; Returns: boolean }
+      dr_request_sync: { Args: { p_kind?: string }; Returns: Json }
+      dr_sync_status: { Args: never; Returns: Json }
       dr_table_counts: {
         Args: never
         Returns: {
