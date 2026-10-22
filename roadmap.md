@@ -3,8 +3,9 @@
 - [x] Pause all standby scheduled jobs (they ran attendance/membership jobs on the copy) and mirror live jobs as paused definitions (18 paused, 16 live jobs mirrored paused).
 - [x] Resumable copy engine: structure, sign-in users, all rows (chunk fingerprints, deletes included), counters, buckets + files (large files resumable).
 - [x] Nightly 02:30 IST copy, wakes instantly when queued, chains itself while working, hourly watchdog restarts a stalled run; Copy now / Check match on the owner card with live progress.
-- [ ] Second full copy (files included) + independent parity check (structure diff = 0, per-table row fingerprints, users, files/bytes per bucket).
-- [ ] Find tables re-copied on every run although unchanged (2nd run rewrote ~100k rows) and make their fingerprints stable.
+- [x] Three full copies + independent parity check: structure/FK/index/trigger/policy/realtime fingerprints identical; 262 tables matched at copy time (incl. sign-in users); later diffs only rows changed after the copy; large files byte-identical (MD5); owner/non-owner access verified.
+- [x] Repeat copies only re-send changed chunks (3rd full copy: under 2 minutes); copy's own progress log excluded from mirroring.
+- [ ] Owner action: raise the standby storage upload size limit (3 files of 72–193 MB refused with 413); the next copy adds them automatically.
 - [ ] Owner action: standby database connection has no encryption (TLS) — enable on the standby server; upgrade standby storage service to v1.80.2+ then drop the compat index.
 - [ ] Definer-guard CI check flags 3 older migrations (0078/0081 generate_pt_commission, 0087 get_registration_geofence) by file markers only; live permissions are correct (service-role only / intended public lookup).
 

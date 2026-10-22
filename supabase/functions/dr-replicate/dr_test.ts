@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { aclStatements, loadModeDrops, planSchema, type Snapshot } from "./catalog.ts";
 import { planJobs } from "./jobs.ts";
-import { chunkRowCount, rangeHashSql, type TableSpec } from "./rows.ts";
+import { chunkRowCount, rangeHashSql, specSql, type TableSpec } from "./rows.ts";
 import { rangePredicate } from "./sqlText.ts";
 import { metaFixSql, type Obj, planObjects } from "./storage.ts";
 
@@ -174,4 +174,9 @@ Deno.test("scheduled jobs: mirror changed/missing definitions, remove standby-on
   const plan = planJobs(p, s);
   assertEquals(plan.schedule.length, 2);
   assertEquals(plan.unschedule, ["SELECT cron.unschedule(10)::text"]);
+});
+
+Deno.test("the copy's own progress log is never mirrored or compared", () => {
+  const sql = specSql(["public", "private"], ["auth.users"]);
+  assert(sql.includes("NOT (n.nspname || '.' || c.relname) = ANY(ARRAY['private.dr_sync_runs']"), sql);
 });
