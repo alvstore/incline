@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from 'sonner';
 import { recordPayment, voidPayment } from '@/services/billingService';
 import { useAuth } from '@/contexts/AuthContext';
+import { DiscountsDuesTab } from '@/components/store/DiscountsDuesTab';
 
 export default function StorePage() {
   const { selectedBranch } = useBranchContext();
@@ -387,9 +388,14 @@ export default function StorePage() {
                   <ShoppingBag className="h-4 w-4" />
                   Store Orders ({memberStoreOrders.length})
                 </TabsTrigger>
+                <TabsTrigger value="discounts">Discounts &amp; dues</TabsTrigger>
                 <TabsTrigger value="products">Products</TabsTrigger>
                 <TabsTrigger value="banners">Ad Banners</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="discounts" className="mt-4">
+                <DiscountsDuesTab branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : null} />
+              </TabsContent>
 
               <TabsContent value="pos-history" className="mt-4">
                 <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">

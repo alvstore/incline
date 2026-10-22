@@ -11032,50 +11032,74 @@ export type Database = {
       pos_sales: {
         Row: {
           branch_id: string
+          buyer_type: string
           created_at: string
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
+          discount_by: string | null
+          discount_reason: string | null
           id: string
           invoice_id: string | null
           items: Json
+          manual_discount: number
           member_id: string | null
+          original_amount: number | null
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_status: string
+          salary_advance_id: string | null
           sale_date: string
+          settlement: string | null
           sold_by: string | null
+          staff_user_id: string | null
           total_amount: number
         }
         Insert: {
           branch_id: string
+          buyer_type?: string
           created_at?: string
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          discount_by?: string | null
+          discount_reason?: string | null
           id?: string
           invoice_id?: string | null
           items?: Json
+          manual_discount?: number
           member_id?: string | null
+          original_amount?: number | null
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_status?: string
+          salary_advance_id?: string | null
           sale_date?: string
+          settlement?: string | null
           sold_by?: string | null
+          staff_user_id?: string | null
           total_amount: number
         }
         Update: {
           branch_id?: string
+          buyer_type?: string
           created_at?: string
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          discount_by?: string | null
+          discount_reason?: string | null
           id?: string
           invoice_id?: string | null
           items?: Json
+          manual_discount?: number
           member_id?: string | null
+          original_amount?: number | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_status?: string
+          salary_advance_id?: string | null
           sale_date?: string
+          settlement?: string | null
           sold_by?: string | null
+          staff_user_id?: string | null
           total_amount?: number
         }
         Relationships: [
@@ -17103,6 +17127,30 @@ export type Database = {
         }
         Returns: Json
       }
+      create_pos_sale_audited: {
+        Args: {
+          p_branch_id: string
+          p_buyer_type?: string
+          p_coupon_discount?: number
+          p_discount_code?: string
+          p_discount_code_id?: string
+          p_discount_reason?: string
+          p_guest_email?: string
+          p_guest_name?: string
+          p_guest_phone?: string
+          p_idempotency_key?: string
+          p_items: Json
+          p_manual_discount?: number
+          p_member_id: string
+          p_payment_method: string
+          p_settlement?: string
+          p_slip_url?: string
+          p_staff_user_id?: string
+          p_transaction_id?: string
+          p_wallet_applied?: number
+        }
+        Returns: Json
+      }
       create_system_notification: {
         Args: {
           p_linked_entity_id?: string
@@ -19100,6 +19148,16 @@ export type Database = {
           member_code: string
           member_status: string
           phone: string
+        }[]
+      }
+      search_pos_staff_buyers: {
+        Args: { p_branch_id: string; p_term: string }
+        Returns: {
+          code: string
+          full_name: string
+          kind: string
+          phone: string
+          user_id: string
         }[]
       }
       set_active_branch: { Args: { p_branch_id: string }; Returns: undefined }
