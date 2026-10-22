@@ -673,6 +673,20 @@
       "when": 1792676680673,
       "tag": "0095_pos_staff_buyers_manual_discount",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1792677543748,
+      "tag": "0096_pos_same_month_deduction_and_pos_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792677566577,
+      "tag": "0097_pos_advances_marked_store",
+      "breakpoints": true
     }
   ]
 }
