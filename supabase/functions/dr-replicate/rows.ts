@@ -49,6 +49,9 @@ export function chunkRowCount(bytes: number, tuples: number): number {
   return Math.max(20, Math.min(5000, Math.floor(TARGET_CHUNK_BYTES / avg)));
 }
 
+/** The copy's own progress log changes while a copy runs, so it is never mirrored or compared. */
+export const NEVER_MIRRORED = ["private.dr_sync_runs"];
+
 export function specSql(schemas: string[], extra: string[]): string {
   return `SELECT coalesce(json_agg(json_build_object(
     'schema', n.nspname, 'name', c.relname,
@@ -62,7 +65,8 @@ export function specSql(schemas: string[], extra: string[]): string {
     'bytes', pg_table_size(c.oid), 'tuples', greatest(c.reltuples, 0)::bigint
   ) ORDER BY n.nspname, c.relname), '[]'::json)::text
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE c.relkind IN ('r','p') AND (n.nspname = ANY(${textArray(schemas)}) OR (n.nspname || '.' || c.relname) = ANY(${textArray(extra)}))`;
+  WHERE c.relkind IN ('r','p') AND (n.nspname = ANY(${textArray(schemas)}) OR (n.nspname || '.' || c.relname) = ANY(${textArray(extra)}))
+    AND NOT (n.nspname || '.' || c.relname) = ANY(${textArray(NEVER_MIRRORED)})`;
 }
 
 /** Table specs from both sides: column intersection, primary key from the primary. */
