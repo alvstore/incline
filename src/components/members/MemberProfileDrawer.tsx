@@ -2293,11 +2293,9 @@ export function MemberProfileDrawer({
                             <p className="text-xs text-muted-foreground mt-1">
                               {format(new Date(payment.payment_date), 'dd MMM yyyy')}
                             </p>
-                            {payment.received_by_name && (
-                              <p className="text-xs text-muted-foreground">
-                                By: {payment.received_by_name}
-                              </p>
-                            )}
+                            <p className="text-xs text-muted-foreground">
+                              Received by: {payment.received_by_name || actorFallback(payment.created_at ?? payment.payment_date)}
+                            </p>
                           </div>
                         </div>
                         );
