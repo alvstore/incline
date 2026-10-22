@@ -36,6 +36,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { downloadBlob } from '@/utils/pdfBlob';
+import { useActorNames } from '@/hooks/useActorNames';
+import { actorFallback } from '@/lib/audit/actorLabel';
 import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 
 const PAGE_SIZE = 20;
@@ -223,7 +225,7 @@ export default function InvoicesPage() {
         supabase
           .from('invoices')
           .select(`
-            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id, is_proforma, document_series,
+            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, created_by, member_id, pos_sale_id, branch_id, is_proforma, document_series,
             members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
             invoice_items(description, reference_type)
           `, { count: 'exact' })
@@ -293,6 +295,7 @@ export default function InvoicesPage() {
   };
 
   // Search across the wide scan window (invoice number, member name, member code)
+  const invoiceActors = useActorNames(invoices.map((i: any) => i.created_by));
   const filteredInvoices = invoices.filter((invoice: any) => {
     if (!isSearching) return true;
     const q = searchTerm.trim().toLowerCase();
@@ -577,6 +580,7 @@ export default function InvoicesPage() {
                             </TableCell>
                             <TableCell className="text-muted-foreground">
                               {new Date(invoice.created_at).toLocaleDateString()}
+                              <p className="text-xs">By {invoiceActors.nameOf(invoice.created_by) || actorFallback(invoice.created_at)}</p>
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-1.5">
