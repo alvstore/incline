@@ -42,6 +42,7 @@ async function flushErrors() {
 
 function shouldDrop(msg: string): boolean {
   if (!msg) return true;
+  if (/Invalid login credentials|Invalid Refresh Token|New password should be different|^otp_invalid$|^Fetch is aborted$|^\[(hmr|vite)\]/i.test(msg)) return true;
   // Don't log connectivity issues — these are user-side (flaky wifi, tab
   // suspend/resume, captive portals), never actionable app bugs.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
@@ -198,7 +199,7 @@ export function initGlobalErrorLogging() {
             queueError({
               error_message: getHumanReadableMessage(String(errorMsg)),
               stack_trace: `${response.status} ${response.statusText} — ${url}`,
-              component_name: isEdgeFunction ? url.split('/functions/')[1]?.split('/')[0] || null : null,
+              component_name: isEdgeFunction ? url.split('/functions/v1/')[1]?.split('/')[0] || null : null,
               route: window.location.pathname,
               source: isEdgeFunction ? 'edge_function' : 'database',
             });
