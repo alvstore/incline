@@ -394,7 +394,7 @@ export default function StorePage() {
               </TabsList>
 
               <TabsContent value="discounts" className="mt-4">
-                <DiscountsDuesTab branchId={effectiveBranchId ?? null} />
+                <DiscountsDuesTab branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : null} />
               </TabsContent>
 
               <TabsContent value="pos-history" className="mt-4">
