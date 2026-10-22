@@ -60,8 +60,8 @@ export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
 
   const isBody = report?.type === 'body';
   const isOriginal = report?.pdf_source === 'howbody_original';
-  const { roles } = useAuth();
-  const canRegenerate = (roles || []).some((r: string) => ['owner', 'admin', 'manager', 'staff'].includes(r));
+  const { hasAnyRole } = useAuth();
+  const canRegenerate = hasAnyRole(['owner', 'admin', 'manager', 'staff']);
 
   return (
     <>
