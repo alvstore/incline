@@ -55,7 +55,7 @@ Deno.test("missing standby table is created and standby-only table is dropped", 
   const keys = planSchema(p, s).map((x) => x.key);
   assert(keys.includes("table:public.members"));
   assert(keys.includes("drop-table:public.old_scratch"));
-  assert(keys.includes("rls:public.members") === false || keys.includes("rls:public.members"));
+  assert(keys.includes("rls:public.members")); // security rules switched on for the new table
 });
 
 Deno.test("foreign keys are added NOT VALID and validated only in the final pass", () => {
@@ -79,9 +79,6 @@ Deno.test("foreign keys are added NOT VALID and validated only in the final pass
 Deno.test("changed security rule is replaced; standby-only rule is dropped", () => {
   const p = empty();
   p.tables = [table("invoices")];
-  s_setTables: {
-    /* label for readability */
-  }
   const s = empty();
   s.tables = [table("invoices")];
   const base = { schema: "public", table: "invoices", permissive: true, cmd: "r", roles: ["authenticated"], check: null };
