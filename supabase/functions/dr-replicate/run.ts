@@ -83,6 +83,7 @@ interface State {
     idx: number;
     mismatches: Record<string, { primary: string; standby: string }>;
     rechecked?: boolean;
+    rounds?: number;
   };
   stepErrors?: Record<string, number>;
 }
@@ -198,7 +199,7 @@ async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean
         matched: specs.length - Object.keys(v.mismatches).length,
         mismatched: Object.entries(v.mismatches).map(([table, h]) => ({ table, ...h })),
       };
-      v.phase = run.kind === "full" && Object.keys(v.mismatches).length && !v.rechecked ? "catchup" : "storage";
+      v.phase = run.kind === "full" && Object.keys(v.mismatches).length ? "catchup" : "storage";
     } else if (v.phase === "catchup") {
       // Rows written on the primary during the copy: copy just those tables again, re-check.
       const specs = (await specsFor()).filter((s) => v.mismatches[`${s.schema}.${s.name}`]);
@@ -207,13 +208,15 @@ async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean
       if (idx < specs.length) return false;
       await compareTables(ctx, specs, 0, v.mismatches);
       v.rechecked = true;
+      v.rounds = (v.rounds ?? 0) + 1;
       const total = rep.tables?.total ?? specs.length;
       rep.tables = {
         total,
         matched: total - Object.keys(v.mismatches).length,
         mismatched: Object.entries(v.mismatches).map(([table, h]) => ({ table, ...h })),
       };
-      v.phase = "storage";
+      // Busy tables can change again while being re-copied: up to 3 catch-up rounds.
+      v.phase = Object.keys(v.mismatches).length && v.rounds < 3 ? "catchup" : "storage";
     } else if (v.phase === "storage") {
       const { p, s } = await listObjects(env);
       const plan = planObjects(p, s);

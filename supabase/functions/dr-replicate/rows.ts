@@ -212,7 +212,9 @@ export async function syncTables(ctx: SyncContext, specs: TableSpec[], start: nu
         if (typeof got === "string" && got === `${chunk.n}:${chunk.h}`) continue;
         try {
           const rows = (await readOne(ctx.primary, rowsSql(spec, chunk.lo, chunk.hi))) ?? "[]";
-          const res = await ctx.standby.replace(qn(spec.schema, spec.name), spec.cols, spec.pk.map((p) => p.name), rangePredicate(spec.pk, chunk.lo, chunk.hi), rows);
+          // Storage tables refuse direct deletes; standby-only buckets are removed via the Storage API first.
+          const res = await ctx.standby.replace(qn(spec.schema, spec.name), spec.cols, spec.pk.map((p) => p.name),
+            rangePredicate(spec.pk, chunk.lo, chunk.hi), rows, spec.schema !== "storage");
           stats.chunksCopied++;
           stats.rowsWritten += res.written;
           stats.rowsDeleted += res.deleted;

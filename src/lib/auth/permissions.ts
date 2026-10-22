@@ -29,7 +29,8 @@ export type Capability =
   | 'rcs_admin'
   | 'rcs_wallet_view'
   | 'manage_class_schedule'
-  | 'manage_renewals';
+  | 'manage_renewals'
+  | 'manage_standby_copy';
 
 const MATRIX: Record<Capability, AppRole[]> = {
   view_financials:     ['owner', 'admin', 'manager'],
@@ -53,6 +54,8 @@ const MATRIX: Record<Capability, AppRole[]> = {
   manage_class_schedule: ['owner', 'admin', 'manager'],
   // Mirrors role_capabilities.manage_renewals (renewal_center_queue / renewal_funnel)
   manage_renewals: ['owner', 'admin', 'manager', 'staff'],
+  // Disaster-recovery standby copy (mirrors role_capabilities.manage_standby_copy)
+  manage_standby_copy: ['owner'],
 };
 
 /** Accepts `['owner']` OR `[{ role: 'owner' }]` (AuthContext shape) — normalizing
@@ -93,6 +96,7 @@ export const can = {
   rcsAdmin:          (r?: RoleLike[]) => hasCapability(r, 'rcs_admin'),
   rcsWalletView:     (r?: RoleLike[]) => hasCapability(r, 'rcs_wallet_view'),
   manageClassSchedule: (r?: RoleLike[]) => hasCapability(r, 'manage_class_schedule'),
+  manageStandbyCopy: (r?: RoleLike[]) => hasCapability(r, 'manage_standby_copy'),
 };
 
 /**

@@ -46,7 +46,8 @@ BEGIN
 END
 $fn$;
 
-CREATE OR REPLACE FUNCTION public.dr_mirror_replace(p_table text, p_cols text[], p_pk text[], p_where text, p_rows text)
+DROP FUNCTION IF EXISTS public.dr_mirror_replace(text, text[], text[], text, text);
+CREATE OR REPLACE FUNCTION public.dr_mirror_replace(p_table text, p_cols text[], p_pk text[], p_where text, p_rows text, p_delete boolean DEFAULT true)
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -60,7 +61,9 @@ AS $fn$
 -- Incline DR helper (standby only): makes one key range of a table identical to the
 -- primary rows in p_rows (JSON array). User triggers are switched off for the write and
 -- restored to their exact previous state before commit, so audit/notification/code
--- generation triggers never rewrite mirrored data. service_role only.
+-- generation triggers never rewrite mirrored data. p_delete = false upserts only (storage
+-- tables refuse direct deletes; their extras are removed through the Storage API).
+-- service_role only.
 DECLARE
   rel regclass := p_table::regclass;
   cols text := (SELECT string_agg(quote_ident(c), ', ') FROM unnest(p_cols) c);
@@ -76,13 +79,16 @@ BEGIN
     IF cardinality(restore) > 0 THEN EXECUTE format('ALTER TABLE %s DISABLE TRIGGER USER', rel); END IF;
   END IF;
   IF cardinality(p_pk) = 0 THEN
+    IF NOT p_delete THEN RAISE EXCEPTION 'upsert-only copy needs a primary key'; END IF;
     EXECUTE format('DELETE FROM %s WHERE %s', rel, p_where);
     GET DIAGNOSTICS d = ROW_COUNT;
     EXECUTE format('INSERT INTO %1$s (%2$s) OVERRIDING SYSTEM VALUE SELECT %2$s FROM json_populate_recordset(NULL::%1$s, $1::json)', rel, cols) USING p_rows;
     GET DIAGNOSTICS i = ROW_COUNT;
   ELSE
-    EXECUTE format('DELETE FROM %1$s WHERE (%2$s) AND (%3$s) NOT IN (SELECT %3$s FROM json_populate_recordset(NULL::%1$s, $1::json))', rel, p_where, pk) USING p_rows;
-    GET DIAGNOSTICS d = ROW_COUNT;
+    IF p_delete THEN
+      EXECUTE format('DELETE FROM %1$s WHERE (%2$s) AND (%3$s) NOT IN (SELECT %3$s FROM json_populate_recordset(NULL::%1$s, $1::json))', rel, p_where, pk) USING p_rows;
+      GET DIAGNOSTICS d = ROW_COUNT;
+    END IF;
     EXECUTE format('INSERT INTO %1$s (%2$s) OVERRIDING SYSTEM VALUE SELECT %2$s FROM json_populate_recordset(NULL::%1$s, $1::json) ON CONFLICT (%3$s) DO %4$s',
       rel, cols, pk, CASE WHEN upd IS NULL THEN 'NOTHING' ELSE 'UPDATE SET ' || upd END) USING p_rows;
     GET DIAGNOSTICS i = ROW_COUNT;
@@ -96,9 +102,9 @@ END
 $fn$;
 
 REVOKE ALL ON FUNCTION public.dr_mirror_run(text[], text[], boolean) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.dr_mirror_run(text[], text[], boolean) TO service_role;
-GRANT EXECUTE ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean) TO service_role;
 ALTER ROLE service_role SET statement_timeout = '120s';
 NOTIFY pgrst, 'reload config';
 NOTIFY pgrst, 'reload schema';
@@ -148,9 +154,9 @@ export class Standby {
     return (await this.run([stmt], params))[0];
   }
 
-  async replace(table: string, cols: string[], pk: string[], where: string, rowsJson: string): Promise<ReplaceResult> {
+  async replace(table: string, cols: string[], pk: string[], where: string, rowsJson: string, allowDelete = true): Promise<ReplaceResult> {
     const out = await this.rpc<string>("dr_mirror_replace", {
-      p_table: table, p_cols: cols, p_pk: pk, p_where: where, p_rows: rowsJson,
+      p_table: table, p_cols: cols, p_pk: pk, p_where: where, p_rows: rowsJson, p_delete: allowDelete,
     });
     const [d, w] = String(out).split(",").map(Number);
     return { deleted: d || 0, written: w || 0 };
