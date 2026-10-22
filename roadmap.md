@@ -1,10 +1,12 @@
 # External standby 1:1 copy (22 Oct 2026)
 - [x] Standby file storage rejected every upload (storage service v1.74 vs newer storage tables); restored its expected index, upload/replace/download/delete verified.
-- [ ] Pause all standby scheduled jobs (they ran attendance/membership jobs on the copy) and mirror live jobs as paused definitions.
-- [ ] Resumable copy engine: structure (tables, columns, keys, indexes, functions, views, triggers, security rules, grants, realtime), sign-in users, all rows (chunk fingerprints, deletes included), counters, buckets + files (large files resumable).
-- [ ] Nightly 02:30 IST run in small resumable steps; Run now / Verify from Disaster Recovery card with live progress.
-- [ ] Full first copy + independent parity check (structure diff = 0, per-table row fingerprints, users, files/bytes per bucket).
+- [x] Pause all standby scheduled jobs (they ran attendance/membership jobs on the copy) and mirror live jobs as paused definitions (18 paused, 16 live jobs mirrored paused).
+- [x] Resumable copy engine: structure, sign-in users, all rows (chunk fingerprints, deletes included), counters, buckets + files (large files resumable).
+- [x] Nightly 02:30 IST copy, wakes instantly when queued, chains itself while working, hourly watchdog restarts a stalled run; Copy now / Check match on the owner card with live progress.
+- [ ] Second full copy (files included) + independent parity check (structure diff = 0, per-table row fingerprints, users, files/bytes per bucket).
+- [ ] Find tables re-copied on every run although unchanged (2nd run rewrote ~100k rows) and make their fingerprints stable.
 - [ ] Owner action: standby database connection has no encryption (TLS) — enable on the standby server; upgrade standby storage service to v1.80.2+ then drop the compat index.
+- [ ] Definer-guard CI check flags 3 older migrations (0078/0081 generate_pt_commission, 0087 get_registration_geofence) by file markers only; live permissions are correct (service-role only / intended public lookup).
 
 # Mohit account cleanup (22 Oct 2026)
 - [x] Removed three cancelled invoices, three assigned diet/workout plans and four old requests; verified only INV-INC-26-0039 remains with both completed payments (₹20,000 total), account retained and cleanup archived in audit history.
