@@ -522,7 +522,7 @@ export default function POSPage() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Invoice</title>
+        <title>Store receipt</title>
         <style>
           body { font-family: monospace; padding: 20px; max-width: 300px; margin: 0 auto; }
           .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
@@ -534,7 +534,7 @@ export default function POSPage() {
       </head>
       <body>
         <div class="header">
-          <h2>GYM STORE</h2>
+          <h2>STORE RECEIPT</h2><p style="font-size:10px">Internal sale record — not a tax invoice</p>
           <p>${new Date().toLocaleString()}</p>
           ${lastSale?.member ? `<p>Member: ${escapeHtml(lastSale.member.member_code || lastSale.member.full_name)}</p>` : ''}
           ${lastSale?.invoice_id ? `<p class="invoice-number">Invoice: ${escapeHtml(lastSale.id?.slice(0, 8) ?? '')}</p>` : ''}
