@@ -1,3 +1,7 @@
+# Audit Insights (22 Oct 2026)
+- [ ] Audit every current error group and fix verified causes; resolve only verified repaired or non-error entries.
+- [ ] Add clear/resolution controls, open/history filtering, accurate audit states, and verify with the signed-in owner.
+
 # External standby 1:1 copy (22 Oct 2026)
 - [x] Standby file storage rejected every upload (storage service v1.74 vs newer storage tables); restored its expected index, upload/replace/download/delete verified.
 - [x] Pause all standby scheduled jobs (they ran attendance/membership jobs on the copy) and mirror live jobs as paused definitions (18 paused, 16 live jobs mirrored paused).
