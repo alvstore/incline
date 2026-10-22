@@ -1,3 +1,4 @@
+// automation-brain v2.5.0 — Transport timeouts are unknown outcomes, never cold-start success.
 // automation-brain v2.3.0 — Auth gate also accepts ANON apikey + x-system-call header
 //                            (pg_cron.job.command can't safely embed SERVICE_KEY; the
 //                            system-call header + service-role headers are both honored).
@@ -77,7 +78,7 @@ function nextCron(expr: string, after: Date): Date {
 }
 
 // ---------- Worker dispatch ----------
-async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; status: number; body: string; gateway5xx: boolean }> {
+async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; status: number; body: string; gateway5xx: boolean; transport?: "timeout" | "network" }> {
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
   // v2.4.0 — retry 502/503/504 (cold-boot gateway failures) with backoff.
   //          Per-attempt 25s timeout (was 60s): three 60s attempts alone blew
@@ -109,14 +110,15 @@ async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; 
     } catch (e) {
       clearTimeout(tm);
       lastErr = e;
-      // Network/abort — fall through to next attempt.
+      // Aborting the response does not cancel the worker. Never duplicate it.
+      return { ok: false, status: 0, body: e instanceof Error ? e.message : String(e), gateway5xx: false, transport: ctrl.signal.aborted ? "timeout" : "network" };
     }
   }
   if (r) {
     const body = await r.text().catch(() => "");
     return { ok: false, status: r.status, body: body.slice(0, 500), gateway5xx: r.status >= 502 && r.status <= 504 };
   }
-  return { ok: false, status: 0, body: String((lastErr as Error)?.message ?? "network error"), gateway5xx: true };
+  return { ok: false, status: 0, body: String((lastErr as Error)?.message ?? "network error"), gateway5xx: false, transport: "network" };
 }
 
 async function callRpc(fn: string): Promise<{ ok: boolean; body: string }> {
@@ -189,6 +191,7 @@ async function processRule(rule: any) {
   let dispatched = 0;
   let errorMsg: string | null = null;
   let gatewayColdStart = false;
+  let transport: "timeout" | "network" | undefined;
 
   try {
     if (rule.worker.startsWith("edge:")) {
@@ -197,7 +200,8 @@ async function processRule(rule: any) {
       if (!r.ok) {
         // v2.1.0 — Gateway 5xx after retries = cold-start, not data loss.
         // Downgrade so SystemHealth doesn't flag it as a hard error.
-        status = r.gateway5xx ? "warning" : "error";
+        status = r.gateway5xx || r.transport ? "warning" : "error";
+        transport = r.transport;
         gatewayColdStart = r.gateway5xx;
         errorMsg = `HTTP ${r.status}: ${r.body}`;
       } else dispatched = 1;
@@ -245,8 +249,8 @@ async function processRule(rule: any) {
       await admin.rpc("log_error_event", {
         p_source: "automation_brain",
         p_severity: severity,
-        p_message: `Automation rule "${rule.key}" ${gatewayColdStart ? "cold-start gateway 5xx" : "failed"}: ${errorMsg}`.slice(0, 1000),
-        p_context: { rule_id: rule.id, rule_key: rule.key, worker: rule.worker, branch_id: rule.branch_id, gateway_cold_start: gatewayColdStart },
+        p_message: `Automation rule "${rule.key}" ${transport ? `response ${transport} (worker outcome unknown)` : gatewayColdStart ? "gateway 5xx" : "failed"}: ${errorMsg}`.slice(0, 1000),
+        p_context: { rule_id: rule.id, rule_key: rule.key, worker: rule.worker, branch_id: rule.branch_id, gateway_cold_start: gatewayColdStart, transport, outcome_unknown: Boolean(transport) },
       });
     } catch (_) { /* swallow logging failures */ }
   }
