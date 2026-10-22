@@ -252,8 +252,8 @@ export async function buildScanPdfV2(input: V2Input): Promise<Uint8Array> {
     page.drawImage(png, { x: fx, y: fy, width: figW, height: figH });
     BODY_ZONES[female ? "female" : "male"].forEach(([nx, ny, rx, ry], i) => {
       const zx = fx + nx * figW, zy = fy + (1 - ny) * figH;
-      page.drawEllipse({ x: zx, y: zy, xScale: rx * figW * 1.3, yScale: ry * figH * 1.15, color: tone(i), opacity: 0.18 });
-      page.drawEllipse({ x: zx, y: zy, xScale: rx * figW, yScale: ry * figH, color: tone(i), opacity: 0.3, borderColor: tone(i), borderWidth: 0.8, borderOpacity: 0.7 });
+      page.drawEllipse({ x: zx, y: zy, xScale: rx * figW * 1.3, yScale: ry * figH * 1.15, color: tone(i), opacity: 0.1 });
+      page.drawEllipse({ x: zx, y: zy, xScale: rx * figW, yScale: ry * figH, color: tone(i), opacity: 0.16, borderColor: tone(i), borderWidth: 0.8, borderOpacity: 0.7 });
       page.drawCircle({ x: zx, y: zy, size: 2.2, color: WHITE, borderColor: tone(i), borderWidth: 1 });
     });
     // table
