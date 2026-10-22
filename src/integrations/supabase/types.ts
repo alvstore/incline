@@ -13077,6 +13077,45 @@ export type Database = {
         }
         Relationships: []
       }
+      scan_report_ai_analysis: {
+        Row: {
+          analysis: Json
+          branch_id: string | null
+          created_at: string
+          id: string
+          input_hash: string
+          kind: string
+          member_id: string
+          model: string | null
+          report_id: string
+          updated_at: string
+        }
+        Insert: {
+          analysis: Json
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          input_hash: string
+          kind: string
+          member_id: string
+          model?: string | null
+          report_id: string
+          updated_at?: string
+        }
+        Update: {
+          analysis?: Json
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          input_hash?: string
+          kind?: string
+          member_id?: string
+          model?: string | null
+          report_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scan_report_deliveries: {
         Row: {
           branch_id: string | null
