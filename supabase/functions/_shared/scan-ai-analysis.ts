@@ -46,22 +46,31 @@ export async function getOrCreateAnalysis(
       "You are a senior fitness and posture coach at Incline, a premium gym in Udaipur. You read a member's in-club 3D " +
       (opts.kind === "body" ? "body composition (BIA) scan" : "posture scan") +
       " and explain EVERY value clearly. Return ONLY valid JSON, no markdown, matching: " +
-      '{"summary":"3-4 sentences","items":[{"term":"name of the measure","value":"number with unit","status":"In range|Watch|Above range|Below range","explanation":"2-3 sentences: what this term means in plain words, what THIS number says about the member","why":"1 sentence: why it matters for training or daily life"}],' +
+      '{"summary":"3-4 sentences","items":[{"term":"name of the measure","value":"number with unit","status":"In range|Watch|Above range|Below range","explanation":"max 40 words: what this term means in plain words and what THIS number says","why":"max 18 words: why it matters"}],' +
       '"strengths":["..."],"focus":["..."],"plan":[{"week":"Week 1","actions":["specific gym action"]},{"week":"Week 2","actions":[]},{"week":"Weeks 3-4","actions":[]}],"questions":["question to ask the trainer"]}. ' +
-      "Rules: include one item for every value given (and segment balance if provided). Use only the numbers provided; do not invent values. " +
+      "Keep it compact: summary max 70 words, max 14 items, max 4 strengths/focus, max 4 actions per week (each max 25 words), max 4 questions. Total output under 1400 words. Rules: include one item for every value given (and segment balance if provided). Use only the numbers provided; do not invent values. " +
       (opts.kind === "posture"
         ? "Plan must include specific corrective and mobility drills (e.g. chin tucks, wall angels, glute bridges, dead bugs) with sets/reps. "
         : "Plan must cover strength training, cardio, protein/hydration habits and sleep, with concrete numbers where sensible. ") +
       "Never diagnose, never name diseases, medication or medical conditions, never quote prices. Warm, direct, second person. English only.";
-    const { content } = await callAI({
-      scope: "all", supabase, temperature: 0.3, max_tokens: 6000, timeoutMs: 55000,
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content: `Member first name: ${opts.firstName}.\n${opts.facts}` },
-      ],
-    });
-    const a = parseAnalysis(String(content || ""));
-    if (!a) { console.warn("scan AI analysis unparsable, length", String(content || "").length, String(content || "").slice(-200)); return null; }
+    let a: AiAnalysis | null = null;
+    for (let attempt = 0; attempt < 2 && !a; attempt++) {
+      const { content } = await callAI({
+        scope: "all", supabase, temperature: 0.3, max_tokens: 10000, timeoutMs: 55000,
+        messages: [
+          { role: "system", content: sys + (attempt ? " Your previous answer was too long and got cut off. Be MUCH shorter: half the words." : "") },
+          { role: "user", content: `Member first name: ${opts.firstName}.\n${opts.facts}` },
+        ],
+      });
+      a = parseAnalysis(String(content || ""));
+      if (!a) console.warn("scan AI analysis unparsable, attempt", attempt + 1, "length", String(content || "").length);
+    }
+    if (!a) {
+      // Keep the last good analysis rather than sending a report without one.
+      const { data } = await supabase.from("scan_report_ai_analysis").select("analysis")
+        .eq("report_id", opts.reportId).eq("kind", opts.kind).maybeSingle();
+      return (data?.analysis as AiAnalysis) ?? null;
+    }
     await supabase.from("scan_report_ai_analysis").upsert({
       report_id: opts.reportId, kind: opts.kind, member_id: opts.memberId, branch_id: opts.branchId,
       input_hash: hash, analysis: a, updated_at: new Date().toISOString(),
