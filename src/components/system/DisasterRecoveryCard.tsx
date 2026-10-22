@@ -115,7 +115,7 @@ function LiveProgress({ run }: { run: RunRow }) {
   );
 }
 
-function Results({ run }: { run: RunRow }) {
+function Results({ run, oversized }: { run: RunRow; oversized: string[] }) {
   const [open, setOpen] = useState(false);
   const v = run.report.verify;
   if (!v) return null;
@@ -158,7 +158,7 @@ function Results({ run }: { run: RunRow }) {
 
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="min-h-11 gap-1.5 px-2 text-muted-foreground hover:bg-secondary">
+          <Button variant="ghost" size="sm" className="min-h-11 gap-1.5 px-2 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground">
             <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
             {open ? "Hide details" : "See details"}
           </Button>
@@ -212,6 +212,17 @@ function Results({ run }: { run: RunRow }) {
                 </table>
               </div>
               {bucketIssues.length > 0 && <p className="mt-1.5 text-xs text-muted-foreground">Only folders with differences are shown.</p>}
+              {oversized.length > 0 && (
+                <div className="mt-3 rounded-lg bg-warning/10 p-3 text-xs">
+                  <p className="flex items-center gap-1.5 font-semibold text-warning">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {oversized.length} file{oversized.length === 1 ? " is" : "s are"} larger than the standby server accepts
+                  </p>
+                  <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
+                    {oversized.map((k) => <li key={k} className="break-all">{k}</li>)}
+                  </ul>
+                  <p className="mt-1.5 text-muted-foreground">Raise the upload size limit on the standby server; the next copy adds them automatically.</p>
+                </div>
+              )}
             </div>
           )}
           {errors.length > 0 && (
@@ -296,6 +307,8 @@ export function DisasterRecoveryCard() {
   const shown = latest && !active && latest.report?.verify ? latest : status.data?.lastFull ?? null;
   const headline = statusMeta(active ? latest : shown ?? latest);
   const failedRun = latest?.status === "failed" ? latest : null;
+  const fileFailures = status.data?.lastFull?.report?.storage?.failures ?? {};
+  const oversized = Object.keys(fileFailures).filter((k) => /\b413\b|maximum size/i.test(fileFailures[k]));
 
   return (
     <Card className="overflow-hidden rounded-2xl">
@@ -352,7 +365,7 @@ export function DisasterRecoveryCard() {
           </div>
         )}
 
-        {shown && <Results run={shown} />}
+        {shown && <Results run={shown} oversized={oversized} />}
 
         {!status.isLoading && !status.isError && !latest && (
           <div className="flex flex-col items-center gap-2 rounded-xl bg-muted/40 px-4 py-8 text-center">
