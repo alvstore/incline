@@ -14,6 +14,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 import { useOrgBranding } from '@/hooks/useOrgBranding';
+import { track } from '@/lib/analytics';
+
+export const OPEN_MOBILE_MENU_EVENT = 'incline:open-mobile-menu';
+export function openMobileMenu(source: 'bottom_more') {
+  window.dispatchEvent(new CustomEvent(OPEN_MOBILE_MENU_EVENT, { detail: { source } }));
+}
 
 
 function useWhatsAppUnreadCount() {
@@ -123,6 +129,17 @@ export function AppSidebar({
   const { signOut, roles } = useAuth();
   const location = useLocation();
   const { data: unreadCount = 0 } = useWhatsAppUnreadCount();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const source = (e as CustomEvent<{ source?: string }>).detail?.source ?? 'bottom_more';
+      setOpen(true);
+      track('mobile_menu_opened', { source });
+    };
+    window.addEventListener(OPEN_MOBILE_MENU_EVENT, handler);
+    return () => window.removeEventListener(OPEN_MOBILE_MENU_EVENT, handler);
+  }, []);
+  useEffect(() => { setOpen(false); }, [location.pathname]);
 
   const resolvedMode: NavMode = mode ?? (collapsedProp ? 'collapsed' : 'vertical');
   const collapsed = resolvedMode === 'collapsed';
@@ -246,7 +263,7 @@ export function AppSidebar({
                           to={item.href}
                           data-testid={`link-nav-${item.href.replace(/\//g, '-')}`}
                           className={cn(
-                            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                            'flex items-center gap-3 px-3 py-2 min-h-11 rounded-lg text-sm font-medium transition-colors',
                             isActive
                               ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                               : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -317,13 +334,13 @@ export function MobileNav() {
     .filter(section => section.items.length > 0);
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (v) track('mobile_menu_opened', { source: 'top_button' }); }}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="lg:hidden">
-          <Menu className="h-5 w-5" />
+        <Button variant="ghost" size="icon" aria-label="Open menu" className="lg:hidden h-11 w-11 shrink-0 cursor-pointer touch-manipulation focus-visible:ring-2 focus-visible:ring-primary">
+          <Menu className="h-6 w-6" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0 bg-sidebar">
+      <SheetContent side="left" className="w-72 max-w-[85vw] p-0 bg-sidebar flex flex-col h-[100dvh] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <VisuallyHidden>
           <SheetTitle>Navigation menu</SheetTitle>
           <SheetDescription>Primary navigation for the app</SheetDescription>
@@ -332,7 +349,7 @@ export function MobileNav() {
           <BrandLogo mobile />
         </div>
 
-        <ScrollArea className="h-[calc(100vh-180px)] py-4">
+        <ScrollArea className="flex-1 min-h-0 py-4">
           <nav className="px-3 space-y-6">
             {menuSections.map((section) => (
               <div key={section.title}>

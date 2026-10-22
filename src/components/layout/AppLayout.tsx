@@ -72,6 +72,29 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const { data: org } = useOrgBranding();
 
+  // Phone top bar: pinned, notch-aware, shared by every nav mode.
+  const MobileTopBar = () => (
+    <header className="lg:hidden sticky top-0 z-40 flex min-h-14 items-center justify-between gap-2 border-b border-border bg-card px-2 pt-[env(safe-area-inset-top)] pl-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.75rem)]">
+      <MobileNav />
+      <h1 className="text-xl font-bold min-w-0 truncate">
+        {org?.logo_url ? (
+          <img src={org.logo_url} alt={org.name || 'Logo'} className="max-h-7 object-contain" />
+        ) : (
+          <span className="text-accent">{org?.name || 'Incline'}</span>
+        )}
+      </h1>
+      <div className="flex items-center gap-2">
+        <NotificationBell />
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={profile?.avatar_url ?? undefined} />
+          <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+            {getInitials(profile?.full_name)}
+          </AvatarFallback>
+        </Avatar>
+      </div>
+    </header>
+  );
+
 
   const getInitials = (name: string | null) => {
     if (!name) return 'U';
@@ -152,26 +175,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (navMode === 'hybrid') {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        {/* Mobile header (unchanged) */}
-        <header className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
-          <MobileNav />
-          <h1 className="text-xl font-bold">
-            {org?.logo_url ? (
-              <img src={org.logo_url} alt={org.name || 'Logo'} className="max-h-7 object-contain" />
-            ) : (
-              <span className="text-accent">{org?.name || 'Incline'}</span>
-            )}
-          </h1>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={profile?.avatar_url ?? undefined} />
-              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                {getInitials(profile?.full_name)}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </header>
+        <MobileTopBar />
         <MobileBranchBar />
 
         {/* Desktop: single horizontal band — brand + modules + header utilities */}
@@ -217,26 +221,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (navMode === 'horizontal-stacked') {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        {/* Mobile header (unchanged) */}
-        <header className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
-          <MobileNav />
-          <h1 className="text-xl font-bold">
-            {org?.logo_url ? (
-              <img src={org.logo_url} alt={org.name || 'Logo'} className="max-h-7 object-contain" />
-            ) : (
-              <span className="text-accent">{org?.name || 'Incline'}</span>
-            )}
-          </h1>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={profile?.avatar_url ?? undefined} />
-              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                {getInitials(profile?.full_name)}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </header>
+        <MobileTopBar />
         <MobileBranchBar />
 
         {/* Desktop: full AppHeader on top (with brand, since no sidebar) */}
@@ -280,27 +265,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop header */}
         <AppHeader />
-
-        {/* Mobile header */}
-        <header className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
-          <MobileNav />
-          <h1 className="text-xl font-bold">
-            {org?.logo_url ? (
-              <img src={org.logo_url} alt={org.name || 'Logo'} className="max-h-7 object-contain" />
-            ) : (
-              <span className="text-accent">{org?.name || 'Incline'}</span>
-            )}
-          </h1>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={profile?.avatar_url ?? undefined} />
-              <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                {getInitials(profile?.full_name)}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </header>
+        <MobileTopBar />
         <MobileBranchBar />
 
         {renderContent()}
