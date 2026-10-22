@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesProductSearch, computeManualDiscount } from './posSearch';
+import { matchesProductSearch, computeManualDiscount } from '../../src/lib/products/posSearch';
 
 const glutamine = ['Muscletech™ Platinum Glutamine', null, 'MT26361'];
 
