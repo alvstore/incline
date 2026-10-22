@@ -1,3 +1,6 @@
+# Mohit account cleanup (22 Oct 2026)
+- [ ] Remove the three specified cancelled invoices, assigned diet/workout plans and old requests; preserve INV-INC-26-0039, both payments, membership and audit history.
+
 # Auth & registration (21 Oct 2026)
 - [x] Animated Rise/Reflect/Repeat card stack on sign-in.
 - [x] Registration only inside the club (200 m of Sector 14) or for signed-in desk staff; elsewhere shows "please visit the club".
