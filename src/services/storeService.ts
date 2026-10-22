@@ -80,6 +80,67 @@ export async function updateProduct(id: string, product: Partial<Product>) {
   return data as Product;
 }
 
+export type PosSettlement = 'paid' | 'link' | 'due' | 'salary_deduction';
+export type PosBuyerType = 'member' | 'staff' | 'walk_in';
+
+/** Desk checkout with staff buyers, audited manual discount, dues and salary deduction. */
+export async function createAuditedPOSSale(sale: {
+  branchId: string;
+  memberId?: string;
+  items: CartItem[];
+  paymentMethod: string;
+  settlement: PosSettlement;
+  buyerType: PosBuyerType;
+  staffUserId?: string;
+  guestName?: string;
+  guestPhone?: string;
+  guestEmail?: string;
+  couponDiscount?: number;
+  discountCodeId?: string;
+  discountCode?: string;
+  manualDiscount?: number;
+  discountReason?: string;
+  walletApplied?: number;
+  transactionId?: string;
+  slipUrl?: string;
+}) {
+  const items = sale.items.map((item) => ({
+    product_id: item.product.id,
+    name: item.product.name,
+    quantity: item.quantity,
+    unit_price: item.product.price,
+    total: item.product.price * item.quantity,
+  }));
+  const { data, error } = await supabase.rpc('create_pos_sale_audited', {
+    p_branch_id: sale.branchId,
+    p_member_id: sale.memberId ?? null,
+    p_items: items,
+    p_payment_method: sale.paymentMethod,
+    p_settlement: sale.settlement,
+    p_buyer_type: sale.buyerType,
+    p_staff_user_id: sale.staffUserId ?? null,
+    p_guest_name: sale.guestName ?? null,
+    p_guest_phone: sale.guestPhone ?? null,
+    p_guest_email: sale.guestEmail ?? null,
+    p_coupon_discount: sale.couponDiscount ?? 0,
+    p_discount_code_id: sale.discountCodeId ?? null,
+    p_discount_code: sale.discountCode ?? null,
+    p_manual_discount: sale.manualDiscount ?? 0,
+    p_discount_reason: sale.discountReason ?? null,
+    p_wallet_applied: sale.walletApplied ?? 0,
+    p_transaction_id: sale.transactionId ?? null,
+    p_slip_url: sale.slipUrl ?? null,
+  } as never);
+  if (error) throw new Error([error.message, error.details, error.hint].filter(Boolean).join(' — '));
+  const r = data as unknown as { pos_sale_id: string; invoice_id: string; total: number; awaiting: boolean };
+  return {
+    id: r.pos_sale_id,
+    invoice_id: r.invoice_id,
+    total_amount: r.total,
+    payment_status: r.awaiting ? 'awaiting_payment' : 'paid',
+  };
+}
+
 /**
  * Create a POS sale.
  *
