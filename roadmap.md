@@ -1,3 +1,8 @@
+# Audit Insights (22 Oct 2026)
+- [x] Audited current error groups; repaired registration's unauthorized self-enrollment attempt and false success, stopped expected Instagram SLA warning noise, closed historical repaired questionnaire/sidebar and expected auth validation entries. Cleared resolved error logs through the owner's screen; transaction audit history preserved.
+- [x] Added per-group Resolve, Clear resolved confirmation, open/history/activity filters, error fallbacks, corrected occurrence totals/date window and trend rendering. Signed-in owner verification: no failed requests or console errors, no open actionable errors; two noise-classification tests pass.
+- [ ] Verify the next scheduled nurture run completes: deployed indexed due-candidate selection and stopped immediate duplicate dispatch on ambiguous response timeout; old timeout telemetry deliberately remains. Requires next scheduled worker outcome, not a live outreach test.
+
 # External standby 1:1 copy (22 Oct 2026)
 - [x] Standby file storage rejected every upload (storage service v1.74 vs newer storage tables); restored its expected index, upload/replace/download/delete verified.
 - [x] Pause all standby scheduled jobs (they ran attendance/membership jobs on the copy) and mirror live jobs as paused definitions (18 paused, 16 live jobs mirrored paused).
@@ -7,7 +12,7 @@
 - [x] Repeat copies only re-send changed chunks (3rd full copy: under 2 minutes); copy's own progress log excluded from mirroring.
 - [ ] Owner action: raise the standby storage upload size limit (3 files of 72–193 MB refused with 413); the next copy adds them automatically.
 - [ ] Owner action: standby database connection has no encryption (TLS) — enable on the standby server; upgrade standby storage service to v1.80.2+ then drop the compat index.
-- [ ] Definer-guard CI check flags 3 older migrations (0078/0081 generate_pt_commission, 0087 get_registration_geofence) by file markers only; live permissions are correct (service-role only / intended public lookup).
+- [ ] Definer-guard CI check flags older migrations 0078/0081/0087 and 0096 generate_invoice_number_for; audit repair's new service-only candidate helper passes. Applied migration history left unchanged; review remaining guard metadata/permissions separately.
 
 # Mohit account cleanup (22 Oct 2026)
 - [x] Removed three cancelled invoices, three assigned diet/workout plans and four old requests; verified only INV-INC-26-0039 remains with both completed payments (₹20,000 total), account retained and cleanup archived in audit history.

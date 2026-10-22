@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Shield, AlertTriangle, TrendingUp, Database, Route as RouteIcon, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 type Fingerprint = {
   fingerprint: string;
@@ -36,11 +38,32 @@ const sevClass = (s: string) =>
 export function SystemAuditTab() {
   const [days, setDays] = useState('7');
   const numDays = Number(days);
+  const [view, setView] = useState('open');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const queryClient = useQueryClient();
+  const resolve = useMutation({
+    mutationFn: async (fingerprint: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Please sign in again');
+      const { error } = await supabase.from('error_logs').update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: user.id }).eq('fingerprint', fingerprint).eq('status', 'open');
+      if (error) throw error;
+    },
+    onSuccess: () => { refreshAll(); queryClient.invalidateQueries({ queryKey: ['error-logs'] }); toast.success('Error group resolved'); },
+    onError: () => toast.error('Could not resolve this group'),
+  });
+  const clear = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('error_logs').delete().eq('status', 'resolved');
+      if (error) throw error;
+    },
+    onSuccess: () => { setConfirmClear(false); refreshAll(); queryClient.invalidateQueries({ queryKey: ['error-logs'] }); toast.success('Resolved error logs cleared'); },
+    onError: () => toast.error('Could not clear resolved logs'),
+  });
 
   const fp = useQuery({
     queryKey: ['audit-fingerprints', numDays],
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('get_error_audit_top_fingerprints', { _days: numDays, _limit: 20 });
+      const { data, error } = await supabase.rpc('get_error_audit_top_fingerprints', { _days: numDays, _limit: 1000 });
       if (error) throw error;
       return (data || []) as Fingerprint[];
     },
@@ -49,16 +72,16 @@ export function SystemAuditTab() {
   const breakdown = useQuery({
     queryKey: ['audit-breakdown', numDays],
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('get_error_audit_breakdown', { _days: numDays });
+      const { data, error } = await supabase.rpc('get_error_audit_breakdown', { _days: numDays });
       if (error) throw error;
       return (data || []) as Breakdown[];
     },
   });
 
   const trend = useQuery({
-    queryKey: ['audit-trend'],
+    queryKey: ['audit-trend', numDays],
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('get_error_audit_daily_trend', { _days: 14 });
+      const { data, error } = await supabase.rpc('get_error_audit_daily_trend', { _days: numDays });
       if (error) throw error;
       return (data || []) as Trend[];
     },
@@ -67,7 +90,7 @@ export function SystemAuditTab() {
   const routes = useQuery({
     queryKey: ['audit-routes', numDays],
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('get_error_audit_top_routes', { _days: numDays, _limit: 10 });
+      const { data, error } = await supabase.rpc('get_error_audit_top_routes', { _days: numDays, _limit: 10 });
       if (error) throw error;
       return (data || []) as TopRoute[];
     },
@@ -76,7 +99,7 @@ export function SystemAuditTab() {
   const rls = useQuery({
     queryKey: ['audit-rls'],
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('get_db_audit_rls_status');
+      const { data, error } = await supabase.rpc('get_db_audit_rls_status');
       if (error) throw error;
       return (data || []) as RlsRow[];
     },
@@ -87,7 +110,10 @@ export function SystemAuditTab() {
   };
 
   const maxTrend = Math.max(1, ...(trend.data?.map((t) => Number(t.total)) || [1]));
-  const rlsIssues = (rls.data || []).filter((r) => !r.rls_enabled || r.policy_count === 0);
+  const visibleFingerprints = (fp.data || []).filter((f) => view === 'all' || (view === 'open' ? f.open_count > 0 && f.severity !== 'info' : f.open_count === 0));
+  const queryFailed = fp.isError || breakdown.isError || trend.isError || routes.isError || rls.isError;
+  const rlsIssues = (rls.data || []).filter((r) => !r.rls_enabled);
+  const lockedTables = (rls.data || []).filter((r) => r.rls_enabled && r.policy_count === 0);
 
   return (
     <div className="space-y-6">
@@ -96,7 +122,9 @@ export function SystemAuditTab() {
           <Shield className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">Audit Insights</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
+          <Select value={view} onValueChange={setView}><SelectTrigger className="w-[170px]" aria-label="Audit status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open errors</SelectItem><SelectItem value="resolved">Resolved history</SelectItem><SelectItem value="all">All activity</SelectItem></SelectContent></Select>
+          <Button variant="outline" size="sm" onClick={() => setConfirmClear(true)} disabled={clear.isPending}>Clear resolved</Button>
           <Select value={days} onValueChange={setDays}>
             <SelectTrigger className="w-[140px] rounded-xl">
               <SelectValue />
@@ -114,17 +142,19 @@ export function SystemAuditTab() {
         </div>
       </div>
 
+      {queryFailed && <div role="alert" className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Some audit reports could not load. <Button variant="outline" size="sm" onClick={refreshAll}>Retry</Button></div>}
+      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Clear resolved error logs?</AlertDialogTitle><AlertDialogDescription>This permanently removes resolved error logs across all dates. Open errors and transaction audit history are kept.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); clear.mutate(); }} disabled={clear.isPending}>{clear.isPending ? 'Clearing…' : 'Clear resolved logs'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {/* Daily Trend */}
       <Card className="rounded-2xl border-border/50 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-info" /> Daily Error Trend (last 14 days)
+            <TrendingUp className="h-4 w-4 text-info" /> Daily Activity Trend (last {days} days)
           </CardTitle>
         </CardHeader>
         <CardContent>
           {trend.isLoading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
-          ) : !trend.data?.length ? (
+          ) : trend.isError ? (<p className="text-sm text-destructive">Activity report unavailable.</p>) : !trend.data?.length ? (
             <div className="text-center py-8">
               <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">No errors in this window.</p>
@@ -135,7 +165,7 @@ export function SystemAuditTab() {
                 const h = (Number(d.total) / maxTrend) * 100;
                 const crit = Number(d.critical_count) > 0;
                 return (
-                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1" title={`${d.day}: ${d.total} (${d.critical_count} critical)`}>
+                  <div key={d.day} className="flex-1 h-full flex flex-col justify-end items-center gap-1" title={`${d.day}: ${d.total} (${d.critical_count} critical)`}>
                     <div
                       className={`w-full rounded-t-md transition-all ${crit ? 'bg-destructive' : 'bg-info'}`}
                       style={{ height: `${Math.max(h, 4)}%` }}
@@ -153,15 +183,15 @@ export function SystemAuditTab() {
       <Card className="rounded-2xl border-border/50 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <AlertTriangle className="h-4 w-4 text-destructive" /> Top Recurring Errors
+            <AlertTriangle className="h-4 w-4 text-destructive" /> Error Groups
             <Badge variant="secondary" className="text-xs ml-1">last {days}d</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {fp.isLoading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
-          ) : !fp.data?.length ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">No recurring errors.</p>
+          ) : fp.isError ? (<p className="text-sm text-destructive">Error groups unavailable.</p>) : !visibleFingerprints.length ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">{view === 'open' ? 'No open errors in this window.' : 'No matching activity.'}</p>
           ) : (
             <div className="overflow-auto">
               <Table>
@@ -173,11 +203,11 @@ export function SystemAuditTab() {
                     <TableHead>Message</TableHead>
                     <TableHead className="text-right">Occurrences</TableHead>
                     <TableHead className="text-right">Open</TableHead>
-                    <TableHead>Last Seen</TableHead>
+                    <TableHead>Last Seen</TableHead><TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {fp.data.map((f) => (
+                  {visibleFingerprints.map((f) => (
                     <TableRow key={f.fingerprint}>
                       <TableCell>
                         <Badge className={`${sevClass((f.severity || 'error').toLowerCase())} rounded-full text-xs font-medium`} variant="secondary">
@@ -186,7 +216,7 @@ export function SystemAuditTab() {
                       </TableCell>
                       <TableCell className="text-xs">{f.source || 'frontend'}</TableCell>
                       <TableCell className="font-mono text-xs max-w-[180px] truncate">{f.function_name || f.route || '—'}</TableCell>
-                      <TableCell className="max-w-[320px] truncate text-sm">{f.error_message}</TableCell>
+                      <TableCell title={f.error_message} className="max-w-[320px] truncate text-sm">{f.error_message}</TableCell>
                       <TableCell className="text-right font-semibold">{f.total_occurrences}</TableCell>
                       <TableCell className="text-right">
                         {Number(f.open_count) > 0 ? (
@@ -197,7 +227,7 @@ export function SystemAuditTab() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {format(new Date(f.last_seen), 'MMM d, HH:mm')}
-                      </TableCell>
+                      </TableCell><TableCell>{f.open_count > 0 ? <Button size="sm" variant="outline" disabled={resolve.isPending} onClick={() => resolve.mutate(f.fingerprint)}>Resolve</Button> : <span className="text-xs text-success">Resolved</span>}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -216,7 +246,7 @@ export function SystemAuditTab() {
           <CardContent>
             {breakdown.isLoading ? (
               <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
-            ) : !breakdown.data?.length ? (
+            ) : breakdown.isError ? (<p className="text-sm text-destructive">Report unavailable.</p>) : !breakdown.data?.length ? (
               <p className="text-sm text-muted-foreground py-6 text-center">No data.</p>
             ) : (
               <Table>
@@ -254,7 +284,7 @@ export function SystemAuditTab() {
           <CardContent>
             {routes.isLoading ? (
               <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
-            ) : !routes.data?.length ? (
+            ) : routes.isError ? (<p className="text-sm text-destructive">Report unavailable.</p>) : !routes.data?.length ? (
               <p className="text-sm text-muted-foreground py-6 text-center">No data.</p>
             ) : (
               <Table>
@@ -286,19 +316,19 @@ export function SystemAuditTab() {
           <CardTitle className="flex items-center gap-2 text-base">
             <Database className="h-4 w-4 text-warning" /> Database RLS Sweep
             {rlsIssues.length > 0 ? (
-              <Badge variant="destructive" className="text-xs">{rlsIssues.length} issues</Badge>
+              <Badge variant="destructive" className="text-xs">{rlsIssues.length} require review</Badge>
             ) : (
-              <Badge variant="secondary" className="text-xs">All clear</Badge>
+              <Badge variant="secondary" className="text-xs">No unprotected tables</Badge>
             )}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {rls.isLoading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
-          ) : rlsIssues.length === 0 ? (
+          ) : rls.isError ? (<p className="text-sm text-destructive">Security report unavailable.</p>) : rlsIssues.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Every public table has RLS enabled with at least one policy.</p>
+              <p className="text-sm text-muted-foreground">Row security is enabled on every checked table. {lockedTables.length} tables are locked to direct app access.</p>
             </div>
           ) : (
             <Table>
@@ -329,7 +359,7 @@ export function SystemAuditTab() {
             </Table>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            Sweep covers all <code className="font-mono">public.*</code> tables. For function search_path and other linter rules, run the Supabase linter from the database tooling.
+            Structural check only; enabled row security does not prove every access rule is correct.
           </p>
         </CardContent>
       </Card>

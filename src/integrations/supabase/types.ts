@@ -17827,6 +17827,65 @@ export type Database = {
         Args: { p_member_id: string; p_slot_id: string }
         Returns: Json
       }
+      lead_nurture_candidates: {
+        Args: {
+          p_cooldown_hours: number
+          p_delay_hours: number
+          p_max_retries: number
+        }
+        Returns: {
+          assigned_to: string | null
+          avatar_consent_blocked: boolean
+          avatar_source: string | null
+          avatar_synced_at: string | null
+          bot_active: boolean | null
+          bot_paused_by: string | null
+          bot_paused_reason: string | null
+          bot_paused_until: string | null
+          branch_id: string | null
+          captured_lead_id: string | null
+          contact_avatar_url: string | null
+          contact_name: string | null
+          context_expires_at: string | null
+          context_ref_id: string | null
+          context_ref_type: string | null
+          context_set_at: string | null
+          conversation_context: string | null
+          conversation_summary: string | null
+          created_at: string | null
+          do_not_contact: boolean
+          do_not_contact_reason: string | null
+          do_not_contact_set_at: string | null
+          do_not_contact_set_by: string | null
+          do_not_contact_until: string | null
+          external_username: string | null
+          founder_handoff_task_id: string | null
+          handoff_reason: string | null
+          handoff_requested_at: string | null
+          id: string
+          is_unread: boolean | null
+          last_nurture_at: string | null
+          last_nurture_hash: string | null
+          last_nurture_text: string | null
+          linked_member_id: string | null
+          nurture_angle_history: Json
+          nurture_retry_count: number | null
+          partial_lead_data: Json | null
+          paused_at: string | null
+          paused_by: string | null
+          phone_number: string
+          platform: Database["public"]["Enums"]["messaging_platform"]
+          summary_message_count: number | null
+          summary_updated_at: string | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "whatsapp_chat_settings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       leave_facility_waitlist: {
         Args: { p_waitlist_id: string }
         Returns: Json

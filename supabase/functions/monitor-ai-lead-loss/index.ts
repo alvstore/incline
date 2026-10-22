@@ -1,3 +1,4 @@
+// v3.2.0 — Expected non-WhatsApp skips do not create SLA errors.
 // v3.0.0 — AI Reply SLA monitor. ALERT-FIRST, never conversational.
 //
 // v2.x shipped a deterministic "recovery ladder" (name → email → goal → plan)
@@ -289,7 +290,7 @@ serve(async (req) => {
       // holding line; only WhatsApp keeps the SLA alerting.
       const platform = String(row.platform || "whatsapp").toLowerCase();
       if (platform !== "whatsapp") {
-        await logLeadLoss(row, "skipped_non_whatsapp_platform");
+        // Intentional exclusion, not a missed WhatsApp reply.
         skipped++;
         continue;
       }

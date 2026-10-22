@@ -1,3 +1,4 @@
+// v8.2.0 — Indexed due-candidate lookup avoids scanning hundreds of idle chats.
 // v8.1.0 — Honour UI ops fields (delay_hours / max_retries / cooldown_hours).
 //
 // Cadence is driven ONLY by fields exposed in HandleOpsSettings:
@@ -235,14 +236,11 @@ serve(async (req) => {
       });
     }
 
-    const { data: staleChats, error: chatErr } = await supabase
-      .from("whatsapp_chat_settings")
-      .select(
-        "id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform, do_not_contact, do_not_contact_until, handoff_reason, last_nurture_hash",
-      )
-      .eq("bot_active", true)
-      .eq("do_not_contact", false)
-      .is("handoff_reason", null);
+    const { data: staleChats, error: chatErr } = await supabase.rpc("lead_nurture_candidates", {
+      p_delay_hours: delayHours,
+      p_cooldown_hours: cooldownHours,
+      p_max_retries: maxRetries,
+    });
 
     if (chatErr) {
       return new Response(JSON.stringify({ error: chatErr.message }), {

@@ -878,10 +878,10 @@ function RegistrationWizard() {
               >
               {newMember && photoState !== "done" && (
                 <div className="rounded-2xl bg-primary-foreground/10 p-4 text-left">
-                  <p className="text-sm font-semibold">Add your photo for gate entry</p>
+                  <p className="text-sm font-semibold">Add your profile photo</p>
                   <p className="mt-1 text-xs text-primary-foreground/70">
                     Look straight at the camera in good light, with only your face in frame. This is the
-                    photo the entry gates will use, so we check it before saving.
+                    photo for your profile. Reception will verify your gate photo before enabling entry.
                   </p>
                   <button
                     type="button"
@@ -912,11 +912,11 @@ function RegistrationWizard() {
                           userId: newMember.userId,
                           personName: details?.full_name || "Member",
                           person: { entityType: "members", entityId: newMember.memberId },
-                          // First-time capture at registration IS the gate face.
-                          enrollFace: true,
+                          // Self-service captures a display photo; reception verifies gate enrollment.
+                          enrollFace: false,
                         });
                         setPhotoState("done");
-                        toast.success("Photo accepted — the entry gates will recognise you");
+                        toast.success("Photo saved — reception will verify your gate enrollment");
                       } catch (err) {
                         setPhotoState("idle");
                         const msg = err instanceof Error ? err.message : "Could not upload photo";
@@ -929,7 +929,7 @@ function RegistrationWizard() {
                 </div>
               )}
               {photoState === "done" && (
-                <p className="text-xs font-medium text-success">Photo received — you're set for gate entry.</p>
+                <p className="text-xs font-medium text-success">Profile photo saved — reception will complete gate enrollment.</p>
               )}
               </ErrorBoundary>
 
