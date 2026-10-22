@@ -13007,6 +13007,7 @@ export type Database = {
           amount: number
           auto_recover: boolean
           branch_id: string
+          carried_from: string | null
           created_at: string
           created_by: string | null
           expense_id: string | null
@@ -13016,6 +13017,8 @@ export type Database = {
           payment_method: Database["public"]["Enums"]["payment_method"] | null
           payment_reference: string | null
           reason: string | null
+          recover_in_month: string | null
+          source: string
           status: string
           updated_at: string
           user_id: string
@@ -13024,6 +13027,7 @@ export type Database = {
           amount: number
           auto_recover?: boolean
           branch_id: string
+          carried_from?: string | null
           created_at?: string
           created_by?: string | null
           expense_id?: string | null
@@ -13033,6 +13037,8 @@ export type Database = {
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           payment_reference?: string | null
           reason?: string | null
+          recover_in_month?: string | null
+          source?: string
           status?: string
           updated_at?: string
           user_id: string
@@ -13041,6 +13047,7 @@ export type Database = {
           amount?: number
           auto_recover?: boolean
           branch_id?: string
+          carried_from?: string | null
           created_at?: string
           created_by?: string | null
           expense_id?: string | null
@@ -13050,6 +13057,8 @@ export type Database = {
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           payment_reference?: string | null
           reason?: string | null
+          recover_in_month?: string | null
+          source?: string
           status?: string
           updated_at?: string
           user_id?: string
@@ -18197,10 +18206,20 @@ export type Database = {
         Args: { p_item_id: string; p_patch: Json; p_reason: string }
         Returns: undefined
       }
-      payroll_advance_due: {
-        Args: { p_branch_id: string; p_payable: number; p_user_id: string }
-        Returns: number
-      }
+      payroll_advance_due:
+        | {
+            Args: { p_branch_id: string; p_payable: number; p_user_id: string }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_branch_id: string
+              p_payable: number
+              p_period_end: string
+              p_user_id: string
+            }
+            Returns: number
+          }
       payroll_approve_run: { Args: { p_run_id: string }; Returns: undefined }
       payroll_create_run: {
         Args: {
