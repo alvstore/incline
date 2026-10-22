@@ -1,3 +1,4 @@
+import { actorFallback } from '@/lib/audit/actorLabel';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -2096,7 +2097,7 @@ export function MemberProfileDrawer({
                       <div>Start: {format(new Date(activeMembership.start_date), 'dd MMM yyyy')}</div>
                       <div>End: {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}</div>
                       <div>Paid: ₹{activeMembership.price_paid}</div>
-                      <div>Sold by: {actorName((activeMembership as any).created_by) || 'System'}</div>
+                      <div>Sold by: {actorName((activeMembership as any).created_by) || actorFallback((activeMembership as any).created_at)}</div>
                     </div>
 
                     {freeDaysTotal > 0 && (
@@ -2112,7 +2113,7 @@ export function MemberProfileDrawer({
                                 <span className="font-semibold text-foreground">+{row.days_added}d</span>{' '}
                                 — {row.reason || 'No reason recorded'}
                                 <span className="block text-[11px] text-muted-foreground">
-                                  Granted by: {actorName(row.added_by) || 'System'}
+                                  Granted by: {actorName(row.added_by) || actorFallback((row as any).created_at)}
                                 </span>
                               </span>
                               <span className="whitespace-nowrap">
@@ -2198,7 +2199,7 @@ export function MemberProfileDrawer({
                               <p className="font-medium text-sm truncate">{m.membership_plans?.name}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(m.start_date), 'dd MMM yy')} - {format(new Date(m.end_date), 'dd MMM yy')}
-                                {' · '}Sold by: {actorName(m.created_by) || 'System'}
+                                {' · '}Sold by: {actorName(m.created_by) || actorFallback((m as any).created_at)}
                               </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
