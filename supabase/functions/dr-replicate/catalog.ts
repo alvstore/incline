@@ -63,7 +63,7 @@ export const POLICY_SCHEMAS = ["storage", "realtime", "auth"];
 export const STANDBY_HELPER_PREFIX = "dr_mirror_";
 
 const aclJson = (expr: string) =>
-  `(SELECT coalesce(json_agg(json_build_object('grantee', CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END, 'priv', a.privilege_type, 'grantable', a.is_grantable) ORDER BY 1), '[]'::json) FROM aclexplode(${expr}) a)`;
+  `(SELECT coalesce(json_agg(json_build_object('grantee', CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END, 'priv', a.privilege_type, 'grantable', a.is_grantable) ORDER BY a.grantee, a.privilege_type, a.is_grantable), '[]'::json) FROM aclexplode(${expr}) a)`;
 
 /** Snapshot query. Must run with search_path = pg_catalog on both sides. */
 export function snapshotSql(schemas = MIRROR_SCHEMAS, policySchemas = POLICY_SCHEMAS): string {
