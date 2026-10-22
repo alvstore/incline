@@ -666,6 +666,13 @@
       "when": 1792673138268,
       "tag": "0094_dr_standby_capability",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792676680673,
+      "tag": "0095_pos_staff_buyers_manual_discount",
+      "breakpoints": true
     }
   ]
 }
