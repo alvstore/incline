@@ -170,8 +170,11 @@ export interface PlanStep {
   deferred?: boolean;
 }
 
-/** Grantees never compared: object owners/administrators with implicit rights. */
-const SKIP_GRANTEES = new Set(["postgres", "supabase_admin"]);
+/**
+ * Grants are compared for the application roles only. Platform roles (supabase_*,
+ * pg_*, dashboard/sandbox/pooler roles) differ per installation and carry no app access.
+ */
+export const APP_GRANTEES = new Set(["PUBLIC", "anon", "authenticated", "service_role"]);
 
 const stripSemi = (s: string) => s.trim().replace(/;+\s*$/, "");
 const fkNorm = (def: string) => def.replace(/\s+NOT VALID$/, "");
@@ -202,7 +205,7 @@ export function aclStatements(
   column?: string,
 ): string[] {
   const keep = (owner: string) => (a: Acl) =>
-    a.grantee !== owner && !SKIP_GRANTEES.has(a.grantee) && (a.grantee === "PUBLIC" || roles.has(a.grantee));
+    a.grantee !== owner && APP_GRANTEES.has(a.grantee) && (a.grantee === "PUBLIC" || roles.has(a.grantee));
   const key = (a: Acl) => `${a.grantee}|${a.priv}|${a.grantable ? 1 : 0}`;
   const p = new Map(primaryAcl.filter(keep(primaryOwner)).map((a) => [key(a), a]));
   const s = new Map(standbyAcl.filter(keep(standbyOwner)).map((a) => [key(a), a]));
