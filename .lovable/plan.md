@@ -1,13 +1,13 @@
 # POS: staff purchases, manual discount with audit, and product search fix
 
 ## What I found
-- **Glutamine is in stock and sellable** ("Muscletech™ Platinum Glutamine", ₹1,499, 3 in stock at your branch). It is hidden because the search only matches the exact typed text: the ™ symbol after "Muscletech" means typing "muscletech platinum", "muscle tech" or "glutamine muscletech" finds nothing. SKU search (MT26361) is also not supported.
-- **Staff can't be chosen as the buyer.** The counter only lets you pick a member or walk-in, so Bhagirath's purchase can't be linked to him or his payroll.
+- **Glutamine is in stock and sellable** ("Muscletech™ Platinum Glutamine", ₹1,499, 3 in stock). Some searches still miss it: the ™ symbol means "muscletech platinum" or "muscle tech" find nothing, and SKU search (MT26361) isn't supported.
+- **Bhagirath can't be found as the customer (main issue).** He is on the staff list (Bhagirath Gurjar), not the member list, and the customer search at the counter only looks through members. So he, and any trainer or staff buyer, never shows up, and the sale can't be linked to his payroll.
 - **No manual discount.** Only coupon codes reduce the price; there is no way to sell ₹1,499 at ₹1,300 and no record of who allowed it or why.
 
 ## What I'll build
 1. **Smarter search** — ignores symbols (™, ®, commas), matches words in any order, "muscle tech" = "muscletech", and searches SKU too.
-2. **Buyer type: Member / Staff / Walk-in** — Staff lets you search employees and trainers of the branch.
+2. **Customer search includes staff and trainers.** A Member / Staff & Trainers / Walk-in switch, where Staff & Trainers searches your branch team by name, phone or employee code (for example "Bhagirath"). Results get a "Staff" or "Trainer" label.
 3. **Manual discount on the bill** (₹ amount or %), with:
    - required reason (dropdown: Staff purchase, Loyalty, Damaged box, Manager approval, Other + note);
    - limits: staff role can give up to a branch-set % (default 10%); above that, or any discount by staff, needs a manager/owner; managers/owners can give any amount, never below cost without a warning;
