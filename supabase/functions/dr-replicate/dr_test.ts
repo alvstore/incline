@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { aclStatements, loadModeDrops, planSchema, type Snapshot } from "./catalog.ts";
 import { planJobs } from "./jobs.ts";
-import { chunkRowCount, rangeHashSql, type TableSpec } from "./rows.ts";
+import { chunkRowCount, rangeHashSql, specSql, type TableSpec } from "./rows.ts";
 import { rangePredicate } from "./sqlText.ts";
 import { metaFixSql, type Obj, planObjects } from "./storage.ts";
 
