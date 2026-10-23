@@ -1,5 +1,6 @@
 import { ReactNode, useState, useCallback, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { AppSidebar, MobileNav } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { TopModulesBar } from './TopModulesBar';
@@ -69,6 +70,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     () => moduleGroups.find((g) => g.module.id === activeModuleId)?.module.label,
     [moduleGroups, activeModuleId],
   );
+
+  // Per-page tab title so the previous route's title (e.g. "Sign in") never sticks.
+  const pageTitle = useMemo(() => {
+    const path = location.pathname;
+    let best: { label: string; len: number } | null = null;
+    for (const g of moduleGroups) {
+      for (const item of g.items) {
+        const href = item.href.split('?')[0];
+        if ((path === href || path.startsWith(`${href}/`)) && (!best || href.length > best.len)) {
+          best = { label: item.label, len: href.length };
+        }
+      }
+    }
+    return best ? `${best.label} · Incline` : 'Incline';
+  }, [moduleGroups, location.pathname]);
 
   const { data: org } = useOrgBranding();
 
@@ -255,6 +271,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   // ===== Standard layout (vertical / collapsed) =====
   return (
     <div className="min-h-screen flex bg-background">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
       <AppSidebar
         mode={navMode}
         onToggleCollapse={handleToggleCollapse}
