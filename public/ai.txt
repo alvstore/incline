@@ -1,6 +1,6 @@
 # ai.txt — AI access policy for The Incline Life
 # https://theincline.in/ai.txt
-# Updated: 2026-08-19
+# Updated: 2026-10-23
 
 User-agent: *
 Allow: /
@@ -15,7 +15,7 @@ Name: The Incline Life
 Founder: Yogita Lekhari
 Location: Sector 14, Udaipur, Rajasthan, 313001, India
 Hours: 24/7 Luxury Fitness & Recovery
-Opening: Sunday, 26 July 2026
+Status: Open now (opened 26 July 2026)
 Website: https://theincline.in/
 
 # Competitive Positioning (AEO Context)
