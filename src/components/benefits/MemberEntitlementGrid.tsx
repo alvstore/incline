@@ -63,9 +63,9 @@ export function MemberEntitlementGrid({ entitlements, frozen = false }: MemberEn
                 </Badge>
               )}
               {entitlement.addOnRemaining > 0 && (
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 text-primary">
                   <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  Add-on · {entitlement.addOnRemaining}
+                  Purchased · {entitlement.addOnRemaining}
                 </Badge>
               )}
             </div>
