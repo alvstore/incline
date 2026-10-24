@@ -15,9 +15,11 @@ interface MeasurementMetricsTabProps {
   history: MemberMeasurementRecord[];
   memberName?: string;
   memberCode?: string;
+  /** Member page already shows weight/height tiles above the tabs. */
+  hideHeadline?: boolean;
 }
 
-export function MeasurementMetricsTab({ latest, previous, weightTrend, bmi, history, memberName, memberCode }: MeasurementMetricsTabProps) {
+export function MeasurementMetricsTab({ latest, previous, weightTrend, bmi, history, memberName, memberCode, hideHeadline }: MeasurementMetricsTabProps) {
   return (
     <div className="space-y-4">
       <Card className="rounded-2xl border-border/60 bg-card shadow-lg shadow-primary/5">
@@ -44,6 +46,12 @@ export function MeasurementMetricsTab({ latest, previous, weightTrend, bmi, hist
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {hideHeadline ? (
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold tabular-nums">{bmi || '--'}</p>
+              <p className="text-xs text-muted-foreground">BMI</p>
+            </div>
+          ) : (
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-2xl font-bold">{latest.weight_kg || '--'}</p>
@@ -59,6 +67,7 @@ export function MeasurementMetricsTab({ latest, previous, weightTrend, bmi, hist
               <p className="text-xs text-muted-foreground">BMI</p>
             </div>
           </div>
+          )}
 
           {(latest.chest_cm || latest.waist_cm || latest.hips_cm || latest.abdomen_cm || latest.shoulder_cm) && (
             <div className="border-t pt-2">
