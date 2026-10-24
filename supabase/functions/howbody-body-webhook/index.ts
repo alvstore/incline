@@ -1,4 +1,4 @@
-// v2.2.0 — HOWBODY body composition push receiver
+// v2.3.0 — HOWBODY body composition push receiver
 // Auth: App Key accepted via header, query string, or JSON body. When the vendor
 // cloud sends no key at all (observed in production), fall back to the device
 // allowlist so genuine reports from a registered scanner are never dropped.
@@ -77,11 +77,24 @@ Deno.serve(async (req) => {
     }
 
 
-    const { data: member } = await sb
+    let { data: member } = await sb
       .from("members")
       .select("id")
       .eq("howbody_third_uid", thirdUid)
       .maybeSingle();
+    // v2.3.0 — scans typed on the scanner (no app login) carry a name+phone ID such as
+    // "Mohit8209887831". Match the last 10 digits to exactly one member's phone.
+    if (!member) {
+      const digits = (String(thirdUid).match(/[6-9]\d{9}$/) || String(payload.tel ?? "").replace(/\D/g, "").match(/[6-9]\d{9}$/))?.[0];
+      if (digits) {
+        const { data: profs } = await sb.from("profiles").select("id").in("phone", [`+91${digits}`, digits, `91${digits}`]);
+        const ids = (profs || []).map((r: { id: string }) => r.id);
+        if (ids.length) {
+          const { data: ms } = await sb.from("members").select("id").in("user_id", ids);
+          if (ms && ms.length === 1) member = ms[0];
+        }
+      }
+    }
     if (!member) {
       await logWebhook("body", thirdUid, dataKey, 404, "member not found", payload);
       return json(ENVELOPE_FAIL, 404);
@@ -101,6 +114,7 @@ Deno.serve(async (req) => {
     }
 
     const testTime = payload.testTime ? new Date(Number(payload.testTime) * 1000).toISOString() : null;
+    const parseArr = (v: unknown): number[] | null => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a.map(Number) : null; } catch { return null; } };
     const num = (v: unknown) => (v === undefined || v === null || v === "" ? null : Number(v));
 
     const { data: upserted, error: upsertError } = await sb.from("howbody_body_reports").upsert({
@@ -127,6 +141,14 @@ Deno.serve(async (req) => {
       fat_control: num(payload.fatControl),
       icf: num(payload.icf),
       ecf: num(payload.ecf),
+      age: num(payload.age) === null ? null : Math.round(Number(payload.age)),
+      height_cm: num(payload.height),
+      sex: payload.indexSex == null ? null : String(payload.indexSex) === "1" ? "male" : "female",
+      ffm: num(payload.ffb),
+      minerals: num(payload.isSalt),
+      segment_fat: parseArr(payload.jdzf),
+      segment_muscle: parseArr(payload.jrjh),
+      reference_ranges: Object.fromEntries(Object.entries(payload).filter(([k]) => /(Bottom|Top)$/.test(k))),
       full_payload: payload,
     }, { onConflict: "data_key" }).select("id").maybeSingle();
     if (upsertError || !upserted?.id) {

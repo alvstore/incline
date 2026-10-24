@@ -27,3 +27,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - Registration self-service saves only display photos; biometric enrollment remains a staff-verified operation so members cannot replace gate identities.
 - Nurture candidates are selected with indexed latest-message timing in a service-only RPC; workers retain final cadence/contact guards. An aborted worker response is unknown and must not trigger an immediate duplicate dispatch.
 - Invoice settlement presentation reads the linked POS settlement through settlementDisplay; salary deductions must not select payment-received messaging, because payroll recovery is not a cash receipt.
+- HOWBODY webhooks resolve members by howbody_third_uid, then by a unique trailing 10-digit phone in thirdUid/tel (scanner-typed IDs); unmatched pushes stay in howbody_webhook_log and are attached via audited howbody_link_unmatched_scan, never by hand-inserted rows.
