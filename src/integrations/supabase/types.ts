@@ -17816,6 +17816,7 @@ export type Database = {
         Args: { _data_key: string; _member_id: string }
         Returns: Json
       }
+      howbody_num_array: { Args: { v: Json }; Returns: number[] }
       howbody_recover_assessment: {
         Args: { _member_id: string; _scan_id: string }
         Returns: Json
