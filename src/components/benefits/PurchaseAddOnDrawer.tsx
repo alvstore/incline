@@ -8,8 +8,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { format } from 'date-fns';
+import { computeAddonTotals, daysUntil } from '@/lib/benefits/addonPricing';
 import {
-  Loader2, IndianRupee, Calendar, Sparkles, Dumbbell, CheckCircle, Plus, ShieldAlert, CalendarCheck,
+  Loader2, IndianRupee, Calendar, Sparkles, Dumbbell, CheckCircle, Plus, Minus, Pencil, ShieldAlert, CalendarCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -66,6 +70,8 @@ type PtPackage = {
 type BenefitTypeSafety = {
   id: string;
   name: string;
+  code: string | null;
+  is_active: boolean | null;
   safety_notes: string | null;
   terms: string | null;
 };
@@ -128,6 +134,37 @@ export function PurchaseAddOnDrawer({
   }, [open, defaultPackageId]);
 
 
+  // Front-desk custom sale state (staff mode only)
+  const [customMode, setCustomMode] = useState(false);
+  const [customTypeId, setCustomTypeId] = useState('');
+  const [customQty, setCustomQty] = useState(1);
+  const [customAmount, setCustomAmount] = useState(0);
+  const [taxInvoice, setTaxInvoice] = useState(false);
+  const [gstRate, setGstRate] = useState(5);
+  const [validity, setValidity] = useState<string>('30');
+  const isStaffSale = mode === 'staff' && (customMode || !!selectedBenefitPkg);
+  const customTotals = useMemo(() => computeAddonTotals(customAmount, taxInvoice, gstRate), [customAmount, taxInvoice, gstRate]);
+
+  const { data: membershipEnd = null } = useQuery({
+    queryKey: ['addon-membership-end', membershipId],
+    enabled: open && !!membershipId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('memberships').select('end_date').eq('id', membershipId!).maybeSingle();
+      if (error) throw error;
+      return (data?.end_date as string | null) ?? null;
+    },
+  });
+
+  // Default validity follows the membership period when we know it.
+  useEffect(() => {
+    if (membershipEnd) setValidity('sync');
+  }, [membershipEnd]);
+
+  const customIdemKey = useStableIdempotencyKey(
+    memberId,
+    'addon_custom',
+    isStaffSale ? `${customTypeId}:${customQty}:${customAmount}:${taxInvoice ? gstRate : 0}:${validity}:${paymentMethod}` : null,
+  );
 
   // Stable idempotency keys per selected package — same selection retries reuse key.
   const benefitIdemKey = useStableIdempotencyKey(memberId, 'addon_benefit', selectedBenefitPkg ?? null);
@@ -175,7 +212,7 @@ export function PurchaseAddOnDrawer({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('benefit_types')
-        .select('id, name, safety_notes, terms')
+        .select('id, name, code, is_active, safety_notes, terms')
         .eq('branch_id', branchId);
       if (error) throw error;
       return (data || []) as BenefitTypeSafety[];
@@ -233,6 +270,21 @@ export function PurchaseAddOnDrawer({
     [benefitPackages, selectedBenefitPkg],
   );
 
+  const sellableTypes = useMemo(
+    () => benefitTypeSafety.filter((t) => t.is_active !== false && t.code !== 'locker_access'),
+    [benefitTypeSafety],
+  );
+
+  // Picking a catalog package pre-fills the editable sale details.
+  useEffect(() => {
+    if (!selectedPackage || mode !== 'staff') return;
+    setCustomTypeId(selectedPackage.benefit_type_id ?? '');
+    setCustomQty(selectedPackage.quantity || 1);
+    setCustomAmount(Number(selectedPackage.price) || 0);
+    setTaxInvoice(false);
+    setGstRate(Number(selectedPackage.tax_rate) || 5);
+  }, [selectedPackage, mode]);
+
   const selectedSafety = useMemo(() => {
     if (!selectedPackage?.benefit_type_id) return null;
     return benefitTypeSafety.find((t) => t.id === selectedPackage.benefit_type_id) || null;
@@ -271,12 +323,68 @@ export function PurchaseAddOnDrawer({
     setDone(false);
     setPtRequested(false);
     setLastPurchase(null);
+    setCustomMode(false);
+    setCustomTypeId('');
+    setCustomQty(1);
+    setCustomAmount(0);
+    setTaxInvoice(false);
+    setGstRate(5);
     setPaymentMethod(mode === 'member' ? 'online' : 'cash');
   };
 
   const handleClose = () => {
     reset();
     onOpenChange(false);
+  };
+
+  /** Front-desk sale: any facility, any session count/price, GST or bill of supply. */
+  const sellCustom = async () => {
+    if (!membershipId) {
+      toast.error('Active membership required to add benefit credits');
+      return;
+    }
+    if (paymentMethod === 'pending') {
+      toast.error('Pick how the member paid (cash, card, UPI or bank transfer)');
+      return;
+    }
+    if (!customTypeId) {
+      toast.error('Choose the facility');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const typeName = sellableTypes.find((t) => t.id === customTypeId)?.name;
+      const { data, error } = await supabase.rpc('purchase_custom_benefit_credits', {
+        p_member_id: memberId,
+        p_membership_id: membershipId,
+        p_branch_id: branchId,
+        p_benefit_type_id: customTypeId,
+        p_quantity: customQty,
+        p_amount: customAmount,
+        p_is_gst_invoice: taxInvoice,
+        p_gst_rate: gstRate,
+        p_validity_days: validity === 'sync' ? null : Number(validity),
+        p_sync_membership: validity === 'sync',
+        p_payment_method: paymentMethod,
+        p_package_id: selectedBenefitPkg ?? null,
+        p_label: selectedPackage && selectedPackage.quantity === customQty ? selectedPackage.name : typeName ?? null,
+        p_idempotency_key: customIdemKey,
+      });
+      if (error) throw error;
+      const result = data as { success?: boolean; error?: string } | null;
+      if (!result?.success) throw new Error(result?.error || 'Sale failed');
+      toast.success(`${customQty} session${customQty > 1 ? 's' : ''} added`);
+      setLastPurchase({ credits: customQty, validityDays: validity === 'sync' ? (daysUntil(membershipEnd) ?? 30) : Number(validity) });
+      for (const key of ['member-benefit-credits', 'my-benefit-credits', 'member-live-benefit-credits', 'member-benefit-credits-tracking',
+        'my-member-entitlements', 'store-addons-credits', 'invoices', 'member-invoices']) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      setDone(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to record the sale');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const buyBenefit = async () => {
@@ -451,7 +559,7 @@ export function PurchaseAddOnDrawer({
     return (
       <Card
         key={p.id}
-        onClick={() => setSelectedBenefitPkg(p.id)}
+        onClick={() => { setCustomMode(false); setSelectedBenefitPkg(p.id); }}
         className={`cursor-pointer transition-all duration-200 rounded-xl ${
           selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-primary/20' : 'border-border/60 hover:border-primary/40'
         }`}
@@ -624,7 +732,102 @@ export function PurchaseAddOnDrawer({
                 ))
               )}
 
-              {selectedPackage && priceBreakdown && (
+              {!isMember && (
+                <Card
+                  onClick={() => { setSelectedBenefitPkg(null); setCustomMode(true); }}
+                  className={`cursor-pointer rounded-xl border-dashed transition-all duration-200 ${
+                    customMode && !selectedBenefitPkg ? 'border-primary ring-2 ring-primary/30' : 'hover:border-primary/40'
+                  }`}
+                >
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <span className="rounded-full bg-primary/10 p-2 text-primary"><Pencil className="h-4 w-4" /></span>
+                    <div>
+                      <p className="text-sm font-semibold">Custom add-on</p>
+                      <p className="text-xs text-muted-foreground">Any facility, any number of sessions, your price.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {isStaffSale && (
+                <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sale details</p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-type">Facility / service</Label>
+                    <Select value={customTypeId} onValueChange={setCustomTypeId}>
+                      <SelectTrigger id="custom-type"><SelectValue placeholder="Choose facility" /></SelectTrigger>
+                      <SelectContent>
+                        {sellableTypes.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="custom-qty">Sessions</Label>
+                      <div className="flex items-center gap-1">
+                        <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" aria-label="Fewer sessions"
+                          onClick={() => setCustomQty((q) => Math.max(1, q - 1))}><Minus className="h-4 w-4" /></Button>
+                        <Input id="custom-qty" type="number" min={1} inputMode="numeric" className="text-center tabular-nums"
+                          value={customQty} onChange={(e) => setCustomQty(Math.max(1, Math.floor(Number(e.target.value) || 1)))} />
+                        <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" aria-label="More sessions"
+                          onClick={() => setCustomQty((q) => q + 1)}><Plus className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="custom-amount">Amount (₹)</Label>
+                      <Input id="custom-amount" type="number" min={0} inputMode="decimal" className="tabular-nums"
+                        value={customAmount} onChange={(e) => setCustomAmount(Math.max(0, Number(e.target.value) || 0))} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-validity">Valid until</Label>
+                    <Select value={validity} onValueChange={setValidity}>
+                      <SelectTrigger id="custom-validity"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {membershipEnd && (
+                          <SelectItem value="sync">Membership end ({format(new Date(membershipEnd), 'dd MMM yyyy')})</SelectItem>
+                        )}
+                        <SelectItem value="30">30 days</SelectItem>
+                        <SelectItem value="60">60 days</SelectItem>
+                        <SelectItem value="90">90 days</SelectItem>
+                        <SelectItem value="365">365 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border p-3">
+                    <div>
+                      <Label htmlFor="custom-gst" className="cursor-pointer">Tax Invoice (GST breakup)</Label>
+                      <p className="text-xs text-muted-foreground">Off = bill of supply, no GST. Member pays the same either way.</p>
+                    </div>
+                    <Switch id="custom-gst" checked={taxInvoice} onCheckedChange={setTaxInvoice} />
+                  </div>
+                  {taxInvoice && (
+                    <Select value={String(gstRate)} onValueChange={(v) => setGstRate(Number(v))}>
+                      <SelectTrigger aria-label="GST rate"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[5, 12, 18].map((r) => <SelectItem key={r} value={String(r)}>{r}% GST</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <div className="rounded-lg bg-background p-3 space-y-1 text-xs">
+                    <div className="flex justify-between"><span className="text-muted-foreground">{taxInvoice ? 'Taxable value' : 'Amount'}</span><span className="tabular-nums">₹{customTotals.subtotal.toLocaleString('en-IN')}</span></div>
+                    {taxInvoice && (
+                      <>
+                        <div className="flex justify-between"><span className="text-muted-foreground">CGST ({gstRate / 2}%)</span><span className="tabular-nums">₹{(customTotals.tax / 2).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">SGST ({gstRate / 2}%)</span><span className="tabular-nums">₹{(customTotals.tax / 2).toFixed(2)}</span></div>
+                      </>
+                    )}
+                    <div className="flex justify-between border-t border-border pt-1 mt-1 text-sm font-bold">
+                      <span>Total · {customQty} session{customQty > 1 ? 's' : ''}</span><span className="tabular-nums">₹{customTotals.total.toLocaleString('en-IN')}</span>
+                    </div>
+                    <p className="text-muted-foreground pt-1">{taxInvoice ? 'Tax invoice (INV series)' : 'Bill of supply (BOS series) — no GST'}</p>
+                  </div>
+                </div>
+              )}
+
+              {!isStaffSale && selectedPackage && priceBreakdown && (
                 <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-1 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Base amount</span>
@@ -708,7 +911,7 @@ export function PurchaseAddOnDrawer({
               )}
             </TabsContent>
 
-            {((tab === 'benefits' && selectedBenefitPkg) || (tab === 'pt' && selectedPtPkg)) && (
+            {((tab === 'benefits' && (selectedBenefitPkg || customMode)) || (tab === 'pt' && selectedPtPkg)) && (
               mode === 'staff' ? (
                 <div className="space-y-2 pt-4">
                   <Label htmlFor="addon-payment">Payment Method</Label>
@@ -754,12 +957,13 @@ export function PurchaseAddOnDrawer({
               <Button variant="outline" onClick={handleClose} disabled={submitting}>Cancel</Button>
               {tab === 'benefits' ? (
                 <Button
-                  onClick={buyBenefit}
+                  onClick={isStaffSale ? sellCustom : buyBenefit}
                   disabled={
                     submitting ||
-                    !selectedBenefitPkg ||
                     !membershipId ||
-                    (needsAcknowledgement && !acknowledged)
+                    (isStaffSale
+                      ? !customTypeId || customQty < 1 || customAmount < 0
+                      : !selectedBenefitPkg || (needsAcknowledgement && !acknowledged))
                   }
                 >
                   {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
