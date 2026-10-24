@@ -70,6 +70,8 @@ type PtPackage = {
 type BenefitTypeSafety = {
   id: string;
   name: string;
+  code: string | null;
+  is_active: boolean | null;
   safety_notes: string | null;
   terms: string | null;
 };
@@ -210,7 +212,7 @@ export function PurchaseAddOnDrawer({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('benefit_types')
-        .select('id, name, safety_notes, terms')
+        .select('id, name, code, is_active, safety_notes, terms')
         .eq('branch_id', branchId);
       if (error) throw error;
       return (data || []) as BenefitTypeSafety[];
@@ -267,6 +269,21 @@ export function PurchaseAddOnDrawer({
     () => benefitPackages.find((p) => p.id === selectedBenefitPkg) || null,
     [benefitPackages, selectedBenefitPkg],
   );
+
+  const sellableTypes = useMemo(
+    () => benefitTypeSafety.filter((t) => t.is_active !== false && t.code !== 'locker_access'),
+    [benefitTypeSafety],
+  );
+
+  // Picking a catalog package pre-fills the editable sale details.
+  useEffect(() => {
+    if (!selectedPackage || mode !== 'staff') return;
+    setCustomTypeId(selectedPackage.benefit_type_id ?? '');
+    setCustomQty(selectedPackage.quantity || 1);
+    setCustomAmount(Number(selectedPackage.price) || 0);
+    setTaxInvoice(false);
+    setGstRate(Number(selectedPackage.tax_rate) || 5);
+  }, [selectedPackage, mode]);
 
   const selectedSafety = useMemo(() => {
     if (!selectedPackage?.benefit_type_id) return null;
