@@ -1,3 +1,6 @@
+# Store invoice identity and sharing (24 Oct 2026)
+- [ ] Correct staff buyer identity and payroll-settlement labels on invoice list and sharing; prefill saved contact details and verify Gyaneshwar's existing invoice without sending a duplicate message or changing recovery records.
+
 # Audit Insights (22 Oct 2026)
 - [x] Audited current error groups; repaired registration's unauthorized self-enrollment attempt and false success, stopped expected Instagram SLA warning noise, closed historical repaired questionnaire/sidebar and expected auth validation entries. Cleared resolved error logs through the owner's screen; transaction audit history preserved.
 - [x] Added per-group Resolve, Clear resolved confirmation, open/history/activity filters, error fallbacks, corrected occurrence totals/date window and trend rendering. Signed-in owner verification: no failed requests or console errors, no open actionable errors; two noise-classification tests pass.

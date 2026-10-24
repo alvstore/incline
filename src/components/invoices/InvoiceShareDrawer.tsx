@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Mail, MessageCircle, Copy, Printer, Download, Send, Phone, Paperclip } from 'lucide-react';
@@ -18,6 +18,8 @@ import { uploadAttachment } from '@/utils/uploadAttachment';
 import { sendWhatsAppDocument } from '@/utils/whatsappDocumentSender';
 import { findTemplate, resolveTemplate } from '@/lib/templates/dynamicAttachment';
 import { dispatchCommunication, buildDedupeKey } from '@/lib/comms/dispatch';
+import { invoiceCommunicationEvent, isSalaryDeduction } from '@/lib/invoices/settlementDisplay';
+import { isValidIndianMobile } from '@/lib/contacts/phone';
 
 interface InvoiceShareDrawerProps {
   open: boolean;
@@ -37,14 +39,15 @@ export function InvoiceShareDrawer({ open, onOpenChange, invoice: invoiceProp }:
 
   // Always fetch the full invoice (with branch + items) when the drawer opens so
   // the generated PDF has every field, regardless of how the caller queried.
-  const { data: fullInvoice } = useQuery({
+  const { data: fullInvoice, isLoading, isError } = useQuery({
     queryKey: ['invoice-share-detail', invoiceProp?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('invoices')
         .select(`
           *,
-          members(member_code, profiles:user_id(full_name, email, phone)),
+          members(member_code, profiles:user_id(full_name, email, phone), lead:lead_id(full_name, email, phone)),
+          pos_sales!invoices_pos_sale_id_fkey(settlement, buyer_type),
           branch:branch_id(name, address, phone, email, gstin),
           invoice_items(*)
         `)
@@ -56,8 +59,22 @@ export function InvoiceShareDrawer({ open, onOpenChange, invoice: invoiceProp }:
     enabled: !!invoiceProp?.id && open,
   });
 
-  if (!invoiceProp) return null;
   const invoice: any = fullInvoice || invoiceProp;
+  const savedPhone = invoice?.members?.profiles?.phone || invoice?.members?.lead?.phone || invoice?.customer_phone || '';
+  const savedEmail = invoice?.members?.profiles?.email || invoice?.members?.lead?.email || invoice?.customer_email || '';
+  const [phoneEdited, setPhoneEdited] = useState(false);
+  const [emailEdited, setEmailEdited] = useState(false);
+  useEffect(() => {
+    setPhoneEdited(false);
+    setEmailEdited(false);
+    setPhone('');
+    setEmail('');
+  }, [invoiceProp?.id, open]);
+  const recipientPhone = phoneEdited ? phone : savedPhone;
+  const recipientEmail = emailEdited ? email : savedEmail;
+
+  if (!invoiceProp) return null;
+  const salaryDeduction = isSalaryDeduction(invoice);
 
   const memberProfile = (invoice.members as any)?.profiles;
   const memberName = memberProfile?.full_name || invoice.customer_name || 'Customer';
@@ -74,8 +91,8 @@ Your invoice #${invoice.invoice_number} is ready. PDF attached.
 
 📋 *Invoice Details*
 Amount: ₹${invoice.total_amount.toLocaleString()}
-${invoice.amount_paid ? `Paid: ₹${invoice.amount_paid.toLocaleString()}` : ''}
-${invoice.total_amount - (invoice.amount_paid || 0) > 0 ? `Balance Due: ₹${(invoice.total_amount - (invoice.amount_paid || 0)).toLocaleString()}` : '✅ Paid in Full'}
+${!salaryDeduction && invoice.amount_paid ? `Paid: ₹${invoice.amount_paid.toLocaleString()}` : ''}
+${salaryDeduction ? 'Settlement: Salary deduction — recovery tracked in payroll' : invoice.total_amount - (invoice.amount_paid || 0) > 0 ? `Balance Due: ₹${(invoice.total_amount - (invoice.amount_paid || 0)).toLocaleString()}` : '✅ Paid in Full'}
 Date: ${format(new Date(invoice.created_at), 'dd MMM yyyy')}
 
 Thank you for your business!
@@ -118,7 +135,7 @@ Team Incline Fitness`;
     const total = Number(invoice.total_amount || 0);
     const paid = Number(invoice.amount_paid || 0);
     const outstanding = Math.max(0, total - paid);
-    const isPaid = invoice.status === 'paid';
+    const isPaid = invoiceCommunicationEvent(invoice) === 'payment_received';
     const dateStr = format(new Date(invoice.created_at), 'dd MMM yyyy');
     const dueStr = invoice.due_date ? format(new Date(invoice.due_date), 'dd MMM yyyy') : dateStr;
     return {
@@ -128,9 +145,9 @@ Team Incline Fitness`;
       first_name: (memberName || '').split(' ')[0] || memberName,
       member_code: (invoice.members as any)?.member_code || '',
       invoice_number: invoice.invoice_number,
-      amount: (isPaid ? total : outstanding).toLocaleString('en-IN'),
-      amount_due: (isPaid ? total : outstanding).toLocaleString('en-IN'),
-      amount_paid: paid.toLocaleString('en-IN'),
+      amount: (isPaid || salaryDeduction ? total : outstanding).toLocaleString('en-IN'),
+      amount_due: (isPaid || salaryDeduction ? total : outstanding).toLocaleString('en-IN'),
+      amount_paid: (salaryDeduction ? 0 : paid).toLocaleString('en-IN'),
       total_amount: total.toLocaleString('en-IN'),
       item_description: `invoice ${invoice.invoice_number}`,
       payment_for: `invoice ${invoice.invoice_number}`,
@@ -143,6 +160,10 @@ Team Incline Fitness`;
 
 
   const handleWhatsAppShare = async () => {
+    if (!isValidIndianMobile(recipientPhone)) {
+      toast.error('Enter a valid Indian mobile number');
+      return;
+    }
     if (!invoice.branch_id) {
       toast.error('Branch context missing — cannot send via WhatsApp');
       return;
@@ -153,7 +174,7 @@ Team Incline Fitness`;
       const tpl = await findTemplate({
         branchId: invoice.branch_id,
         type: 'whatsapp',
-        triggerEvent: 'payment_received',
+        triggerEvent: invoiceCommunicationEvent(invoice),
         nameContains: 'Invoice',
       });
       const vars = buildTemplateVars();
@@ -165,14 +186,14 @@ Team Incline Fitness`;
       const pdf = await generateInvoicePdfBlob(invoice);
       const result = await sendWhatsAppDocument({
         branchId: invoice.branch_id,
-        phone,
+        phone: recipientPhone,
         memberId: invoice.member_id,
         caption: resolved.body,
         filename: resolved.filename || `Invoice-${invoice.invoice_number}.pdf`,
         pdf,
         folder: 'invoices',
         dedupeKey: `invoice:${invoice.id}:wa`,
-        category: 'payment_receipt',
+        category: salaryDeduction ? 'transactional' : 'payment_receipt',
         triggerEvent: String(vars.event_key),
         variables: vars,
       });
@@ -200,7 +221,7 @@ Team Incline Fitness`;
       const tpl = invoice.branch_id ? await findTemplate({
         branchId: invoice.branch_id,
         type: 'email',
-        triggerEvent: 'payment_received',
+        triggerEvent: invoiceCommunicationEvent(invoice),
         nameContains: 'Invoice',
       }) : null;
       const vars = buildTemplateVars();
@@ -224,8 +245,8 @@ Team Incline Fitness`;
       const result = await dispatchCommunication({
         branch_id: invoice.branch_id,
         channel: 'email',
-        category: 'payment_receipt',
-        recipient: email,
+        category: salaryDeduction ? 'transactional' : 'payment_receipt',
+        recipient: recipientEmail,
         member_id: invoice.member_id ?? null,
         payload: {
           subject: resolved.subject || emailSubject,
@@ -254,7 +275,7 @@ Team Incline Fitness`;
 
 
   const handleSMSShare = async () => {
-    await communicationService.sendSMS(phone, smsMessage, {
+    await communicationService.sendSMS(recipientPhone, salaryDeduction ? whatsappMessage : smsMessage, {
       branchId: invoice.branch_id,
       memberId: invoice.member_id,
     });
@@ -390,7 +411,7 @@ Team Incline Fitness`;
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">{memberName}</p>
                   <p className={`text-sm font-medium ${invoice.status === 'paid' ? 'text-success' : 'text-warning'}`}>
-                    {invoice.status.toUpperCase()}
+                    {salaryDeduction ? 'Salary deduction' : invoice.status.toUpperCase()}
                   </p>
                 </div>
               </div>
@@ -400,30 +421,34 @@ Team Incline Fitness`;
           {/* Contact Info */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Phone Number</Label>
+              <Label htmlFor="invoice-share-phone">Phone Number</Label>
               <PhoneInput
-                value={phone}
-                onChange={(value) => setPhone(value)}
+                id="invoice-share-phone"
+                value={recipientPhone}
+                onChange={(value) => { setPhoneEdited(true); setPhone(value); }}
               />
             </div>
             <div className="space-y-2">
-              <Label>Email Address</Label>
+              <Label htmlFor="invoice-share-email">Email Address</Label>
               <Input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="invoice-share-email"
+                value={recipientEmail}
+                onChange={(e) => { setEmailEdited(true); setEmail(e.target.value); }}
                 placeholder="Enter email address"
               />
             </div>
           </div>
 
           {/* Share Options */}
+          {isLoading && <p className="text-sm text-muted-foreground">Loading invoice details…</p>}
+          {isError && <p role="alert" className="text-sm text-destructive">Could not load invoice details. Close and reopen to retry.</p>}
           <div className="space-y-3">
             <p className="text-sm font-medium text-muted-foreground">Share via</p>
             
             <Button 
               className="w-full justify-start gap-3 bg-success hover:bg-success"
               onClick={handleWhatsAppShare}
-              disabled={!phone || sendingWhatsApp}
+              disabled={!isValidIndianMobile(recipientPhone) || sendingWhatsApp || isLoading || isError}
             >
               <MessageCircle className="h-5 w-5" />
               {sendingWhatsApp ? 'Generating PDF & sending…' : 'Send PDF via WhatsApp'}
@@ -433,7 +458,7 @@ Team Incline Fitness`;
               variant="outline"
               className="w-full justify-start gap-3"
               onClick={handleEmailShare}
-              disabled={!email || sendingEmail}
+              disabled={!recipientEmail || sendingEmail || isLoading || isError}
             >
               <Mail className="h-5 w-5" />
               {sendingEmail ? 'Generating PDF & sending…' : 'Send PDF via Email'}
@@ -443,7 +468,7 @@ Team Incline Fitness`;
               variant="outline"
               className="w-full justify-start gap-3"
               onClick={handleSMSShare}
-              disabled={!phone}
+              disabled={!isValidIndianMobile(recipientPhone) || isLoading || isError}
             >
               <Phone className="h-5 w-5" />
               Send via SMS
