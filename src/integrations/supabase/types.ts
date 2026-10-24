@@ -17833,6 +17833,10 @@ export type Database = {
         Args: { _equipment_no: string }
         Returns: undefined
       }
+      howbody_unlink_report: {
+        Args: { _kind: string; _reason: string; _report_id: string }
+        Returns: Json
+      }
       import_purchase_bill: { Args: { p_payload: Json }; Returns: Json }
       internal_fn_token: { Args: never; Returns: string }
       is_bot_paused: {
