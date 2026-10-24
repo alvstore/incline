@@ -32,6 +32,28 @@ const REPLY_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   dismissed: { label: 'Dismissed', cls: 'bg-muted text-muted-foreground' },
 };
 
+const REPLY_TONES = [
+  { value: 'warm', label: 'Warm' },
+  { value: 'friendly', label: 'Friendly' },
+  { value: 'grateful', label: 'Grateful' },
+  { value: 'short', label: 'Short & sweet' },
+  { value: 'professional', label: 'Professional' },
+  { value: 'luxury', label: 'Premium hospitality' },
+  { value: 'empathetic', label: 'Empathetic' },
+  { value: 'apologetic', label: 'Apologetic' },
+  { value: 'playful', label: 'Light & playful' },
+  { value: 'hinglish', label: 'Hinglish' },
+] as const;
+
+const DRAFT_ADJUSTMENTS = [
+  { value: 'shorter', label: 'Shorter' },
+  { value: 'longer', label: 'A bit longer' },
+  { value: 'formal', label: 'More formal' },
+  { value: 'casual', label: 'More casual' },
+  { value: 'invite', label: 'Add visit invite' },
+  { value: 'fresh', label: 'Fresh variation' },
+] as const;
+
 interface InboundRow {
   id: string;
   branch_id: string;
