@@ -8,8 +8,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { format } from 'date-fns';
+import { computeAddonTotals, daysUntil } from '@/lib/benefits/addonPricing';
 import {
-  Loader2, IndianRupee, Calendar, Sparkles, Dumbbell, CheckCircle, Plus, ShieldAlert, CalendarCheck,
+  Loader2, IndianRupee, Calendar, Sparkles, Dumbbell, CheckCircle, Plus, Minus, Pencil, ShieldAlert, CalendarCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -128,6 +132,37 @@ export function PurchaseAddOnDrawer({
   }, [open, defaultPackageId]);
 
 
+  // Front-desk custom sale state (staff mode only)
+  const [customMode, setCustomMode] = useState(false);
+  const [customTypeId, setCustomTypeId] = useState('');
+  const [customQty, setCustomQty] = useState(1);
+  const [customAmount, setCustomAmount] = useState(0);
+  const [taxInvoice, setTaxInvoice] = useState(false);
+  const [gstRate, setGstRate] = useState(5);
+  const [validity, setValidity] = useState<string>('30');
+  const isStaffSale = mode === 'staff' && (customMode || !!selectedBenefitPkg);
+  const customTotals = useMemo(() => computeAddonTotals(customAmount, taxInvoice, gstRate), [customAmount, taxInvoice, gstRate]);
+
+  const { data: membershipEnd = null } = useQuery({
+    queryKey: ['addon-membership-end', membershipId],
+    enabled: open && !!membershipId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('memberships').select('end_date').eq('id', membershipId!).maybeSingle();
+      if (error) throw error;
+      return (data?.end_date as string | null) ?? null;
+    },
+  });
+
+  // Default validity follows the membership period when we know it.
+  useEffect(() => {
+    if (membershipEnd) setValidity('sync');
+  }, [membershipEnd]);
+
+  const customIdemKey = useStableIdempotencyKey(
+    memberId,
+    'addon_custom',
+    isStaffSale ? `${customTypeId}:${customQty}:${customAmount}:${taxInvoice ? gstRate : 0}:${validity}:${paymentMethod}` : null,
+  );
 
   // Stable idempotency keys per selected package — same selection retries reuse key.
   const benefitIdemKey = useStableIdempotencyKey(memberId, 'addon_benefit', selectedBenefitPkg ?? null);
@@ -271,12 +306,68 @@ export function PurchaseAddOnDrawer({
     setDone(false);
     setPtRequested(false);
     setLastPurchase(null);
+    setCustomMode(false);
+    setCustomTypeId('');
+    setCustomQty(1);
+    setCustomAmount(0);
+    setTaxInvoice(false);
+    setGstRate(5);
     setPaymentMethod(mode === 'member' ? 'online' : 'cash');
   };
 
   const handleClose = () => {
     reset();
     onOpenChange(false);
+  };
+
+  /** Front-desk sale: any facility, any session count/price, GST or bill of supply. */
+  const sellCustom = async () => {
+    if (!membershipId) {
+      toast.error('Active membership required to add benefit credits');
+      return;
+    }
+    if (paymentMethod === 'pending') {
+      toast.error('Pick how the member paid (cash, card, UPI or bank transfer)');
+      return;
+    }
+    if (!customTypeId) {
+      toast.error('Choose the facility');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const typeName = sellableTypes.find((t) => t.id === customTypeId)?.name;
+      const { data, error } = await supabase.rpc('purchase_custom_benefit_credits', {
+        p_member_id: memberId,
+        p_membership_id: membershipId,
+        p_branch_id: branchId,
+        p_benefit_type_id: customTypeId,
+        p_quantity: customQty,
+        p_amount: customAmount,
+        p_is_gst_invoice: taxInvoice,
+        p_gst_rate: gstRate,
+        p_validity_days: validity === 'sync' ? null : Number(validity),
+        p_sync_membership: validity === 'sync',
+        p_payment_method: paymentMethod,
+        p_package_id: selectedBenefitPkg ?? null,
+        p_label: selectedPackage && selectedPackage.quantity === customQty ? selectedPackage.name : typeName ?? null,
+        p_idempotency_key: customIdemKey,
+      });
+      if (error) throw error;
+      const result = data as { success?: boolean; error?: string } | null;
+      if (!result?.success) throw new Error(result?.error || 'Sale failed');
+      toast.success(`${customQty} session${customQty > 1 ? 's' : ''} added`);
+      setLastPurchase({ credits: customQty, validityDays: validity === 'sync' ? (daysUntil(membershipEnd) ?? 30) : Number(validity) });
+      for (const key of ['member-benefit-credits', 'my-benefit-credits', 'member-live-benefit-credits', 'member-benefit-credits-tracking',
+        'my-member-entitlements', 'store-addons-credits', 'invoices', 'member-invoices']) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      setDone(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to record the sale');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const buyBenefit = async () => {
