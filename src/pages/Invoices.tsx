@@ -39,6 +39,7 @@ import { downloadBlob } from '@/utils/pdfBlob';
 import { useActorNames } from '@/hooks/useActorNames';
 import { actorFallback } from '@/lib/audit/actorLabel';
 import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
+import { isSalaryDeduction } from '@/lib/invoices/settlementDisplay';
 
 const PAGE_SIZE = 20;
 
@@ -108,7 +109,8 @@ export default function InvoicesPage() {
       const { data, error } = await supabase
         .from('invoices')
         .select(`
-          id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
+          id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id, customer_name, customer_email, customer_phone,
+          pos_sales!invoices_pos_sale_id_fkey(settlement, buyer_type),
           members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
           invoice_items(description, reference_type)
         `)
@@ -225,7 +227,8 @@ export default function InvoicesPage() {
         supabase
           .from('invoices')
           .select(`
-            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, created_by, member_id, pos_sale_id, branch_id, is_proforma, document_series,
+            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, created_by, member_id, pos_sale_id, branch_id, is_proforma, document_series, customer_name, customer_email, customer_phone,
+            pos_sales!invoices_pos_sale_id_fkey(settlement, buyer_type),
             members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
             invoice_items(description, reference_type)
           `, { count: 'exact' })
@@ -337,7 +340,7 @@ export default function InvoicesPage() {
         inv.total_amount,
         inv.amount_paid || 0,
         inv.total_amount - (inv.amount_paid || 0),
-        inv.status,
+        isSalaryDeduction(inv) ? 'Salary deduction' : inv.status,
         format(new Date(inv.created_at), 'dd/MM/yyyy'),
       ];
     });
@@ -549,7 +552,7 @@ export default function InvoicesPage() {
                                 <div>
                                   <p className="font-medium">{memberName}</p>
                                   <p className="text-sm text-muted-foreground">
-                                    {display.code || 'Guest'}
+                                    {display.code || (invoice.pos_sales?.buyer_type === 'staff' ? 'Staff / Trainer' : 'Guest')}
                                   </p>
                                 </div>
                               </div>
@@ -584,9 +587,10 @@ export default function InvoicesPage() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <Badge className={`${getStatusColor(invoice.status)} border`}>
-                                  {invoice.status}
+                                <Badge className={`${getStatusColor(isSalaryDeduction(invoice) ? 'pending' : invoice.status)} border`}>
+                                  {isSalaryDeduction(invoice) ? 'Salary deduction' : invoice.status}
                                 </Badge>
+                                {isSalaryDeduction(invoice) && <span className="text-xs text-muted-foreground">Recovery tracked in payroll</span>}
                                 {invoice.is_proforma && (
                                   <Badge variant="outline" className="border-primary/30 text-primary">Renewal offer</Badge>
                                 )}
@@ -628,8 +632,8 @@ export default function InvoicesPage() {
                                       total_amount: invoice.total_amount,
                                       amount_paid: invoice.amount_paid || 0,
                                       member_name: d.name,
-                                      member_phone: d.phone,
-                                      member_email: d.email,
+                                      member_phone: d.phone || invoice.customer_phone,
+                                      member_email: d.email || invoice.customer_email,
                                       branch_id: invoice.branch_id,
                                     });
                                   }}>

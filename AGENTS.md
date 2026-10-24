@@ -26,3 +26,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - Audit Insights resolves fingerprint groups and clears only resolved error logs; transaction audit history is separate and preserved. Zero-policy RLS tables are locked, not public leaks.
 - Registration self-service saves only display photos; biometric enrollment remains a staff-verified operation so members cannot replace gate identities.
 - Nurture candidates are selected with indexed latest-message timing in a service-only RPC; workers retain final cadence/contact guards. An aborted worker response is unknown and must not trigger an immediate duplicate dispatch.
+- Invoice settlement presentation reads the linked POS settlement through settlementDisplay; salary deductions must not select payment-received messaging, because payroll recovery is not a cash receipt.
