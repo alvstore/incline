@@ -279,9 +279,9 @@ export default function ExternalReviewsTab() {
   // the classification or the match evidence.
   const [draftingId, setDraftingId] = useState<string | null>(null);
   const draftWithAI = useMutation({
-    mutationFn: async ({ id, tone }: { id: string; tone?: string }) => {
+    mutationFn: async ({ id, tone, adjust, current }: { id: string; tone?: string; adjust?: string; current?: string }) => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
-        body: { action: 'draft_reply', inbound_id: id, tone },
+        body: { action: 'draft_reply', inbound_id: id, tone, adjust, current_draft: current },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -644,14 +644,13 @@ export default function ExternalReviewsTab() {
                             onValueChange={(tone) => draftWithAI.mutate({ id: r.id, tone })}
                             disabled={isDrafting}
                           >
-                            <SelectTrigger className="h-8 w-[150px] rounded-lg text-xs" aria-label="Adjust the AI reply tone">
-                              <SelectValue placeholder="Adjust tone" />
+                            <SelectTrigger className="h-8 w-[150px] rounded-lg text-xs" aria-label="Choose the AI reply tone">
+                              <SelectValue placeholder="Choose tone" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="warm">Warm</SelectItem>
-                              <SelectItem value="short">Short</SelectItem>
-                              <SelectItem value="apologetic">Apologetic</SelectItem>
-                              <SelectItem value="professional">Professional</SelectItem>
+                              {REPLY_TONES.map((t) => (
+                                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                           <Button
@@ -680,8 +679,25 @@ export default function ExternalReviewsTab() {
                         aria-label={`Reply to the review by ${r.author_name ?? 'Anonymous'}`}
                         placeholder="Write a reply, or click Draft reply with AI"
                       />
+                      {draftValue.trim() && (
+                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Adjust the draft">
+                          {DRAFT_ADJUSTMENTS.map((a) => (
+                            <Button
+                              key={a.value}
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="h-8 rounded-full px-3 text-xs cursor-pointer transition-colors duration-200"
+                              disabled={isDrafting}
+                              onClick={() => draftWithAI.mutate({ id: r.id, adjust: a.value, current: draftValue })}
+                            >
+                              {a.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground">
-                        {draftValue.length}/4000 characters · drafts save automatically
+                        {draftValue.length} characters{draftValue.length > 0 && (draftValue.length < 120 ? ' · quite short' : draftValue.length > 400 ? ' · a bit long for Google' : ' · good length')} · drafts save automatically
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {canReply ? (
