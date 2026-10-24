@@ -5877,6 +5877,7 @@ export type Database = {
       }
       howbody_body_reports: {
         Row: {
+          age: number | null
           bmi: number | null
           bmr: number | null
           created_at: string
@@ -5885,16 +5886,23 @@ export type Database = {
           equipment_no: string | null
           fat: number | null
           fat_control: number | null
+          ffm: number | null
           full_payload: Json
           health_score: number | null
+          height_cm: number | null
           icf: number | null
           id: string
           member_id: string | null
           metabolic_age: number | null
+          minerals: number | null
           muscle_control: number | null
           pbf: number | null
           pr: number | null
+          reference_ranges: Json | null
           scan_id: string | null
+          segment_fat: number[] | null
+          segment_muscle: number[] | null
+          sex: string | null
           smm: number | null
           target_weight: number | null
           tbw: number | null
@@ -5905,6 +5913,7 @@ export type Database = {
           whr: number | null
         }
         Insert: {
+          age?: number | null
           bmi?: number | null
           bmr?: number | null
           created_at?: string
@@ -5913,16 +5922,23 @@ export type Database = {
           equipment_no?: string | null
           fat?: number | null
           fat_control?: number | null
+          ffm?: number | null
           full_payload: Json
           health_score?: number | null
+          height_cm?: number | null
           icf?: number | null
           id?: string
           member_id?: string | null
           metabolic_age?: number | null
+          minerals?: number | null
           muscle_control?: number | null
           pbf?: number | null
           pr?: number | null
+          reference_ranges?: Json | null
           scan_id?: string | null
+          segment_fat?: number[] | null
+          segment_muscle?: number[] | null
+          sex?: string | null
           smm?: number | null
           target_weight?: number | null
           tbw?: number | null
@@ -5933,6 +5949,7 @@ export type Database = {
           whr?: number | null
         }
         Update: {
+          age?: number | null
           bmi?: number | null
           bmr?: number | null
           created_at?: string
@@ -5941,16 +5958,23 @@ export type Database = {
           equipment_no?: string | null
           fat?: number | null
           fat_control?: number | null
+          ffm?: number | null
           full_payload?: Json
           health_score?: number | null
+          height_cm?: number | null
           icf?: number | null
           id?: string
           member_id?: string | null
           metabolic_age?: number | null
+          minerals?: number | null
           muscle_control?: number | null
           pbf?: number | null
           pr?: number | null
+          reference_ranges?: Json | null
           scan_id?: string | null
+          segment_fat?: number[] | null
+          segment_muscle?: number[] | null
+          sex?: string | null
           smm?: number | null
           target_weight?: number | null
           tbw?: number | null
@@ -6025,6 +6049,7 @@ export type Database = {
       }
       howbody_posture_reports: {
         Row: {
+          age: number | null
           back_img: string | null
           body_shape_profile: string | null
           body_slope: number | null
@@ -6038,6 +6063,7 @@ export type Database = {
           full_payload: Json
           head_forward: number | null
           head_slant: number | null
+          height_cm: number | null
           high_low_shoulder: number | null
           hip: number | null
           id: string
@@ -6055,6 +6081,7 @@ export type Database = {
           right_thigh: number | null
           scan_id: string | null
           score: number | null
+          sex: string | null
           shoulder_back: number | null
           shoulder_left: number | null
           shoulder_right: number | null
@@ -6064,6 +6091,7 @@ export type Database = {
           waist: number | null
         }
         Insert: {
+          age?: number | null
           back_img?: string | null
           body_shape_profile?: string | null
           body_slope?: number | null
@@ -6077,6 +6105,7 @@ export type Database = {
           full_payload: Json
           head_forward?: number | null
           head_slant?: number | null
+          height_cm?: number | null
           high_low_shoulder?: number | null
           hip?: number | null
           id?: string
@@ -6094,6 +6123,7 @@ export type Database = {
           right_thigh?: number | null
           scan_id?: string | null
           score?: number | null
+          sex?: string | null
           shoulder_back?: number | null
           shoulder_left?: number | null
           shoulder_right?: number | null
@@ -6103,6 +6133,7 @@ export type Database = {
           waist?: number | null
         }
         Update: {
+          age?: number | null
           back_img?: string | null
           body_shape_profile?: string | null
           body_slope?: number | null
@@ -6116,6 +6147,7 @@ export type Database = {
           full_payload?: Json
           head_forward?: number | null
           head_slant?: number | null
+          height_cm?: number | null
           high_low_shoulder?: number | null
           hip?: number | null
           id?: string
@@ -6133,6 +6165,7 @@ export type Database = {
           right_thigh?: number | null
           scan_id?: string | null
           score?: number | null
+          sex?: string | null
           shoulder_back?: number | null
           shoulder_left?: number | null
           shoulder_right?: number | null
@@ -17778,6 +17811,10 @@ export type Database = {
       howbody_device_authorized: {
         Args: { _equipment_no: string }
         Returns: boolean
+      }
+      howbody_link_unmatched_scan: {
+        Args: { _data_key: string; _member_id: string }
+        Returns: Json
       }
       howbody_recover_assessment: {
         Args: { _member_id: string; _scan_id: string }
