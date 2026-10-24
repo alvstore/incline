@@ -18536,6 +18536,25 @@ export type Database = {
         }
         Returns: Json
       }
+      purchase_custom_benefit_credits: {
+        Args: {
+          p_amount: number
+          p_benefit_type_id: string
+          p_branch_id: string
+          p_gst_rate?: number
+          p_idempotency_key?: string
+          p_is_gst_invoice?: boolean
+          p_label?: string
+          p_member_id: string
+          p_membership_id: string
+          p_package_id?: string
+          p_payment_method?: string
+          p_quantity: number
+          p_sync_membership?: boolean
+          p_validity_days?: number
+        }
+        Returns: Json
+      }
       purchase_group_membership: {
         Args: {
           p_branch_id: string

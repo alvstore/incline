@@ -701,6 +701,13 @@
       "when": 1792680899753,
       "tag": "0099_nurture_candidates_and_audit_occurrence_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1792819729566,
+      "tag": "0100_custom_benefit_addon_sale",
+      "breakpoints": true
     }
   ]
 }
