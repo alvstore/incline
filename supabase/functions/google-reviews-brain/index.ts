@@ -1,3 +1,4 @@
+// v6.2.0 — 10 tones, draft adjustments, anti-parroting guard.
 // google-reviews-brain v6.1.0 — Places lane now auto-drafts on arrival (plus a
 // pending backfill), new `draft_reply` action with tone control, opener
 // de-duplication and a style guard that retries robotic/empty drafts.
@@ -1185,6 +1186,7 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
       match_type: match.match_type,
       match_evidence: match.evidence,
       requested_tone: opts.tone ?? null,
+      requested_adjustment: opts.adjust ?? null,
       regenerate: !!opts.draftOnly,
     });
 
@@ -1276,17 +1278,17 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
 
     // Attempt 3 — the reply is the deliverable, so never leave it empty or
     // full of corporate filler. Ask once more for the reply text only.
-    if (violatesStyle(draft)) {
+    if (violatesStyle(draft) || parrotsReview(draft, row.review_text)) {
       try {
         const r3 = await generateOnce({
           purpose: "review_reply",
           branchId: row.branch_id ?? null,
-          userMessage: `${userPrompt}\n\nWrite ONLY the reply text (no JSON, no quotes). 2-4 short sentences, specific to this review, no banned corporate phrases.`,
+          userMessage: `${userPrompt}\n\nWrite ONLY the reply text (no JSON, no quotes). 2-4 short sentences, specific to this review, no banned corporate phrases, and do NOT reuse any 3-word phrase from the review text.`,
           systemOverride: sysOverride,
           maxTokens: 800,
         });
         const retry = sanitizeReply(r3.content ?? "");
-        if (retry && !violatesStyle(retry)) draft = retry;
+        if (retry && !violatesStyle(retry) && !parrotsReview(retry, row.review_text)) draft = retry;
         else if (retry && !draft) draft = retry;
       } catch (e) {
         console.error("AI draft retry failed", e);
