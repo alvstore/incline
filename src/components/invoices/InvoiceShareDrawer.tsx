@@ -104,12 +104,14 @@ Team Incline Fitness`;
   // Email template — branded HTML wrapped by send-email's `use_branded_template`.
   const emailSubject = `Invoice #${invoice.invoice_number} from Incline Fitness`;
   const balance = invoice.total_amount - (invoice.amount_paid || 0);
-  const statusBadge = balance > 0
+  const statusBadge = salaryDeduction
+    ? '<strong>Salary deduction — recovery tracked in payroll</strong>'
+    : balance > 0
     ? `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#3a2a08;color:#FFD466;font-weight:600;font-size:12px;">Balance Due ₹${balance.toLocaleString()}</span>`
     : `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#0e3a23;color:#7CE0A8;font-weight:600;font-size:12px;">Paid in Full</span>`;
   const emailBody = `
     <h2 style="margin:0 0 8px;">Hi ${memberName},</h2>
-    <p>Thank you for your payment. Your invoice details are below — the full PDF is attached for your records.</p>
+    <p>${salaryDeduction ? 'Your store purchase is assigned to salary recovery.' : 'Your invoice details are below.'} The full PDF is attached for your records.</p>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0;border-collapse:separate;border-spacing:0;background:#0a0a0a;border:1px solid #ffffff15;border-radius:12px;overflow:hidden;">
       <tr><td style="padding:14px 18px;border-bottom:1px solid #ffffff10;">
         <div style="font-size:11px;letter-spacing:2px;color:#EAB30880;text-transform:uppercase;">Invoice</div>
@@ -118,7 +120,7 @@ Team Incline Fitness`;
       <tr><td style="padding:14px 18px;color:#fff;">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#ffffff80;">Date</span><strong>${format(new Date(invoice.created_at), 'dd MMMM yyyy')}</strong></div>
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#ffffff80;">Amount</span><strong>₹${invoice.total_amount.toLocaleString()}</strong></div>
-        ${invoice.amount_paid ? `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#ffffff80;">Amount Paid</span><strong>₹${invoice.amount_paid.toLocaleString()}</strong></div>` : ''}
+        ${!salaryDeduction && invoice.amount_paid ? `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#ffffff80;">Amount Paid</span><strong>₹${invoice.amount_paid.toLocaleString()}</strong></div>` : ''}
         <div style="margin-top:10px;">${statusBadge}</div>
       </td></tr>
     </table>
@@ -324,7 +326,7 @@ Team Incline Fitness`;
       <body>
         <div class="header">
           <h1>INCLINE FITNESS</h1>
-          <p>Tax Invoice</p>
+          <p>${invoice.pos_sale_id ? 'Store receipt — internal sale record, not a tax invoice' : 'Invoice'}</p>
         </div>
         
         <div class="invoice-info">
@@ -339,8 +341,8 @@ Team Incline Fitness`;
             <p><strong>${e(invoice.invoice_number)}</strong></p>
             <p>Date: ${format(new Date(invoice.created_at), 'dd MMM yyyy')}</p>
             <p>
-              <span class="status ${invoice.status === 'paid' ? 'paid' : 'pending'}">
-                ${e(String(invoice.status).toUpperCase())}
+              <span class="status ${invoice.status === 'paid' && !salaryDeduction ? 'paid' : 'pending'}">
+                ${salaryDeduction ? 'SALARY DEDUCTION' : e(String(invoice.status).toUpperCase())}
               </span>
             </p>
           </div>
@@ -372,7 +374,7 @@ Team Incline Fitness`;
           ${invoice.discount_amount ? `<p>Discount: -₹${invoice.discount_amount.toLocaleString()}</p>` : ''}
           ${invoice.tax_amount ? `<p>Tax: ₹${invoice.tax_amount.toLocaleString()}</p>` : ''}
           <p class="total">Total: ₹${invoice.total_amount.toLocaleString()}</p>
-          ${invoice.amount_paid ? `<p style="color: green;">Paid: ₹${invoice.amount_paid.toLocaleString()}</p>` : ''}
+          ${salaryDeduction ? '<p>Recovery tracked in payroll</p>' : invoice.amount_paid ? `<p style="color: green;">Paid: ₹${invoice.amount_paid.toLocaleString()}</p>` : ''}
           ${invoice.total_amount - (invoice.amount_paid || 0) > 0 ? `<p style="color: red;">Balance Due: ₹${(invoice.total_amount - (invoice.amount_paid || 0)).toLocaleString()}</p>` : ''}
         </div>
 
@@ -410,7 +412,7 @@ Team Incline Fitness`;
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">{memberName}</p>
-                  <p className={`text-sm font-medium ${invoice.status === 'paid' ? 'text-success' : 'text-warning'}`}>
+                  <p className={`text-sm font-medium ${invoice.status === 'paid' && !salaryDeduction ? 'text-success' : 'text-warning'}`}>
                     {salaryDeduction ? 'Salary deduction' : invoice.status.toUpperCase()}
                   </p>
                 </div>
