@@ -5,9 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useMemberData } from '@/hooks/useMemberData';
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
-import { ScanQuotaStrip } from '@/components/progress/ScanQuotaStrip';
-import { HowbodyReportsCard } from '@/components/progress/HowbodyReportsCard';
-import { useScanQuota } from '@/hooks/useHowbodyReports';
 import {
   TrendingUp,
   Activity,
@@ -18,6 +15,9 @@ import {
   Ruler,
   Box,
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
+  Minus,
   Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -25,7 +25,6 @@ import { Link } from 'react-router-dom';
 
 export default function MyProgress() {
   const { member, measurements, isLoading: memberLoading } = useMemberData();
-  const { data: quota } = useScanQuota(member?.id);
   const [recordOpen, setRecordOpen] = useState(false);
 
   if (memberLoading) {
@@ -113,71 +112,44 @@ export default function MyProgress() {
         {/* Quick stats */}
         {latestMeasurement && (
           <div className="grid gap-4 md:grid-cols-4">
-            <Card className="border-border/50">
+            <Card className="rounded-2xl border-border/50 shadow-sm shadow-primary/5">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <Scale className="h-8 w-8 text-accent" />
                   <div>
                     <p className="text-sm text-muted-foreground">Weight</p>
-                    <p className="text-2xl font-bold">{latestMeasurement.weight_kg || '-'} kg</p>
-                    {previousMeasurement && (
-                      <p
-                        className={`text-sm ${
-                          getChange(latestMeasurement.weight_kg, previousMeasurement.weight_kg)! < 0
-                            ? 'text-success'
-                            : 'text-destructive'
-                        }`}
-                      >
-                        {getChange(latestMeasurement.weight_kg, previousMeasurement.weight_kg)?.toFixed(1)} kg
-                      </p>
-                    )}
+                    <p className="text-2xl font-bold tabular-nums">{latestMeasurement.weight_kg || '-'} kg</p>
+                    <ChangeLine value={getChange(latestMeasurement.weight_kg, previousMeasurement?.weight_kg ?? null)} unit=" kg" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-border/50">
+            <Card className="rounded-2xl border-border/50 shadow-sm shadow-primary/5">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <Ruler className="h-8 w-8 text-accent" />
                   <div>
                     <p className="text-sm text-muted-foreground">Height</p>
-                    <p className="text-2xl font-bold">{latestMeasurement.height_cm || '-'} cm</p>
+                    <p className="text-2xl font-bold tabular-nums">{latestMeasurement.height_cm || '-'} cm</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-border/50">
+            <Card className="rounded-2xl border-border/50 shadow-sm shadow-primary/5">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <TrendingUp className="h-8 w-8 text-accent" />
                   <div>
                     <p className="text-sm text-muted-foreground">Body Fat</p>
-                    <p className="text-2xl font-bold">
+                    <p className="text-2xl font-bold tabular-nums">
                       {latestMeasurement.body_fat_percentage || '-'}%
                     </p>
-                    {previousMeasurement && (
-                      <p
-                        className={`text-sm ${
-                          getChange(
-                            latestMeasurement.body_fat_percentage,
-                            previousMeasurement.body_fat_percentage,
-                          )! < 0
-                            ? 'text-success'
-                            : 'text-destructive'
-                        }`}
-                      >
-                        {getChange(
-                          latestMeasurement.body_fat_percentage,
-                          previousMeasurement.body_fat_percentage,
-                        )?.toFixed(1)}
-                        %
-                      </p>
-                    )}
+                    <ChangeLine value={getChange(latestMeasurement.body_fat_percentage, previousMeasurement?.body_fat_percentage ?? null)} unit="%" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-border/50">
+            <Card className="rounded-2xl border-border/50 shadow-sm shadow-primary/5">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <Activity className="h-8 w-8 text-accent" />
@@ -193,12 +165,14 @@ export default function MyProgress() {
           </div>
         )}
 
-        {/* HOWBODY: scan quota + reports */}
-        <ScanQuotaStrip body={quota?.body} posture={quota?.posture} />
-        <HowbodyReportsCard memberId={member.id} />
-
-        {/* Progress Chart */}
-        <MeasurementProgressView memberId={member.id} />
+        {/* Tabs directly below the headline tiles; scan reports live inside the Scan Reports tab */}
+        <MeasurementProgressView
+          memberId={member.id}
+          memberGender={(member as any)?.gender}
+          memberName={(member as any)?.profiles?.full_name}
+          memberCode={member.member_code}
+          variant="member"
+        />
 
         {/* Cross-link to Workout & Diet (no duplicate content) */}
         <div className="grid gap-4 md:grid-cols-2">
@@ -249,5 +223,24 @@ export default function MyProgress() {
         memberGender={(member as any)?.gender}
       />
     </AppLayout>
+  );
+}
+
+function ChangeLine({ value, unit }: { value: number | null; unit: string }) {
+  if (value === null) return null;
+  if (Math.abs(value) < 0.1) {
+    return (
+      <p className="flex items-center gap-1 text-sm text-muted-foreground">
+        <Minus className="h-3.5 w-3.5" aria-hidden="true" /> Stable
+      </p>
+    );
+  }
+  const down = value < 0;
+  const Icon = down ? ArrowDown : ArrowUp;
+  return (
+    <p className={`flex items-center gap-1 text-sm tabular-nums ${down ? 'text-success' : 'text-destructive'}`}>
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {down ? '' : '+'}{value.toFixed(1)}{unit}
+    </p>
   );
 }
