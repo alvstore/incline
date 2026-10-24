@@ -1,4 +1,4 @@
-// v2.0.0 (Phase 1 — provider outcome safety)
+// v2.1.0 (template rows are never replayed as free text)
 // Reaper for outbound WhatsApp rows stuck at status='pending'.
 //
 // SAFETY CONTRACT — an unknown provider outcome MUST NOT become a resend:
@@ -259,7 +259,7 @@ serve(async (req) => {
     // ONLY rows with no transmission evidence are replay candidates.
     const { data: rows, error } = await supabase
       .from("whatsapp_messages")
-      .select("id, branch_id, phone_number, contact_name, content, message_type, created_at, provider_attempted_at, provider_ack_state")
+      .select("id, branch_id, phone_number, contact_name, content, message_type, created_at, provider_attempted_at, provider_ack_state, media_meta")
       .eq("direction", "outbound")
       .eq("status", "pending")
       .is("whatsapp_message_id", null)
@@ -271,7 +271,21 @@ serve(async (req) => {
 
     if (error) throw error;
 
-    const candidates = (rows || []) as PendingRow[];
+    // v2.1.0: rows that were meant to go out as an approved Meta template must
+    // NEVER be replayed as free text — outside the 24h window Meta rejects them
+    // with 131047 (this is how membership expiry reminders failed). Mark them
+    // failed with a clear reason instead of downgrading.
+    const all = (rows || []) as Array<PendingRow & { media_meta?: Record<string, unknown> | null }>;
+    const templateRows = all.filter((r) => !!(r.media_meta?.template_name || r.media_meta?.template_id));
+    if (templateRows.length > 0) {
+      await supabase.from("whatsapp_messages").update({
+        status: "failed",
+        failure_reason: "reconciler: template send never confirmed; not replayed as free text",
+        failed_at: new Date().toISOString(),
+        provider_ack_state: "not_transmitted",
+      }).in("id", templateRows.map((r) => r.id));
+    }
+    const candidates = all.filter((r) => !templateRows.includes(r)) as PendingRow[];
     const results = { reaped: 0, sent: 0, failed: 0, skipped: 0, expired: 0, parked_unknown: 0 };
 
     for (const row of candidates) {
