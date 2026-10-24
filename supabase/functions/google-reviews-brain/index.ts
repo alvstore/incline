@@ -1101,12 +1101,10 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
     // v6 — persona comes from ai_purposes.review_reply.system_prompt. This block
     // only carries the output contract plus the "sound like a human" rules that
     // stop the model producing obvious AI boilerplate.
-    const toneLine = ({
-      short: "TONE: keep it to 1-2 sentences, friendly and brief.",
-      warm: "TONE: warm and personal, like a quick note from the founder.",
-      apologetic: "TONE: genuinely apologetic and accountable, no defensiveness.",
-      professional: "TONE: calm and professional, still human, no corporate filler.",
-    } as Record<string, string>)[String(opts.tone ?? "").toLowerCase()] ?? "";
+    const toneLine = (TONE_LINES)[String(opts.tone ?? "").toLowerCase()] ?? "";
+    const adjustLine = opts.adjust && ADJUST_LINES[opts.adjust]
+      ? `ADJUSTMENT to the current draft: ${ADJUST_LINES[opts.adjust]}${opts.currentDraft ? ` Current draft: "${opts.currentDraft.slice(0, 800)}"` : ""}`
+      : "";
 
     const sysOverride = [
       "You classify a Google review and write the owner's reply.",
