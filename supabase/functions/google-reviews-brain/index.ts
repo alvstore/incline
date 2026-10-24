@@ -1,3 +1,4 @@
+// v6.2.0 — 10 tones, draft adjustments, anti-parroting guard.
 // google-reviews-brain v6.1.0 — Places lane now auto-drafts on arrival (plus a
 // pending backfill), new `draft_reply` action with tone control, opener
 // de-duplication and a style guard that retries robotic/empty drafts.
@@ -74,6 +75,8 @@ interface Body {
   draft?: string;
   /** draft_reply: warm | short | apologetic | professional */
   tone?: string;
+  adjust?: string;
+  current_draft?: string;
   // for request_member_review (legacy shim)
   feedback_id?: string;
   channel?: "whatsapp" | "sms" | "email" | "in_app";
@@ -1074,9 +1077,50 @@ async function recentOpeners(branch_id: string, excludeId: string): Promise<stri
     .slice(0, 6);
 }
 
+const TONE_LINES: Record<string, string> = {
+  warm: "TONE: warm and personal, like a quick note from the founder.",
+  friendly: "TONE: relaxed and friendly, like chatting with a regular at the desk.",
+  short: "TONE: 1-2 sentences only, friendly and brief.",
+  grateful: "TONE: sincerely grateful without gushing; one honest line of thanks, not a template.",
+  apologetic: "TONE: genuinely apologetic and accountable, no defensiveness.",
+  empathetic: "TONE: empathetic and understanding; show you get how it felt before anything else.",
+  professional: "TONE: calm and professional, still human, no corporate filler.",
+  luxury: "TONE: understated, premium hospitality voice; polished but never stiff.",
+  playful: "TONE: light and a little playful, one gentle touch of humour, still respectful.",
+  hinglish: "TONE: natural Udaipur Hinglish in Roman script, mostly English with a few Hindi words.",
+};
+
+const ADJUST_LINES: Record<string, string> = {
+  shorter: "Make it noticeably shorter (cut to the essentials, max 2 sentences).",
+  longer: "Make it a bit fuller (3-4 sentences) with one more genuine, specific touch.",
+  formal: "Make it more formal and polished, still human.",
+  casual: "Make it more casual and conversational.",
+  invite: "Add a natural invitation to say hello to the manager / team on their next visit, or reach the front desk.",
+  fresh: "Write a completely different variation: new opener, new structure, new wording.",
+};
+
+/** True when the draft copies a 3-word run straight from the review. */
+function parrotsReview(draft: string, review: string | null | undefined): boolean {
+  const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9\u0900-\u097f\s]/g, " ").split(/\s+/).filter(Boolean);
+  const r = words(String(review ?? ""));
+  if (r.length < 3) return false;
+  const STOP = new Set(["the", "a", "an", "and", "to", "of", "is", "it", "in", "for", "you", "we", "i", "was", "are", "at", "on", "with", "this", "that", "so", "be", "our", "your", "my"]);
+  const grams = new Set<string>();
+  for (let i = 0; i + 2 < r.length; i++) {
+    const g = r.slice(i, i + 3);
+    if (g.filter((w) => !STOP.has(w)).length >= 2) grams.add(g.join(" "));
+  }
+  const d = words(draft);
+  for (let i = 0; i + 2 < d.length; i++) if (grams.has(d.slice(i, i + 3).join(" "))) return true;
+  return false;
+}
+
 interface DraftOpts {
-  /** warm | short | apologetic | professional */
+  /** see TONE_LINES */
   tone?: string;
+  /** see ADJUST_LINES — refines the current draft */
+  adjust?: string;
+  currentDraft?: string;
   /** Regenerate the reply only, leaving classification/match data untouched. */
   draftOnly?: boolean;
 }
@@ -1101,12 +1145,10 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
     // v6 — persona comes from ai_purposes.review_reply.system_prompt. This block
     // only carries the output contract plus the "sound like a human" rules that
     // stop the model producing obvious AI boilerplate.
-    const toneLine = ({
-      short: "TONE: keep it to 1-2 sentences, friendly and brief.",
-      warm: "TONE: warm and personal, like a quick note from the founder.",
-      apologetic: "TONE: genuinely apologetic and accountable, no defensiveness.",
-      professional: "TONE: calm and professional, still human, no corporate filler.",
-    } as Record<string, string>)[String(opts.tone ?? "").toLowerCase()] ?? "";
+    const toneLine = (TONE_LINES)[String(opts.tone ?? "").toLowerCase()] ?? "";
+    const adjustLine = opts.adjust && ADJUST_LINES[opts.adjust]
+      ? `ADJUSTMENT to the current draft: ${ADJUST_LINES[opts.adjust]}${opts.currentDraft ? ` Current draft: "${opts.currentDraft.slice(0, 800)}"` : ""}`
+      : "";
 
     const sysOverride = [
       "You classify a Google review and write the owner's reply.",
@@ -1123,7 +1165,10 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
       "8. Never accuse the reviewer of being fake or a competitor, even when the classification says suspected_fake — in that case write a calm, neutral, factual reply.",
       "9. No promises the gym cannot keep, no pricing, no opening dates.",
       "10. A draft_reply is ALWAYS required. Never return an empty string.",
+      "11. NEVER echo the reviewer. Do not copy any phrase of 3+ words from the review, and do not list back the things they listed. Refer to at most ONE detail, in your own different words (e.g. review says 'steam room and sauna are amazing' -> 'the recovery side seems to have won you over').",
+      "12. Sound typed by a real person: mix one short sentence with a longer one, contractions are fine, no 'Thank you for your review' opener, no closing slogan, no sign-off formula like 'Warm regards, Team'.",
       toneLine,
+      adjustLine,
       avoidOpeners.length
         ? `Do NOT start with any of these already-used openers: ${avoidOpeners.map((o) => `"${o}"`).join(", ")}`
         : "",
@@ -1143,6 +1188,7 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
       match_type: match.match_type,
       match_evidence: match.evidence,
       requested_tone: opts.tone ?? null,
+      requested_adjustment: opts.adjust ?? null,
       regenerate: !!opts.draftOnly,
     });
 
@@ -1234,17 +1280,17 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
 
     // Attempt 3 — the reply is the deliverable, so never leave it empty or
     // full of corporate filler. Ask once more for the reply text only.
-    if (violatesStyle(draft)) {
+    if (violatesStyle(draft) || parrotsReview(draft, row.review_text)) {
       try {
         const r3 = await generateOnce({
           purpose: "review_reply",
           branchId: row.branch_id ?? null,
-          userMessage: `${userPrompt}\n\nWrite ONLY the reply text (no JSON, no quotes). 2-4 short sentences, specific to this review, no banned corporate phrases.`,
+          userMessage: `${userPrompt}\n\nWrite ONLY the reply text (no JSON, no quotes). 2-4 short sentences, specific to this review, no banned corporate phrases, and do NOT reuse any 3-word phrase from the review text.`,
           systemOverride: sysOverride,
           maxTokens: 800,
         });
         const retry = sanitizeReply(r3.content ?? "");
-        if (retry && !violatesStyle(retry)) draft = retry;
+        if (retry && !violatesStyle(retry) && !parrotsReview(retry, row.review_text)) draft = retry;
         else if (retry && !draft) draft = retry;
       } catch (e) {
         console.error("AI draft retry failed", e);
@@ -1714,7 +1760,9 @@ Deno.serve(async (req) => {
       case "draft_reply": {
         if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
         const r = await classifyOne(body.inbound_id, {
-          tone: body.tone,
+          tone: typeof body.tone === "string" ? body.tone.slice(0, 20) : undefined,
+          adjust: typeof body.adjust === "string" ? body.adjust.slice(0, 20) : undefined,
+          currentDraft: typeof body.current_draft === "string" ? body.current_draft.slice(0, 1000) : undefined,
           draftOnly: true,
         });
         return json(r);
