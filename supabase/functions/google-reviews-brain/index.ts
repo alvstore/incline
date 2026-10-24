@@ -75,6 +75,8 @@ interface Body {
   draft?: string;
   /** draft_reply: warm | short | apologetic | professional */
   tone?: string;
+  adjust?: string;
+  current_draft?: string;
   // for request_member_review (legacy shim)
   feedback_id?: string;
   channel?: "whatsapp" | "sms" | "email" | "in_app";
@@ -1758,7 +1760,9 @@ Deno.serve(async (req) => {
       case "draft_reply": {
         if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
         const r = await classifyOne(body.inbound_id, {
-          tone: body.tone,
+          tone: typeof body.tone === "string" ? body.tone.slice(0, 20) : undefined,
+          adjust: typeof body.adjust === "string" ? body.adjust.slice(0, 20) : undefined,
+          currentDraft: typeof body.current_draft === "string" ? body.current_draft.slice(0, 1000) : undefined,
           draftOnly: true,
         });
         return json(r);
