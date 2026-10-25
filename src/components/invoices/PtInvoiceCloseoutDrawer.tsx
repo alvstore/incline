@@ -35,7 +35,7 @@ export function PtInvoiceCloseoutDrawer({ invoiceId, open, onOpenChange }: PtInv
       return savePtCloseout({ invoiceId, reason: values.reason, externalCommission: values.externalCommission, total: result.original_total, paid: result.retained_amount });
     },
     onSuccess: async () => {
-      await Promise.all(['invoices', 'invoice-stats', 'invoice-details', 'invoice-payments', 'member-all-invoices', 'member-pending-invoices', 'member-invoices', 'member-details', 'member-pt-packages', 'active-member-packages', 'pt-closeout-history', 'trainer-earnings', 'trainer-commissions', 'pt_settlements'].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
+      await Promise.all(['invoices', 'invoice-stats', 'invoice-details', 'invoice-payments', 'member-all-invoices', 'member-pending-invoices', 'member-invoices', 'member-details', 'member-pt-packages', 'active-member-packages', 'pt-closeout-history', 'trainer-earnings-summary', 'pt-commission-ledger', 'pt_settlements'].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
       toast.success('PT closed — received cash preserved and remaining dues waived.');
       onOpenChange(false);
     },

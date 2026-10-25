@@ -32,7 +32,7 @@ export function PtInvoiceCloseoutAction({ invoiceId, branchId, isPt, hasBalance 
     },
   });
   if (!permitted || !isPt) return null;
-  if (history.data) return <Badge variant="outline" className="mt-2 whitespace-normal text-warning">PT closed · ₹{history.data.waived_amount.toLocaleString('en-IN')} waived</Badge>;
+  if (history.data) return <Badge variant="outline" className="mt-2 block min-w-36 whitespace-normal rounded-md text-warning">PT closed · ₹{history.data.waived_amount.toLocaleString('en-IN')} waived</Badge>;
   if (!flag.data || !hasBalance) return null;
   return <>
     <Button variant="outline" size="sm" className="mt-2 min-h-11 cursor-pointer gap-2 transition-colors duration-200" onClick={() => setOpen(true)}><CheckCircle2 className="h-4 w-4" />Close PT &amp; waive balance</Button>

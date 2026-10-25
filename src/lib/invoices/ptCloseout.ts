@@ -38,6 +38,8 @@ export function ptCloseoutError(error: { message?: string; code?: string }): str
     reason_required: 'Enter a reason of at least 6 characters.',
     invalid_external_commission: 'Enter a valid commission amount with at most two decimal places.',
     package_closed: 'This PT package is already closed.',
+    pending_gateway_payment: 'A payment link is still pending. Cancel or settle that link before closing PT.',
+    closeout_finalized: 'This PT invoice is already closed. Receipts and settlement history are protected.',
   };
   return messages[error.message ?? ''] ?? 'Could not close the PT invoice. No changes were saved.';
 }
