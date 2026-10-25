@@ -33,6 +33,8 @@ import { exportToCSV } from '@/lib/csvExport';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { differenceInDays, format, startOfDay, startOfMonth, subDays } from 'date-fns';
+import { CalendarDays } from 'lucide-react';
+import { membershipValidity, type ValidityTone } from '@/lib/memberships/validityDisplay';
 
 const PAGE_SIZE = 20;
 
