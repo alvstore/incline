@@ -11,6 +11,7 @@ import { MemberScanReportsTab } from './MemberScanReportsTab';
 import { BodyComparisonView } from '@/components/progress3d/BodyComparisonView';
 import { hasBodyShapeMeasurements } from '@/lib/measurements/measurementToAvatar';
 import { ScanQuotaStrip } from '@/components/progress/ScanQuotaStrip';
+import { ScanScoreGauges } from '@/components/progress/ScanScoreGauges';
 import { HowbodyReportsCard } from '@/components/progress/HowbodyReportsCard';
 import { useScanQuota } from '@/hooks/useHowbodyReports';
 
@@ -31,6 +32,7 @@ function MemberScansPanel({ memberId }: { memberId: string }) {
   const { data: quota } = useScanQuota(memberId);
   return (
     <div className="space-y-4">
+      <ScanScoreGauges memberId={memberId} />
       <ScanQuotaStrip body={quota?.body} posture={quota?.posture} />
       <HowbodyReportsCard memberId={memberId} />
     </div>
