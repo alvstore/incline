@@ -11698,6 +11698,85 @@ export type Database = {
           },
         ]
       }
+      pt_invoice_closeouts: {
+        Row: {
+          actor_id: string
+          branch_id: string
+          commission_entitlement: number
+          commission_id: string
+          confirmed_external_commission: number
+          created_at: string
+          id: string
+          invoice_id: string
+          member_package_id: string
+          original_total: number
+          payroll_linked_commission: number
+          reason: string
+          remaining_commission: number
+          retained_amount: number
+          snapshot: Json
+          waived_amount: number
+        }
+        Insert: {
+          actor_id: string
+          branch_id: string
+          commission_entitlement: number
+          commission_id: string
+          confirmed_external_commission?: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          member_package_id: string
+          original_total: number
+          payroll_linked_commission: number
+          reason: string
+          remaining_commission: number
+          retained_amount: number
+          snapshot: Json
+          waived_amount: number
+        }
+        Update: {
+          actor_id?: string
+          branch_id?: string
+          commission_entitlement?: number
+          commission_id?: string
+          confirmed_external_commission?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          member_package_id?: string
+          original_total?: number
+          payroll_linked_commission?: number
+          reason?: string
+          remaining_commission?: number
+          retained_amount?: number
+          snapshot?: Json
+          waived_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_invoice_closeouts_commission_id_fkey"
+            columns: ["commission_id"]
+            isOneToOne: false
+            referencedRelation: "trainer_commissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_invoice_closeouts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: true
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_invoice_closeouts_member_package_id_fkey"
+            columns: ["member_package_id"]
+            isOneToOne: false
+            referencedRelation: "member_pt_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pt_packages: {
         Row: {
           branch_id: string
@@ -16967,6 +17046,17 @@ export type Database = {
       cleanup_old_notifications: { Args: never; Returns: Json }
       clear_do_not_contact: {
         Args: { p_branch_id: string; p_phone: string }
+        Returns: Json
+      }
+      closeout_pt_invoice: {
+        Args: {
+          p_expected_paid?: number
+          p_expected_total?: number
+          p_external_commission?: number
+          p_invoice_id: string
+          p_preview?: boolean
+          p_reason?: string
+        }
         Returns: Json
       }
       communication_send_allowed: {
