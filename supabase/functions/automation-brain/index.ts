@@ -1,4 +1,4 @@
-// automation-brain v2.5.0 — Transport timeouts are unknown outcomes, never cold-start success.
+// automation-brain v2.6.0 — Allow bounded workers 90s, including response body; never retry an abort.
 // automation-brain v2.3.0 — Auth gate also accepts ANON apikey + x-system-call header
 //                            (pg_cron.job.command can't safely embed SERVICE_KEY; the
 //                            system-call header + service-role headers are both honored).
@@ -12,6 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { sendBirthdayGreeting, istToday } from "../_shared/birthday-greeting.ts";
 import { requireCaller } from "../_shared/requireCaller.ts";
+import { requestAutomationWorker } from "../_shared/automationWorkerRequest.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,18 +81,12 @@ function nextCron(expr: string, after: Date): Date {
 // ---------- Worker dispatch ----------
 async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; status: number; body: string; gateway5xx: boolean; transport?: "timeout" | "network" }> {
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
-  // v2.4.0 — retry 502/503/504 (cold-boot gateway failures) with backoff.
-  //          Per-attempt 25s timeout (was 60s): three 60s attempts alone blew
-  //          past the gateway wall clock and produced 504s on the whole tick.
+  // Runs under waitUntil, outside the tick response. Preserve gateway-only retry.
   const BACKOFFS = [0, 800];
-  let r: Response | null = null;
-  let lastErr: unknown = null;
+  let lastResult: Awaited<ReturnType<typeof requestAutomationWorker>> | undefined;
   for (let attempt = 0; attempt < BACKOFFS.length; attempt++) {
     if (BACKOFFS[attempt] > 0) await new Promise((res) => setTimeout(res, BACKOFFS[attempt]));
-    const ctrl = new AbortController();
-    const tm = setTimeout(() => ctrl.abort(), 25_000);
-    try {
-      r = await fetch(url, {
+    lastResult = await requestAutomationWorker(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,25 +95,10 @@ async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; 
           "x-system-call": "automation-brain",
         },
         body: JSON.stringify(payload ?? {}),
-        signal: ctrl.signal,
       });
-      clearTimeout(tm);
-      // Retry on gateway 5xx; otherwise return immediately.
-      if (r.status === 502 || r.status === 503 || r.status === 504) continue;
-      const body = await r.text();
-      return { ok: r.ok, status: r.status, body: body.slice(0, 500), gateway5xx: false };
-    } catch (e) {
-      clearTimeout(tm);
-      lastErr = e;
-      // Aborting the response does not cancel the worker. Never duplicate it.
-      return { ok: false, status: 0, body: e instanceof Error ? e.message : String(e), gateway5xx: false, transport: ctrl.signal.aborted ? "timeout" : "network" };
-    }
+    if (!lastResult.gateway5xx) return lastResult;
   }
-  if (r) {
-    const body = await r.text().catch(() => "");
-    return { ok: false, status: r.status, body: body.slice(0, 500), gateway5xx: r.status >= 502 && r.status <= 504 };
-  }
-  return { ok: false, status: 0, body: String((lastErr as Error)?.message ?? "network error"), gateway5xx: false, transport: "network" };
+  return lastResult ?? { ok: false, status: 0, body: "network error", gateway5xx: false, transport: "network" };
 }
 
 async function callRpc(fn: string): Promise<{ ok: boolean; body: string }> {

@@ -1,4 +1,4 @@
-// v8.2.0 — Indexed due-candidate lookup avoids scanning hundreds of idle chats.
+// v8.3.0 — Bound AI candidates and stop starting new work after the run budget.
 // v8.1.0 — Honour UI ops fields (delay_hours / max_retries / cooldown_hours).
 //
 // Cadence is driven ONLY by fields exposed in HandleOpsSettings:
@@ -20,6 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { buildSystemPrompt } from "../_shared/ai-prompt.ts";
 import { requireCaller } from "../_shared/requireCaller.ts";
+import { NURTURE_BATCH_LIMIT, NURTURE_START_BUDGET_MS } from "../_shared/automationWorkerRequest.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
@@ -252,8 +253,15 @@ serve(async (req) => {
     let nudgedCount = 0;
     let resetCount = 0;
     const decisions: any[] = [];
+    const batchStarted = Date.now();
+    let generatedCandidates = 0;
+    let deferred = false;
 
     for (const chat of staleChats || []) {
+      if (generatedCandidates >= NURTURE_BATCH_LIMIT || Date.now() - batchStarted >= NURTURE_START_BUDGET_MS) {
+        deferred = true;
+        break;
+      }
       if (chat.do_not_contact) continue;
       if (chat.do_not_contact_until && new Date(chat.do_not_contact_until) > new Date()) continue;
       if (chat.handoff_reason) continue;
@@ -416,6 +424,7 @@ serve(async (req) => {
       const prospectName = contactName || "there";
 
       // ── AI generation with similarity guard ──
+      generatedCandidates++;
       let candidate: string | null = null;
       let regenerated = false;
       let fallbackUsed = false;
@@ -544,7 +553,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, nudged: nudgedCount, retries_reset: resetCount, decisions }),
+      JSON.stringify({ success: true, nudged: nudgedCount, retries_reset: resetCount, deferred, decisions }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: unknown) {
