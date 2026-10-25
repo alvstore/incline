@@ -1,3 +1,6 @@
+# Selected System Health errors (25 Oct 2026)
+- [ ] Repair gate function startup, Meta failure attribution, PT transfer date validation, automation timeouts and weak-password noise; verify without sending test outreach or changing payroll.
+
 # Store invoice identity and sharing (24 Oct 2026)
 - [x] Corrected staff buyer identity and payroll-settlement labels on invoice list and sharing; authenticated owner check verified Gyaneshwar's existing invoice, saved phone/email and enabled WhatsApp action. Nine tests pass. No message sent or recovery records changed.
 
