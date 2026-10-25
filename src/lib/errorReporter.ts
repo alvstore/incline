@@ -3,6 +3,7 @@
 // v1.2.0 — filters benign noise (offline, abort, login errors, Radix dev warnings)
 // and auto-recovers from stale dynamic-import chunks after deploys.
 import { supabase } from '@/integrations/supabase/client';
+import { isExpectedErrorOutcome } from '@/lib/audit/errorNoise';
 
 const RELEASE_SHA = (import.meta.env.VITE_RELEASE_SHA as string) || 'dev';
 
@@ -27,6 +28,7 @@ const NOISE_PATTERNS: RegExp[] = [
 
 function isNoise(message: string): boolean {
   if (!message) return true;
+  if (isExpectedErrorOutcome(message)) return true;
   // Drop network failures while offline — those are environmental.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     if (/Failed to fetch|NetworkError|Load failed|Network error/i.test(message)) return true;

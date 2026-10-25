@@ -1,3 +1,9 @@
+# Selected System Health errors (25 Oct 2026)
+- [x] Gate startup already recovered (live imports/attendance successful); retained valid SDK CORS. Fixed canonical Meta refusal logging, detailed failed-message reasons and duplicate frontend logging; weak-password feedback stays out of error monitoring. Ten regression tests pass; build OK.
+- [x] PT transfer uses latest final-session boundary, prevents invalid submission and fails closed on loading errors. Authenticated owner check: Simpy's earliest date 24 Oct, 1 Oct blocked, 25 Oct allowed; no transfer saved.
+- [x] Automation response deadline raised to 90s with body coverage; aborts remain unknown with no immediate retry. Nurture starts at most five AI candidates and no new work after 60s; contact/cadence safeguards unchanged.
+- [ ] Confirm the next scheduled runs after this change finish for nurture/retention/upgrade/reminders; blocked on their scheduled execution. No live outreach test or historical error deletion performed.
+
 # Store invoice identity and sharing (24 Oct 2026)
 - [x] Corrected staff buyer identity and payroll-settlement labels on invoice list and sharing; authenticated owner check verified Gyaneshwar's existing invoice, saved phone/email and enabled WhatsApp action. Nine tests pass. No message sent or recovery records changed.
 

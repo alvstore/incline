@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { getISTToday } from '@/lib/utils/datetime';
+import { isTransferDateValid, minimumTransferDate, TRANSFER_FINAL_SESSION_STATUSES } from '@/lib/trainers/transferDate';
 
 interface Props {
   open: boolean;
@@ -33,6 +34,7 @@ interface PkgRow {
   sessions_remaining: number;
   expiry_date: string;
   member_name: string;
+  last_session_date: string | null;
   pending: { month: string; amount: number }[];
 }
 
@@ -48,17 +50,31 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
   const [reason, setReason] = useState('');
 
   const pkgs = useQuery({
-    queryKey: ['pt-transfer-packages', fromTrainerId ?? null, packageId ?? null, (packageIds ?? []).join(',')],
-    enabled: open && !!(fromTrainerId || packageId || packageIds?.length),
+    queryKey: ['pt-transfer-packages', branchId, fromTrainerId ?? null, packageId ?? null, (packageIds ?? []).join(',')],
+    enabled: open && !!branchId && !!(fromTrainerId || packageId || packageIds?.length),
     queryFn: async (): Promise<PkgRow[]> => {
       let q = supabase.from('member_pt_packages')
         .select('id, member_id, trainer_id, sessions_total, sessions_remaining, expiry_date, status')
+        .eq('branch_id', branchId)
         .in('status', ['active', 'pending_payment']);
-      q = packageIds?.length ? q.in('id', packageIds) : packageId ? q.eq('id', packageId) : q.eq('trainer_id', fromTrainerId!);
+      if (packageIds?.length) q = q.in('id', packageIds);
+      else if (packageId) q = q.eq('id', packageId);
+      else if (fromTrainerId) q = q.eq('trainer_id', fromTrainerId);
+      else return [];
       const { data, error } = await q;
       if (error) throw error;
       const rows = data ?? [];
       if (!rows.length) return [];
+      const lastDates = await Promise.all(rows.map(async (row) => {
+        const { data, error } = await supabase.from('pt_sessions')
+          .select('scheduled_at').eq('branch_id', branchId)
+          .eq('member_pt_package_id', row.id)
+          .in('status', [...TRANSFER_FINAL_SESSION_STATUSES])
+          .order('scheduled_at', { ascending: false }).limit(1).maybeSingle();
+        if (error) throw error;
+        return [row.id, data?.scheduled_at ? new Date(data.scheduled_at).toISOString().slice(0, 10) : null] as const;
+      }));
+      const lastDateByPackage = new Map(lastDates);
       const memberIds = [...new Set(rows.map((r) => r.member_id))];
       const { data: mem } = await supabase.from('members').select('id, user_id, member_code').in('id', memberIds);
       const uids = (mem ?? []).map((m) => m.user_id).filter(Boolean) as string[];
@@ -75,6 +91,7 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
       return rows.map((r) => ({
         ...r,
         member_name: String(nameByMember.get(r.member_id) ?? 'Member'),
+        last_session_date: lastDateByPackage.get(r.id) ?? null,
         pending: (inst ?? []).filter((i) => pkgByComm.get(i.commission_id) === r.id && i.trainer_id === r.trainer_id)
           .map((i) => ({ month: i.payout_month, amount: Number(i.installment_amount) })),
       }));
@@ -92,6 +109,8 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
   }, [open, pkgs.data]);
 
   const effMonth = effective.slice(0, 7);
+  const minimumDate = minimumTransferDate((pkgs.data ?? []).filter((p) => selected.includes(p.id)).map((p) => p.last_session_date));
+  const validDate = isTransferDateValid(effective, minimumDate);
   const preview = useMemo(() => {
     let move = 0, stay = 0;
     (pkgs.data ?? []).filter((p) => selected.includes(p.id)).forEach((p) =>
@@ -105,6 +124,7 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!validDate || pkgs.isFetching || pkgs.isError) throw new Error(`Choose an effective date on or after ${minimumDate ?? 'the last completed session'}.`);
       const { data, error } = await supabase.rpc('transfer_pt_package_trainer', {
         _package_ids: selected, _to_trainer: toTrainer, _effective_date: effective,
         _keep_general: keepGeneral, _reason: reason.trim() || null,
@@ -121,7 +141,7 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const canSubmit = selected.length > 0 && !!toTrainer && !!effective && !mutation.isPending;
+  const canSubmit = selected.length > 0 && !!toTrainer && validDate && !mutation.isPending && !pkgs.isFetching && !pkgs.isError && !trainers.isError;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -178,7 +198,10 @@ export function TransferPTClientsDrawer({ open, onOpenChange, branchId, fromTrai
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="pt-transfer-date">Effective from</Label>
-              <Input id="pt-transfer-date" type="date" className="min-h-11" value={effective} onChange={(e) => setEffective(e.target.value)} />
+              <Input id="pt-transfer-date" type="date" className="min-h-11" min={minimumDate} value={effective} onChange={(e) => setEffective(e.target.value)} aria-invalid={!validDate} aria-describedby="pt-transfer-date-help" />
+              <p id="pt-transfer-date-help" className={`text-xs ${validDate ? 'text-muted-foreground' : 'text-destructive'}`}>
+                {minimumDate ? `Earliest transfer date: ${minimumDate} (last completed session).` : 'Choose the transfer date.'}
+              </p>
             </div>
             <label htmlFor="pt-keep-general" className="flex min-h-11 cursor-pointer items-center gap-3">
               <Checkbox id="pt-keep-general" checked={keepGeneral} onCheckedChange={(c) => setKeepGeneral(!!c)} />

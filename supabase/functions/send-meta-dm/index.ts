@@ -1,3 +1,4 @@
+// v1.4.0 — Persist provider refusal details and use the canonical error logger.
 // v1.3.0 — Send only the stored text of a pending, not-yet-sent outbound row
 //          (request content must match), blocking arbitrary-content DMs.
 // v1.2.0 — Strip leading `+` from recipient_id so Meta Graph API never gets a
@@ -12,6 +13,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_GRAPH_VERSION, detectMetaHost, metaFetchWithFallback } from "../_shared/meta-config.ts";
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
+import { captureEdgeError } from "../_shared/capture-edge-error.ts";
+import { metaDmOutcome } from "../_shared/metaDmOutcome.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,19 +201,16 @@ Deno.serve(async (req) => {
       const metaErrMsg = data?.error?.message || `HTTP ${r.status}`;
       const metaErrCode = data?.error?.code;
       const metaErrSubcode = data?.error?.error_subcode;
-      console.error(`[send-meta-dm] ${platform} send failed for ${recipientId}: ${metaErrMsg} (code=${metaErrCode}/${metaErrSubcode})`);
-      await supabase.from("whatsapp_messages")
-        .update({ status: "failed" })
+      const outcome = metaDmOutcome(metaErrCode ?? null, metaErrMsg, r.status);
+      const { error: updateError } = await supabase.from("whatsapp_messages")
+        .update({ status: "failed", failure_reason: `Meta ${metaErrCode ?? r.status}/${metaErrSubcode ?? '-'}: ${metaErrMsg}`.slice(0, 1000), failed_at: new Date().toISOString() })
         .eq("id", messageId);
-      try {
-        await supabase.rpc("log_error_event" as any, {
-          p_source: "send-meta-dm",
-          p_branch_id: branchId,
-          p_message: `Meta ${platform} send failed: ${metaErrMsg}`,
-          p_detail: JSON.stringify({ recipientId, code: metaErrCode, subcode: metaErrSubcode, accountId }),
-        });
-      } catch (_) { /* best-effort */ }
-      return json(502, { error: "meta_send_failed", meta_error: metaErrMsg, meta_code: metaErrCode });
+      await captureEdgeError('send-meta-dm', `Meta ${platform} send failed: ${metaErrMsg}`, {
+        branch_id: branchId, severity: outcome.severity,
+        context: { message_id: messageId, code: metaErrCode, subcode: metaErrSubcode, provider_status: r.status, classification: outcome.classification },
+      });
+      if (updateError) await captureEdgeError('send-meta-dm', updateError.message, { branch_id: branchId, context: { message_id: messageId, operation: 'persist_failure' } });
+      return json(outcome.status, { error: "meta_send_failed", meta_error: metaErrMsg, meta_code: metaErrCode, meta_subcode: metaErrSubcode, error_logged: true });
     }
 
     // Meta returns the provider message id under `message_id`. Persist it so
@@ -224,11 +224,12 @@ Deno.serve(async (req) => {
     return json(200, { success: true, message_id: providerMessageId });
   } catch (err: any) {
     console.error("[send-meta-dm] error:", err?.message || err);
+    await captureEdgeError('send-meta-dm', err, { context: { message_id: messageId } });
     if (messageId) {
       try {
         await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", messageId);
       } catch (_) { /* ignore */ }
     }
-    return json(500, { error: "internal_error", detail: err?.message || String(err) });
+    return json(500, { error: "internal_error", detail: err?.message || String(err), error_logged: true });
   }
 });
