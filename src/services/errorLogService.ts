@@ -192,6 +192,9 @@ export function initGlobalErrorLogging() {
           const cloned = response.clone();
           const body = await cloned.text();
           const parsed = (() => { try { return JSON.parse(body); } catch { return null; } })();
+          // The sender already recorded the detailed provider error canonically.
+          // Avoid a second generic row; other failures remain actionable.
+          if (isEdgeFunction && url.includes('/functions/v1/send-meta-dm') && parsed?.error_logged === true) return response;
           const errorMsg = parsed?.error || parsed?.message || parsed?.msg || body.slice(0, 500);
           
           // Storage 5xx (e.g. Cloudflare 520) are transient upstream outages returning HTML, not app faults.
