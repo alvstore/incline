@@ -33,6 +33,8 @@ import { exportToCSV } from '@/lib/csvExport';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { differenceInDays, format, startOfDay, startOfMonth, subDays } from 'date-fns';
+import { CalendarDays } from 'lucide-react';
+import { membershipValidity, type ValidityTone } from '@/lib/memberships/validityDisplay';
 
 const PAGE_SIZE = 20;
 
@@ -434,34 +436,29 @@ export default function MembersPage() {
     { key: 'expiring_soon' as const, label: 'Expiring ≤7d', value: stats.expiringSoon, icon: AlertTriangle, accent: 'border-l-warning', text: 'text-warning', bg: 'bg-warning/10', bar: 'bg-warning' },
   ];
 
+  const VALIDITY_STYLES: Record<ValidityTone, { cls: string; Icon: typeof CheckCircle }> = {
+    healthy: { cls: 'bg-success/10 text-success border-success/20', Icon: CheckCircle },
+    warning: { cls: 'bg-warning/10 text-warning border-warning/25', Icon: Clock },
+    critical: { cls: 'bg-destructive/10 text-destructive border-destructive/20', Icon: AlertTriangle },
+    expired: { cls: 'bg-destructive/10 text-destructive border-destructive/20', Icon: AlertTriangle },
+    scheduled: { cls: 'bg-primary/10 text-primary border-primary/20', Icon: CalendarClock },
+    frozen: { cls: 'bg-info/10 text-info border-info/20', Icon: Snowflake },
+    none: { cls: 'bg-muted text-muted-foreground border-border', Icon: Clock },
+  };
+
   const renderDaysLeftCell = (member: any) => {
-    const daysLeft = member.daysLeft;
-    if (member.derived_status === 'scheduled' || member.scheduledMembership) {
-      return (
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-300">
-            <CalendarClock className="h-3 w-3" />
-            <span className="font-medium tabular-nums">
-              Starts in {Math.max(0, differenceInDays(new Date(member.scheduledMembership.start_date), new Date()))}d
-            </span>
-          </div>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            {fmtDate(member.startDate)} – {fmtDate(member.endDate)}
-          </span>
-        </div>
-      );
-    }
-    if (daysLeft === null || daysLeft === undefined || !member.activeMembership) {
-      return <span className="text-muted-foreground">--</span>;
-    }
+    const v = membershipValidity({ status: member.status, startDate: member.startDate, endDate: member.endDate });
+    if (v.tone === 'none') return <span className="text-muted-foreground">--</span>;
+    const { cls, Icon } = VALIDITY_STYLES[v.tone];
     return (
-      <div className="flex flex-col gap-0.5">
-        <div className={`flex items-center gap-1.5 ${getDaysLeftColor(daysLeft)}`}>
-          {getDaysLeftIcon(daysLeft)}
-          <span className="font-medium tabular-nums">{daysLeft > 0 ? `${daysLeft}d` : 'Expired'}</span>
-        </div>
-        <span className="text-[11px] text-muted-foreground tabular-nums">
-          {fmtDate(member.startDate)} – {fmtDate(member.endDate)}
+      <div className="flex flex-col gap-1">
+        <Badge variant="outline" className={`${cls} w-fit gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums`}>
+          <Icon className="h-3 w-3" aria-hidden />
+          {v.label}
+        </Badge>
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+          <CalendarDays className="h-3 w-3" aria-hidden />
+          {fmtDate(member.startDate)} → {fmtDate(member.endDate)}
         </span>
         {member.activeMembership?.id && freeDaysByMembership[member.activeMembership.id] > 0 && (
           <Tooltip>
