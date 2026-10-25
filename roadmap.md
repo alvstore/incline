@@ -1,5 +1,5 @@
 # Invoice PDF privacy and addresses (25 Oct 2026)
-- [ ] Remove internal notes from customer PDFs, restore existing invoice terms, include saved customer/branch addresses, and test actual downloads without changing transactions.
+- [x] Removed internal notes at mapping/render boundaries; reused applicable existing agreement clauses (no separate five-clause invoice policy was found); added saved customer/branch postal addresses and expandable address blocks. Signed-in real BOS download and GST/thermal/three-page fixtures verified; no transaction changes or messages sent.
 
 # PT partial-payment closeout (25 Oct 2026)
 - [x] Build guarded, branch-controlled closeout preserving cash receipts, GST rules and existing payroll; record waived dues and externally confirmed commission separately.

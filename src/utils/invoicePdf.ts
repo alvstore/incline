@@ -25,7 +25,9 @@ export async function generateInvoicePdfBlob(invoiceOrId: any | string): Promise
 }
 
 function hasJoinedFields(inv: any): boolean {
-  return !!(inv && inv.invoice_items && inv.branch);
+  // Other screens may provide a partial join; refetch before omitting addresses.
+  return !!(inv && inv.invoice_items && inv.branch && 'postal_code' in inv.branch &&
+    (!inv.members?.profiles || 'postal_code' in inv.members.profiles));
 }
 
 async function fetchFullInvoice(id: string) {
