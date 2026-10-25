@@ -1,3 +1,6 @@
+# Invoice PDF privacy and addresses (25 Oct 2026)
+- [x] Removed internal notes at mapping/render boundaries; reused applicable existing agreement clauses (no separate five-clause invoice policy was found); added saved customer/branch postal addresses and expandable address blocks. Signed-in real BOS download and GST/thermal/three-page fixtures verified; no transaction changes or messages sent.
+
 # PT partial-payment closeout (25 Oct 2026)
 - [x] Build guarded, branch-controlled closeout preserving cash receipts, GST rules and existing payroll; record waived dues and externally confirmed commission separately.
 - [x] Closed all three approved BOS PT invoices through the owner screen; retained ₹35,000 cash and recorded ₹17,500 externally shared commission, waived ₹98,500. Verified receipts, zero balances, cancelled packages, actor/time audit, concurrent idempotency, anonymous denial and cancellation protection. Sixteen regression tests pass; build OK; invoice PDF downloaded.

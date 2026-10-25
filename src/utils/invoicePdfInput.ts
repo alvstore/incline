@@ -1,6 +1,8 @@
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { supabase } from '@/integrations/supabase/client';
 import type { InvoicePdfInput } from '@/utils/pdfBlob';
+import { formatPostalAddress } from '@/lib/invoices/postalAddress';
+import { invoiceTerms } from '@/lib/invoices/invoiceTerms';
 
 /**
  * Build the shared PDF input from an invoice row joined with:
@@ -35,7 +37,7 @@ export function toInvoicePdfInput(invoice: any): InvoicePdfInput {
     tax_amount: invoice.tax_amount || 0,
     total_amount: invoice.total_amount,
     amount_paid: invoice.amount_paid || 0,
-    notes: invoice.notes,
+    terms: invoiceTerms((invoice.invoice_items || []).some((item: { reference_type?: string | null }) => item.reference_type === 'membership')),
     items: (invoice.invoice_items || []).map((i: any) => ({
       description: i.description,
       quantity: i.quantity || 1,
@@ -48,8 +50,9 @@ export function toInvoicePdfInput(invoice: any): InvoicePdfInput {
     member_code: memberDisplay.code,
     member_email: memberDisplay.email || invoice.customer_email,
     member_phone: memberDisplay.phone || invoice.customer_phone,
+    member_address: formatPostalAddress(invoice.members?.profiles),
     branch_name: invoice.branch?.name || '',
-    branch_address: invoice.branch?.address,
+    branch_address: formatPostalAddress(invoice.branch),
     branch_phone: invoice.branch?.phone,
     branch_email: invoice.branch?.email,
     gst_number: invoice.branch?.gstin,

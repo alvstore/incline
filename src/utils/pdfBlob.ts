@@ -8,6 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import inclineLogoAsset from '@/assets/incline-logo.png';
 import { normalizeDietContent, dayTotals, slotTotals } from '@/lib/fitness/dietContent';
 import { shiftWorkoutPlanDays } from '@/lib/fitness/planRotation';
+import { formatPostalAddress } from '@/lib/invoices/postalAddress';
+import { invoiceTerms } from '@/lib/invoices/invoiceTerms';
 
 
 const BRAND = {
@@ -64,8 +66,8 @@ async function loadLogoDataUrl(url?: string | null): Promise<{ dataUrl: string; 
 export async function resolveBrandAsync(branchId?: string | null, branchName?: string | null): Promise<BrandContext> {
   let branch: BrandContext['branch'] = { name: branchName || 'Incline' };
   if (branchId) {
-    const { data } = await supabase.from('branches').select('id,name,code,address,phone,email,gstin').eq('id', branchId).maybeSingle();
-    if (data) branch = { id: data.id, name: data.name, code: (data as any).code ?? null, address: data.address ?? null, phone: data.phone ?? null, email: data.email ?? null, gstin: (data as any).gstin ?? null };
+    const { data } = await supabase.from('branches').select('id,name,code,address,city,state,postal_code,phone,email,gstin').eq('id', branchId).maybeSingle();
+    if (data) branch = { id: data.id, name: data.name, code: data.code ?? null, address: formatPostalAddress(data), phone: data.phone ?? null, email: data.email ?? null, gstin: data.gstin ?? null };
   }
   let logoUrl: string | null = null;
   const { data: globalRows } = await supabase.rpc('get_org_branding', { _branch_id: null });
@@ -191,6 +193,7 @@ export interface InvoicePdfInput {
   total_amount: number;
   amount_paid?: number | null;
   notes?: string | null;
+  terms?: string[];
   is_gst_invoice?: boolean | null;
   customer_gstin?: string | null;
   items: Array<{
@@ -206,6 +209,7 @@ export interface InvoicePdfInput {
   member_code?: string | null;
   member_email?: string | null;
   member_phone?: string | null;
+  member_address?: string | null;
   branch_name: string;
   branch_address?: string | null;
   branch_phone?: string | null;
@@ -296,10 +300,20 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
 
   // ── Bill To / From cards ───────────────────────────────────────────────
   const cardY = HEADER_H + 8;
-  const cardH = 32;
   const cardW = 90;
   const leftX = 14;
   const rightX = PAGE_W - 14 - cardW;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const billLines: string[] = [data.member_code, data.member_address, data.member_phone, data.member_email, data.customer_gstin ? `GSTIN: ${data.customer_gstin}` : null]
+    .filter((value): value is string => Boolean(value)).flatMap(value => doc.splitTextToSize(value, cardW - 8));
+  const fromLines: string[] = [resolvedBrand.branch.address || data.branch_address, resolvedBrand.branch.phone, resolvedBrand.branch.email, resolvedBrand.branch.gstin ? `GSTIN: ${resolvedBrand.branch.gstin}` : null]
+    .filter((value): value is string => Boolean(value)).flatMap(value => doc.splitTextToSize(value, cardW - 8));
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  const billName: string[] = doc.splitTextToSize(data.member_name || '—', cardW - 8);
+  const fromName: string[] = doc.splitTextToSize(resolvedBrand.branch.name || 'Incline', cardW - 8);
+  const cardH = Math.max(32, 13 + Math.max(billName.length * 5 + billLines.length * 4, fromName.length * 5 + fromLines.length * 4));
 
   doc.setDrawColor(...SLATE_BORDER);
   doc.setFillColor(...SLATE_BG);
@@ -314,15 +328,11 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
   doc.text('BILL TO', leftX + 4, cardY + 6);
   setColor(doc, TEXT);
   doc.setFontSize(11);
-  doc.text(data.member_name || '—', leftX + 4, cardY + 12);
+  doc.text(billName, leftX + 4, cardY + 12, { lineHeightFactor: 1.25 });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setColor(doc, MUTED);
-  let by = cardY + 17;
-  if (data.member_code) { doc.text(data.member_code, leftX + 4, by); by += 4; }
-  if (data.member_phone) { doc.text(data.member_phone, leftX + 4, by); by += 4; }
-  if (data.member_email) { doc.text(data.member_email, leftX + 4, by); by += 4; }
-  if (data.customer_gstin) doc.text(`GSTIN: ${data.customer_gstin}`, leftX + 4, by);
+  billLines.forEach((line, index) => doc.text(line, leftX + 4, cardY + 12 + billName.length * 5 + index * 4));
 
   // From
   setColor(doc, INDIGO);
@@ -331,19 +341,11 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
   doc.text('FROM', rightX + 4, cardY + 6);
   setColor(doc, TEXT);
   doc.setFontSize(11);
-  doc.text(resolvedBrand.branch.name || 'Incline', rightX + 4, cardY + 12);
+  doc.text(fromName, rightX + 4, cardY + 12, { lineHeightFactor: 1.25 });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setColor(doc, MUTED);
-  let fy = cardY + 17;
-  if (resolvedBrand.branch.address) {
-    const addrLines = doc.splitTextToSize(resolvedBrand.branch.address, cardW - 8);
-    doc.text(addrLines, rightX + 4, fy);
-    fy += addrLines.length * 4;
-  }
-  if (resolvedBrand.branch.phone) { doc.text(resolvedBrand.branch.phone, rightX + 4, fy); fy += 4; }
-  if (resolvedBrand.branch.email && fy < cardY + cardH - 2) { doc.text(resolvedBrand.branch.email, rightX + 4, fy); fy += 4; }
-  if (resolvedBrand.branch.gstin && fy < cardY + cardH - 2) doc.text(`GSTIN: ${resolvedBrand.branch.gstin}`, rightX + 4, fy);
+  fromLines.forEach((line, index) => doc.text(line, rightX + 4, cardY + 12 + fromName.length * 5 + index * 4));
 
   // ── Items table ────────────────────────────────────────────────────────
   const showHsn = !!data.is_gst_invoice && data.items.some(i => i.hsn_code);
@@ -394,7 +396,7 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
     columnStyles: showHsn
       ? { 1: { halign: 'center', cellWidth: 22 }, 2: { halign: 'center', cellWidth: 16 }, 3: { halign: 'right', cellWidth: 30 }, 4: { halign: 'right', cellWidth: 32 } }
       : { 1: { halign: 'center', cellWidth: 16 }, 2: { halign: 'right', cellWidth: 32 }, 3: { halign: 'right', cellWidth: 34 } },
-    margin: { left: 14, right: 14 },
+    margin: { left: 14, right: 14, bottom: 24 },
     didDrawCell: (d) => {
       if (d.section === 'body') {
         doc.setDrawColor(...SLATE_BORDER);
@@ -405,7 +407,8 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
   });
 
   // ── Totals card (right) ────────────────────────────────────────────────
-  const tableEnd = (doc as any).lastAutoTable.finalY + 6;
+  let tableEnd = (doc as any).lastAutoTable.finalY + 6;
+  if (tableEnd + 70 > 273) { doc.addPage(); tableEnd = 20; }
   const totalsW = 86;
   const totalsX = PAGE_W - 14 - totalsW;
   let ty = tableEnd;
@@ -496,18 +499,28 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
   if (data.status === 'paid') stamp('PAID', [22, 163, 74]);
   else if (data.status === 'voided' || data.status === 'cancelled') stamp('VOID', [220, 38, 38]);
 
-  // ── Notes ──────────────────────────────────────────────────────────────
-  if (data.notes) {
-    const ny = Math.max(ty, tableEnd + 24);
+  // Internal notes are never customer-facing, even for direct builder callers.
+  let termsY = Math.max(ty + 10, tableEnd + innerH + 10, tableEnd + 40);
+  const terms = data.terms ?? invoiceTerms(false);
+  if (terms.length) {
+    if (termsY + 24 > 273) { doc.addPage(); termsY = 20; }
     setColor(doc, INDIGO);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.text('NOTES', 14, ny);
+    doc.text('TERMS & CONDITIONS', 14, termsY);
+    termsY += 6;
     setColor(doc, TEXT);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const lines = doc.splitTextToSize(data.notes, 180);
-    doc.text(lines, 14, ny + 5);
+    doc.setFontSize(8);
+    terms.forEach((term, index) => {
+      const lines: string[] = doc.splitTextToSize(`${index + 1}. ${term}`, 180);
+      lines.forEach(line => {
+        if (termsY > 269) { doc.addPage(); termsY = 20; }
+        doc.text(line, 14, termsY);
+        termsY += 4;
+      });
+      termsY += 2;
+    });
   }
 
   // ── Footer ─────────────────────────────────────────────────────────────
@@ -1524,6 +1537,7 @@ export function buildThermalReceiptPdf(data: InvoicePdfInput, brand?: BrandConte
     ...DEFAULT_BRAND,
     branch: {
       name: data.branch_name,
+      address: data.branch_address ?? null,
       phone: data.branch_phone ?? null,
       gstin: data.gst_number ?? null,
     },
@@ -1541,6 +1555,10 @@ export function buildThermalReceiptPdf(data: InvoicePdfInput, brand?: BrandConte
   doc.setFontSize(8);
   setColor(doc, BRAND.muted);
   if (resolvedBrand.branch.name) { doc.text(resolvedBrand.branch.name, W / 2, y, { align: 'center' }); y += 3; }
+  if (resolvedBrand.branch.address) {
+    const lines: string[] = doc.splitTextToSize(resolvedBrand.branch.address, W - margin * 2);
+    lines.forEach(value => { doc.text(value, W / 2, y, { align: 'center' }); y += 3; });
+  }
   if (resolvedBrand.branch.phone) { doc.text(`Tel: ${resolvedBrand.branch.phone}`, W / 2, y, { align: 'center' }); y += 3; }
   if (resolvedBrand.branch.gstin) { doc.text(`GSTIN: ${resolvedBrand.branch.gstin}`, W / 2, y, { align: 'center' }); y += 3; }
 
