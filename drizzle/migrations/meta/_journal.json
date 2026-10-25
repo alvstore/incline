@@ -729,6 +729,27 @@
       "when": 1792855538906,
       "tag": "0103_howbody_unlink_report",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1792952362864,
+      "tag": "0104_pt_bos_closeout_preserve_cash_payroll",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1792952499531,
+      "tag": "0105_pt_closeout_appointment_payment_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1792952538483,
+      "tag": "0106_pt_closeout_protect_history_actor",
+      "breakpoints": true
     }
   ]
 }

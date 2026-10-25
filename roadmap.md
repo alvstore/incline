@@ -1,3 +1,7 @@
+# PT partial-payment closeout (25 Oct 2026)
+- [x] Build guarded, branch-controlled closeout preserving cash receipts, GST rules and existing payroll; record waived dues and externally confirmed commission separately.
+- [x] Closed all three approved BOS PT invoices through the owner screen; retained ₹35,000 cash and recorded ₹17,500 externally shared commission, waived ₹98,500. Verified receipts, zero balances, cancelled packages, actor/time audit, concurrent idempotency, anonymous denial and cancellation protection. Sixteen regression tests pass; build OK; invoice PDF downloaded.
+
 # Selected System Health errors (25 Oct 2026)
 - [x] Gate startup already recovered (live imports/attendance successful); retained valid SDK CORS. Fixed canonical Meta refusal logging, detailed failed-message reasons and duplicate frontend logging; weak-password feedback stays out of error monitoring. Ten regression tests pass; build OK.
 - [x] PT transfer uses latest final-session boundary, prevents invalid submission and fails closed on loading errors. Authenticated owner check: Simpy's earliest date 24 Oct, 1 Oct blocked, 25 Oct allowed; no transfer saved.

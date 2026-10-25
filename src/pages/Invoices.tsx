@@ -40,6 +40,7 @@ import { useActorNames } from '@/hooks/useActorNames';
 import { actorFallback } from '@/lib/audit/actorLabel';
 import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 import { isSalaryDeduction } from '@/lib/invoices/settlementDisplay';
+import { PtInvoiceCloseoutAction } from '@/components/invoices/PtInvoiceCloseoutAction';
 
 const PAGE_SIZE = 20;
 
@@ -559,6 +560,7 @@ export default function InvoicesPage() {
                             </TableCell>
                             <TableCell>
                               <span className="font-mono text-sm">{invoice.invoice_number}</span>
+                              <PtInvoiceCloseoutAction invoiceId={invoice.id} branchId={invoice.branch_id} isPt={getInvoiceType(invoice).label === 'PT'} hasBalance={balance > 0 && invoice.amount_paid > 0 && invoice.status !== 'cancelled' && invoice.status !== 'refunded'} />
                             </TableCell>
                             <TableCell>
                               {(() => {
@@ -599,7 +601,7 @@ export default function InvoicesPage() {
                             <TableCell className="text-right">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button variant="ghost" size="icon" aria-label={`Actions for ${invoice.invoice_number}`} className="min-h-11 min-w-11 cursor-pointer transition-colors duration-200">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>

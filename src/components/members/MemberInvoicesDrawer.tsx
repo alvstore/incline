@@ -13,6 +13,7 @@ import { can } from '@/lib/auth/permissions';
 import { RecordPaymentDrawer } from '@/components/invoices/RecordPaymentDrawer';
 import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer';
 import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
+import { PtInvoiceCloseoutAction } from '@/components/invoices/PtInvoiceCloseoutAction';
 
 interface Props {
   open: boolean;
@@ -52,8 +53,9 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
     queryFn: async () => {
       const { data, error } = await supabase
         .from('invoices')
-        .select('id, invoice_number, subtotal, discount_amount, tax_amount, total_amount, amount_paid, status, due_date, created_at, invoice_type, is_gst_invoice, gst_rate')
+        .select('id, invoice_number, subtotal, discount_amount, tax_amount, total_amount, amount_paid, status, due_date, created_at, invoice_type, is_gst_invoice, gst_rate, invoice_items(reference_type)')
         .eq('member_id', memberId)
+        .eq('branch_id', branchId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
@@ -130,6 +132,7 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      <PtInvoiceCloseoutAction invoiceId={inv.id} branchId={branchId} isPt={inv.invoice_items?.some((item: { reference_type: string | null }) => item.reference_type === 'pt_package') ?? false} hasBalance={!closed && due > 0 && inv.amount_paid > 0} />
                       {!closed && due > 0 && (
                         <Button
                           size="sm"
