@@ -10,25 +10,36 @@ interface Props {
   posture?: ScanQuota;
 }
 
-function QuotaBlock({ icon: Icon, label, q }: { icon: any; label: string; q?: ScanQuota }) {
+function QuotaBlock({ icon: Icon, label, q }: { icon: typeof Scan; label: string; q?: ScanQuota }) {
   if (!q) return null;
-  const usage = q.plan_limit > 0 ? `${q.used_this_month}/${q.plan_limit}` : `${q.used_this_month}`;
-  const variant = q.allowed ? 'secondary' : 'destructive';
+  const pct = q.plan_limit > 0 ? Math.min(100, (q.used_this_month / q.plan_limit) * 100) : 0;
+  const remaining = Math.max(0, q.plan_limit - q.used_this_month);
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
-      <div className="rounded-full bg-primary/10 p-2 text-primary">
-        <Icon className="h-4 w-4" />
+    <div className="space-y-2 rounded-xl bg-muted/40 px-3 py-3">
+      <div className="flex items-center gap-3">
+        <div className="rounded-full bg-primary/10 p-2 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium leading-tight">{label}</p>
+          <p className="text-sm font-bold tabular-nums leading-tight">
+            {q.plan_limit > 0 ? <>{q.used_this_month}<span className="text-muted-foreground font-normal"> / {q.plan_limit} used</span></> : <span className="text-xs font-normal text-muted-foreground">Not in your plan</span>}
+          </p>
+        </div>
+        <Badge variant={q.allowed ? 'secondary' : 'destructive'} className="ml-auto rounded-full text-[10px]">
+          {q.allowed ? 'Available' : 'Used up'}
+        </Badge>
       </div>
-      <div className="min-w-0">
-        <p className="text-xs font-medium leading-tight">{label}</p>
-        <p className="text-xs text-muted-foreground leading-tight">
-          {q.plan_limit > 0 ? `${usage} this month` : 'Not in your plan'}
-          {q.addon_remaining > 0 && ` · +${q.addon_remaining} add-on`}
-        </p>
-      </div>
-      <Badge variant={variant} className="ml-auto rounded-full text-[10px]">
-        {q.allowed ? 'Available' : 'Used up'}
-      </Badge>
+      {q.plan_limit > 0 && (
+        <>
+          <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={q.used_this_month} aria-valuemax={q.plan_limit} aria-label={`${label} scans used`}>
+            <div className={`h-full rounded-full ${q.allowed ? 'bg-primary' : 'bg-destructive'} motion-safe:transition-all motion-safe:duration-500`} style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {remaining} left this month{q.addon_remaining > 0 && ` · +${q.addon_remaining} add-on`}
+          </p>
+        </>
+      )}
     </div>
   );
 }
