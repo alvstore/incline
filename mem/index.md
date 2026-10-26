@@ -11,3 +11,4 @@
 - [PT commission GST-exclusive + installments](mem://features/pt-commission-gst-exclusive-installments) — pre-GST commission base, separate GST deduction, full-payment gating, monthly installments, duplicate protection
 - [MIPS device churn & face verification](mem://integrations/mips-device-churn-and-face-verification) — drift-only reconciliation, IST quiet hours, recognition-proof face ledger
 - [MIPS Personnel Routing](mem://integrations/mips-personnel-routing) — personType 1 only, deptId 100, Smart Attendance intentionally unused, failure auditing
+- [WhatsApp media MIME type](mem://integrations/whatsapp-media-mimetype) — Meta 131053: set correct Content-Type at upload time; CDN caches per URL, fix via new object path (birthday video = v3 path)
