@@ -1,4 +1,7 @@
-// v1.1.0 — canonical birthday greeting sender (video greeting).
+// v1.2.0 — canonical birthday greeting sender (video greeting).
+// v1.2.0: video moved to a -v2 object path. Meta caches header media by URL,
+// and the original object was first served as application/octet-stream
+// (Meta error 131053). The -v2 object has mimetype video/mp4 verified.
 //
 // One place decides HOW a birthday wish goes out so the dashboard "Greet"
 // button and the noon-IST `builtin:birthday_wish` automation behave identically:
@@ -15,7 +18,7 @@
 // resolution, member preferences, quiet hours and communication_logs.
 
 export const BIRTHDAY_VIDEO_URL =
-  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-video.mp4";
+  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-video-v3.mp4";
 
 /** Still frame of the video — used where a video cannot render (email). */
 export const BIRTHDAY_POSTER_URL =
