@@ -18,7 +18,7 @@
 // resolution, member preferences, quiet hours and communication_logs.
 
 export const BIRTHDAY_VIDEO_URL =
-  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-video-v2.mp4";
+  "https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/public/template-media/birthday%2Fincline-birthday-video-v3.mp4";
 
 /** Still frame of the video — used where a video cannot render (email). */
 export const BIRTHDAY_POSTER_URL =
