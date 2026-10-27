@@ -1,3 +1,8 @@
+# Frontend-only dead-code cleanup (27 Oct 2026)
+- [ ] Independently verify the 16 step-1 candidates; retain anything with active callers.
+- [ ] Remove verified unused frontend files only; leave packages, backend functions, tables and storage untouched.
+- [ ] Run relevant regression tests and verify live route loading.
+
 # Dashboard smaller-screen layout (27 Oct 2026)
 - [x] Improved widget grids, compact spacing, birthday list sizing and wrapping check-in details; dashboard actions/data unchanged.
 - [x] Incline E2E Playwright: signed-in owner screenshots at 375/768/1075/1440px, working check-in tabs, no horizontal overflow; dark view checked, build OK, no page/console errors or HTTP failures (cancelled HEAD refreshes only). No greetings or transactions triggered.
