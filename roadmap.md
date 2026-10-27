@@ -1,3 +1,8 @@
+# Frontend-only dead-code cleanup (27 Oct 2026)
+- [x] Independently verified all 16 step-1 candidates had no inbound imports, exported-type callers, routes or dynamic loaders.
+- [x] Removed exactly 11 unused components, two unrouted pages and three unused service/library files; packages, backend functions, tables and storage untouched. No bundle-size reduction claimed for already-unreachable code.
+- [x] 21 regression tests passed before and after cleanup; build OK, no dangling source references. Signed-in owner dashboard, attendance, members, fitness templates and HR screens loaded after deletion with no page errors; no transactions or outreach triggered.
+
 # Dashboard smaller-screen layout (27 Oct 2026)
 - [x] Improved widget grids, compact spacing, birthday list sizing and wrapping check-in details; dashboard actions/data unchanged.
 - [x] Incline E2E Playwright: signed-in owner screenshots at 375/768/1075/1440px, working check-in tabs, no horizontal overflow; dark view checked, build OK, no page/console errors or HTTP failures (cancelled HEAD refreshes only). No greetings or transactions triggered.
