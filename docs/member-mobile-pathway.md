@@ -1,5 +1,7 @@
 # Incline native member app — pathway
 
+> **Superseded:** the member app is now planned in Flutter — see `docs/flutter-member-app-readme.md` and `docs/flutter-member-app-roadmap.md`.
+
 The member app for Android and iOS is a **separate React Native (Expo) project**. This web repository has no native wrapper: Capacitor was removed, and `/member-app` and `/mobile-preview` redirect to `/member-dashboard`.
 
 ## Technology
