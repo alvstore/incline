@@ -1,3 +1,7 @@
+# Deprecated table cleanup (27 Oct 2026)
+- [ ] Recheck all nine candidates against live row counts, frontend/backend producers, database functions, dependencies and scheduled jobs; preserve empty future-use logs.
+- [ ] Remove only confirmed unused tables if Cloud permissions allow; document retained tables and verify the outcome.
+
 # Frontend-only dead-code cleanup (27 Oct 2026)
 - [x] Independently verified all 16 step-1 candidates had no inbound imports, exported-type callers, routes or dynamic loaders.
 - [x] Removed exactly 11 unused components, two unrouted pages and three unused service/library files; packages, backend functions, tables and storage untouched. No bundle-size reduction claimed for already-unreachable code.
