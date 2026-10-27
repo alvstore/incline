@@ -1,10 +1,96 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Layers, Moon, Timer } from 'lucide-react';
-import { estimatedMinutes, totalSets, type WorkoutDay } from './planNormalize';
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, ExternalLink, Layers, Moon, Play, Timer, X } from 'lucide-react';
+import { estimatedMinutes, totalSets, type WorkoutDay, type WorkoutExercise } from './planNormalize';
+import { getVideoPublicUrl } from '@/services/videoUploadService';
+import { track } from '@/lib/analytics';
+
+const EMBED_HOSTS_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com|player\.vimeo\.com)/i;
+
+function resolveVideoUrl(ex: WorkoutExercise): string | null {
+  if (ex.video_url) return ex.video_url;
+  if (ex.video_file_path) return getVideoPublicUrl(ex.video_file_path);
+  return null;
+}
+
+/** Expandable inline demo player for one exercise. Direct files play in a
+ *  <video> tag; YouTube/Vimeo open externally. No autoplay, ever. */
+function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
+  const [open, setOpen] = useState(false);
+  const url = resolveVideoUrl(exercise);
+  if (!url) return null;
+  const isEmbedHost = EMBED_HOSTS_RE.test(url);
+
+  if (isEmbedHost) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => {
+          e.stopPropagation();
+          track('exercise_video_played', { exercise: exercise.name, kind: 'external' });
+        }}
+        className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+        aria-label={`Watch demo video for ${exercise.name} (opens in new tab)`}
+      >
+        <Play className="h-3.5 w-3.5" /> Watch demo <ExternalLink className="h-3 w-3 text-muted-foreground" />
+      </a>
+    );
+  }
+
+  return (
+    <span className="inline-flex shrink-0">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => {
+            if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
+            return !v;
+          });
+        }}
+        aria-expanded={open}
+        aria-label={`${open ? 'Hide' : 'Watch'} demo video for ${exercise.name}`}
+        className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+      >
+        {open ? <X className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        {open ? 'Hide video' : 'Watch demo'}
+      </button>
+      {open && (
+        <span
+          className="mt-2 block w-full overflow-hidden rounded-xl border border-border/60 bg-black"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <video
+            src={url}
+            controls
+            preload="metadata"
+            playsInline
+            className="aspect-video w-full"
+            aria-label={`Demo video: ${exercise.name}`}
+          />
+          {exercise.form_tips && exercise.form_tips.length > 0 && (
+            <span className="block bg-card px-3 py-2">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Form cues
+              </span>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-foreground">
+                {exercise.form_tips.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
+              </ul>
+            </span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface DaySessionCardProps {
   day: WorkoutDay;
