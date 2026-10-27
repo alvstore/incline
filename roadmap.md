@@ -1,3 +1,7 @@
+# Deprecated table cleanup (27 Oct 2026)
+- [x] Rechecked nine candidates against live counts, frontend/backend producers, database functions/dependencies and scheduled jobs. Six legacy tables are already absent; no new drops needed.
+- [x] Retained pt_attendance_corrections (0 rows; correction approvals/boards), pt_trainer_transfers (1 row; active transfer/audit workflow), referral_code_attempts (0 rows; signup validation/rate limiting). Previous drop-candidate classification was incorrect. Evidence in docs/deprecated-table-audit.md; no database, application or storage changes.
+
 # Frontend-only dead-code cleanup (27 Oct 2026)
 - [x] Independently verified all 16 step-1 candidates had no inbound imports, exported-type callers, routes or dynamic loaders.
 - [x] Removed exactly 11 unused components, two unrouted pages and three unused service/library files; packages, backend functions, tables and storage untouched. No bundle-size reduction claimed for already-unreachable code.
