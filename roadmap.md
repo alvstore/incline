@@ -1,3 +1,6 @@
+# Dead backend function cleanup (28 Oct 2026)
+- [x] Removed `send-message` (legacy router) and `backfill-razorpay-fees` (one-time backfill): no app, backend, scheduled job, automation rule, setting or database callers and no recent calls; deleted from live and source.
+
 # Deprecated table cleanup (27 Oct 2026)
 - [x] Rechecked nine candidates against live counts, frontend/backend producers, database functions/dependencies and scheduled jobs. Six legacy tables are already absent; no new drops needed.
 - [x] Retained pt_attendance_corrections (0 rows; correction approvals/boards), pt_trainer_transfers (1 row; active transfer/audit workflow), referral_code_attempts (0 rows; signup validation/rate limiting). Previous drop-candidate classification was incorrect. Evidence in docs/deprecated-table-audit.md; no database, application or storage changes.
