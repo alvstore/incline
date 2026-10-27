@@ -1158,6 +1158,28 @@ Deno.serve(async (req) => {
 
       // Generate trainer code: TRN-{first4chars} (consistent with UI)
       personNo = `TRN-${person_id.substring(0, 4).toUpperCase()}`;
+
+      // v3.9.0 — multi-role staff (e.g. manager who also trains) have ONE gate
+      // identity: the employee record. Creating a second MIPS person fails with
+      // "Mobile already exists" and the new photo never reaches the gates.
+      if (trainer.user_id && !shouldRevokeInstead) {
+        const { data: twin } = await supabase
+          .from("employees").select("id, is_active, exit_date")
+          .eq("user_id", trainer.user_id).maybeSingle();
+        if (twin && twin.is_active !== false && !twin.exit_date) {
+          const { data: delegated, error: delErr } = await supabase.functions.invoke("sync-to-mips", {
+            body: { person_type: "employee", person_id: twin.id, force },
+            headers: { "x-internal-token": req.headers.get("x-internal-token") ?? "" },
+          });
+          return new Response(JSON.stringify({
+            success: !delErr && (delegated as any)?.success !== false,
+            action: "delegated_to_employee",
+            employee_id: twin.id,
+            result: delegated ?? null,
+            error: delErr?.message ?? null,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
     } else {
       return new Response(JSON.stringify({ error: `Unknown person_type: ${person_type}` }), {
         status: 400,
