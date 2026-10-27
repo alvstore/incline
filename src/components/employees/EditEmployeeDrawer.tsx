@@ -65,10 +65,8 @@ export function EditEmployeeDrawer({ open, onOpenChange, employee }: EditEmploye
 
   const handleAvatarChange = async (url: string) => {
     setAvatarUrl(url);
-    if (url && employee?.id) {
-      if (employee.user_id) {
-        await supabase.from('profiles').update({ avatar_url: url }).eq('id', employee.user_id);
-      }
+    // With a login, StaffAvatarUpload already ran the full gate pipeline.
+    if (url && employee?.id && !employee.user_id) {
       try {
         await queueStaffSync(employee.id, url, employee.profile?.full_name || 'Employee');
       } catch (err) {
@@ -192,6 +190,9 @@ export function EditEmployeeDrawer({ open, onOpenChange, employee }: EditEmploye
             <StaffAvatarUpload
               avatarUrl={avatarUrl}
               name={employee?.profile?.full_name || 'Employee'}
+              userId={employee?.user_id || undefined}
+              staffId={employee?.id}
+              entityType="employees"
               onAvatarChange={handleAvatarChange}
               size="lg"
             />
