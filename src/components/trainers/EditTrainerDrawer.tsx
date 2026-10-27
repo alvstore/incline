@@ -60,21 +60,19 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
   
   const [newCertification, setNewCertification] = useState('');
 
-  // Handle avatar changes and queue biometric sync
+  // The avatar uploader (with userId) already runs the full gate pipeline:
+  // profile photo → private biometric copy → device sync queue. Only queue
+  // here for legacy trainers with no login, where that pipeline can't run.
   const handleAvatarChange = async (url: string) => {
     setAvatarUrl(url);
-    if (url && trainer?.id) {
-      // Update profile avatar
-      if (trainer.user_id) {
-        await supabase.from('profiles').update({ avatar_url: url }).eq('id', trainer.user_id);
-      }
-      // Queue biometric sync
+    if (url && trainer?.id && !trainer.user_id) {
       try {
         await queueTrainerSync(trainer.id, url, trainer.profile_name || 'Trainer');
       } catch (err) {
         console.warn('Biometric sync queue failed:', err);
       }
     }
+    queryClient.invalidateQueries({ queryKey: ['biometric-sync-status-staff'] });
   };
 
   // Defense in depth: refetch the trainer (with full profile) when the drawer opens,
