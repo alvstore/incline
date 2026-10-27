@@ -1,4 +1,7 @@
-// whatsapp-member-menu.ts — v1.2.0
+// whatsapp-member-menu.ts — v1.3.0
+// v1.3.0 — slot row titles keep the AM/PM space ("7:30 PM" not "7:30PM") so
+// morning members stop misreading evening slots; the day picker flags
+// "evening only" when advance-notice rules have hidden all morning slots.
 // Deterministic (zero-LLM) WhatsApp self-service gateway for ACTIVE members.
 //
 // Epic 1  Phone normalisation + active-member resolution
@@ -407,7 +410,7 @@ async function openSlots(
 // short enough (24 chars) to survive without truncation.
 const dateRowTitle = (typeName: string, iso: string) => cut(`${typeInitials(typeName)} · ${dayShort(iso)}`, 24);
 const slotRowTitle = (typeName: string, s: any) =>
-  cut(`${typeInitials(typeName)} ${dayShort(s.slot_date)} ${prettyTime(s.start_time).replace(/\s/g, "")}`, 24);
+  cut(`${typeInitials(typeName)} ${dayShort(s.slot_date)} ${prettyTime(s.start_time)}`, 24);
 
 // Step 2 — which day.
 async function handleFacilityDates(supabase: any, ctx: MemberContext, typeId: string, typeName: string): Promise<string> {
@@ -423,14 +426,25 @@ async function handleFacilityDates(supabase: any, ctx: MemberContext, typeId: st
     return `No open ${typeName} times in the next week, ${ctx.firstName}. Our front desk can help — reply *Front desk*, or check ${PORTAL}/my-benefits${BACK}`;
   }
 
-  const byDate = new Map<string, number>();
-  for (const s of slots) byDate.set(s.slot_date, (byDate.get(s.slot_date) ?? 0) + 1);
+  const byDate = new Map<string, { count: number; earliest: string }>();
+  for (const s of slots) {
+    const start = String(s.start_time).slice(0, 5);
+    const cur = byDate.get(s.slot_date);
+    if (!cur) byDate.set(s.slot_date, { count: 1, earliest: start });
+    else { cur.count += 1; if (start < cur.earliest) cur.earliest = start; }
+  }
 
-  const rows: Row[] = [...byDate.entries()].slice(0, 9).map(([iso, count]) => ({
-    id: `FACDATE:${typeId}:${iso}`,
-    title: dateRowTitle(typeName, iso),
-    description: cut(`${dayLabel(iso)} · ${count} time${count === 1 ? "" : "s"} open`, 72),
-  }));
+  const rows: Row[] = [...byDate.entries()].slice(0, 9).map(([iso, info]) => {
+    // When advance-notice rules hide every morning slot, say so — morning
+    // gym-goers were misreading the lone evening slot as a morning one.
+    const eveningOnly = iso === today && info.earliest >= "12:00";
+    const desc = `${dayLabel(iso)}${eveningOnly ? " · evening only" : ""} · ${info.count} time${info.count === 1 ? "" : "s"} open`;
+    return {
+      id: `FACDATE:${typeId}:${iso}`,
+      title: dateRowTitle(typeName, iso),
+      description: cut(desc, 72),
+    };
+  });
 
   const left = units < 0 ? "unlimited sessions" : `${units} session${units === 1 ? "" : "s"} left`;
   return list(
