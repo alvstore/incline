@@ -1,3 +1,4 @@
 - MIPS gate state signatures use the photo hash, not the storage path, because re-uploads reuse the same path.
 - The 3-minute per person/gate cooldown only folds pushes with the same state signature; a changed validity or photo always dispatches, because new members are first pushed revoked and their plan arrives seconds later.
 - Never skip gate delivery solely because that person was delivered historically; compare state signatures and honour explicit manual repair events, because an old success cannot prove a new photo or restored access reached the gate.
+- A trainer who is also an active employee has one gate identity: sync-to-mips delegates the trainer push to the employee record, because MIPS rejects a second person with the same mobile ("Mobile already exists") and the photo is then never uploaded.
