@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Link as LinkIcon, Upload, Video, X, AlertCircle } from 'lucide-react';
+import { Loader2, Link as LinkIcon, LibraryBig, Upload, Video, X, AlertCircle } from 'lucide-react';
 import {
   uploadVideo,
   validateVideoFile,
@@ -12,6 +14,26 @@ import {
   getVideoPublicUrl,
   deleteVideo,
 } from '@/services/videoUploadService';
+import { ExerciseVideoLibraryPicker, type ExerciseLibraryItem } from './ExerciseVideoLibraryPicker';
+
+/** Global feature flag (settings row, branch_id NULL) gating the Library tab. */
+function useExerciseLibraryEnabled(): boolean {
+  const { data } = useQuery({
+    queryKey: ['feature-flag', 'exercise_video_library_enabled'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .is('branch_id', null)
+        .eq('key', 'exercise_video_library_enabled')
+        .maybeSingle();
+      if (error) return true; // fail open — flag row may predate policies
+      return data?.value !== false;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+  return data ?? true;
+}
 
 export interface VideoAttachmentValue {
   video_url?: string;
