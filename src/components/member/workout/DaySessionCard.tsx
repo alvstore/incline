@@ -44,16 +44,15 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
   }
 
   return (
-    <span className="inline-flex shrink-0">
+    <div className="px-3 pb-3">
       <button
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
+        onClick={() =>
           setOpen((v) => {
             if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
             return !v;
-          });
-        }}
+          })
+        }
         aria-expanded={open}
         aria-label={`${open ? 'Hide' : 'Watch'} demo video for ${exercise.name}`}
         className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -62,10 +61,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
         {open ? 'Hide video' : 'Watch demo'}
       </button>
       {open && (
-        <span
-          className="mt-2 block w-full overflow-hidden rounded-xl border border-border/60 bg-black"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-black">
           <video
             src={url}
             controls
@@ -75,20 +71,20 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
             aria-label={`Demo video: ${exercise.name}`}
           />
           {exercise.form_tips && exercise.form_tips.length > 0 && (
-            <span className="block bg-card px-3 py-2">
-              <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="bg-card px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Form cues
-              </span>
+              </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-foreground">
                 {exercise.form_tips.map((tip, i) => (
                   <li key={i}>{tip}</li>
                 ))}
               </ul>
-            </span>
+            </div>
           )}
-        </span>
+        </div>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -162,42 +158,48 @@ export function DaySessionCard({
             const key = `${day.id}:${i}`;
             const done = doneKeys.has(key);
             return (
-              <button
+              <div
                 key={key}
-                type="button"
-                onClick={() => onToggleExercise(i)}
-                aria-pressed={done}
-                aria-label={`Mark ${exercise.name} as ${done ? 'not done' : 'done'}`}
                 className={cn(
-                  'flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200',
-                  'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
-                  done
-                    ? 'border-success/30 bg-success/5'
-                    : 'border-border/60 bg-muted/40 hover:border-primary/40 hover:bg-muted',
+                  'rounded-xl border transition-colors duration-200',
+                  done ? 'border-success/30 bg-success/5' : 'border-border/60 bg-muted/40',
                 )}
               >
-                <span
+                <button
+                  type="button"
+                  onClick={() => onToggleExercise(i)}
+                  aria-pressed={done}
+                  aria-label={`Mark ${exercise.name} as ${done ? 'not done' : 'done'}`}
                   className={cn(
-                    'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-                    done ? 'bg-success/15 text-success' : 'bg-background text-muted-foreground',
+                    'flex w-full cursor-pointer items-start gap-3 rounded-t-xl p-3 text-left transition-colors duration-200',
+                    'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
+                    !done && 'hover:bg-muted',
                   )}
                 >
-                  {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={cn('block text-sm font-semibold', done && 'line-through opacity-70')}>
-                    {exercise.name}
+                  <span
+                    className={cn(
+                      'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                      done ? 'bg-success/15 text-success' : 'bg-background text-muted-foreground',
+                    )}
+                  >
+                    {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                   </span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                    <span>{exercise.sets} sets × {exercise.reps || '—'}</span>
-                    {exercise.rest && <span>Rest {exercise.rest}</span>}
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block text-sm font-semibold', done && 'line-through opacity-70')}>
+                      {exercise.name}
+                    </span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>{exercise.sets} sets × {exercise.reps || '—'}</span>
+                      {exercise.rest && <span>Rest {exercise.rest}</span>}
+                    </span>
+                    {exercise.notes && (
+                      <span className="mt-1 block text-xs italic text-muted-foreground">{exercise.notes}</span>
+                    )}
                   </span>
-                  {exercise.notes && (
-                    <span className="mt-1 block text-xs italic text-muted-foreground">{exercise.notes}</span>
-                  )}
-                </span>
-                <Circle className={cn('mt-1 h-4 w-4 shrink-0', done ? 'hidden' : 'text-muted-foreground/40')} />
-              </button>
+                  <Circle className={cn('mt-1 h-4 w-4 shrink-0', done ? 'hidden' : 'text-muted-foreground/40')} />
+                </button>
+                <ExerciseVideoButton exercise={exercise} />
+              </div>
             );
           })
         )}
