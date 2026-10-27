@@ -112,7 +112,7 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl bg-gradient-to-br from-card/90 to-card/50 backdrop-blur-xl ring-1 ring-border/60 shadow-lg shadow-primary/5 p-5',
+        'relative min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-card/90 to-card/50 backdrop-blur-xl ring-1 ring-border/60 shadow-lg shadow-primary/5 p-4 sm:p-5',
         className,
       )}
     >
@@ -156,16 +156,16 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
                 <Sparkles className="h-3.5 w-3.5" /> Today
               </div>
               {today.map((m) => (
-                <div key={m.member_id} className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10 ring-2 ring-primary/40">
+                <div key={m.member_id} className="flex flex-wrap items-center gap-2">
+                  <Avatar className="h-10 w-10 shrink-0 ring-2 ring-primary/40">
                     <AvatarImage src={m.avatar_url ?? undefined} alt="" />
                     <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                       {initials(m.full_name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-semibold text-foreground truncate">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-sm font-semibold text-foreground break-words">
                         {m.full_name ?? 'Unnamed member'}
                       </p>
                       <PersonTypeBadge type={m.person_type} />
@@ -175,7 +175,7 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
                   <Button
                     size="sm"
                     variant="default"
-                    className="h-8 rounded-lg"
+                    className="h-11 shrink-0 rounded-lg cursor-pointer transition-colors duration-200"
                     onClick={() => handleGreet(m)}
                     aria-label={`Send birthday greeting to ${m.full_name ?? 'member'}`}
                     disabled={greetingId === m.member_id}
@@ -197,7 +197,7 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">
                 Upcoming
               </div>
-              <ul className="space-y-1.5">
+              <ul className="max-h-64 sm:max-h-72 space-y-1.5 overflow-y-auto overscroll-contain pr-1" tabIndex={0} aria-label="Upcoming birthdays" >
                 {upcoming.slice(0, 8).map((m) => (
                   <li
                     key={m.member_id}

@@ -344,11 +344,11 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground break-words">
               Welcome back, {profile?.full_name?.split(' ')[0] || 'Admin'}!
             </h1>
             <p className="text-muted-foreground">
@@ -358,16 +358,16 @@ export default function DashboardPage() {
         </div>
 
         {/* Hero Gradient Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/70 p-6 text-primary-foreground shadow-lg shadow-primary/25">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/70 p-4 sm:p-6 text-primary-foreground shadow-lg shadow-primary/25">
           <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-primary-foreground/10 blur-2xl" aria-hidden="true" />
           <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-primary-foreground/5 blur-3xl" aria-hidden="true" />
-          <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="relative flex min-w-0 flex-col gap-5 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/70">Live overview</p>
               <h2 className="mt-1 text-2xl font-bold tracking-tight">Gym Health</h2>
               <p className="mt-1 text-sm text-primary-foreground/75">Real-time pulse of your business</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-xl bg-primary-foreground/10 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:bg-primary-foreground/15">
                 <p className="text-2xl font-bold tabular-nums md:text-3xl">{(stats as any)?.totalMembers || 0}</p>
                 <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/70 md:text-xs">Total Members</p>
@@ -399,14 +399,14 @@ export default function DashboardPage() {
 
         {/* Secondary Stats Row */}
         {statsLoading ? (
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
           </div>
         ) : (
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
             <StatCard
               title="New Leads"
               value={(stats as any)?.newLeads || 0}
@@ -445,10 +445,10 @@ export default function DashboardPage() {
 
         {/* Live task pulse — compact bento card (kill switch: settings.dashboard_task_widget_v2) */}
         {taskPulseV2 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-12">
-            <TaskPulseWidget branchFilter={branchFilter} className="md:col-span-2 lg:col-span-4" />
-            <div className="min-w-0 lg:col-span-4"><RevenueChart data={revenueData} /></div>
-            <div className="min-w-0 lg:col-span-4"><AttendanceChart data={attendanceData} /></div>
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
+            <TaskPulseWidget branchFilter={branchFilter} className="md:col-span-2 xl:col-span-1" />
+            <div className="min-w-0"><RevenueChart data={revenueData} /></div>
+            <div className="min-w-0"><AttendanceChart data={attendanceData} /></div>
           </div>
         ) : (
           <>
@@ -461,8 +461,8 @@ export default function DashboardPage() {
         )}
 
         {/* Members Counting + Joined Summary */}
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2">
+        <div className="grid gap-4 sm:gap-6 xl:grid-cols-3 [&>*]:min-w-0">
+          <div className="xl:col-span-2">
             <Suspense fallback={<ChartSkeleton />}>
               <LazyMembersCountingChart branchFilter={branchFilter} />
             </Suspense>
@@ -471,7 +471,7 @@ export default function DashboardPage() {
         </div>
 
         {/* CRM Widgets Row — lazy loaded */}
-        <div ref={crmRef} className="grid gap-6 md:grid-cols-4">
+        <div ref={crmRef} className="grid gap-4 sm:gap-6 md:grid-cols-2 2xl:grid-cols-4 [&>*]:min-w-0">
           {crmInView ? (
             <>
               <OccupancyGauge currentlyIn={(stats as any)?.currentlyIn || 0} capacity={branches?.find((b: any) => b.id === branchFilter)?.capacity || 50} />
@@ -493,7 +493,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom Row — lazy loaded */}
-        <div ref={bottomRef} className="grid gap-6 md:grid-cols-4">
+        <div ref={bottomRef} className="grid gap-4 sm:gap-6 md:grid-cols-2 2xl:grid-cols-4 [&>*]:min-w-0">
           {bottomInView ? (
             <>
               <MembershipDistribution data={membershipData} />
@@ -514,13 +514,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Google Reviews + Live Access Feed */}
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 xl:grid-cols-3 [&>*]:min-w-0">
           {bottomInView ? (
             <>
               <Suspense fallback={<ChartSkeleton />}>
                 <LazyGoogleReviewsWidget branchId={branchFilter || undefined} />
               </Suspense>
-              <Card className="shadow-lg rounded-2xl border-0 md:col-span-2">
+              <Card className="shadow-lg rounded-2xl border-0 xl:col-span-2">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Activity className="h-5 w-5 text-success" />
@@ -537,14 +537,14 @@ export default function DashboardPage() {
           ) : (
             <>
               <ChartSkeleton />
-              <Skeleton className="h-64 rounded-2xl md:col-span-2" />
+              <Skeleton className="h-64 rounded-2xl xl:col-span-2" />
             </>
           )}
         </div>
 
 
         {/* AI Insights + Member Voice — lazy loaded */}
-        <div ref={insightsRef} className="grid gap-6 md:grid-cols-2">
+        <div ref={insightsRef} className="grid gap-4 sm:gap-6 xl:grid-cols-2 [&>*]:min-w-0">
           {insightsInView ? (
             <Suspense fallback={<><ChartSkeleton /><ChartSkeleton /></>}>
               <LazyAIInsightsWidget branchId={branchFilter} />
