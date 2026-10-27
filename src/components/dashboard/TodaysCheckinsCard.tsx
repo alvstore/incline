@@ -44,17 +44,17 @@ function PersonRow({ row, signed }: { row: CheckinRow; signed: Record<string, st
   const dues = Number(row.dues ?? 0);
   const days = row.days_remaining;
   return (
-    <li className="flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors duration-150 hover:bg-slate-50">
-      <Avatar className="h-9 w-9">
+    <li className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-xl px-2.5 py-2 transition-colors duration-200 hover:bg-muted/50">
+      <Avatar className="h-9 w-9 shrink-0">
         {photo ? <AvatarImage src={photo} alt={row.full_name ?? 'Member'} /> : null}
-        <AvatarFallback className="bg-indigo-50 text-xs font-semibold text-indigo-600">
+        <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
           {initials(row.full_name)}
         </AvatarFallback>
       </Avatar>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-900">{row.full_name || 'Unknown'}</p>
-        <p className="truncate text-xs text-slate-500">
+        <p className="truncate text-sm font-semibold text-foreground">{row.full_name || 'Unknown'}</p>
+        <p className="text-xs text-muted-foreground break-words">
           {row.person_kind === 'member'
             ? row.member_code ?? 'Member'
             : (row.role_label ?? 'staff').replace(/^\w/, (c) => c.toUpperCase())}
@@ -65,14 +65,14 @@ function PersonRow({ row, signed }: { row: CheckinRow; signed: Record<string, st
       </div>
 
       {row.person_kind === 'member' && (
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="col-start-2 flex flex-wrap items-center gap-1.5">
           {dues > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
               <IndianRupee className="h-3 w-3" aria-hidden />
               {Math.round(dues).toLocaleString('en-IN')}
             </span>
           ) : (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+            <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
               Paid
             </span>
           )}
@@ -80,10 +80,10 @@ function PersonRow({ row, signed }: { row: CheckinRow; signed: Record<string, st
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                 days < 0
-                  ? 'bg-red-100 text-red-700'
+                  ? 'bg-destructive/10 text-destructive'
                   : days <= 7
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-slate-100 text-slate-600'
+                    ? 'bg-warning/10 text-warning'
+                    : 'bg-muted text-muted-foreground'
               }`}
             >
               <CalendarClock className="h-3 w-3" aria-hidden />
@@ -132,17 +132,17 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
   const staff = data.filter((r) => r.person_kind === 'staff');
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 md:col-span-2">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Activity className="h-5 w-5 text-emerald-500" aria-hidden />
+    <Card className="min-w-0 rounded-2xl border-0 shadow-lg shadow-primary/5 md:col-span-2">
+      <CardHeader className="p-4 sm:p-6 pb-3 sm:pb-3">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
+          <Activity className="h-5 w-5 text-success" aria-hidden />
           Today&apos;s Check-ins
-          <span className="ml-auto text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <span className="ml-auto text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {data.length} today
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-6">
         {isLoading ? (
           <div className="space-y-2">
             {[0, 1, 2, 3].map((i) => (
@@ -150,15 +150,15 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
             ))}
           </div>
         ) : isError ? (
-          <p className="py-8 text-center text-sm text-slate-500">Could not load today&apos;s check-ins.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">Could not load today&apos;s check-ins.</p>
         ) : (
           <Tabs defaultValue="members">
-            <TabsList className="mb-3">
-              <TabsTrigger value="members" className="cursor-pointer gap-1.5">
+            <TabsList className="mb-3 grid h-auto w-full grid-cols-2">
+              <TabsTrigger value="members" className="min-h-11 cursor-pointer gap-1.5 whitespace-normal transition-colors duration-200">
                 <Users className="h-3.5 w-3.5" aria-hidden />
                 Members ({members.length})
               </TabsTrigger>
-              <TabsTrigger value="staff" className="cursor-pointer gap-1.5">
+              <TabsTrigger value="staff" className="min-h-11 cursor-pointer gap-1.5 whitespace-normal transition-colors duration-200">
                 <UserCog className="h-3.5 w-3.5" aria-hidden />
                 Staff &amp; Trainers ({staff.length})
               </TabsTrigger>
@@ -166,7 +166,7 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
 
             <TabsContent value="members">
               {members.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">No member check-ins yet today.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">No member check-ins yet today.</p>
               ) : (
                 <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
                   {members.map((r) => (
@@ -178,7 +178,7 @@ export default function TodaysCheckinsCard({ branchId }: Props) {
 
             <TabsContent value="staff">
               {staff.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">No staff check-ins yet today.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">No staff check-ins yet today.</p>
               ) : (
                 <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
                   {staff.map((r) => (

@@ -1,3 +1,7 @@
+# Dashboard smaller-screen layout (27 Oct 2026)
+- [x] Improved widget grids, compact spacing, birthday list sizing and wrapping check-in details; dashboard actions/data unchanged.
+- [x] Incline E2E Playwright: signed-in owner screenshots at 375/768/1075/1440px, working check-in tabs, no horizontal overflow; dark view checked, build OK, no page/console errors or HTTP failures (cancelled HEAD refreshes only). No greetings or transactions triggered.
+
 # Invoice PDF privacy and addresses (25 Oct 2026)
 - [x] Removed internal notes at mapping/render boundaries; reused applicable existing agreement clauses (no separate five-clause invoice policy was found); added saved customer/branch postal addresses and expandable address blocks. Signed-in real BOS download and GST/thermal/three-page fixtures verified; no transaction changes or messages sent.
 
