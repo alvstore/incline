@@ -1,3 +1,4 @@
+// v3.9.0 — trainers who are also active employees delegate to the employee gate identity (fixes "Mobile already exists").
 // v3.8.0 — remove historical-delivery veto of real changes; honour explicit repair events.
 // v3.7.0 — future validity lock preserves enrolled faces when access is blocked.
 // v3.5.0 — internal-token auth for DB triggers; photo-hash state signature; cooldown counts as delivered.
