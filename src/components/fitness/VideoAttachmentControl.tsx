@@ -45,14 +45,23 @@ interface Props {
   onChange: (next: VideoAttachmentValue) => void;
   folder: 'exercises' | 'meals';
   label?: string;
+  /** Exercise name used to pre-seed the library search (exercise cards only). */
+  exerciseName?: string;
+  /** Called when a library pick carries form cues the parent may apply. */
+  onFormTips?: (tips: string[]) => void;
 }
 
 /**
- * Tabbed URL / Upload control used by the workout exercise card and the meal
- * card. Persists `{ video_url, video_file_path }` into the parent draft.
+ * Tabbed Library / URL / Upload control used by the workout exercise card and
+ * the meal card. Persists `{ video_url, video_file_path }` into the parent
+ * draft. The Library tab (exercises only, behind the
+ * `exercise_video_library_enabled` flag) searches the curated catalog.
  */
-export function VideoAttachmentControl({ value, onChange, folder, label }: Props) {
-  const [tab, setTab] = useState<'url' | 'upload'>(value.video_file_path ? 'upload' : 'url');
+export function VideoAttachmentControl({ value, onChange, folder, label, exerciseName, onFormTips }: Props) {
+  const libraryEnabled = folder === 'exercises' && useExerciseLibraryEnabled();
+  const [tab, setTab] = useState<'library' | 'url' | 'upload'>(
+    value.video_file_path ? 'upload' : libraryEnabled ? 'library' : 'url',
+  );
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState(value.video_url || '');
