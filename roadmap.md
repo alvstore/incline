@@ -1,3 +1,7 @@
+# Dashboard smaller-screen layout (27 Oct 2026)
+- [ ] Improve widget grids, compact spacing and birthday list sizing without changing dashboard actions or data.
+- [ ] Verify signed-in preview screenshots at phone, tablet, 1075px and desktop widths.
+
 # Invoice PDF privacy and addresses (25 Oct 2026)
 - [x] Removed internal notes at mapping/render boundaries; reused applicable existing agreement clauses (no separate five-clause invoice policy was found); added saved customer/branch postal addresses and expandable address blocks. Signed-in real BOS download and GST/thermal/three-page fixtures verified; no transaction changes or messages sent.
 
