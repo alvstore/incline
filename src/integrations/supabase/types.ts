@@ -12461,6 +12461,7 @@ export type Database = {
           referrer_reward_type: string
           referrer_reward_value: number
           reward_mode: string | null
+          tracking_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -12474,6 +12475,7 @@ export type Database = {
           referrer_reward_type?: string
           referrer_reward_value?: number
           reward_mode?: string | null
+          tracking_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -12487,6 +12489,7 @@ export type Database = {
           referrer_reward_type?: string
           referrer_reward_value?: number
           reward_mode?: string | null
+          tracking_enabled?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -17805,6 +17808,10 @@ export type Database = {
       }
       get_rcs_webhook_token: { Args: never; Returns: string }
       get_referral_enabled: { Args: { p_branch_id: string }; Returns: boolean }
+      get_referral_rewards_enabled: {
+        Args: { p_branch_id: string }
+        Returns: boolean
+      }
       get_registration_geofence: { Args: never; Returns: boolean }
       get_registration_geofence_detail: { Args: never; Returns: Json }
       get_setting_numeric: {
