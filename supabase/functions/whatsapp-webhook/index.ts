@@ -45,6 +45,7 @@ import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts"
 import { phoneVariants } from "../_shared/phone.ts";
 import { mayAdvance } from "../_shared/deliveryState.ts";
 import { classifyOutcome, recordMarketingEvent, recordPaceEvent } from "../_shared/whatsappPolicy.ts";
+import { FAILOVER_CODES, failoverToEmail } from "../_shared/whatsappEmailFailover.ts";
 
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 import {
@@ -581,6 +582,15 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             const isPacing = mapped === "failed" && paceVerdict.outcome === "pace_limited";
             const recipientPhone = String(status.recipient_id ?? "");
             if (mapped === "failed") {
+              // v7.4.0 — rescue undelivered operational notices by email.
+              if (failureCode && FAILOVER_CODES.has(String(failureCode))) {
+                try {
+                  const r = await failoverToEmail(supabase, log.id, String(failureCode));
+                  console.log(`[wa-status] email failover ${log.id}: ${r}`);
+                } catch (fe) {
+                  console.warn("[wa-status] email failover error", fe);
+                }
+              }
               await supabase
                 .from("communication_retry_queue")
                 .update({ status: "terminal", last_error: errMsg ?? "delivery_failed" })

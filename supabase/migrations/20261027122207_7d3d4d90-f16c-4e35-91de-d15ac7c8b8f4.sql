@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_recipient_state SET marketing_cooldown_until = NULL WHERE phone_last10 = '9116180911';
