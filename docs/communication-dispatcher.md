@@ -53,7 +53,7 @@ The dispatcher is the new canonical path. Existing edge functions write to `comm
 3. **Wave B — pending**: `notify-lead-created`, `send-reminders`, `run-retention-nudges` — add stable dedupe keys per loop iteration.
 4. **Wave C — pending**: `send-broadcast`, `notify-staff-handoff` — preserve campaign-level batching semantics.
 
-The `skip_log: true` and `source_log_id` parameters on `send-whatsapp`, `send-sms`, `send-message` are reserved for the dispatcher to suppress double logging while it owns the canonical row.
+The `skip_log: true` and `source_log_id` parameters on `send-whatsapp`, `send-sms` are reserved for the dispatcher to suppress double logging while it owns the canonical row.
 
 ## Quiet hours
 
