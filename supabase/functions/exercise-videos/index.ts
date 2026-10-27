@@ -57,9 +57,6 @@ Deno.serve(async (req: Request) => {
 
     // Rank: exact > prefix > substring.
     const ranked = (data ?? []).sort((a, b) => {
-      const score = (n: string) =>
-        n.normalized === undefined ? 0 : 0; // placeholder, replaced below
-      void score;
       const an = (a.name as string).toLowerCase();
       const bn = (b.name as string).toLowerCase();
       const rank = (n: string) =>
