@@ -1,4 +1,7 @@
-// notify-booking-event v3.0.0
+// notify-booking-event v3.1.0
+// v3.1.0 — WhatsApp confirmations are skipped for bookings made inside the
+// WhatsApp bot (source='whatsapp_ai'): the bot already confirms inline, so
+// the trigger copy was a duplicate message ~180ms later.
 // Dispatches booking confirmations / cancellations / reminders for benefit
 // (facility) slot bookings through the canonical `dispatch-communication`
 // funnel — WhatsApp, Email, SMS, RCS and in-app, honouring member channel
@@ -61,7 +64,7 @@ Deno.serve(async (req) => {
     const { data: booking, error: bErr } = await supabase
       .from("benefit_bookings")
       .select(`
-        id, status, member_id,
+        id, status, member_id, source,
         slot:benefit_slots(id, slot_date, start_time, end_time, branch_id, benefit_type, benefit_type_id, facility_id)
       `)
       .eq("id", booking_id)
@@ -210,7 +213,15 @@ Deno.serve(async (req) => {
     }
 
     // 6. External channels via the canonical dispatcher
+    // Bot bookings already got an inline WhatsApp confirmation — don't send
+    // a second one from the trigger.
+    const skipWhatsApp =
+      eventName === "facility_slot_booked" && (booking as any).source === "whatsapp_ai";
     for (const channel of CHANNELS) {
+      if (channel === "whatsapp" && skipWhatsApp) {
+        results.push({ channel, success: true, skipped: true, reason: "bot_confirmed_inline" });
+        continue;
+      }
       const recipient = channel === "email" ? profile?.email : profile?.phone;
       if (!recipient) continue;
       try {
