@@ -750,6 +750,13 @@
       "when": 1792952538483,
       "tag": "0106_pt_closeout_protect_history_actor",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1793100755835,
+      "tag": "0107_exercise_video_library",
+      "breakpoints": true
     }
   ]
 }

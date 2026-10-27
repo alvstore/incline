@@ -4804,6 +4804,54 @@ export type Database = {
         }
         Relationships: []
       }
+      exercise_video_library: {
+        Row: {
+          active: boolean
+          created_at: string
+          equipment: string | null
+          external_id: string | null
+          form_cues: Json
+          id: string
+          muscle_group: string | null
+          name: string
+          normalized_name: string
+          source: string
+          thumbnail_url: string | null
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          equipment?: string | null
+          external_id?: string | null
+          form_cues?: Json
+          id?: string
+          muscle_group?: string | null
+          name: string
+          normalized_name: string
+          source?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          equipment?: string | null
+          external_id?: string | null
+          form_cues?: Json
+          id?: string
+          muscle_group?: string | null
+          name?: string
+          normalized_name?: string
+          source?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       expense_categories: {
         Row: {
           created_at: string

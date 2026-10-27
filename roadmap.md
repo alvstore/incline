@@ -131,3 +131,10 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 
 - [x] Point DR replication at https://api.joinincline.in (one-way, delete propagation, v1.6.0)
 - [ ] Full 1:1 copy to self-hosted standby — BLOCKED: standby has no database tables yet; needs schema applied (user to provide standby DB connection string or apply dump). Edge functions + crons need deploy on the self-hosted side.
+
+# Exercise video library (27 Oct 2026)
+- [x] exercise_video_library table (30 curated exercises, staff-managed, RLS) + feature flag
+- [x] exercise-videos edge fn (staff/trainer search) deployed
+- [x] Builder: Library tab in VideoAttachmentControl; member DaySessionCard inline player; planNormalize carries video fields; tests pass
+- [ ] Add real demo video URLs to catalog rows (currently cues-only) or connect ExerciseDB API key if licensed
+- [ ] Visual check of member player at /my-workout with a member session once a plan carries a video

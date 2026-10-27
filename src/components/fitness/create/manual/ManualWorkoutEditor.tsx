@@ -225,9 +225,14 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
               </div>
               <VideoAttachmentControl
                 folder="exercises"
-                label="Demo video (URL or upload)"
+                label="Demo video (library, URL or upload)"
+                exerciseName={ex.name}
                 value={{ video_url: ex.video_url, video_file_path: ex.video_file_path }}
                 onChange={onVideoChange}
+                onFormTips={(tips) => {
+                  // Only prefill empty form tips — never overwrite trainer text.
+                  if (!ex.form_tips.trim()) onUpdate(exIdx, 'form_tips', tips.join('\n'));
+                }}
               />
             </div>
           )}

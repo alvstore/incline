@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Link as LinkIcon, Upload, Video, X, AlertCircle } from 'lucide-react';
+import { Loader2, Link as LinkIcon, LibraryBig, Upload, Video, X, AlertCircle } from 'lucide-react';
 import {
   uploadVideo,
   validateVideoFile,
@@ -12,6 +14,26 @@ import {
   getVideoPublicUrl,
   deleteVideo,
 } from '@/services/videoUploadService';
+import { ExerciseVideoLibraryPicker, type ExerciseLibraryItem } from './ExerciseVideoLibraryPicker';
+
+/** Global feature flag (settings row, branch_id NULL) gating the Library tab. */
+function useExerciseLibraryEnabled(): boolean {
+  const { data } = useQuery({
+    queryKey: ['feature-flag', 'exercise_video_library_enabled'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .is('branch_id', null)
+        .eq('key', 'exercise_video_library_enabled')
+        .maybeSingle();
+      if (error) return true; // fail open — flag row may predate policies
+      return data?.value !== false;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+  return data ?? true;
+}
 
 export interface VideoAttachmentValue {
   video_url?: string;
@@ -23,14 +45,23 @@ interface Props {
   onChange: (next: VideoAttachmentValue) => void;
   folder: 'exercises' | 'meals';
   label?: string;
+  /** Exercise name used to pre-seed the library search (exercise cards only). */
+  exerciseName?: string;
+  /** Called when a library pick carries form cues the parent may apply. */
+  onFormTips?: (tips: string[]) => void;
 }
 
 /**
- * Tabbed URL / Upload control used by the workout exercise card and the meal
- * card. Persists `{ video_url, video_file_path }` into the parent draft.
+ * Tabbed Library / URL / Upload control used by the workout exercise card and
+ * the meal card. Persists `{ video_url, video_file_path }` into the parent
+ * draft. The Library tab (exercises only, behind the
+ * `exercise_video_library_enabled` flag) searches the curated catalog.
  */
-export function VideoAttachmentControl({ value, onChange, folder, label }: Props) {
-  const [tab, setTab] = useState<'url' | 'upload'>(value.video_file_path ? 'upload' : 'url');
+export function VideoAttachmentControl({ value, onChange, folder, label, exerciseName, onFormTips }: Props) {
+  const libraryEnabled = folder === 'exercises' && useExerciseLibraryEnabled();
+  const [tab, setTab] = useState<'library' | 'url' | 'upload'>(
+    value.video_file_path ? 'upload' : libraryEnabled ? 'library' : 'url',
+  );
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState(value.video_url || '');
@@ -84,6 +115,22 @@ export function VideoAttachmentControl({ value, onChange, folder, label }: Props
     }
   };
 
+  const handleLibrarySelect = async (item: ExerciseLibraryItem) => {
+    setError(null);
+    if (item.video_url) {
+      // A library video replaces any previously uploaded file.
+      if (value.video_file_path) {
+        try {
+          await deleteVideo(value.video_file_path);
+        } catch {
+          /* swallow — UI swap must always succeed */
+        }
+      }
+      onChange({ video_file_path: undefined, video_url: item.video_url });
+    }
+    if (item.form_cues?.length && onFormTips) onFormTips(item.form_cues);
+  };
+
   const clear = async () => {
     if (value.video_file_path) {
       try {
@@ -124,8 +171,13 @@ export function VideoAttachmentControl({ value, onChange, folder, label }: Props
           </Button>
         </div>
       ) : (
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'url' | 'upload')} className="w-full">
-          <TabsList className="h-7 grid grid-cols-2 w-full">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'library' | 'url' | 'upload')} className="w-full">
+          <TabsList className={`h-7 grid w-full ${libraryEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {libraryEnabled && (
+              <TabsTrigger value="library" className="text-xs h-6">
+                <LibraryBig className="h-3 w-3 mr-1" /> Library
+              </TabsTrigger>
+            )}
             <TabsTrigger value="url" className="text-xs h-6">
               <LinkIcon className="h-3 w-3 mr-1" /> URL
             </TabsTrigger>
@@ -133,6 +185,11 @@ export function VideoAttachmentControl({ value, onChange, folder, label }: Props
               <Upload className="h-3 w-3 mr-1" /> Upload
             </TabsTrigger>
           </TabsList>
+          {libraryEnabled && (
+            <TabsContent value="library" className="mt-2">
+              <ExerciseVideoLibraryPicker initialQuery={exerciseName} onSelect={handleLibrarySelect} />
+            </TabsContent>
+          )}
           <TabsContent value="url" className="mt-2">
             <Input
               placeholder="https://youtube.com/... or .mp4 link"

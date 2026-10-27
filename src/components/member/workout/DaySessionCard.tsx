@@ -1,10 +1,92 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Layers, Moon, Timer } from 'lucide-react';
-import { estimatedMinutes, totalSets, type WorkoutDay } from './planNormalize';
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, ExternalLink, Layers, Moon, Play, Timer, X } from 'lucide-react';
+import { estimatedMinutes, totalSets, type WorkoutDay, type WorkoutExercise } from './planNormalize';
+import { getVideoPublicUrl } from '@/services/videoUploadService';
+import { track } from '@/lib/analytics';
+
+const EMBED_HOSTS_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com|player\.vimeo\.com)/i;
+
+function resolveVideoUrl(ex: WorkoutExercise): string | null {
+  if (ex.video_url) return ex.video_url;
+  if (ex.video_file_path) return getVideoPublicUrl(ex.video_file_path);
+  return null;
+}
+
+/** Expandable inline demo player for one exercise. Direct files play in a
+ *  <video> tag; YouTube/Vimeo open externally. No autoplay, ever. */
+function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
+  const [open, setOpen] = useState(false);
+  const url = resolveVideoUrl(exercise);
+  if (!url) return null;
+  const isEmbedHost = EMBED_HOSTS_RE.test(url);
+
+  if (isEmbedHost) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => {
+          e.stopPropagation();
+          track('exercise_video_played', { exercise: exercise.name, kind: 'external' });
+        }}
+        className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+        aria-label={`Watch demo video for ${exercise.name} (opens in new tab)`}
+      >
+        <Play className="h-3.5 w-3.5" /> Watch demo <ExternalLink className="h-3 w-3 text-muted-foreground" />
+      </a>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-3">
+      <button
+        type="button"
+        onClick={() =>
+          setOpen((v) => {
+            if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
+            return !v;
+          })
+        }
+        aria-expanded={open}
+        aria-label={`${open ? 'Hide' : 'Watch'} demo video for ${exercise.name}`}
+        className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+      >
+        {open ? <X className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        {open ? 'Hide video' : 'Watch demo'}
+      </button>
+      {open && (
+        <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-black">
+          <video
+            src={url}
+            controls
+            preload="metadata"
+            playsInline
+            className="aspect-video w-full"
+            aria-label={`Demo video: ${exercise.name}`}
+          />
+          {exercise.form_tips && exercise.form_tips.length > 0 && (
+            <div className="bg-card px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Form cues
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-foreground">
+                {exercise.form_tips.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface DaySessionCardProps {
   day: WorkoutDay;
@@ -76,42 +158,48 @@ export function DaySessionCard({
             const key = `${day.id}:${i}`;
             const done = doneKeys.has(key);
             return (
-              <button
+              <div
                 key={key}
-                type="button"
-                onClick={() => onToggleExercise(i)}
-                aria-pressed={done}
-                aria-label={`Mark ${exercise.name} as ${done ? 'not done' : 'done'}`}
                 className={cn(
-                  'flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-all duration-200',
-                  'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
-                  done
-                    ? 'border-success/30 bg-success/5'
-                    : 'border-border/60 bg-muted/40 hover:border-primary/40 hover:bg-muted',
+                  'rounded-xl border transition-colors duration-200',
+                  done ? 'border-success/30 bg-success/5' : 'border-border/60 bg-muted/40',
                 )}
               >
-                <span
+                <button
+                  type="button"
+                  onClick={() => onToggleExercise(i)}
+                  aria-pressed={done}
+                  aria-label={`Mark ${exercise.name} as ${done ? 'not done' : 'done'}`}
                   className={cn(
-                    'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-                    done ? 'bg-success/15 text-success' : 'bg-background text-muted-foreground',
+                    'flex w-full cursor-pointer items-start gap-3 rounded-t-xl p-3 text-left transition-colors duration-200',
+                    'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
+                    !done && 'hover:bg-muted',
                   )}
                 >
-                  {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={cn('block text-sm font-semibold', done && 'line-through opacity-70')}>
-                    {exercise.name}
+                  <span
+                    className={cn(
+                      'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                      done ? 'bg-success/15 text-success' : 'bg-background text-muted-foreground',
+                    )}
+                  >
+                    {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                   </span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                    <span>{exercise.sets} sets × {exercise.reps || '—'}</span>
-                    {exercise.rest && <span>Rest {exercise.rest}</span>}
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block text-sm font-semibold', done && 'line-through opacity-70')}>
+                      {exercise.name}
+                    </span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>{exercise.sets} sets × {exercise.reps || '—'}</span>
+                      {exercise.rest && <span>Rest {exercise.rest}</span>}
+                    </span>
+                    {exercise.notes && (
+                      <span className="mt-1 block text-xs italic text-muted-foreground">{exercise.notes}</span>
+                    )}
                   </span>
-                  {exercise.notes && (
-                    <span className="mt-1 block text-xs italic text-muted-foreground">{exercise.notes}</span>
-                  )}
-                </span>
-                <Circle className={cn('mt-1 h-4 w-4 shrink-0', done ? 'hidden' : 'text-muted-foreground/40')} />
-              </button>
+                  <Circle className={cn('mt-1 h-4 w-4 shrink-0', done ? 'hidden' : 'text-muted-foreground/40')} />
+                </button>
+                <ExerciseVideoButton exercise={exercise} />
+              </div>
             );
           })
         )}

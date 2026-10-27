@@ -14,6 +14,12 @@ export interface WorkoutExercise {
   reps: string;
   rest?: string;
   notes?: string;
+  /** Playable demo video URL (https .mp4/.webm, YouTube, Vimeo). */
+  video_url?: string;
+  /** Storage path in the workout-videos bucket (fallback when video_url is absent). */
+  video_file_path?: string;
+  /** Form cues shown as the text alternative under the video. */
+  form_tips?: string[];
 }
 
 export interface WorkoutDay {
@@ -68,6 +74,14 @@ function toExercises(raw: any): WorkoutExercise[] {
     reps: String(ex?.reps ?? ex?.rep_range ?? ''),
     rest: ex?.rest ? String(ex.rest) : ex?.rest_seconds ? `${ex.rest_seconds}s` : undefined,
     notes: ex?.notes || ex?.tempo || ex?.cue || undefined,
+    video_url: typeof ex?.video_url === 'string' && ex.video_url ? ex.video_url : undefined,
+    video_file_path:
+      typeof ex?.video_file_path === 'string' && ex.video_file_path ? ex.video_file_path : undefined,
+    form_tips: Array.isArray(ex?.form_tips)
+      ? ex.form_tips.filter(Boolean).map(String)
+      : typeof ex?.form_tips === 'string' && ex.form_tips.trim()
+        ? [ex.form_tips.trim()]
+        : undefined,
   }));
 }
 
