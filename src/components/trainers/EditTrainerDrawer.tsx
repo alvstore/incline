@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getTrainer } from '@/services/trainerService';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
   });
   
   const [newCertification, setNewCertification] = useState('');
+  const queryClient = useQueryClient();
 
   // The avatar uploader (with userId) already runs the full gate pipeline:
   // profile photo → private biometric copy → device sync queue. Only queue
@@ -207,6 +209,9 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
             <StaffAvatarUpload
               avatarUrl={avatarUrl}
               name={trainer?.profile_name || 'Trainer'}
+              userId={trainer?.user_id || undefined}
+              staffId={trainer?.user_id ? undefined : trainer?.id}
+              entityType="trainers"
               onAvatarChange={handleAvatarChange}
               size="lg"
             />
@@ -469,6 +474,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
             branchId={trainer.branch_id}
             biometricPhotoUrl={trainer.biometric_photo_url}
             biometricEnrolled={trainer.biometric_enrolled}
+            showPhotoUpload={false}
           />
 
           <SheetFooter className="pt-4">

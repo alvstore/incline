@@ -477,6 +477,7 @@ export function EditEmployeeDrawer({ open, onOpenChange, employee }: EditEmploye
                 branchId={employee.branch_id}
                 biometricPhotoUrl={employee.biometric_photo_url}
                 biometricEnrolled={employee.biometric_enrolled}
+                showPhotoUpload={false}
               />
             </TabsContent>
           </Tabs>

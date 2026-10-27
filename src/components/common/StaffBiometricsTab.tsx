@@ -24,6 +24,8 @@ interface StaffBiometricsTabProps {
   branchId: string;
   biometricPhotoUrl?: string | null;
   biometricEnrolled?: boolean | null;
+  /** Hide the face upload card when the drawer's profile photo already feeds the gates. */
+  showPhotoUpload?: boolean;
 }
 
 export function StaffBiometricsTab({
@@ -33,6 +35,7 @@ export function StaffBiometricsTab({
   branchId,
   biometricPhotoUrl,
   biometricEnrolled,
+  showPhotoUpload = true,
 }: StaffBiometricsTabProps) {
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
@@ -138,8 +141,13 @@ export function StaffBiometricsTab({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="p-4 pt-0 space-y-4">
+            {!showPhotoUpload && (
+              <p className="text-xs text-muted-foreground">
+                Gate face = the profile photo above. Changing it syncs to all gates automatically.
+              </p>
+            )}
             {/* Face Enrollment */}
-            <Card className="border">
+            {showPhotoUpload && <Card className="border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <Fingerprint className="h-4 w-4" />
@@ -177,7 +185,7 @@ export function StaffBiometricsTab({
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </Card>}
 
             {/* Device Sync Status */}
             <Card className="border">
