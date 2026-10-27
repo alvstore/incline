@@ -115,6 +115,22 @@ export function VideoAttachmentControl({ value, onChange, folder, label, exercis
     }
   };
 
+  const handleLibrarySelect = async (item: ExerciseLibraryItem) => {
+    setError(null);
+    if (item.video_url) {
+      // A library video replaces any previously uploaded file.
+      if (value.video_file_path) {
+        try {
+          await deleteVideo(value.video_file_path);
+        } catch {
+          /* swallow — UI swap must always succeed */
+        }
+      }
+      onChange({ video_file_path: undefined, video_url: item.video_url });
+    }
+    if (item.form_cues?.length && onFormTips) onFormTips(item.form_cues);
+  };
+
   const clear = async () => {
     if (value.video_file_path) {
       try {
@@ -155,8 +171,13 @@ export function VideoAttachmentControl({ value, onChange, folder, label, exercis
           </Button>
         </div>
       ) : (
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'url' | 'upload')} className="w-full">
-          <TabsList className="h-7 grid grid-cols-2 w-full">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'library' | 'url' | 'upload')} className="w-full">
+          <TabsList className={`h-7 grid w-full ${libraryEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {libraryEnabled && (
+              <TabsTrigger value="library" className="text-xs h-6">
+                <LibraryBig className="h-3 w-3 mr-1" /> Library
+              </TabsTrigger>
+            )}
             <TabsTrigger value="url" className="text-xs h-6">
               <LinkIcon className="h-3 w-3 mr-1" /> URL
             </TabsTrigger>
@@ -164,6 +185,11 @@ export function VideoAttachmentControl({ value, onChange, folder, label, exercis
               <Upload className="h-3 w-3 mr-1" /> Upload
             </TabsTrigger>
           </TabsList>
+          {libraryEnabled && (
+            <TabsContent value="library" className="mt-2">
+              <ExerciseVideoLibraryPicker initialQuery={exerciseName} onSelect={handleLibrarySelect} />
+            </TabsContent>
+          )}
           <TabsContent value="url" className="mt-2">
             <Input
               placeholder="https://youtube.com/... or .mp4 link"
