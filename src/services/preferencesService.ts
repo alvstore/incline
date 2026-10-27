@@ -44,7 +44,7 @@ export interface DispatchResult {
 }
 
 /** Canonical outbound communication funnel. Always prefer this over calling
- *  send-whatsapp / send-sms / send-message / send-email directly. */
+ *  send-whatsapp / send-sms / send-email directly. */
 export async function dispatchCommunication(input: DispatchInput): Promise<DispatchResult> {
   const { data, error } = await supabase.functions.invoke<DispatchResult>(
     'dispatch-communication',
