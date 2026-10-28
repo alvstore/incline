@@ -1,3 +1,9 @@
+# Repository organization & Flutter manual progress (29 Oct 2026)
+- [ ] Remove verified screenshots, scratch files and build caches; archive unique physical memory notes rather than discard them.
+- [ ] Remove seven verified unrelated inactive skill drafts; preserve active skills, lockfile, configuration, migrations, assets and tests.
+- [ ] Refresh README and documentation index; extend the single Flutter guide with manual measurements/photos and acceptance tests.
+- [ ] Validate links, removal references and regression tests. The managed read-only .gitignore cannot be updated here.
+
 # Consolidated Flutter member guide (29 Oct 2026)
 - [x] Consolidated Flutter README, roadmap, HOWBODY, referral and video guides in docs/flutter-member-app-readme.md; removed five redundant/obsolete native guides and repaired references.
 - [x] Documented verified general/PT assignment, day-wise workout/diet, validity, local versus optional server completion, and stored versus generated PDF contracts.
