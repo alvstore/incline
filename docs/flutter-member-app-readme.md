@@ -37,7 +37,7 @@ Native iOS + Android member app for **Incline – Rise.Reflect.Repeat.** It talk
 | --- | --- |
 | Framework | Flutter (stable), Dart 3, null-safety, `very_good_analysis` lints |
 | Backend SDK | `supabase_flutter` (auth, PostgREST, RPC, storage, realtime, functions) |
-| State / data | Riverpod 2 (`AsyncNotifier`) — mirrors TanStack Query: cache, invalidate after every mutation |
+| State / data | Riverpod (compatible stable release) (`AsyncNotifier`) — mirrors TanStack Query: cache, invalidate after every mutation |
 | Routing | `go_router` with auth + role redirect and deep links |
 | Models | `freezed` + `json_serializable`; snake_case JSON ↔ camelCase Dart |
 | Secure storage | `flutter_secure_storage` (session), `local_auth` (biometric unlock) |
@@ -156,7 +156,7 @@ For a signed-in member the server accepts only `app_android` or `app_ios`; any o
 
 **Workout videos.** Play `video_url` inline; else build public URL from bucket `workout-videos` + `video_file_path`; external YouTube/Vimeo opens externally. No autoplay; always show `form_tips` as a text list. Details: §15.
 
-**Referrals.** Link `https://theincline.in/register?ref=<MEMBER_CODE>`. Tracking defaults on but has a separate branch toggle; rewards may be off — hide claim buttons when rewards are disabled. Details: §17.
+**Referrals.** Link `https://theincline.in/register?ref=<MEMBER_CODE>`. Tracking defaults on but has a separate branch toggle; rewards may be off — hide claim buttons when rewards are disabled. Do not promise retroactive rewards for joins while payouts were paused. Details: §17.
 
 **Do-not-contact & preferences.** Show and edit communication preferences; respect opt-outs (backend enforces).
 
@@ -404,7 +404,7 @@ Sources: `src/pages/MyWorkout.tsx`, `src/pages/MyDiet.tsx`, `src/components/fitn
 How the Flutter member app should read and play exercise demo videos, matching
 the web dashboard pattern exactly.
 
-### 1. Data contract
+### 15.1. Data contract
 
 Workout plans live in `member_fitness_plans.plan_data` (JSONB). Each exercise
 inside `plan_data.weeks[].days[].exercises[]` (or flat `plan_data.days[].exercises[]`)
@@ -432,7 +432,7 @@ may carry these optional fields — all existing plans without them stay valid:
 Rule: **if `video_url == null && video_file_path == null`, render no video UI** —
 never show an empty player.
 
-### 2. Dart model
+### 15.2. Dart model
 
 ```dart
 class ExerciseEntry {
@@ -467,7 +467,7 @@ class ExerciseEntry {
 }
 ```
 
-### 3. Playback (video_player / chewie)
+### 15.3. Playback (video_player / chewie)
 
 - Package: `video_player` (+ `chewie` for controls). Direct media URLs may be MP4/WebM over HTTPS; validate platform codec support. Provider page URLs need the external-link flow below.
 - Initialise lazily: create the `VideoPlayerController.networkUrl(Uri.parse(url))`
@@ -488,7 +488,7 @@ Future<void> _openDemo(ExerciseEntry ex) async {
 }
 ```
 
-### 4. UX parity with the web dashboard
+### 15.4. UX parity with the web dashboard
 
 - Exercise row shows a small **Watch demo** chip (play icon) only when a video exists.
 - Tapping opens a bottom sheet: 16:9 player on top, exercise name, muscle/equipment
@@ -497,7 +497,7 @@ Future<void> _openDemo(ExerciseEntry ex) async {
 - Cache nothing sensitive — these are public training videos; HTTP caching headers
   from the CDN are enough.
 
-### 5. Trainer-side attaching (web only, for reference)
+### 15.5. Trainer-side attaching (web only, for reference)
 
 Trainers attach videos in the web workout builder via three sources:
 **Library** (curated `exercise_video_library` table, searched through the
@@ -511,7 +511,7 @@ bucket). Flutter only consumes the resulting `plan_data` JSON — no extra API.
 
 How the member app links a member to a HOWBODY body-composition or posture scanner, matching the web page at `https://theincline.in/scan-login`.
 
-### 1. What the scanner QR contains
+### 16.1. What the scanner QR contains
 
 The scanner screen shows a QR that opens:
 
@@ -521,7 +521,7 @@ https://theincline.in/scan-login?equipmentNo=<DEVICE_NO>&scanId=<SCAN_ID>&kind=b
 
 `kind` may also arrive as `scanType`. Missing/unknown → `body`. Older devices may use the path `/howbody-login` — treat it the same.
 
-### 2. Flow
+### 16.2. Flow
 
 ```text
 Scanner QR ──► in-app scanner (mobile_scanner) or OS camera via App/Universal Link
@@ -532,13 +532,13 @@ Scanner QR ──► in-app scanner (mobile_scanner) or OS camera via App/Univer
           ──► open the new report in Progress → Scan Reports
 ```
 
-### 3. Deep links
+### 16.3. Deep links
 
-- Android App Links + iOS Universal Links for host `theincline.in`, paths `/scan-login*` and `/howbody-login*`.
+- Android App Links + iOS Universal Links for host `theincline.in`, exact paths `/scan-login` and `/howbody-login`; allow the query parameters but reject unrelated routes.
 - If the app is not installed, the OS opens the web page — which already works. No fallback code needed.
 - If the member is signed out, keep the parsed params, sign in, then resume the sheet.
 
-### 4. Parsing
+### 16.4. Parsing
 
 ```dart
 ScanLink? parseScanLink(String raw) {
@@ -556,11 +556,11 @@ ScanLink? parseScanLink(String raw) {
 
 Reject any other host — never call the backend for a QR from another domain.
 
-### 5. Device name
+### 16.5. Device name
 
 Show the friendly device name from the device inventory (same lookup the web uses, `howbody_devices` by `equipment_no`); fall back to the raw `equipmentNo`.
 
-### 6. Height (required)
+### 16.6. Height (required)
 
 The scanner cannot calculate BMI or body fat without height.
 
@@ -573,7 +573,7 @@ The scanner cannot calculate BMI or body fat without height.
 - Valid range **100–250 cm** (≈ 3 ft 3 in – 8 ft 2 in). Feet 3–8, inches 0–11.
 - **Always send centimetres** (`heightCm`, number). Never send feet/inches.
 
-### 7. Bind call
+### 16.7. Bind call
 
 ```dart
 final res = await supabase.functions.invoke('howbody-bind-user', body: {
@@ -592,7 +592,7 @@ Server rules (do not duplicate on the client, just show the message verbatim):
 - Scan entitlement is checked per kind (`howbody_scan_quota`) — body credits never pay for posture and vice versa. The error says which credit is missing.
 - A scan already bound to someone else is refused.
 
-### 8. Waiting for the result
+### 16.8. Waiting for the result
 
 `howbody_scan_sessions` is **not** on Realtime. Poll instead:
 
@@ -611,18 +611,18 @@ Statuses: `pending` → `bound` → `completed`. Members can read only their own
 
 Reports: body → `howbody_body_reports`, posture → `howbody_posture_reports`, newest for this member.
 
-### 9. UX & accessibility
+### 16.9. UX & accessibility
 
 - Camera permission: explain why before asking; if denied, offer "Open settings" or suggest scanning with the phone's own camera (the App/Universal Link opens the app).
 - Torch toggle, 44×44 targets, haptic tick on successful parse.
 - Unit toggle is a radio group with labels "Centimetres" / "Feet and inches"; inputs labelled "Height in centimetres", "Feet", "Inches".
 - Never show prices or credit costs on this screen.
 
-### 10. Feature flag
+### 16.10. Feature flag
 
 There is no server flag for this yet. Ship the in-app scanner button behind a client remote-config switch (default **on**). Turning it off only hides the button — deep links still fall back to the working web page. If a server flag is needed later, add it to `settings` in the web project first and read it the standard way (README §7).
 
-### 11. Tests
+### 16.11. Tests
 
 - Parser: valid URL, `scanType` alias, `/howbody-login`, foreign host rejected, missing scanId rejected.
 - Height: 5'9" → 175.3, 168 → 5'6", 182.6 → 6'0", 99.9/250.1 invalid.
@@ -639,29 +639,29 @@ Tracking defaults on per branch (`referral_settings.tracking_enabled`, default t
 Reward payouts are a separate switch (`referral_settings.is_active`). The app must never
 create rewards or wallet credit itself — the server does it.
 
-### 1. Member's share link (Refer & Earn screen)
+### 17.1. Member's share link (Refer & Earn screen)
 - Code = the member's `member_code` (e.g. `INC-26-0015`).
 - Link = `https://theincline.in/register?ref=<url-encoded code>`.
 - Buttons: Copy link, Share (WhatsApp intent with message + link). 44px targets, labelled.
 
-### 2. Deep link into sign-up
+### 17.2. Deep link into sign-up
 - Register `theincline.in/register` as an App Link / Universal Link.
 - Read `ref` from the URI, uppercase + trim, max 32 chars, keep in memory for the sign-up flow.
 
-### 3. Sign-up screen referral field
+### 17.3. Sign-up screen referral field
 1. Call RPC `get_referral_enabled(p_branch_id)` → boolean. Hide the field when false.
 2. Optional "Referral code" field, prefilled from the link, with a **Validate** button.
 3. On Validate call RPC `validate_referral_code(p_code, p_branch_id, p_phone, p_email)`.
    Response: `{ valid: true, referrer_display: "Mohit G." }` or `{ valid: false, reason: "invalid" | "rate_limited" | "disabled" }`.
 4. Show result as icon + text (not colour only) and announce it (Semantics liveRegion).
-5. Sign-up must never be blocked by a bad/empty code.
+5. Sign-up must never be blocked by a bad/empty code. Existing registration OTP, on-site eligibility and consent requirements still apply; a referral link is not permission to bypass them.
 
-### 4. Final registration
+### 17.4. Final registration
 Send `referral_code` in the body of the existing `register-member` function call. The server
 re-checks the code (never trust the client result), sets `members.referred_by`, and creates one
 `referrals` row (`lifecycle_status = 'joined'`).
 
-### 5. Rewards (member side)
+### 17.5. Rewards (member side)
 - List: `referrals` where `referrer_member_id = me`; `referral_rewards` where `member_id = me`.
 - Call RPC `get_referral_rewards_enabled(p_branch_id)`. When false, show "Rewards paused" and hide Claim.
 - Claim → RPC `request_referral_reward_claim(p_reward_id)`. It only creates a manager approval;
