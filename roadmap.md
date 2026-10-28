@@ -1,7 +1,8 @@
 # Consolidated Flutter member guide (29 Oct 2026)
-- [ ] Merge Flutter README, roadmap, HOWBODY, referral and video guides into one canonical document; remove redundant native guides and repair references.
-- [ ] Document verified general/PT workout and diet assignment, day-wise display, validity, completion and shared-PDF limitations.
-- [ ] Validate documentation links and contracts; application behavior unchanged.
+- [x] Consolidated Flutter README, roadmap, HOWBODY, referral and video guides in docs/flutter-member-app-readme.md; removed five redundant/obsolete native guides and repaired references.
+- [x] Documented verified general/PT assignment, day-wise workout/diet, validity, local versus optional server completion, and stored versus generated PDF contracts.
+- [x] Validated contents links, code fences and absence of deleted-guide references; one Flutter guide remains. Documentation only; application behavior unchanged.
+- [ ] Identical native PDF downloads for structured plans require a canonical member-authorized shared artifact/service; documented as a release prerequisite, not implemented by this documentation request.
 
 # Scan height units & booking source badges (29 Oct 2026)
 - [x] Scan login height: cm ⇄ ft/in toggle with live conversion, remembered unit, always sends cm (100–250).
