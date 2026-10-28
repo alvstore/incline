@@ -11,6 +11,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getHowbodyDeviceLabel } from "@/services/howbodyDeviceService";
+import { HeightInput } from "@/components/scans/HeightInput";
+import { isValidHeightCm } from "@/lib/scans/height";
 import { Loader2, ScanLine, CheckCircle2, AlertTriangle, Search, ShieldCheck } from "lucide-react";
 
 type Status = "idle" | "binding" | "bound" | "error";
@@ -156,10 +158,10 @@ export default function HowbodyLogin() {
       return;
     }
     const heightValue = Number.parseFloat(height);
-    if (!Number.isFinite(heightValue) || heightValue < 100 || heightValue > 250) {
+    if (!isValidHeightCm(heightValue)) {
       toast({
         title: "Height needed",
-        description: "Enter a height between 100 and 250 cm so the scan results are accurate.",
+        description: "Enter a height between 100 and 250 cm (about 3 ft 3 in to 8 ft 2 in) so the scan results are accurate.",
         variant: "destructive",
       });
       return;
@@ -295,25 +297,15 @@ export default function HowbodyLogin() {
           </div>
         </div>
 
-        <div className="mt-5 space-y-2">
-          <Label htmlFor="scan-height">Height (cm)</Label>
-          <Input
-            id="scan-height"
-            type="number"
-            inputMode="decimal"
-            min={100}
-            max={250}
-            step={0.5}
-            value={height}
-            onChange={(e) => { setHeight(e.target.value); setHeightPrefilled(false); }}
-            placeholder="e.g. 164"
-            className="h-12"
-          />
-          <p className="text-xs text-muted-foreground">
-            {heightPrefilled
+        <div className="mt-5">
+          <HeightInput
+            valueCm={height}
+            onChangeCm={(cm) => { setHeight(cm); setHeightPrefilled(false); }}
+            disabled={status === "binding"}
+            hint={heightPrefilled
               ? "Taken from the last record — correct it if it has changed."
               : "Required. Body fat and BMI are calculated from this, so measure it accurately."}
-          </p>
+          />
         </div>
 
         {!isStaff && memberId && (
