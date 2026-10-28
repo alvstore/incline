@@ -109,7 +109,7 @@ Reports: body → `howbody_body_reports`, posture → `howbody_posture_reports`,
 
 ## 10. Feature flag
 
-Gate the scanner entry point with `settings.howbody_app_link_enabled` (default **on**; off hides the in-app scanner button, deep links fall back to the web page).
+There is no server flag for this yet. Ship the in-app scanner button behind a client remote-config switch (default **on**). Turning it off only hides the button — deep links still fall back to the working web page. If a server flag is needed later, add it to `settings` in the web project first and read it the standard way (README §7).
 
 ## 11. Tests
 

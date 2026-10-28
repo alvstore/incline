@@ -20,6 +20,7 @@ Read `docs/flutter-member-app-readme.md` first. Each phase ends with a demo on r
 ## Phase 2 — Bookings (weeks 4–5)
 - [ ] Classes: schedule, `book_class`, `cancel_class_booking`, live capacity
 - [ ] Recovery: `ensure_facility_slots`, `book_facility_slot`, `cancel_facility_slot`, benefit balances, evening-only/AM-PM labels
+- [ ] Recovery bookings pass `p_source: app_android | app_ios` (backend ready; staff see "Android app" / "iPhone app" badges)
 - [ ] Server rule messages surfaced verbatim (advance notice, gender lock, limits)
 - **Exit:** integration test book → cancel for both
 
@@ -28,7 +29,8 @@ Read `docs/flutter-member-app-readme.md` first. Each phase ends with a demo on r
 - [ ] Diet plan viewer
 - [ ] PT: package, sessions, trainer; "Request PT" creates front-desk task
 - [ ] Progress: measurements, photos upload, scan reports with score dials, scan quota
-- **Exit:** video plays inline/external; PT request appears on desk task list
+- [ ] HOWBODY QR link: in-app scanner + App/Universal Links for `/scan-login`, link sheet with cm ⇄ ft/in height (sent as cm), `howbody-bind-user`, poll session → open report (`flutter-howbody-scan.md`)
+- **Exit:** video plays inline/external; PT request appears on desk task list; a real scan links from the app and its report opens
 
 ## Phase 4 — Money (weeks 8–9)
 - [ ] Invoices + receipts list, void/refund labels, PDF via signed URL
@@ -49,6 +51,8 @@ Read `docs/flutter-member-app-readme.md` first. Each phase ends with a demo on r
 - **Blocker:** backend change must be built in the web project first
 
 ## Phase 7 — Hardening & release (weeks 13–14)
+- [ ] Presence: join `presence:app` with `platform` + `app_version`, ping `touch_presence()` every 60 s in foreground
+- [ ] Backend (web project, before launch): store last platform/app version server-side and show an Android / iPhone / Web chip on Audit Logs and the online pill
 - [ ] Accessibility pass (TalkBack/VoiceOver, 200 % text, contrast, reduce-motion)
 - [ ] Performance: cold start < 2.5 s, list virtualisation, image caching
 - [ ] Security review against README §11; dependency audit
