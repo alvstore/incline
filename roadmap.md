@@ -1,3 +1,8 @@
+# Consolidated Flutter member guide (29 Oct 2026)
+- [ ] Merge Flutter README, roadmap, HOWBODY, referral and video guides into one canonical document; remove redundant native guides and repair references.
+- [ ] Document verified general/PT workout and diet assignment, day-wise display, validity, completion and shared-PDF limitations.
+- [ ] Validate documentation links and contracts; application behavior unchanged.
+
 # Scan height units & booking source badges (29 Oct 2026)
 - [x] Scan login height: cm ⇄ ft/in toggle with live conversion, remembered unit, always sends cm (100–250).
 - [x] Facility bookings accept Android/iPhone app channels (members can only self-report those two); All Bookings + slot drawer show labelled source badges, filter and CSV export use the same labels.
