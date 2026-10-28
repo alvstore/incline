@@ -1,26 +1,43 @@
-# Branch Core Hub
+# Incline — Rise.Reflect.Repeat.
 
-Central operations platform for gym and fitness branch management.
+Multi-branch fitness and recovery operations and member self-service for The Incline Life by Incline, Udaipur, Rajasthan. Canonical website: https://theincline.in/.
+
+## Project map
+
+| Location | Purpose |
+| --- | --- |
+| `src/` | Web application, design system and shared domain logic |
+| `public/` | Served assets, crawler files and referenced 3D models |
+| `supabase/functions/` | Backend functions and shared helpers |
+| `supabase/migrations/`, `drizzle/` | Historical and managed database migrations — preserve applied history |
+| `scripts/`, `scripts/tests/` | Active maintenance, QA and regression suites |
+| `docs/` | Project guides, the consolidated Flutter guide and historical notes |
+| `AGENTS.md` | Engineering rules; also read nested guidance before scoped edits |
+| `roadmap.md` | Progress and outstanding dependencies |
+
+Build configuration and lockfiles stay at the root in conventional locations. Tool-managed metadata and approved skills are not application clutter. Browser captures and scratch helpers belong outside the checkout under `/tmp/`.
+
+See [the documentation index](docs/README.md). The Flutter guide covers shared-backend contracts and explicitly identifies native/shared-PDF prerequisites, not a shipped Flutter app.
 
 ## Local development
 
 Prerequisites:
 
-- Node.js 18+
-- npm
+- Maintained Node.js 22-compatible runtime (CI provisions Node 22; sandbox runtime is managed separately)
+- Bun (the project's package manager)
 
 Run locally:
 
 ```sh
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Build for production:
 
 ```sh
-npm run build
-npm run preview
+bun run build
+bun run preview
 ```
 
 ## Stack
@@ -30,6 +47,19 @@ npm run preview
 - Tailwind CSS
 - Radix UI / shadcn-ui
 - Supabase (via Lovable Cloud)
+
+- TanStack Query for server data
+
+The Lovable preview is already supervised; do not start a second server there. Private credentials never belong in frontend code.
+
+## Regression checks
+
+```sh
+bun test scripts/tests
+bun run lint
+```
+
+CI additionally checks migration guards and builds. Keep active tests/scripts, referenced assets and migration history during cleanup. Empty security/audit tables and dynamically invoked workers are not automatically dead code.
 
 ---
 
@@ -47,15 +77,13 @@ The system integrates with MIPS (RuoYi-Vue v3) middleware for biometric face-rec
 | `sync-to-mips` | `/functions/v1/sync-to-mips` | Sync person (member/employee/trainer) to MIPS: create/update person, upload photo, dispatch to devices |
 | `mips-webhook-receiver` | `/functions/v1/mips-webhook-receiver` | Receive face-scan callbacks from MIPS → lookup person → mark attendance → log → relay |
 
-### Webhook URL (for MIPS Admin Panel)
+### Webhook configuration
 
-```
-https://iyqqpbvnszyrrgerniog.supabase.co/functions/v1/mips-webhook-receiver
-```
+Use the deployed `mips-webhook-receiver` endpoint from the existing branch integration configuration; do not hardcode project-specific endpoints in this guide.
 
-Set this in MIPS Admin → Device Management → Configure Device → Server Configuration:
-- **Recognition Record Upload URL**: (above URL)
-- **Register Person Data Upload URL**: (above URL)
+MIPS Admin → Device Management → Configure Device → Server Configuration:
+- **Recognition Record Upload URL**: deployed receiver endpoint
+- **Register Person Data Upload URL**: deployed receiver endpoint
 - **Device Heartbeat Upload URL**: Keep default
 
 ### Attendance Flow

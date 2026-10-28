@@ -13,6 +13,7 @@ Native iOS + Android member app for **Incline – Rise.Reflect.Repeat.** It talk
 - [16. HOWBODY scanner integration](#16-howbody-scanner-integration)
 - [17. Referral tracking and rewards](#17-referral-tracking-and-rewards)
 - [18. Implementation roadmap](#18-implementation-roadmap)
+- [19. Manual progress updates and private photos](#19-manual-progress-updates-and-private-photos)
 
 ---
 
@@ -107,7 +108,7 @@ Read with PostgREST (RLS restricts to self). Use explicit column lists and expli
 | PT | own PT packages, sessions log, trainer profile | **Request** only → front-desk task (see §6) |
 | Workout | `member_fitness_plans` (type workout) — exercises carry `video_url`, `video_file_path`, `form_tips` | local tick-offs; optional progress service is separate (§14.7) |
 | Diet | `member_fitness_plans` (type diet) + legacy fallback | — |
-| Progress | measurements, progress photos, `howbody_*` scan reports, `howbody_scan_quota`, own `howbody_scan_sessions` | upload own progress photo; scanner link via `howbody-bind-user` (see §16) |
+| Progress | own `member_measurements` (includes photo references), `howbody_*` reports/quota/sessions | `record_member_measurement`; private own-photo uploads (§19); scanner link via `howbody-bind-user` (§16) |
 | Invoices | own `invoices`, `payments` (show **void ≠ refund** labels) | stored PDF via signed URL; generated PDFs need shared-service parity (§14.8) |
 | Store | sellable products (`is_sellable`) + add-on plans for branch | `create-payment-order` → Razorpay → `verify-payment`; on dismiss `abandon_online_addon_invoice` |
 | Membership purchase/renew | member-visible plans | `purchase_member_membership` (member path) |
@@ -709,7 +710,7 @@ Use the preceding contracts in this guide. Each phase ends with a demo on real A
 - [ ] Backend prerequisite for structured plans: canonical authorized PDF artifact/service shared by web and Flutter (§14.8); not built yet
 - [ ] Web/Flutter plan date boundaries and multi-week/assignment selection agreement before release
 - [ ] PT: package, sessions, trainer; "Request PT" creates front-desk task
-- [ ] Progress: measurements, photos upload, scan reports with score dials, scan quota
+- [ ] Progress: manual measurements through `record_member_measurement`, private photo upload/signing, read-back and ownership tests (§19); scan reports with score dials and scan quota
 - [ ] HOWBODY QR link: in-app scanner + App/Universal Links for `/scan-login`, link sheet with cm ⇄ ft/in height (sent as cm), `howbody-bind-user`, poll session → open report (§16)
 - **Exit:** video plays inline/external; PT request appears on desk task list; a real scan links from the app and its report opens
 
@@ -751,3 +752,106 @@ Staff POS, PT selling, payment recording, freezes by direct RPC, gate/door contr
 - Exercise catalog is currently cues-only unless staff attach actual videos; ExerciseDB integration needs licensing/API credentials.
 
 These are release gates, not completed functionality. Verify hosted auth/redirect settings, current RPC signatures, RLS and actual member flows in staging before enabling each action. Documentation consolidation changes no live data, permissions, billing or notifications.
+
+---
+
+## 19. Manual progress updates and private photos
+
+### 19.1 Member workflow and boundaries
+
+Both general-program and PT members can **record a new measurement snapshot** for themselves, with optional progress photos. No PT purchase is required. Web parity: Progress → Measurements → Record measurements, with height prefilled from the latest record and an explicit action copying earlier numbers into **blank** fields only. Clearly identify copied values before saving; never silently invent measurements.
+
+Flutter should use a labelled scrollable sheet, numeric fields with units, optional photo picker, Cancel and Save. A new row is created on Save; there is no member-facing edit-existing or delete-history workflow to copy. Do not implement direct inserts/updates/deletes on `member_measurements` or call staff actions. Recording progress never marks attendance, decrements PT sessions or changes HOWBODY reports, gate photos or plan validity.
+
+### 19.2 Read model
+
+Photo paths live **on `member_measurements`**, not in a separate progress-photo table. Read under the member session, filter to own member UUID, order by `recorded_at` descending, and paginate history. This table has no `branch_id` field; do not add a nonexistent branch filter. Own-member authorization enforces scope.
+
+```dart
+final rows = await supabase.from('member_measurements')
+    .select('id,member_id,recorded_at,recorded_by,weight_kg,height_cm,'
+        'body_fat_percentage,waist_cm,chest_cm,hips_cm,notes,photos,'
+        'front_progress_photo_path,side_progress_photo_path')
+    .eq('member_id', myMemberId)
+    .order('recorded_at', ascending: false)
+    .range(0, 19);
+```
+
+Select additional measurement columns when presenting full detail. Server-managed metadata: `id`, `member_id`, `recorded_by`, `recorded_at`, `created_at`, `updated_at`. Omit those from the write payload; manual entry currently records server save time, not a chosen historical date. Optional numbers remain null, not zero. BMI is a display calculation `weight_kg / (height_cm / 100)^2` only when both valid values exist; never fabricate body-fat or posture scores from it.
+
+### 19.3 Field contract and validation
+
+Numeric payloads are JSON numbers or null, never unit strings. UI uses 0.1 increments; server validates and rounds to two decimals. Port `src/lib/measurements/measurementValidation.ts` and check generated types/current server definitions before release:
+
+| Field(s) | Unit | Inclusive range |
+| --- | --- | --- |
+| `weight_kg` | kg | 25–350 |
+| `height_cm` | cm | 100–250 |
+| `body_fat_percentage` | % | 2–70 |
+| `shoulder_cm` | cm | 25–90 |
+| `chest_cm` | cm | 40–220 |
+| `abdomen_cm`, `waist_cm` | cm | 35–220 |
+| `hips_cm` | cm | 45–240 |
+| `neck_cm` | cm | 20–60 |
+| `torso_length_cm` | cm | 30–90 |
+| `biceps_left_cm`, `biceps_right_cm` | cm | 12–80 |
+| `forearm_left_cm`, `forearm_right_cm` | cm | 12–55 |
+| `wrist_left_cm`, `wrist_right_cm` | cm | 8–30 |
+| `thighs_left_cm`, `thighs_right_cm` | cm | 20–120 |
+| `calves_cm` | cm | 18–70 |
+| `ankle_left_cm`, `ankle_right_cm` | cm | 10–40 |
+| `inseam_cm` | cm | 40–130 |
+
+Other optional fields: `gender_presentation` (`male`, `female`, `other`, or null), `posture_type`, `body_shape_profile`, `notes`, `photos` (array of owned object-path strings), `front_progress_photo_path`, `side_progress_photo_path`. Do not relabel self-entered posture text as a clinical/scanner assessment. Trim blank text to null, reject invalid/non-finite numbers, and require at least one numeric measurement or photo; notes alone are insufficient. Height may offer cm/ft-in using §16 conversion, but always save cm. Unit selection is local preference, not a database column.
+
+### 19.4 Save RPC and confirmation
+
+```dart
+// Values below are illustrative, not a real member update.
+final savedId = await supabase.rpc('record_member_measurement', params: {
+  'p_member_id': myMemberId,
+  'p_payload': {
+    'weight_kg': 67.7,
+    'height_cm': 168.0,
+    'body_fat_percentage': null,
+    'notes': null,
+    'photos': uploadedPaths, // private member-photos object paths, not URLs
+  },
+});
+// Re-read own history and confirm the returned row before showing saved state.
+```
+
+The function validates caller access through `can_write_member_measurements`. A member may target only the member record linked to their authenticated user; never trust a UUID merely because it came from a screen. Broader staff/trainer permissions do not grant a member app those capabilities. Inspect the current return signature; do not assume every RPC returns `{success:true}`. Transport/database errors are failures. On success invalidate history, latest summary, photo gallery and height-prefill caches, then re-read the saved row.
+
+Disable Save while uploading/saving. This RPC creates a row per call and has no documented client idempotency key: do not automatically retry an ambiguous timeout. Preserve the draft, refresh history to reconcile, and ask before another submission if the outcome remains unknown. Offline drafts must be explicitly unsaved, protected per account and cleared on logout; do not silently replay health-data writes.
+
+### 19.5 Private photo lifecycle
+
+1. Ask for camera/gallery permission only on member action. Accept supported image content (web uses image MIME types) and reject files above **10 MB** before upload; server bucket limits also apply. Preserve an accessible non-camera measurement path.
+2. Authenticated upload to private bucket **`member-photos`**, `upsert:false`, path `{myMemberId}/drafts/{sessionUUID}/{timestamp}-{uuid}.{ext}`. Use a unique generated name, not a member name or user-controlled path. Never upload into another member's prefix or biometric bucket.
+3. Save successful object paths in RPC `photos`. Do not save signed/public URLs, local device paths or temporary preview URLs. Never assume the RPC verifies object existence: confirm upload succeeded first.
+4. On explicit Cancel/remove, delete only this unsaved draft's objects. After confirmed Save, keep referenced objects — even though their path contains `drafts`. Closing after Save must not clean them up.
+5. On RPC failure keep the draft for correction or explicit cancellation. On an unknown outcome reconcile before deleting uploads; otherwise a successful row could reference deleted files. Cleanup is best-effort, not an atomic upload+RPC transaction; abandoned objects after a crash remain a known limitation, not permission for broad bucket deletion.
+6. Display/download with the member session using `storage.from('member-photos').createSignedUrl(path, 60)`, matching `src/lib/measurements/photoSigning.ts`. Refresh expired links on demand, never `getPublicUrl`. Health photos and signed links stay out of logs, analytics, public caches and notification payloads. Clear private photo cache on logout.
+
+Storage authorization and row authorization are separate checks. The database validates member-prefixed paths, and current storage policies enforce authorized access. Before rollout, verify the hosted bucket remains private and that member A cannot read/upload/sign/delete member B's object. Historical public-bucket migrations are not the current intended contract.
+
+### 19.6 Manual versus scanner data
+
+HOWBODY webhook triggers can insert measurement snapshots alongside the separate full scan reports (§16). Manual Save adds another snapshot; it does **not** overwrite the scanner report or merge it with past rows. History is chronological by `recorded_at`.
+
+Do not assume the newest snapshot contains every measurement; null means not recorded. Keep latest-snapshot date and full scan-report date distinct. If retrieving last non-null values across history for hints, preserve each value's date and do not present a synthesized row as one new scan. Avoid duplicate summary/measurement cards; summary first, then Measurements / Photos / 3D Body / Scan Reports tabs.
+
+Do not manufacture a scanner/manual source flag: verify current schema and trigger attribution before adding badges. `recorded_by` alone is not a reliable scanner origin label. No measurement PDF endpoint is established here; existing scanner PDFs and plan PDF contracts are separate. This guide adds documentation, not a native implementation, new API or live member update.
+
+### 19.7 Flutter acceptance tests and source map
+
+- General and PT member: save one valid snapshot via RPC, read returned row through own history, refreshed summary/height hint; no plan/package/gate changes.
+- Blank/notes-only draft refused; exact min/max accepted and out-of-range/non-finite rejected; kg/cm/% and ft-in conversion preserved; server errors shown.
+- Another member UUID/path is refused; no other-member rows/photos visible or signable.
+- Photo-only snapshot, oversize rejection, denied permissions, upload failure, Save failure, Cancel cleanup; confirmed saved files survive sheet close.
+- Double-tap blocked; ambiguous timeout reconciled without duplicate write; offline/retry state is honest.
+- Manual row alongside scanner row, partial/null snapshots and date labels; no fabricated scores or duplicate sections.
+- Signed photo expiry/refetch, logout cache clearing, screen-reader field labels and 200% text scaling.
+
+Sources: `src/pages/MyProgress.tsx`, `src/components/members/RecordMeasurementDrawer.tsx`, `src/components/members/MeasurementProgressView.tsx`, `src/lib/measurements/measurementValidation.ts`, `src/lib/measurements/photoSigning.ts`, `src/lib/measurements/types.ts`; server measurement/access functions and private-bucket policies in `supabase/migrations/20260422103636_e7056631-82f5-4d11-8694-f812f61451b9.sql`, with later hardening under `drizzle/`. Source audit verified the web contract; authenticated native save/read-back and hosted storage probes remain release tests for the Flutter team.
