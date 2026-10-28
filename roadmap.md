@@ -1,3 +1,9 @@
+# Scan height units & booking source badges (29 Oct 2026)
+- [x] Scan login height: cm ⇄ ft/in toggle with live conversion, remembered unit, always sends cm (100–250).
+- [x] Facility bookings accept Android/iPhone app channels (members can only self-report those two); All Bookings + slot drawer show labelled source badges, filter and CSV export use the same labels.
+- [x] Flutter docs: new HOWBODY QR link guide; README/roadmap updated for booking source and presence.
+- [ ] Android/iPhone chip on Audit Logs / online pill: needs server-side platform storage once the Flutter app sends it (roadmap Phase 7).
+
 # Dead backend function cleanup (28 Oct 2026)
 - [x] Removed `send-message` (legacy router) and `backfill-razorpay-fees` (one-time backfill): no app, backend, scheduled job, automation rule, setting or database callers and no recent calls; deleted from live and source.
 

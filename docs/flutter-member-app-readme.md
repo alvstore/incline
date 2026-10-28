@@ -2,7 +2,7 @@
 
 Native iOS + Android member app for **Incline – Rise.Reflect.Repeat.** It talks to the **same backend** as the web member dashboard (`/member-dashboard`). There is no separate server: every rule (prices, booking windows, dues, gate access, approvals) is enforced by the database and backend functions. The app only displays data and calls approved actions.
 
-> This supersedes the React Native plan in `docs/member-mobile-pathway.md`. Companion guides: `docs/flutter-referrals.md`, `docs/flutter-workout-videos.md`, `docs/browser-notifications.md`. Roadmap: `docs/flutter-member-app-roadmap.md`.
+> This supersedes the React Native plan in `docs/member-mobile-pathway.md`. Companion guides: `docs/flutter-howbody-scan.md`, `docs/flutter-referrals.md`, `docs/flutter-workout-videos.md`, `docs/browser-notifications.md`. Roadmap: `docs/flutter-member-app-roadmap.md`.
 
 ---
 
@@ -92,12 +92,12 @@ Read with PostgREST (RLS restricts to self). Use explicit column lists and expli
 | Home | `members`, `memberships` (active/frozen/upcoming), `invoices` dues, `member_debt_locks` RPC | — |
 | Attendance | `member_attendance` (group by IST day; raw rows are audit detail) | — (check-in is gate/desk only) |
 | Classes | `class_sessions` (+ type, trainer, capacity), own `class_bookings` | `book_class`, `cancel_class_booking` |
-| Recovery | `ensure_facility_slots` (read slots), own `benefit_bookings`, benefit balances | `book_facility_slot`, `cancel_facility_slot` |
+| Recovery | `ensure_facility_slots` (read slots), own `benefit_bookings`, benefit balances | `book_facility_slot` with `p_source` `app_android`/`app_ios`, `cancel_facility_slot` |
 | Add-on credits | own benefit credits/usage | `purchase_benefit_credits` via checkout |
 | PT | own PT packages, sessions log, trainer profile | **Request** only → front-desk task (see §6) |
 | Workout | `member_fitness_plans` (type workout) — exercises carry `video_url`, `video_file_path`, `form_tips` | completion state (local + existing logging) |
 | Diet | `member_fitness_plans` (type diet) + legacy fallback | — |
-| Progress | measurements, progress photos, `howbody_*` scan reports, `howbody_scan_quota` | upload own progress photo |
+| Progress | measurements, progress photos, `howbody_*` scan reports, `howbody_scan_quota`, own `howbody_scan_sessions` | upload own progress photo; scanner link via `howbody-bind-user` (see `flutter-howbody-scan.md`) |
 | Invoices | own `invoices`, `payments` (show **void ≠ refund** labels) | PDF via signed URL |
 | Store | sellable products (`is_sellable`) + add-on plans for branch | `create-payment-order` → Razorpay → `verify-payment`; on dismiss `abandon_online_addon_invoice` |
 | Membership purchase/renew | member-visible plans | `purchase_member_membership` (member path) |
@@ -120,6 +120,23 @@ Confirm table/column names against the generated types in `src/integrations/supa
 **Classes.** Capacity, duplicates, cutoff and cancellation windows are server-side. After any book/cancel, refetch the session list.
 
 **Recovery facilities.** Slots are generated server-side from opening hours + capacity. Advance-notice rules (e.g. Steam 12 h, Sauna/Ice Bath 24 h) and gender locks are enforced by `book_facility_slot`. Label times with spaced AM/PM ("7:30 PM"); if today only has evening slots, label it "Today (evening only)".
+
+**Booking source (Steam / Sauna / Ice Bath).** Every facility booking records where it came from, and staff see it as a badge on All Bookings and the slot drawer ("Android app", "iPhone app", "Web portal", "WhatsApp", "Front desk", "Concierge", "System"). The app must pass its platform:
+
+```dart
+await supabase.rpc('book_facility_slot', params: {
+  'p_slot_id': slotId,
+  'p_member_id': myMemberId,
+  'p_membership_id': activeMembershipId,
+  'p_source': Platform.isIOS ? 'app_ios' : 'app_android',
+});
+```
+
+For a signed-in member the server accepts only `app_android` or `app_ios`; any other value (or none) is stored as `member_portal`. Members cannot send `admin`, `concierge`, `whatsapp_ai` or `system`, nor `p_staff_id` / `p_force`. Class bookings do not take a source yet.
+
+**HOWBODY scanner link.** Scanning the scanner's QR (in-app or via App/Universal Link for `/scan-login`) opens a link sheet with scan type and a required height in **cm or ft/in** — always sent to `howbody-bind-user` as centimetres (100–250). Poll the session (no Realtime) until `completed`. Full contract: `flutter-howbody-scan.md`.
+
+**Who is online / Android vs iOS.** The web joins the Realtime presence channel `presence:app` and pings `touch_presence()` every 60 s. The app must do the same while in the foreground and add `platform` (`android` | `ios`) and `app_version` to its presence payload. `touch_presence()` takes no arguments today, so the platform lives only in the live presence payload; storing it server-side (for history on Audit Logs) is a pending backend addition — see roadmap Phase 7.
 
 **PT.** Members cannot buy PT directly. "Choose a PT package" creates a high-priority front-desk task (same as web Renewal Concierge); the desk confirms trainer and sends a payment link. PT attendance is auto-marked by the backend from gate scans — the app just displays it.
 

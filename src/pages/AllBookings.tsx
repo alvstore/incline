@@ -27,6 +27,8 @@ import { escapeHtml as e } from '@/utils/htmlEscape';
 import { ConciergeBookingDrawer } from '@/components/bookings/ConciergeBookingDrawer';
 import { SlotAvailabilityTimeline } from '@/components/bookings/SlotAvailabilityTimeline';
 import { SlotDetailDrawer } from '@/components/bookings/SlotDetailDrawer';
+import { BookingSourceBadge } from '@/components/bookings/BookingSourceBadge';
+import { BOOKING_SOURCES, bookingSourceMeta, normalizeBookingSource } from '@/lib/bookings/bookingSource';
 import { BookingStatusTimeline } from '@/components/bookings/BookingStatusTimeline';
 import { RescheduleBookingDrawer, type RescheduleTarget } from '@/components/bookings/RescheduleBookingDrawer';
 import { AttendanceActions } from '@/components/bookings/AttendanceActions';
@@ -326,21 +328,11 @@ export default function AllBookingsPage() {
         || b.member_name?.toLowerCase().includes(searchQuery.toLowerCase())
         || b.member_code?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
-      const matchesSource = sourceFilter === 'all' || (b.source || 'member_portal') === sourceFilter;
+      const matchesSource = sourceFilter === 'all' || normalizeBookingSource(b.source) === sourceFilter;
       return matchesSearch && matchesStatus && matchesSource;
     });
 
-  const SOURCE_BADGE: Record<string, string> = {
-    member_portal: 'bg-success/10 text-success border-success/25',
-    concierge: 'bg-primary/10 text-primary border-primary/25',
-    whatsapp_ai: 'bg-info/10 text-info border-info/25',
-    admin: 'bg-warning/10 text-warning border-warning/25',
-    system: 'bg-muted text-foreground border-border',
-  };
-  const renderSourceBadge = (source?: string) => {
-    const s = source || 'member_portal';
-    return <Badge variant="outline" className={`text-[10px] capitalize ${SOURCE_BADGE[s] || ''}`}>{s.replace('_', ' ')}</Badge>;
-  };
+  const renderSourceBadge = (source?: string) => <BookingSourceBadge source={source} />;
 
   const filteredClassBookings = filterBookings(classBookings);
   const filteredBenefitBookings = filterBookings(benefitBookings);
@@ -402,17 +394,17 @@ export default function AllBookingsPage() {
     filteredClassBookings.forEach((b: any) => rows.push({
       date: b.day, time: fmtTime(b.class_time), type: 'Class', item: b.class_name || '',
       member_code: b.member_code || '', member_name: b.member_name || '',
-      status: (b.status || '').replace('_', ' '), source: (b.source || 'member_portal').replace('_', ' '), booked_by: '',
+      status: (b.status || '').replace('_', ' '), source: bookingSourceMeta(b.source).label, booked_by: '',
     }));
     filteredBenefitBookings.forEach((b: any) => rows.push({
       date: b.slot_date || b.day, time: b.slot_time || '', type: 'Benefit', item: b.benefit_name || '',
       member_code: b.member_code || '', member_name: b.member_name || '',
-      status: (b.status || '').replace('_', ' '), source: (b.source || 'member_portal').replace('_', ' '), booked_by: b.booked_by_name || '',
+      status: (b.status || '').replace('_', ' '), source: bookingSourceMeta(b.source).label, booked_by: b.booked_by_name || '',
     }));
     filteredPTSessions.forEach((b: any) => rows.push({
       date: b.day, time: fmtTime(b.scheduled_at), type: 'PT', item: b.trainer_name || '',
       member_code: b.member_code || '', member_name: b.member_name || '',
-      status: (b.status || '').replace('_', ' '), source: (b.source || 'member_portal').replace('_', ' '), booked_by: '',
+      status: (b.status || '').replace('_', ' '), source: bookingSourceMeta(b.source).label, booked_by: '',
     }));
     return rows.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   };
@@ -753,11 +745,9 @@ ${rows.map((r) => `<tr>
                     <SelectTrigger className="w-[160px] rounded-xl" aria-label="Filter by source"><SelectValue placeholder="Source" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Sources</SelectItem>
-                      <SelectItem value="member_portal">Member Portal</SelectItem>
-                      <SelectItem value="concierge">Concierge</SelectItem>
-                      <SelectItem value="whatsapp_ai">WhatsApp AI</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
+                      {BOOKING_SOURCES.map((s) => (
+                        <SelectItem key={s} value={s}>{bookingSourceMeta(s).label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
