@@ -102,7 +102,7 @@ Reports: body → `howbody_body_reports`, posture → `howbody_posture_reports`,
 
 ## 9. UX & accessibility
 
-- Camera permission: explain why before asking; if denied, offer "Open settings" and a manual "Enter code" fallback is not needed (scan IDs are long) — ask them to use the phone camera instead.
+- Camera permission: explain why before asking; if denied, offer "Open settings" or suggest scanning with the phone's own camera (the App/Universal Link opens the app).
 - Torch toggle, 44×44 targets, haptic tick on successful parse.
 - Unit toggle is a radio group with labels "Centimetres" / "Feet and inches"; inputs labelled "Height in centimetres", "Feet", "Inches".
 - Never show prices or credit costs on this screen.
