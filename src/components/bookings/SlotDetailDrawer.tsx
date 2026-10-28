@@ -8,19 +8,12 @@ import { BookingStatusTimeline } from './BookingStatusTimeline';
 import { AttendanceActions } from './AttendanceActions';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, ShieldAlert, User } from 'lucide-react';
+import { BookingSourceBadge } from './BookingSourceBadge';
 
 interface SlotDetailDrawerProps {
   slotId: string | null;
   onClose: () => void;
 }
-
-const SOURCE_BADGE: Record<string, string> = {
-  member_portal: 'bg-success/10 text-success border-success/25',
-  concierge: 'bg-primary/10 text-primary border-primary/25',
-  whatsapp_ai: 'bg-info/10 text-info border-info/25',
-  admin: 'bg-warning/10 text-warning border-warning/25',
-  system: 'bg-muted text-foreground border-border',
-};
 
 export function SlotDetailDrawer({ slotId, onClose }: SlotDetailDrawerProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -108,9 +101,7 @@ export function SlotDetailDrawer({ slotId, onClose }: SlotDetailDrawerProps) {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate">{b.member_name || '—'}</span>
                         <Badge variant="outline" className="text-[10px]">{b.member?.member_code}</Badge>
-                        <Badge variant="outline" className={`text-[10px] capitalize ${SOURCE_BADGE[b.source] || ''}`}>
-                          {b.source?.replace('_', ' ') || 'member portal'}
-                        </Badge>
+                        <BookingSourceBadge source={b.source} />
                         {b.force_added && (
                           <Badge variant="outline" className="text-[10px] gap-1 bg-warning/10 text-warning border-warning/25">
                             <ShieldAlert className="h-3 w-3" /> force
