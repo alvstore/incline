@@ -184,10 +184,27 @@ export function PlanViewerSheet({
                                 key={ei}
                                 className="flex items-center gap-3 rounded-lg bg-background px-3 py-2 text-sm"
                               >
-                                <div className="h-6 w-6 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-semibold shrink-0">
-                                  {ei + 1}
-                                </div>
-                                <span className="flex-1 truncate">{ex.name}</span>
+                                {ex.poster_url ? (
+                                  <img
+                                    src={ex.poster_url}
+                                    alt=""
+                                    width={40}
+                                    height={40}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="h-10 w-10 shrink-0 rounded-md bg-muted object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-6 w-6 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-semibold shrink-0">
+                                    {ei + 1}
+                                  </div>
+                                )}
+                                <span className="flex-1 min-w-0">
+                                  <span className="block truncate">{ex.name}</span>
+                                  {ex.equipment && (
+                                    <span className="block truncate text-[11px] text-muted-foreground">{ex.equipment}</span>
+                                  )}
+                                </span>
                                 <span className="text-xs text-muted-foreground shrink-0">
                                   {ex.sets}×{ex.reps}
                                   {ex.rest ? ` · ${ex.rest}` : ''}
