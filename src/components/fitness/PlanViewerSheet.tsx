@@ -19,6 +19,8 @@ import {
 import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target, Plus } from 'lucide-react';
 import { normalizeDietPlan } from '@/lib/planNormalizer';
 import { useSignedAttachment } from '@/lib/documents/signAttachment';
+import { ExercisePosterThumb } from '@/components/fitness/ExercisePosterThumb';
+import { ExercisePreviewToggle } from '@/components/member/workout/ExercisePreviewToggle';
 
 
 interface PlanViewerSheetProps {
@@ -153,6 +155,8 @@ export function PlanViewerSheet({
             </div>
           ) : plan.type === 'workout' ? (
             weeks.length > 0 ? (
+              <div className="space-y-3">
+              <ExercisePreviewToggle />
               <Accordion type="multiple" defaultValue={["w0"]} className="space-y-2">
                 {weeks.map((week: any, wi: number) => (
                   <AccordionItem
@@ -184,21 +188,7 @@ export function PlanViewerSheet({
                                 key={ei}
                                 className="flex items-center gap-3 rounded-lg bg-background px-3 py-2 text-sm"
                               >
-                                {ex.poster_url ? (
-                                  <img
-                                    src={ex.poster_url}
-                                    alt=""
-                                    width={40}
-                                    height={40}
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-10 w-10 shrink-0 rounded-md bg-muted object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-6 w-6 rounded-full bg-primary/10 text-primary text-[11px] flex items-center justify-center font-semibold shrink-0">
-                                    {ei + 1}
-                                  </div>
-                                )}
+                                <ExercisePosterThumb posterUrl={ex.poster_url} index={ei} />
                                 <span className="flex-1 min-w-0">
                                   <span className="block truncate">{ex.name}</span>
                                   {ex.equipment && (
@@ -218,6 +208,7 @@ export function PlanViewerSheet({
                   </AccordionItem>
                 ))}
               </Accordion>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 This plan has no scheduled exercises yet.

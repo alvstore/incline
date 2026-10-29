@@ -14,6 +14,7 @@ import {
   getVideoPublicUrl,
   deleteVideo,
 } from '@/services/videoUploadService';
+import { useExerciseMediaUrl } from '@/lib/exercises/exerciseMedia';
 import { ExerciseVideoLibraryPicker, type ExerciseLibraryItem } from './ExerciseVideoLibraryPicker';
 
 /** Global feature flag (settings row, branch_id NULL) gating the Library tab. */
@@ -70,7 +71,9 @@ export function VideoAttachmentControl({ value, onChange, folder, label, exercis
   const fileRef = useRef<HTMLInputElement>(null);
 
   const hasAttachment = !!(value.video_url || value.video_file_path);
-  const previewUrl = value.video_file_path ? getVideoPublicUrl(value.video_file_path) : value.video_url;
+  const rawPreview = value.video_file_path ? getVideoPublicUrl(value.video_file_path) : value.video_url;
+  // Library demos live in private storage — sign them for the trainer's "open" link.
+  const { url: previewUrl } = useExerciseMediaUrl(rawPreview, hasAttachment);
 
   const handleUrlBlur = async () => {
     setError(null);
@@ -158,7 +161,7 @@ export function VideoAttachmentControl({ value, onChange, folder, label, exercis
         <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border">
           <Video className="h-4 w-4 text-accent flex-shrink-0" />
           <a
-            href={previewUrl}
+            href={previewUrl ?? undefined}
             target="_blank"
             rel="noreferrer"
             className="text-xs truncate text-primary hover:underline flex-1"

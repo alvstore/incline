@@ -437,6 +437,15 @@ may carry these optional fields — all existing plans without them stay valid:
 Rule: **if `video_url == null && video_file_path == null`, render no video UI** —
 never show an empty player.
 
+**Library media paths:** auto-attached demos are stored as paths like
+`exercisedb/<slug>/<slug>.mp4` and `exercisedb/<slug>/<slug>_poster.webp` in the
+private `inclineexercisedb` bucket (readable by any signed-in user). If a value
+starts with `exercisedb/`, call
+`storage.from('inclineexercisedb').createSignedUrl(path, 3600)` (batch with
+`createSignedUrls` per day) and cache it; any other value is already a full URL.
+Show a "Exercise demos" switch (off by default, remembered on device) and load
+no pictures or videos until it is on, matching web.
+
 **Auto-attach:** when a workout template or member plan is saved, a backend
 trigger matches each exercise *name* against the exercise library and fills
 `video_url` + `poster_url` if they are empty. Machine names, sets, reps and any
