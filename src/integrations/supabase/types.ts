@@ -16934,6 +16934,7 @@ export type Database = {
       }
       can_read_policy_pdf: { Args: { _object_name: string }; Returns: boolean }
       can_use_realtime_topic: { Args: { _topic: string }; Returns: boolean }
+      can_view_exercise_demos: { Args: never; Returns: boolean }
       can_write_biometric_photo: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
@@ -17463,6 +17464,10 @@ export type Database = {
         }
         Returns: Json
       }
+      exercise_demos_visible_for: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       expire_pt_packages: { Args: never; Returns: Json }
       expire_wallet_balances: { Args: never; Returns: Json }
       extract_member_id_from_storage_path: {
@@ -17733,6 +17738,10 @@ export type Database = {
           member_id: string
           phone: string
         }[]
+      }
+      get_member_exercise_demos: {
+        Args: { p_branch_id: string }
+        Returns: boolean
       }
       get_member_id: { Args: { _user_id: string }; Returns: string }
       get_my_duty_presence: { Args: never; Returns: Json }
@@ -19470,6 +19479,10 @@ export type Database = {
       set_invoice_due_date: {
         Args: { p_due_date: string; p_invoice_id: string; p_reason?: string }
         Returns: Json
+      }
+      set_member_exercise_demos: {
+        Args: { p_branch_id: string; p_enabled: boolean }
+        Returns: boolean
       }
       set_registration_geofence: {
         Args: { p_disabled_until?: string; p_enabled: boolean }
