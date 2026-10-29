@@ -19,6 +19,8 @@ import {
 import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target, Plus } from 'lucide-react';
 import { normalizeDietPlan } from '@/lib/planNormalizer';
 import { useSignedAttachment } from '@/lib/documents/signAttachment';
+import { ExercisePosterThumb } from '@/components/fitness/ExercisePosterThumb';
+import { ExercisePreviewToggle } from '@/components/member/workout/ExercisePreviewToggle';
 
 
 interface PlanViewerSheetProps {
@@ -206,6 +208,7 @@ export function PlanViewerSheet({
                   </AccordionItem>
                 ))}
               </Accordion>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 This plan has no scheduled exercises yet.
