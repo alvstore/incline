@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { demosVisible } from './exerciseMedia';
 
 describe('exercise demo visibility', () => {
