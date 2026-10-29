@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { demosVisible } from './exerciseMedia';
+import { demosVisible } from '../../src/lib/exercises/exerciseMedia';
 
 describe('exercise demo visibility', () => {
   it('members cannot see demos while the owner switch is off', () => {
