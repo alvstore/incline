@@ -20,7 +20,7 @@ export function ExercisePreviewToggle({ className = '' }: { className?: string }
             Exercise demos
           </Label>
           <p className="text-[11px] text-muted-foreground">
-            {on ? 'On — tap a picture to play the video' : 'Off — turn on to see how each move is done'}
+            {on ? 'On — tap a picture to play the video (staff preview)' : 'Off — turn on to preview demos'}
           </p>
         </div>
       </div>
