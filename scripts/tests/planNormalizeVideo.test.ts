@@ -71,3 +71,12 @@ describe('normalizeWorkoutPlan media preview + machine name', () => {
     expect(ex?.equipment).toBe('SUPER LAT PULLDOWN CIRCULAR');
   });
 });
+
+import { isExerciseLibraryPath } from '@/lib/exercises/exerciseMedia';
+describe('exercise library media paths', () => {
+  it('signs only exercisedb/ storage paths, leaves full URLs alone', () => {
+    expect(isExerciseLibraryPath('exercisedb/lat-pulldown/lat-pulldown.mp4')).toBe(true);
+    expect(isExerciseLibraryPath('https://cdn.example.com/a.mp4')).toBe(false);
+    expect(isExerciseLibraryPath(undefined)).toBe(false);
+  });
+});
