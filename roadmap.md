@@ -1,8 +1,9 @@
 # Repository organization & Flutter manual progress (29 Oct 2026)
-- [ ] Remove verified screenshots, scratch files and build caches; archive unique physical memory notes rather than discard them.
-- [ ] Remove seven verified unrelated inactive skill drafts; preserve active skills, lockfile, configuration, migrations, assets and tests.
-- [ ] Refresh README and documentation index; extend the single Flutter guide with manual measurements/photos and acceptance tests.
-- [ ] Validate links, removal references and regression tests. The managed read-only .gitignore cannot be updated here.
+- [x] Removed three root screenshots, empty shell artifact, one-off plan script and two build caches; moved 15 unique physical notes to docs/archive/legacy-notes, explicitly historical-only.
+- [x] Removed seven verified unrelated inactive skill drafts; preserved all active skills, lockfile, configuration, migrations, served assets and tests.
+- [x] Refreshed README and docs/README.md index; added §19 to the single Flutter guide for manual measurements/RPC, units, private photos, scanner separation, retry safety and native acceptance tests. No live member data or app behavior changed.
+- [x] Validated documentation links/fences, one Flutter guide, 15 preserved notes and removed-file absence; 164 local regression tests passed, build OK. Existing voice policy integration suite could not initialize without an authenticated session; no unrelated session was minted.
+- [ ] Cache ignore-pattern update is blocked because the managed .gitignore is read-only here; generated caches were removed, but may return on future builds.
 
 # Consolidated Flutter member guide (29 Oct 2026)
 - [x] Consolidated Flutter README, roadmap, HOWBODY, referral and video guides in docs/flutter-member-app-readme.md; removed five redundant/obsolete native guides and repaired references.
