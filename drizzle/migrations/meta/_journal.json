@@ -778,6 +778,13 @@
       "when": 1793298865405,
       "tag": "0110_exercise_media_auto_attach",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1793299842173,
+      "tag": "0111_exercisedb_bucket_policies",
+      "breakpoints": true
     }
   ]
 }
