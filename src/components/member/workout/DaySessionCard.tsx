@@ -43,31 +43,71 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
     );
   }
 
+  const poster = exercise.poster_url;
+  const toggle = () =>
+    setOpen((v) => {
+      if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
+      return !v;
+    });
+  const reduceMotion =
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
   return (
     <div className="px-3 pb-3">
-      <button
-        type="button"
-        onClick={() =>
-          setOpen((v) => {
-            if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
-            return !v;
-          })
-        }
-        aria-expanded={open}
-        aria-label={`${open ? 'Hide' : 'Watch'} demo video for ${exercise.name}`}
-        className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
-      >
-        {open ? <X className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-        {open ? 'Hide video' : 'Watch demo'}
-      </button>
+      {!open && poster ? (
+        // Instant WebP preview (a few KB) — the MP4 only downloads after a tap.
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={false}
+          aria-label={`Play demo video for ${exercise.name}`}
+          className="group relative flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-background p-2 text-left transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          <span className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-muted">
+            <img
+              src={poster}
+              alt=""
+              width={96}
+              height={64}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+            <span className="absolute inset-0 flex items-center justify-center bg-foreground/10">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-primary">
+                <Play className="h-4 w-4" />
+              </span>
+            </span>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-xs font-semibold text-foreground">Watch how it's done</span>
+            <span className="block text-[11px] text-muted-foreground">Tap to play the demo</span>
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={`${open ? 'Hide' : 'Watch'} demo video for ${exercise.name}`}
+          className="inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-background px-4 text-xs font-medium text-primary transition-colors duration-200 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          {open ? <X className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {open ? 'Hide video' : 'Watch demo'}
+        </button>
+      )}
       {open && (
-        <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-black">
+        <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-muted">
           <video
             src={url}
+            poster={poster}
             controls
+            muted
+            loop
+            autoPlay={!reduceMotion}
             preload="metadata"
             playsInline
-            className="aspect-video w-full"
+            className="aspect-video w-full bg-muted object-contain"
             aria-label={`Demo video: ${exercise.name}`}
           />
           {exercise.form_tips && exercise.form_tips.length > 0 && (
