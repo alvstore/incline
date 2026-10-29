@@ -38,6 +38,8 @@ function useExerciseLibraryEnabled(): boolean {
 export interface VideoAttachmentValue {
   video_url?: string;
   video_file_path?: string;
+  /** Light WebP preview shown before the MP4 loads (library picks only). */
+  poster_url?: string;
 }
 
 interface Props {
@@ -126,7 +128,11 @@ export function VideoAttachmentControl({ value, onChange, folder, label, exercis
           /* swallow — UI swap must always succeed */
         }
       }
-      onChange({ video_file_path: undefined, video_url: item.video_url });
+      onChange({
+        video_file_path: undefined,
+        video_url: item.video_url,
+        poster_url: item.thumbnail_url ?? undefined,
+      });
     }
     if (item.form_cues?.length && onFormTips) onFormTips(item.form_cues);
   };
