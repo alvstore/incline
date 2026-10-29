@@ -8,6 +8,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Dumbbell, Exter
 import { estimatedMinutes, totalSets, type WorkoutDay, type WorkoutExercise } from './planNormalize';
 import { getVideoPublicUrl } from '@/services/videoUploadService';
 import { track } from '@/lib/analytics';
+import { isExerciseLibraryPath, useExerciseMediaUrl, useExercisePreviewsEnabled } from '@/lib/exercises/exerciseMedia';
 
 const EMBED_HOSTS_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com|player\.vimeo\.com)/i;
 
@@ -21,14 +22,21 @@ function resolveVideoUrl(ex: WorkoutExercise): string | null {
  *  <video> tag; YouTube/Vimeo open externally. No autoplay, ever. */
 function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
   const [open, setOpen] = useState(false);
-  const url = resolveVideoUrl(exercise);
-  if (!url) return null;
-  const isEmbedHost = EMBED_HOSTS_RE.test(url);
+  const previewsOn = useExercisePreviewsEnabled();
+  const raw = resolveVideoUrl(exercise);
+  // Nothing downloads until the member switches demos on; the MP4 only after a tap.
+  const { url: poster } = useExerciseMediaUrl(exercise.poster_url, previewsOn);
+  const { url, isLoading: videoLoading } = useExerciseMediaUrl(raw, previewsOn && open);
+  if (!raw || !previewsOn) return null;
+  if (!url && !open && !poster && isExerciseLibraryPath(raw)) {
+    // Library video without a preview picture: still offer the play button.
+  } else if (!url && !isExerciseLibraryPath(raw)) return null;
+  const isEmbedHost = !!url && EMBED_HOSTS_RE.test(url);
 
   if (isEmbedHost) {
     return (
       <a
-        href={url}
+        href={url ?? undefined}
         target="_blank"
         rel="noreferrer"
         onClick={(e) => {
@@ -43,7 +51,6 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
     );
   }
 
-  const poster = exercise.poster_url;
   const toggle = () =>
     setOpen((v) => {
       if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
@@ -98,6 +105,11 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
       )}
       {open && (
         <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-muted">
+          {videoLoading || !url ? (
+            <div className="flex aspect-video w-full items-center justify-center text-xs text-muted-foreground" role="status">
+              Loading video…
+            </div>
+          ) : (
           <video
             src={url}
             poster={poster}
@@ -110,6 +122,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
             className="aspect-video w-full bg-muted object-contain"
             aria-label={`Demo video: ${exercise.name}`}
           />
+          )}
           {exercise.form_tips && exercise.form_tips.length > 0 && (
             <div className="bg-card px-3 py-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
