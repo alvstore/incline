@@ -153,6 +153,8 @@ export function PlanViewerSheet({
             </div>
           ) : plan.type === 'workout' ? (
             weeks.length > 0 ? (
+              <div className="space-y-3">
+              <ExercisePreviewToggle />
               <Accordion type="multiple" defaultValue={["w0"]} className="space-y-2">
                 {weeks.map((week: any, wi: number) => (
                   <AccordionItem
