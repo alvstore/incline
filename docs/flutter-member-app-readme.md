@@ -777,7 +777,7 @@ final rows = await supabase.from('member_measurements')
     .range(0, 19);
 ```
 
-Select additional measurement columns when presenting full detail. Server-managed metadata: `id`, `member_id`, `recorded_by`, `recorded_at`, `created_at`, `updated_at`. Omit those from the write payload; manual entry currently records server save time, not a chosen historical date. Optional numbers remain null, not zero. BMI is a display calculation `weight_kg / (height_cm / 100)^2` only when both valid values exist; never fabricate body-fat or posture scores from it.
+Select additional measurement columns when presenting full detail. Server-stamped metadata: `id`, `member_id`, `recorded_by`, `created_at`, `updated_at`. Web manual entry omits `recorded_at`, so the RPC defaults it to server save time. The SQL also accepts an optional timestamp in `p_payload.recorded_at`, but no historical-date control is exposed by the current member drawer; leave it out for initial Flutter parity. Optional numbers remain null, not zero. BMI is a display calculation `weight_kg / (height_cm / 100)^2` only when both valid values exist; never fabricate body-fat or posture scores from it.
 
 ### 19.3 Field contract and validation
 
@@ -821,7 +821,7 @@ final savedId = await supabase.rpc('record_member_measurement', params: {
 // Re-read own history and confirm the returned row before showing saved state.
 ```
 
-The function validates caller access through `can_write_member_measurements`. A member may target only the member record linked to their authenticated user; never trust a UUID merely because it came from a screen. Broader staff/trainer permissions do not grant a member app those capabilities. Inspect the current return signature; do not assume every RPC returns `{success:true}`. Transport/database errors are failures. On success invalidate history, latest summary, photo gallery and height-prefill caches, then re-read the saved row.
+The function validates caller access through `can_write_member_measurements` and returns the new row's **UUID**, not `{success:true}`. A member may target only the member record linked to their authenticated user; never trust a UUID merely because it came from a screen. Broader staff/trainer permissions do not grant a member app those capabilities. Transport/database errors are failures. On success invalidate history, latest summary, photo gallery and height-prefill caches, then re-read the saved row by returned UUID and own member ID.
 
 Disable Save while uploading/saving. This RPC creates a row per call and has no documented client idempotency key: do not automatically retry an ambiguous timeout. Preserve the draft, refresh history to reconcile, and ask before another submission if the outcome remains unknown. Offline drafts must be explicitly unsaved, protected per account and cleared on logout; do not silently replay health-data writes.
 
