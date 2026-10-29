@@ -1,4 +1,4 @@
-// v1.0.0 — Hands out very short-lived signed links for exercise demo media.
+// v1.0.1 — Hands out very short-lived signed links for exercise demo media.
 // Staff/trainers always; members only when their branch switch is on AND the
 // requested file belongs to one of their own active workout plans.
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -31,9 +31,9 @@ Deno.serve(async (req) => {
     const { data: visible } = await admin.rpc('exercise_demos_visible_for', { _user_id: userId });
     if (!visible) return json({ error: 'Exercise demos are not available', code: 'demos_off' }, 403);
 
-    const { data: isStaff } = await admin.rpc('has_any_role', {
-      _user_id: userId, _roles: ['owner', 'admin', 'manager', 'trainer', 'staff'],
-    });
+    const { data: roleRows } = await admin.from('user_roles').select('role').eq('user_id', userId)
+      .in('role', ['owner', 'admin', 'manager', 'trainer', 'staff']).limit(1);
+    const isStaff = (roleRows?.length ?? 0) > 0;
     let allowed = clean;
     if (!isStaff) {
       const { data: member } = await admin.from('members').select('id').eq('user_id', userId).maybeSingle();

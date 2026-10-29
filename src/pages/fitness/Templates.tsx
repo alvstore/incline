@@ -53,6 +53,7 @@ import {
 import { AssignPlanDrawer } from "@/components/fitness/AssignPlanDrawer";
 import { EditTemplateTargetingDrawer } from "@/components/fitness/EditTemplateTargetingDrawer";
 import { FitnessHubTabs } from "@/components/fitness/FitnessHubTabs";
+import { MemberExerciseDemosCard } from "@/components/fitness/MemberExerciseDemosCard";
 import { PlanViewerSheet } from "@/components/fitness/PlanViewerSheet";
 import { UploadPdfTemplateDrawer } from "@/components/fitness/UploadPdfTemplateDrawer";
 import { TemplateAssignmentsSheet } from "@/components/fitness/TemplateAssignmentsSheet";
@@ -398,6 +399,9 @@ export default function FitnessTemplatesPage() {
     <AppLayout>
       <div className="space-y-6">
         <FitnessHubTabs />
+        {hasAnyRole(["owner", "admin"]) && effectiveBranchId && (
+          <MemberExerciseDemosCard branchId={effectiveBranchId} />
+        )}
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
