@@ -1,4 +1,4 @@
-// v1.1.0 — Exercise video library lookup for the workout plan builder.
+// v1.2.0 — Exercise video library lookup for the workout plan builder.
 // Staff/trainer callers search (1) the exercise_video_library table, which
 // holds Incline exercise names mapped to demo media, then (2) the bundled
 // full MoveKit catalog (movekit-catalog.json, ~580 exercises). Each result
@@ -9,7 +9,9 @@ import { z } from "npm:zod@3";
 import { requireCaller } from "../_shared/requireCaller.ts";
 import catalog from "./movekit-catalog.json" with { type: "json" };
 
-const MEDIA_BASE = "https://nhfzzqhmoyed3wnl.public.blob.vercel-storage.com/exercises/";
+// Media lives in the private "inclineexercisedb" bucket under exercisedb/<slug>/;
+// clients turn these paths into short-lived signed URLs.
+const MEDIA_BASE = "";
 
 interface CatalogEntry { s: string; t: string; m: string[]; v: string; p: string }
 
@@ -83,7 +85,7 @@ Deno.serve(async (req: Request) => {
       seenVideos.add(video);
       results.push({
         id: `movekit:${e.s}`, name: e.t, muscle_group: e.m[0] ?? null, equipment: null,
-        video_url: video, thumbnail_url: MEDIA_BASE + e.p, form_cues: [], source: "movekit",
+        video_url: video, thumbnail_url: e.p ? MEDIA_BASE + e.p : null, form_cues: [], source: "movekit",
       });
     }
 
