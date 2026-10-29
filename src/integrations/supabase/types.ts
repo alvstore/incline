@@ -16794,6 +16794,8 @@ export type Database = {
         }
         Returns: Json
       }
+      attach_exercise_media: { Args: { p: Json }; Returns: Json }
+      attach_exercise_media_list: { Args: { p_list: Json }; Returns: Json }
       audit_set_actor: {
         Args: { p_actor_id: string; p_actor_name?: string; p_source?: string }
         Returns: undefined
@@ -18377,6 +18379,7 @@ export type Database = {
         }
         Returns: number
       }
+      normalize_exercise_name: { Args: { p: string }; Returns: string }
       normalize_phone_in: { Args: { p: string }; Returns: string }
       notification_recipients: {
         Args: { p_branch_id: string; p_category?: string }
