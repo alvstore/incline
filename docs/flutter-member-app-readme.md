@@ -429,9 +429,20 @@ may carry these optional fields — all existing plans without them stay valid:
 | `video_url` | string? | Directly playable URL (https .mp4/.webm, YouTube, Vimeo). **Play this.** |
 | `video_file_path` | string? | Path inside the public `workout-videos` storage bucket. Fallback when `video_url` is absent: resolve via `Supabase.instance.client.storage.from('workout-videos').getPublicUrl(path)`. |
 | `form_tips` | string[] or string | Form cues shown under the player as the text alternative. |
+| `poster_url` | string? | Small WebP preview (≈5–10 KB). Show it instantly in the list; only download the MP4 when the member taps play. |
+| `equipment` | string? | Incline machine name (e.g. `SUPER LAT PULLDOWN CIRCULAR`). Display verbatim — never rename. |
+| `video_source` / `video_ref` | string? | `library` + library slug when the backend auto-attached the media. Informational only. |
+| `video_auto` | `"off"`? | Trainer removed the video on purpose; the backend will not auto-attach one again. |
 
 Rule: **if `video_url == null && video_file_path == null`, render no video UI** —
 never show an empty player.
+
+**Auto-attach:** when a workout template or member plan is saved, a backend
+trigger matches each exercise *name* against the exercise library and fills
+`video_url` + `poster_url` if they are empty. Machine names, sets, reps and any
+trainer-chosen video are never touched. Flutter needs no extra API call — read
+the plan as usual. Recommended player: `cached_network_image` for `poster_url`,
+`video_player` (muted, looping, `playsInline`) for `video_url` on tap.
 
 ### 15.2. Dart model
 
