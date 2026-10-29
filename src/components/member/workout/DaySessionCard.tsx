@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, ExternalLink, Layers, Moon, Play, Timer, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Dumbbell, ExternalLink, Layers, Moon, Play, Timer, X } from 'lucide-react';
 import { estimatedMinutes, totalSets, type WorkoutDay, type WorkoutExercise } from './planNormalize';
 import { getVideoPublicUrl } from '@/services/videoUploadService';
 import { track } from '@/lib/analytics';
@@ -231,6 +231,12 @@ export function DaySessionCard({
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                       <span>{exercise.sets} sets × {exercise.reps || '—'}</span>
                       {exercise.rest && <span>Rest {exercise.rest}</span>}
+                      {exercise.equipment && (
+                        <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
+                          <Dumbbell className="h-3 w-3" aria-hidden="true" />
+                          {exercise.equipment}
+                        </span>
+                      )}
                     </span>
                     {exercise.notes && (
                       <span className="mt-1 block text-xs italic text-muted-foreground">{exercise.notes}</span>
