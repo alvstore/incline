@@ -8,7 +8,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Dumbbell, Exter
 import { estimatedMinutes, totalSets, type WorkoutDay, type WorkoutExercise } from './planNormalize';
 import { getVideoPublicUrl } from '@/services/videoUploadService';
 import { track } from '@/lib/analytics';
-import { isExerciseLibraryPath, useExerciseMediaUrl, useExercisePreviewsEnabled } from '@/lib/exercises/exerciseMedia';
+import { useExerciseMediaUrl, useExercisePreviewsEnabled } from '@/lib/exercises/exerciseMedia';
 
 const EMBED_HOSTS_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com|player\.vimeo\.com)/i;
 
@@ -28,9 +28,6 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
   const { url: poster } = useExerciseMediaUrl(exercise.poster_url, previewsOn);
   const { url, isLoading: videoLoading } = useExerciseMediaUrl(raw, previewsOn && open);
   if (!raw || !previewsOn) return null;
-  if (!url && !open && !poster && isExerciseLibraryPath(raw)) {
-    // Library video without a preview picture: still offer the play button.
-  } else if (!url && !isExerciseLibraryPath(raw)) return null;
   const isEmbedHost = !!url && EMBED_HOSTS_RE.test(url);
 
   if (isEmbedHost) {
@@ -112,7 +109,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
           ) : (
           <video
             src={url}
-            poster={poster}
+            poster={poster ?? undefined}
             controls
             muted
             loop

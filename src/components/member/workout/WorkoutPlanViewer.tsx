@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dumbbell, Moon, Repeat, Shuffle } from 'lucide-react';
 import { DaySessionCard } from './DaySessionCard';
+import { ExercisePreviewToggle } from './ExercisePreviewToggle';
 import { WeekGrid } from './WeekGrid';
 import { PlanSegmentedTabs } from '@/components/member/plan/PlanSegmentedTabs';
 import { PlanDayRail } from '@/components/member/plan/PlanDayRail';
@@ -145,6 +146,7 @@ export function WorkoutPlanViewer({
         </div>
       )}
 
+      <ExercisePreviewToggle />
       <PlanSegmentedTabs<ViewMode>
         ariaLabel="Workout plan view"
         value={mode}
