@@ -8,7 +8,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Dumbbell, Exter
 import { estimatedMinutes, totalSets, type WorkoutDay, type WorkoutExercise } from './planNormalize';
 import { getVideoPublicUrl } from '@/services/videoUploadService';
 import { track } from '@/lib/analytics';
-import { useExerciseMediaUrl, useExercisePreviewsEnabled } from '@/lib/exercises/exerciseMedia';
+import { useExerciseDemosAllowed, useExerciseMediaUrl } from '@/lib/exercises/exerciseMedia';
 
 const EMBED_HOSTS_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com|player\.vimeo\.com)/i;
 
@@ -22,7 +22,7 @@ function resolveVideoUrl(ex: WorkoutExercise): string | null {
  *  <video> tag; YouTube/Vimeo open externally. No autoplay, ever. */
 function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
   const [open, setOpen] = useState(false);
-  const previewsOn = useExercisePreviewsEnabled();
+  const previewsOn = useExerciseDemosAllowed();
   const raw = resolveVideoUrl(exercise);
   // Nothing downloads until the member switches demos on; the MP4 only after a tap.
   const { url: poster } = useExerciseMediaUrl(exercise.poster_url, previewsOn);
@@ -50,7 +50,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
 
   const toggle = () =>
     setOpen((v) => {
-      if (!v) track('exercise_video_played', { exercise: exercise.name, kind: 'inline' });
+      if (!v) track('exercise_demo_played', { exercise: exercise.name, kind: 'inline' });
       return !v;
     });
   const reduceMotion =
@@ -75,6 +75,8 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
               height={64}
               loading="lazy"
               decoding="async"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
               className="h-full w-full object-cover"
             />
             <span className="absolute inset-0 flex items-center justify-center bg-foreground/10">
@@ -101,9 +103,9 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
         </button>
       )}
       {open && (
-        <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-muted">
+        <div className="mt-2 w-full max-w-xs overflow-hidden rounded-xl border border-border/60 bg-muted sm:max-w-sm">
           {videoLoading || !url ? (
-            <div className="flex aspect-video w-full items-center justify-center text-xs text-muted-foreground" role="status">
+            <div className="flex aspect-video max-h-[220px] w-full items-center justify-center text-xs text-muted-foreground" role="status">
               Loading video…
             </div>
           ) : (
@@ -111,12 +113,16 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
             src={url}
             poster={poster ?? undefined}
             controls
+            controlsList="nodownload noremoteplayback noplaybackrate"
+            disablePictureInPicture
+            disableRemotePlayback
+            onContextMenu={(e) => e.preventDefault()}
             muted
-            loop
+            loop={!reduceMotion}
             autoPlay={!reduceMotion}
-            preload="metadata"
+            preload="none"
             playsInline
-            className="aspect-video w-full bg-muted object-contain"
+            className="aspect-video max-h-[220px] w-full bg-muted object-contain"
             aria-label={`Demo video: ${exercise.name}`}
           />
           )}
