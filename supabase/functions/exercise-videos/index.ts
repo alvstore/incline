@@ -1,10 +1,17 @@
-// v1.0.0 — Exercise video library lookup for the workout plan builder.
-// Staff/trainer callers search the curated exercise_video_library catalog by
-// name; results include an optional demo video URL and form cues that the
-// builder can attach to a plan exercise. Read-only, branch-independent.
+// v1.1.0 — Exercise video library lookup for the workout plan builder.
+// Staff/trainer callers search (1) the exercise_video_library table, which
+// holds Incline exercise names mapped to demo media, then (2) the bundled
+// full MoveKit catalog (movekit-catalog.json, ~580 exercises). Each result
+// carries an MP4 demo (video_url) and a light WebP preview (thumbnail_url).
+// Read-only, branch-independent. Machine names are never part of the result.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
 import { requireCaller } from "../_shared/requireCaller.ts";
+import catalog from "./movekit-catalog.json" with { type: "json" };
+
+const MEDIA_BASE = "https://nhfzzqhmoyed3wnl.public.blob.vercel-storage.com/exercises/";
+
+interface CatalogEntry { s: string; t: string; m: string[]; v: string; p: string }
 
 const QuerySchema = z.object({
   query: z.string().trim().min(1).max(80),
@@ -17,6 +24,10 @@ function json(status: number, body: unknown): Response {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+/** Mirrors public.normalize_exercise_name(). */
+const normalize = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -39,9 +50,9 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "invalid_input", details: parsed.error.flatten() });
     }
     const { query, limit } = parsed.data;
+    const normalized = normalize(query);
+    if (!normalized) return json(200, { results: [] });
 
-    // Prefix match first (uses the text_pattern_ops index), then substring.
-    const normalized = query.toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim();
     const { data, error } = await caller.admin
       .from("exercise_video_library")
       .select("id, name, muscle_group, equipment, video_url, thumbnail_url, form_cues, source")
@@ -55,16 +66,34 @@ Deno.serve(async (req: Request) => {
       return json(500, { error: "internal_error", message: "Lookup failed" });
     }
 
-    // Rank: exact > prefix > substring.
-    const ranked = (data ?? []).sort((a, b) => {
-      const an = (a.name as string).toLowerCase();
-      const bn = (b.name as string).toLowerCase();
-      const rank = (n: string) =>
-        n === normalized ? 0 : n.startsWith(normalized) ? 1 : 2;
-      return rank(an) - rank(bn) || an.localeCompare(bn);
-    });
+    type Row = {
+      id: string; name: string; muscle_group: string | null; equipment: string | null;
+      video_url: string | null; thumbnail_url: string | null; form_cues: unknown; source: string;
+    };
+    const results: Row[] = [...((data ?? []) as Row[])];
+    const seenVideos = new Set(results.map((r) => r.video_url));
 
-    return json(200, { results: ranked });
+    const words = normalized.split(" ");
+    for (const e of catalog as CatalogEntry[]) {
+      if (results.length >= limit * 2) break;
+      const t = normalize(e.t);
+      if (!words.every((w) => t.includes(w))) continue;
+      const video = MEDIA_BASE + e.v;
+      if (seenVideos.has(video)) continue;
+      seenVideos.add(video);
+      results.push({
+        id: `movekit:${e.s}`, name: e.t, muscle_group: e.m[0] ?? null, equipment: null,
+        video_url: video, thumbnail_url: MEDIA_BASE + e.p, form_cues: [], source: "movekit",
+      });
+    }
+
+    const rank = (n: string) => {
+      const x = normalize(n);
+      return x === normalized ? 0 : x.startsWith(normalized) ? 1 : 2;
+    };
+    results.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+
+    return json(200, { results: results.slice(0, limit) });
   } catch (e) {
     console.error("exercise-videos unhandled", e);
     return json(500, { error: "internal_error", message: "Something went wrong" });
