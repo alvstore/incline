@@ -18,6 +18,10 @@ export interface WorkoutExercise {
   video_url?: string;
   /** Storage path in the workout-videos bucket (fallback when video_url is absent). */
   video_file_path?: string;
+  /** Lightweight WebP preview (instant, shown before the MP4 loads). */
+  poster_url?: string;
+  /** Machine the member should use — shown as-is, never renamed. */
+  equipment?: string;
   /** Form cues shown as the text alternative under the video. */
   form_tips?: string[];
 }
@@ -77,6 +81,8 @@ function toExercises(raw: any): WorkoutExercise[] {
     video_url: typeof ex?.video_url === 'string' && ex.video_url ? ex.video_url : undefined,
     video_file_path:
       typeof ex?.video_file_path === 'string' && ex.video_file_path ? ex.video_file_path : undefined,
+    poster_url: typeof ex?.poster_url === 'string' && ex.poster_url ? ex.poster_url : undefined,
+    equipment: typeof ex?.equipment === 'string' && ex.equipment.trim() ? ex.equipment.trim() : undefined,
     form_tips: Array.isArray(ex?.form_tips)
       ? ex.form_tips.filter(Boolean).map(String)
       : typeof ex?.form_tips === 'string' && ex.form_tips.trim()

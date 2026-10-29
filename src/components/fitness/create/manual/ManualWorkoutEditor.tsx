@@ -137,7 +137,7 @@ interface SortableExerciseRowProps {
   exIdx: number;
   onUpdate: (exIdx: number, field: keyof Exercise, value: any) => void;
   onRemove: (exIdx: number) => void;
-  onVideoChange: (next: { video_url?: string; video_file_path?: string }) => void;
+  onVideoChange: (next: { video_url?: string; video_file_path?: string; poster_url?: string }) => void;
 }
 
 function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange }: SortableExerciseRowProps) {
@@ -759,8 +759,19 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                       onUpdate={updateExercise}
                       onRemove={removeExercise}
                       onVideoChange={(next) => {
+                        const cleared = !next.video_url && !next.video_file_path;
                         const updated = active.exercises.map((e, i) =>
-                          i === exIdx ? { ...e, video_url: next.video_url, video_file_path: next.video_file_path } : e,
+                          i === exIdx
+                            ? {
+                                ...e,
+                                video_url: next.video_url,
+                                video_file_path: next.video_file_path,
+                                // WebP preview only travels with library picks.
+                                poster_url: next.poster_url,
+                                // A trainer removing the video opts this exercise out of auto-attach.
+                                video_auto: cleared ? 'off' : undefined,
+                              }
+                            : e,
                         );
                         updateDay(activeIdx, { exercises: updated });
                       }}

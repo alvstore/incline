@@ -55,3 +55,19 @@ describe('normalizeWorkoutPlan video carry-through', () => {
     expect(plan?.days[0]?.exercises[0]?.name).toBe('Row');
   });
 });
+
+describe('normalizeWorkoutPlan media preview + machine name', () => {
+  it('keeps the WebP poster and the gym machine name exactly as written', () => {
+    const plan = normalizeWorkoutPlan({
+      days: [{ day: 'Monday', exercises: [{
+        name: 'Lat Pulldown', sets: 3, reps: '10',
+        equipment: 'SUPER LAT PULLDOWN CIRCULAR',
+        video_url: 'https://cdn.example.com/lat.mp4',
+        poster_url: 'https://cdn.example.com/lat.webp',
+      }] }],
+    });
+    const ex = plan?.days[0]?.exercises[0];
+    expect(ex?.poster_url).toBe('https://cdn.example.com/lat.webp');
+    expect(ex?.equipment).toBe('SUPER LAT PULLDOWN CIRCULAR');
+  });
+});
