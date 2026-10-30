@@ -878,5 +878,5 @@ Sources: `src/pages/MyProgress.tsx`, `src/components/members/RecordMeasurementDr
 
 ### §15 update — exercise demo access (Oct 2026)
 - Members can no longer read the `inclineexercisedb` bucket directly. Call RPC `can_view_exercise_demos()`; if false, hide all demo pictures/videos (owner/admin control this per branch).
-- When true, request links via edge function `exercise-media-sign` with `{ "paths": ["exercisedb/..."] }` (max 60, batch per day). Links last 120 s and only cover files in the member's own active workout plans; re-request on expiry.
+- When true, request links via edge function `exercise-media-sign` with `{ "paths": ["exercisedb/..."] }` (max 60, batch per day). Links last 300 s (treat them as expired 30 s early) and only cover files in the member's own active workout plans. Never cache a link past that; re-request when the screen resumes, before playing a video opened long after the list loaded, and once on any image/video load error (an expired link returns HTTP 400).
 - Show the WebP poster first; load the MP4 only on tap; small player (≤ 220 px tall), muted, no download / share / picture-in-picture.

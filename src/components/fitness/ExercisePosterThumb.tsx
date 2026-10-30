@@ -8,7 +8,7 @@ export interface ExercisePosterThumbProps {
 /** 40px exercise picture when demos are switched on; otherwise the step number. */
 export function ExercisePosterThumb({ posterUrl, index }: ExercisePosterThumbProps) {
   const on = useExercisePreviewsEnabled();
-  const { url } = useExerciseMediaUrl(posterUrl, on);
+  const { url, refresh } = useExerciseMediaUrl(posterUrl, on);
   if (on && url) {
     return (
       <img
@@ -18,6 +18,7 @@ export function ExercisePosterThumb({ posterUrl, index }: ExercisePosterThumbPro
         height={40}
         loading="lazy"
         decoding="async"
+        onError={refresh}
         className="h-10 w-10 shrink-0 rounded-md bg-muted object-cover"
       />
     );

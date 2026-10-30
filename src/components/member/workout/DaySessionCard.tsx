@@ -25,8 +25,30 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
   const previewsOn = useExerciseDemosAllowed();
   const raw = resolveVideoUrl(exercise);
   // Nothing downloads until the member switches demos on; the MP4 only after a tap.
-  const { url: poster } = useExerciseMediaUrl(exercise.poster_url, previewsOn);
-  const { url, isLoading: videoLoading } = useExerciseMediaUrl(raw, previewsOn && open);
+  const { url: poster, refresh: refreshPoster } = useExerciseMediaUrl(exercise.poster_url, previewsOn);
+  const {
+    url,
+    isLoading: videoLoading,
+    isError: videoError,
+    isUnavailable: videoUnavailable,
+    refresh: refreshVideo,
+  } = useExerciseMediaUrl(raw, previewsOn && open, { autoRenew: false });
+  // Expired links are re-requested once per open; a second failure shows "unavailable".
+  const [videoRetried, setVideoRetried] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const onVideoError = () => {
+    if (!videoRetried) {
+      setVideoRetried(true);
+      refreshVideo();
+    } else {
+      setVideoFailed(true);
+    }
+  };
+  const retryVideo = () => {
+    setVideoFailed(false);
+    setVideoRetried(false);
+    refreshVideo();
+  };
   if (!raw || !previewsOn) return null;
   const isEmbedHost = !!url && EMBED_HOSTS_RE.test(url);
 
@@ -50,7 +72,11 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
 
   const toggle = () =>
     setOpen((v) => {
-      if (!v) track('exercise_demo_played', { exercise: exercise.name, kind: 'inline' });
+      if (!v) {
+        track('exercise_demo_played', { exercise: exercise.name, kind: 'inline' });
+        setVideoRetried(false);
+        setVideoFailed(false);
+      }
       return !v;
     });
   const reduceMotion =
@@ -77,6 +103,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
               decoding="async"
               draggable={false}
               onContextMenu={(e) => e.preventDefault()}
+              onError={refreshPoster}
               className="h-full w-full object-cover"
             />
             <span className="absolute inset-0 flex items-center justify-center bg-foreground/10">
@@ -104,12 +131,20 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
       )}
       {open && (
         <div className="mt-2 w-full max-w-xs overflow-hidden rounded-xl border border-border/60 bg-muted sm:max-w-sm">
-          {videoLoading || !url ? (
+          {videoFailed || ((videoError || videoUnavailable) && !videoLoading) ? (
+            <div className="flex aspect-video max-h-[220px] w-full flex-col items-center justify-center gap-2 px-3 text-center text-xs text-muted-foreground" role="alert">
+              <span>This demo couldn't load right now.</span>
+              <Button type="button" size="sm" variant="outline" className="h-9 cursor-pointer" onClick={retryVideo}>
+                Try again
+              </Button>
+            </div>
+          ) : videoLoading || !url ? (
             <div className="flex aspect-video max-h-[220px] w-full items-center justify-center text-xs text-muted-foreground" role="status">
               Loading video…
             </div>
           ) : (
           <video
+            key={url}
             src={url}
             poster={poster ?? undefined}
             controls
@@ -117,6 +152,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
             disablePictureInPicture
             disableRemotePlayback
             onContextMenu={(e) => e.preventDefault()}
+            onError={onVideoError}
             muted
             loop={!reduceMotion}
             autoPlay={!reduceMotion}
