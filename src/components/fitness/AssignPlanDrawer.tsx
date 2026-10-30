@@ -314,9 +314,20 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                 branchId: branchId || m.branch_id || undefined,
                 channels: pdfChannels,
               });
+              // Reflect the PDF outcome on the confirmation chips so a sent
+              // notice never hides a PDF that failed to go out.
+              for (const c of pdfChannels) {
+                const pr = res.channels[c];
+                if (pr && !pr.sent) {
+                  r.channels[c] = { sent: false, error: `PDF not sent: ${pr.error || 'failed'}` };
+                }
+              }
               if (pdfChannels.some((c) => res.channels[c]?.sent === false)) pdfFailures++;
             } catch (e) {
               pdfFailures++;
+              for (const c of pdfChannels) {
+                r.channels[c] = { sent: false, error: `PDF not sent: ${(e as Error)?.message || 'failed'}` };
+              }
             }
           }
           if (pdfFailures > 0) {
