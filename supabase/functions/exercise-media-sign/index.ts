@@ -1,11 +1,11 @@
-// v1.0.2 — Hands out short-lived (5 min) signed links for exercise demo media.
+// v1.1.0 — Hands out 24-hour signed links for exercise demo media (streaming-safe).
 // Staff/trainers always; members only when their branch switch is on AND the
 // requested file belongs to one of their own active workout plans.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const BUCKET = 'inclineexercisedb';
-const TTL = 300; // keep in sync with SIGNED_TTL_SECONDS in src/lib/exercises/exerciseMedia.ts
+const TTL = 86400; // keep in sync with SIGNED_TTL_SECONDS in src/lib/exercises/exerciseMedia.ts
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 

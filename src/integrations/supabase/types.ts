@@ -18259,6 +18259,10 @@ export type Database = {
         Returns: Json
       }
       member_branch_id: { Args: { _member_id: string }; Returns: string }
+      member_can_read_exercise_media: {
+        Args: { _path: string }
+        Returns: boolean
+      }
       member_check_in: {
         Args: {
           _at?: string

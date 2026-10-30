@@ -5,8 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 /** Private bucket holding the exercise demo library (exercisedb/<slug>/…). */
 export const EXERCISE_MEDIA_BUCKET = 'inclineexercisedb';
 export const EXERCISE_MEDIA_PREFIX = 'exercisedb/';
-/** Links are handed out by the backend and expire after 5 minutes (mirrors exercise-media-sign TTL). */
-export const SIGNED_TTL_SECONDS = 300;
+/** Links are handed out by the backend and expire after 24 hours (mirrors exercise-media-sign TTL). */
+export const SIGNED_TTL_SECONDS = 86400;
 /** Treat a link as expired this long before the server does, so it never reaches the player stale. */
 const EXPIRY_MARGIN_MS = 30_000;
 
