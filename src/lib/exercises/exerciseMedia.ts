@@ -57,20 +57,45 @@ function signPath(path: string): Promise<string | null> {
  * Resolves an exercise media reference to a playable URL. Library paths get a
  * short-lived link from the backend (which checks role, branch switch and plan
  * ownership); any other value (full URL) is returned unchanged.
+ *
+ * Links expire, so the hook never returns one that is (nearly) expired: it
+ * renews it just before expiry while mounted (`autoRenew`, used for posters)
+ * and exposes `refresh()` for <img>/<video> onError — e.g. a lazy picture that
+ * scrolls into view, or a video tapped long after the page opened.
  */
-export function useExerciseMediaUrl(value: string | null | undefined, enabled = true) {
+export function useExerciseMediaUrl(
+  value: string | null | undefined,
+  enabled = true,
+  { autoRenew = true }: { autoRenew?: boolean } = {},
+) {
   const needsSigning = isExerciseLibraryPath(value);
+  const freshMs = SIGNED_TTL_SECONDS * 1000 - EXPIRY_MARGIN_MS;
   const query = useQuery({
     queryKey: ['exercise-media-url', value],
     enabled: enabled && needsSigning,
-    staleTime: (SIGNED_TTL_SECONDS - 30) * 1000,
-    gcTime: SIGNED_TTL_SECONDS * 1000,
+    staleTime: freshMs,
+    gcTime: freshMs,
     retry: false,
+    refetchInterval: autoRenew
+      ? (q) => (q.state.data ? Math.max(1000, q.state.dataUpdatedAt + freshMs - Date.now()) : false)
+      : false,
     queryFn: () => signPath(value as string),
   });
-  if (!value) return { url: null, isLoading: false, isError: false };
-  if (!needsSigning) return { url: value, isLoading: false, isError: false };
-  return { url: query.data ?? null, isLoading: query.isLoading && enabled, isError: query.isError };
+  const refresh = () => {
+    if (enabled && needsSigning && !query.isFetching) void query.refetch();
+  };
+  if (!value) return { url: null, isLoading: false, isError: false, refresh };
+  if (!needsSigning) return { url: value, isLoading: false, isError: false, refresh };
+  const fresh = !!query.data && isSignedLinkFresh(query.dataUpdatedAt, Date.now());
+  // A video already playing keeps its link (changing src would restart it); only
+  // brand-new renders are guarded against expired links.
+  const url = fresh || !autoRenew ? query.data ?? null : null;
+  return {
+    url,
+    isLoading: enabled && (query.isLoading || (!!query.data && !fresh && query.isFetching)),
+    isError: query.isError,
+    refresh,
+  };
 }
 
 /** Server-decided: staff always; members only when an owner/admin turned demos on for their branch. */
