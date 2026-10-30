@@ -1,13 +1,13 @@
-// v1.2.0 — Exercise video library lookup for the workout plan builder.
+// v1.3.0 — Exercise video library lookup for the workout plan builder.
 // Staff/trainer callers search (1) the exercise_video_library table, which
 // holds Incline exercise names mapped to demo media, then (2) the bundled
-// full MoveKit catalog (movekit-catalog.json, ~580 exercises). Each result
+// full Incline ExerciseDB catalog (incline-exercise-catalog.json, ~580 exercises). Each result
 // carries an MP4 demo (video_url) and a light WebP preview (thumbnail_url).
 // Read-only, branch-independent. Machine names are never part of the result.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
 import { requireCaller } from "../_shared/requireCaller.ts";
-import catalog from "./movekit-catalog.json" with { type: "json" };
+import catalog from "./incline-exercise-catalog.json" with { type: "json" };
 
 // Media lives in the private "inclineexercisedb" bucket under exercisedb/<slug>/;
 // clients turn these paths into short-lived signed URLs.
@@ -84,8 +84,8 @@ Deno.serve(async (req: Request) => {
       if (seenVideos.has(video)) continue;
       seenVideos.add(video);
       results.push({
-        id: `movekit:${e.s}`, name: e.t, muscle_group: e.m[0] ?? null, equipment: null,
-        video_url: video, thumbnail_url: e.p ? MEDIA_BASE + e.p : null, form_cues: [], source: "movekit",
+        id: `incline:${e.s}`, name: e.t, muscle_group: e.m[0] ?? null, equipment: null,
+        video_url: video, thumbnail_url: e.p ? MEDIA_BASE + e.p : null, form_cues: [], source: "incline",
       });
     }
 
