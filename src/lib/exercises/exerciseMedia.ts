@@ -87,9 +87,10 @@ export function useExerciseMediaUrl(
   if (!value) return { url: null, isLoading: false, isError: false, refresh };
   if (!needsSigning) return { url: value, isLoading: false, isError: false, refresh };
   const fresh = !!query.data && isSignedLinkFresh(query.dataUpdatedAt, Date.now());
-  // A video already playing keeps its link (changing src would restart it); only
-  // brand-new renders are guarded against expired links.
-  const url = fresh || !autoRenew ? query.data ?? null : null;
+  // A video already playing keeps its (now expired) link — swapping src would
+  // restart it; while a new link is being fetched nothing stale is handed out.
+  const keepPlaying = !autoRenew && !query.isFetching;
+  const url = fresh || keepPlaying ? query.data ?? null : null;
   return {
     url,
     isLoading: enabled && (query.isLoading || (!!query.data && !fresh && query.isFetching)),
