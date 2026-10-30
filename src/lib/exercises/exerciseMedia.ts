@@ -5,8 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 /** Private bucket holding the exercise demo library (exercisedb/<slug>/…). */
 export const EXERCISE_MEDIA_BUCKET = 'inclineexercisedb';
 export const EXERCISE_MEDIA_PREFIX = 'exercisedb/';
-/** Links are handed out by the backend and expire after ~2 minutes. */
-const SIGNED_TTL_SECONDS = 120;
+/** Links are handed out by the backend and expire after 5 minutes (mirrors exercise-media-sign TTL). */
+export const SIGNED_TTL_SECONDS = 300;
+/** Treat a link as expired this long before the server does, so it never reaches the player stale. */
+const EXPIRY_MARGIN_MS = 30_000;
+
+/** Pure: is a signed link issued at `issuedAt` still safe to hand to <img>/<video> at `now`? */
+export function isSignedLinkFresh(issuedAt: number, now: number, ttlSeconds = SIGNED_TTL_SECONDS): boolean {
+  return now < issuedAt + ttlSeconds * 1000 - EXPIRY_MARGIN_MS;
+}
 
 /** True when the value is a library path that needs a signed URL. */
 export function isExerciseLibraryPath(value: string | null | undefined): value is string {
