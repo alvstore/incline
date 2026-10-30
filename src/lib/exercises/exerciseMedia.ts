@@ -84,8 +84,8 @@ export function useExerciseMediaUrl(
   const refresh = () => {
     if (enabled && needsSigning && !query.isFetching) void query.refetch();
   };
-  if (!value) return { url: null, isLoading: false, isError: false, refresh };
-  if (!needsSigning) return { url: value, isLoading: false, isError: false, refresh };
+  if (!value) return { url: null, isLoading: false, isError: false, isUnavailable: false, refresh };
+  if (!needsSigning) return { url: value, isLoading: false, isError: false, isUnavailable: false, refresh };
   const fresh = !!query.data && isSignedLinkFresh(query.dataUpdatedAt, Date.now());
   // A video already playing keeps its (now expired) link — swapping src would
   // restart it; while a new link is being fetched nothing stale is handed out.
@@ -95,6 +95,8 @@ export function useExerciseMediaUrl(
     url,
     isLoading: enabled && (query.isLoading || (!!query.data && !fresh && query.isFetching)),
     isError: query.isError,
+    /** Server answered but gave no link (file not in this member's plan, or demos off). */
+    isUnavailable: query.isSuccess && !query.isFetching && query.data === null,
     refresh,
   };
 }

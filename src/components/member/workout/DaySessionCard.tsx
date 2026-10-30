@@ -30,6 +30,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
     url,
     isLoading: videoLoading,
     isError: videoError,
+    isUnavailable: videoUnavailable,
     refresh: refreshVideo,
   } = useExerciseMediaUrl(raw, previewsOn && open, { autoRenew: false });
   // Expired links are re-requested once per open; a second failure shows "unavailable".
@@ -130,7 +131,7 @@ function ExerciseVideoButton({ exercise }: { exercise: WorkoutExercise }) {
       )}
       {open && (
         <div className="mt-2 w-full max-w-xs overflow-hidden rounded-xl border border-border/60 bg-muted sm:max-w-sm">
-          {videoFailed || (!videoLoading && !url && (videoError || open)) && !videoLoading && !url ? (
+          {videoFailed || ((videoError || videoUnavailable) && !videoLoading) ? (
             <div className="flex aspect-video max-h-[220px] w-full flex-col items-center justify-center gap-2 px-3 text-center text-xs text-muted-foreground" role="alert">
               <span>This demo couldn't load right now.</span>
               <Button type="button" size="sm" variant="outline" className="h-9 cursor-pointer" onClick={retryVideo}>
