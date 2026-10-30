@@ -81,8 +81,11 @@ export function useExerciseMediaUrl(
       : false,
     queryFn: () => signPath(value as string),
   });
+  // Only re-sign links older than 10 s, so a genuinely broken file can't loop onError → refetch.
   const refresh = () => {
-    if (enabled && needsSigning && !query.isFetching) void query.refetch();
+    if (!enabled || !needsSigning || query.isFetching) return;
+    if (query.data && Date.now() - query.dataUpdatedAt < 10_000) return;
+    void query.refetch();
   };
   if (!value) return { url: null, isLoading: false, isError: false, isUnavailable: false, refresh };
   if (!needsSigning) return { url: value, isLoading: false, isError: false, isUnavailable: false, refresh };
