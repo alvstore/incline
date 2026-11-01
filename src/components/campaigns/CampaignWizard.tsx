@@ -1277,7 +1277,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               ? { ...fixedVars, ...rcsVariables }
               : (Object.keys(fixedVars).length ? fixedVars : undefined);
             const result = await sendCampaignNow(campaign, { ...audience, variables: sendVariables });
-            toast.success(`${ch.toUpperCase()} — queued for ${result.total} recipients.`);
+            toast.success(result.awaitingApproval
+              ? `${ch.toUpperCase()} — waiting for owner/admin approval.`
+              : `${ch.toUpperCase()} — queued for ${result.total} recipients.`);
           } else if (trigger === 'automated') {
             const cron = recurrencePresetToCron(recurrence, customCron);
             await createRecurringCampaignRule({

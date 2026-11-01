@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { renewalVoiceBlockReason } from '@/lib/renewal/voiceEligibility';
 
 const queues: Array<{ value: RenewalQueue; label: string }> = [
   { value: 'all', label: 'All' },
@@ -205,6 +206,8 @@ export default function RenewalCenter() {
   }
 
   async function callNow(row: RenewalCaseRow) {
+    const blocked = renewalVoiceBlockReason(row);
+    if (blocked) { toast.error(blocked); return; }
     try {
       await voiceCall.mutateAsync({ caseId: row.case_id, memberId: row.member_id });
       toast.success(`Ananya is calling ${row.member_name} now`);
@@ -433,11 +436,9 @@ export default function RenewalCenter() {
                       <Button
                         variant="secondary"
                         className="cursor-pointer gap-2 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                        disabled={!voiceLive || voiceCall.isPending || row.voice_attempts_count >= VOICE_CALL_LIMIT}
+                        disabled={!voiceLive || voiceCall.isPending || !!renewalVoiceBlockReason(row)}
                         title={
-                          row.voice_attempts_count >= VOICE_CALL_LIMIT
-                            ? 'Call budget used (3 calls). Follow up in person to save calling cost.'
-                            : voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet'
+                          renewalVoiceBlockReason(row) ?? (voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet')
                         }
                         onClick={() => callNow(row)}
                       >
@@ -550,8 +551,8 @@ export default function RenewalCenter() {
                   size="sm"
                   variant="secondary"
                   className="cursor-pointer gap-2 rounded-xl"
-                  disabled={!voiceLive || voiceCall.isPending || (selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT}
-                  title={(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT ? 'Call budget used (3 calls). Follow up in person to save calling cost.' : undefined}
+                  disabled={!voiceLive || voiceCall.isPending || !selected || !!renewalVoiceBlockReason(selected)}
+                  title={selected ? renewalVoiceBlockReason(selected) ?? undefined : undefined}
                   onClick={() => selected && callNow(selected)}
                 >
                   {voiceCall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}Call now
@@ -611,8 +612,8 @@ export default function RenewalCenter() {
             <Button
               variant="outline"
               className="cursor-pointer rounded-xl"
-              disabled={action.isPending || (selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT}
-              title={(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT ? 'Call budget used (3 calls). Follow up in person instead.' : 'Queue one Voice AI call for this member'}
+              disabled={action.isPending || !selected || !!renewalVoiceBlockReason(selected)}
+              title={selected ? renewalVoiceBlockReason(selected) ?? 'Queue one Voice AI call for this member' : undefined}
               onClick={() => selected && run({ caseId: selected.case_id, action: 'voice_escalate', note }, 'Voice AI call queued')}
             >
               <PhoneCall className="mr-2 h-4 w-4" />Queue AI call

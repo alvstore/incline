@@ -340,7 +340,9 @@ export function RequestComposerDrawer({
         return;
       }
 
-      // locker
+      // Persist the same branch-configured quote shown to the member.
+      if (!lockerCfg) throw new Error('Locker pricing is not available yet. Please try again.');
+      const quote = lockerPricing(lockerSize, lockerCfg);
       const { error } = await supabase.from('approval_requests').insert({
         ...base,
         approval_type: 'locker_request' as any,
@@ -349,17 +351,16 @@ export function RequestComposerDrawer({
           memberName,
           memberCode: member.member_code,
           preferred_size: lockerSize,
-          quoted_fee: lockerPricing(lockerSize),
+          quoted_fee: quote,
           validity: 'until_membership_end',
           note,
           requested_at: new Date().toISOString(),
         },
       } as any);
       if (error) throw error;
-      const quote = lockerPricing(lockerSize);
       await createRequestTask(
         memberRequestTaskTitle('locker', memberName),
-        `${memberName} requested a dedicated ${lockerSize.toLowerCase()} locker (₹${quote.base.toLocaleString('en-IN')} + GST = ₹${quote.total.toLocaleString('en-IN')}, valid until membership end). Assign a locker and collect payment.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
+        `${memberName} requested a dedicated ${lockerSize.toLowerCase()} locker (₹${quote.base.toLocaleString('en-IN')}${quote.gstRate > 0 ? ` + ${quote.gstRate}% GST` : ', no GST'} = ₹${quote.total.toLocaleString('en-IN')}, valid until membership end). Assign a locker and collect payment.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
         null,
       );
     },
@@ -382,7 +383,7 @@ export function RequestComposerDrawer({
       ? { ...baseCopy, title: 'Change trainer', description: 'Tell us what isn’t working so the manager can help.', note: 'The branch manager reviews your request and follows up.' }
       : { ...baseCopy, title: 'Request a trainer', description: 'Get matched with a coach for your goals.', note: 'The front desk will match you with a suitable trainer.' }
     : baseCopy;
-  const canSubmit = !!kind && (kind === 'trainer' ? !trainerError : (!copy?.requireText || note.trim().length > 0));
+  const canSubmit = !!kind && (kind !== 'locker' || !!lockerCfg) && (kind === 'trainer' ? !trainerError : (!copy?.requireText || note.trim().length > 0));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

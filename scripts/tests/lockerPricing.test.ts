@@ -17,4 +17,8 @@ describe('dedicated locker pricing', () => {
   it('members can only request medium or large', () => {
     expect([...LOCKER_SIZES]).toEqual(['Medium', 'Large']);
   });
+  it('an edited fee with GST off is retained in the stored request quote', () => {
+    const request = { quoted_fee: lockerPricing('Large', { medium_fee: 2100, large_fee: 4200, gst_enabled: false, gst_rate: 18 }) };
+    expect(request.quoted_fee).toEqual({ base: 4200, gst: 0, total: 4200, gstRate: 0 });
+  });
 });

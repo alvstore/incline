@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { campaignNeedsApproval } from '@/lib/campaigns/approvalGate';
 
 export type CampaignChannel = 'whatsapp' | 'email' | 'sms' | 'rcs';
 export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused' | 'pending_template_approval';
@@ -413,11 +414,23 @@ export async function duplicateCampaign(id: string): Promise<Campaign> {
 export async function sendCampaignNow(
   campaign: Campaign & { attachment_url?: string | null; attachment_kind?: string | null; attachment_filename?: string | null },
   audience: { memberIds?: string[]; recipients?: ResolvedRecipient[]; variables?: Record<string, string> }
-): Promise<{ accepted: true; total: number }> {
+): Promise<{ accepted: true; total: number; awaitingApproval?: boolean }> {
   // send-broadcast v4 ACKs 202 immediately and runs the dispatch loop in the
   // background. Do NOT await final counts here — the wizard should close and
   // the campaign card polls `success_count / failure_count / delivered_count`.
-  await supabase.from('campaigns').update({ status: 'sending' }).eq('id', campaign.id);
+  // Read the server's insert-trigger decision, not the wizard's pre-insert state.
+  const { data: gate, error: gateError } = await supabase.from('campaigns')
+    .select('approval_required, approved_at, scheduled_at').eq('id', campaign.id).single();
+  if (gateError) throw gateError;
+  if (campaignNeedsApproval(gate)) {
+    const { error: queueError } = await supabase.from('campaigns').update({
+      status: 'scheduled', scheduled_at: gate.scheduled_at ?? new Date().toISOString(),
+    }).eq('id', campaign.id);
+    if (queueError) throw queueError;
+    return { accepted: true, total: audience.recipients?.length ?? audience.memberIds?.length ?? 0, awaitingApproval: true };
+  }
+
+  // The sender owns 'sending'; a refusal must not leave a phantom in-flight state.
 
   const { data, error } = await supabase.functions.invoke('send-broadcast', {
     body: {
