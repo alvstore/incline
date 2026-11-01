@@ -813,6 +813,13 @@
       "when": 1793340714014,
       "tag": "0115_exercisedb_member_assigned_read",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1793515535564,
+      "tag": "0116_restore_pending_custom_addon_invoices",
+      "breakpoints": true
     }
   ]
 }
