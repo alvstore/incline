@@ -1,3 +1,4 @@
+// v1.6.0 — Leave owner-approval-blocked campaigns scheduled; never fail or close them out.
 // v1.5.0 — Hand off to send-broadcast v5 chunked pipeline (mode='materialize');
 //          added watchdog that resumes 'sending' campaigns with no progress in
 //          5+ minutes so a dead isolate never leaves a broadcast half-done.
@@ -57,6 +58,10 @@ Deno.serve(async (req) => {
     const dueList = due || [];
 
     for (const c of dueList) {
+      if (c.approval_required && !c.approved_at) {
+        results.push({ id: c.id, note: 'awaiting_owner_approval' });
+        continue;
+      }
       // ── Pre-dispatch WhatsApp template gate ──
       // If this campaign was scheduled while its template was still pending
       // Meta approval, re-check status live. APPROVED → send. REJECTED/etc →
@@ -138,6 +143,11 @@ Deno.serve(async (req) => {
 
         const body = await resp.json().catch(() => ({}));
         if (!resp.ok) {
+          if (body?.code === 'approval_required') {
+            await admin.from('campaigns').update({ status: 'scheduled' }).eq('id', c.id).eq('status', 'sending');
+            results.push({ id: c.id, note: 'awaiting_owner_approval' });
+            continue;
+          }
           await admin.from("campaigns").update({
             status: "failed",
             last_run_error: body?.error || `HTTP ${resp.status}`,
@@ -161,11 +171,12 @@ Deno.serve(async (req) => {
       const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       const { data: stalled } = await admin
         .from('campaigns')
-        .select('id, branch_id, last_progress_at')
+        .select('id, branch_id, last_progress_at, approval_required, approved_at')
         .eq('status', 'sending')
         .lt('last_progress_at', staleCutoff)
         .limit(20);
       for (const s of (stalled || [])) {
+        if (s.approval_required && !s.approved_at) continue;
         const { count: pending } = await admin
           .from('campaign_recipients')
           .select('*', { count: 'exact', head: true })
