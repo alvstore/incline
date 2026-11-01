@@ -343,10 +343,6 @@ export function PurchaseAddOnDrawer({
       toast.error('Active membership required to add benefit credits');
       return;
     }
-    if (paymentMethod === 'pending') {
-      toast.error('Pick how the member paid (cash, card, UPI or bank transfer)');
-      return;
-    }
     if (!customTypeId) {
       toast.error('Choose the facility');
       return;
@@ -373,7 +369,7 @@ export function PurchaseAddOnDrawer({
       if (error) throw error;
       const result = data as { success?: boolean; error?: string } | null;
       if (!result?.success) throw new Error(result?.error || 'Sale failed');
-      toast.success(`${customQty} session${customQty > 1 ? 's' : ''} added`);
+      toast.success(paymentMethod === 'pending' ? 'Pending add-on invoice created — no payment recorded' : `${customQty} session${customQty > 1 ? 's' : ''} added`);
       setLastPurchase({ credits: customQty, validityDays: validity === 'sync' ? (daysUntil(membershipEnd) ?? 30) : Number(validity) });
       for (const key of ['member-benefit-credits', 'my-benefit-credits', 'member-live-benefit-credits', 'member-benefit-credits-tracking',
         'my-member-entitlements', 'store-addons-credits', 'invoices', 'member-invoices']) {
