@@ -274,7 +274,7 @@ export default function ApprovalQueuePage() {
         <div className="space-y-1 text-sm">
           <p><span className="text-muted-foreground">Member:</span> {data?.memberName || 'N/A'} {data?.memberCode ? `(${data.memberCode})` : ''}</p>
           <p><span className="text-muted-foreground">Type:</span> Locker allocation request</p>
-          {data?.preferred_size && <p><span className="text-muted-foreground">Size:</span> {data.preferred_size}{data?.quoted_fee?.total ? ` · quoted ₹${Number(data.quoted_fee.total).toLocaleString('en-IN')} incl. GST` : ''}</p>}
+          {data?.preferred_size && <p><span className="text-muted-foreground">Size:</span> {data.preferred_size}{data?.quoted_fee?.total != null ? ` · quoted ₹${Number(data.quoted_fee.total).toLocaleString('en-IN')}${Number(data.quoted_fee.gst) > 0 ? ' incl. GST' : ' · no GST'}` : ''}</p>}
           {data?.assigned_locker && <p><span className="text-muted-foreground">Assigned:</span> {data.assigned_locker} · billed ₹{Number(data.charged_fee || 0).toLocaleString('en-IN')} + GST</p>}
           {data?.note && <p><span className="text-muted-foreground">Preference:</span> {data.note}</p>}
         </div>

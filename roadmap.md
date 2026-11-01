@@ -1,3 +1,10 @@
+# Monitoring findings (1 Nov 2026)
+- [ ] Verify alias lookup against live database and service access.
+- [ ] Restore pending staff add-on invoices without recording a payment.
+- [ ] Align Renewal Center call controls with existing calling safeguards.
+- [ ] Preserve approval-blocked broadcasts until approval.
+- [ ] Save branch-configured locker quotes consistently; run focused checks.
+
 # Homepage floating dumbbell (1 Nov 2026)
 - [x] Restored automatic visibility, viewport-relative left-side framing, local reflection lighting and continuous damped motion; page content no longer depends on WebGL loading.
 - [x] Two motion tests pass; screenshots checked at 320/390/768/844/1280/1440/1920 widths, including landscape/reduced motion and all story sections. Join Now opens the existing form; Member Login reaches /auth. No page errors, request failures or horizontal overflow; build OK. Real-device GPU smoothness remains a device check.
