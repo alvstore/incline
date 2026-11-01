@@ -1,9 +1,9 @@
 # Monitoring findings (1 Nov 2026)
-- [ ] Verify alias lookup against live database and service access.
-- [ ] Restore pending staff add-on invoices without recording a payment.
-- [ ] Align Renewal Center call controls with existing calling safeguards.
-- [ ] Preserve approval-blocked broadcasts until approval.
-- [ ] Save branch-configured locker quotes consistently; run focused checks.
+- [x] Alias finding stale: exact live resolver and service-role grants exist; no matching missing-function errors in last 24 hours. No alias/schema changes made.
+- [x] Restored pending custom/catalog staff invoices; pending bypasses settlement, and only zero-total invoices are marked paid. Live no-write validation passes.
+- [x] Both Call now controls and Queue AI call mirror claimed/stage/budget safeguards; signed-in page shows staff follow-up disabled. No calling safeguards relaxed.
+- [x] Approval-blocked Send Now becomes scheduled; worker preserves waiting campaigns and handles approval races. Approval recovers only unsent approval failures while retaining future timing. Worker deployed; non-system request rejected.
+- [x] Stored locker quote/task use loaded branch prices and GST; submission waits for prices, approval label respects GST off. 23 focused tests pass; build OK; signed-in pages have no page errors. No real invoice, locker request, broadcast approval/send or call was created to test; full live transaction flows remain unverified.
 
 # Homepage floating dumbbell (1 Nov 2026)
 - [x] Restored automatic visibility, viewport-relative left-side framing, local reflection lighting and continuous damped motion; page content no longer depends on WebGL loading.
