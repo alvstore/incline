@@ -1,5 +1,5 @@
 // Internal-team (staff) operations tools — live business data over chat.
-// v1.1.0 — WhatsApp expense capture (draft_expense → confirm_expense, pending approval)
+// v1.2.0 — WhatsApp expense capture (draft_expense → confirm_expense, pending approval)
 import {
   normalizeExpenseMode, parseAmount, resolveExpenseDate, defaultExpenseType,
   guessCategory, matchCategoryId, canCaptureExpense,
@@ -130,8 +130,8 @@ export function getOpsToolDefinitions(role: StaffRole | undefined): any[] {
     tool(
       "confirm_expense",
       "Save the most recent expense draft as Pending approval. ONLY call after the colleague explicitly replied yes/confirm to the draft summary.",
-      { draft_id: ["string", "The draft_id returned by draft_expense."] },
-      ["draft_id"],
+      { draft_id: ["string", "Optional. The draft_id returned by draft_expense; omit it if unknown — the latest pending draft is used."] },
+      [],
     ),
   ];
 }
@@ -750,8 +750,19 @@ export async function executeOpsToolCall(
         if (fv === false || fv === "false" || fv?.enabled === false) return { error: "WhatsApp expense recording is switched off for this branch." };
 
         if (toolName === "confirm_expense") {
-          const { data: d } = await supabase.from("chat_expense_drafts").select("*")
-            .eq("id", String(args.draft_id || "")).eq("actor_user_id", opts.staffUserId).maybeSingle();
+          const wanted = String(args.draft_id || "").trim();
+          let d: any = null;
+          if (/^[0-9a-f-]{36}$/i.test(wanted)) {
+            ({ data: d } = await supabase.from("chat_expense_drafts").select("*")
+              .eq("id", wanted).eq("actor_user_id", opts.staffUserId).maybeSingle());
+          }
+          // Models cannot see draft UUIDs in WhatsApp history — fall back to the caller's latest live draft.
+          if (!d) {
+            ({ data: d } = await supabase.from("chat_expense_drafts").select("*")
+              .eq("actor_user_id", opts.staffUserId).eq("status", "pending")
+              .gt("expires_at", new Date().toISOString())
+              .order("created_at", { ascending: false }).limit(1).maybeSingle());
+          }
           if (!d) return { error: "Draft not found. Please send the expense again." };
           if ((d as any).status !== "pending") return { error: "This expense was already saved.", expense_id: (d as any).expense_id };
           if (new Date((d as any).expires_at).getTime() < Date.now()) return { error: "Draft expired (15 min). Please send the expense again." };
