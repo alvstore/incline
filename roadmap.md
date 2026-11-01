@@ -1,3 +1,7 @@
+# Homepage floating dumbbell (1 Nov 2026)
+- [ ] Restore automatic visibility and left-side framing; smooth motion without changing registration/login behavior.
+- [ ] Verify phones, tablets, desktop, reduced motion and scrolling.
+
 # Repository organization & Flutter manual progress (29 Oct 2026)
 - [x] Removed three root screenshots, empty shell artifact, one-off plan script and two build caches; moved 15 unique physical notes to docs/archive/legacy-notes, explicitly historical-only.
 - [x] Removed seven verified unrelated inactive skill drafts; preserved all active skills, lockfile, configuration, migrations, served assets and tests.
