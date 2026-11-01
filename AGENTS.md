@@ -1,4 +1,5 @@
 Attendance operations views consolidate same-day member attendance rows by member while retaining raw rows as expandable audit detail, because turnstile bounce scans must not inflate visit counts.
+- Homepage content renders independently of WebGL; dumbbell framing uses viewport-relative pure motion math and reduced-motion demand rendering so graphics cannot hide navigation or copy. The canvas wrapper exposes data-scene-ready after its first object frame for browser checks.
 Browser push mirrors existing in-app notifications through an event-driven queue; all new notification creation uses dispatchCommunication, keeping existing paid delivery channels unchanged.
 Web Push signing keys are stored in a service-role-only table; endpoints are provider-allowlisted and lock-screen payloads contain no personal, financial, or health data.
 Historical body silhouettes never fetch the latest scanner model; scan AI analysis is cached per report by input hash (no regeneration per send).

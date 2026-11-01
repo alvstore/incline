@@ -1,3 +1,7 @@
+# Homepage floating dumbbell (1 Nov 2026)
+- [x] Restored automatic visibility, viewport-relative left-side framing, local reflection lighting and continuous damped motion; page content no longer depends on WebGL loading.
+- [x] Two motion tests pass; screenshots checked at 320/390/768/844/1280/1440/1920 widths, including landscape/reduced motion and all story sections. Join Now opens the existing form; Member Login reaches /auth. No page errors, request failures or horizontal overflow; build OK. Real-device GPU smoothness remains a device check.
+
 # Repository organization & Flutter manual progress (29 Oct 2026)
 - [x] Removed three root screenshots, empty shell artifact, one-off plan script and two build caches; moved 15 unique physical notes to docs/archive/legacy-notes, explicitly historical-only.
 - [x] Removed seven verified unrelated inactive skill drafts; preserved all active skills, lockfile, configuration, migrations, served assets and tests.

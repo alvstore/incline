@@ -4,6 +4,7 @@ import { LogIn } from 'lucide-react';
 import ScrollProgressBar from '@/components/ui/ScrollProgressBar';
 import useSoundEffects from '@/hooks/useSoundEffects';
 import SEO from '@/components/seo/SEO';
+import ScrollOverlay from '@/components/ui/ScrollOverlay';
 import { PUBLIC_BRANCHES, PUBLIC_FAQS } from '@/config/publicSite';
 
 // Logo lives in /public so it can be preloaded from index.html with a stable
@@ -56,15 +57,6 @@ const InclineAscent = () => {
     const target = interactionRootRef.current;
     if (!target) return;
 
-    // Honor reduced-motion: never mount the 3D scene.
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      return;
-    }
-
-    const isLowEndMobile =
-      window.innerWidth < 768 &&
-      (navigator.hardwareConcurrency ?? 8) <= 4;
-
     const idleMount = () => {
       if (cancelled) return;
       const idle = (window as any).requestIdleCallback as
@@ -73,27 +65,6 @@ const InclineAscent = () => {
       if (idle) idle(() => !cancelled && setMountScene(true), { timeout: 1200 });
       else window.setTimeout(() => !cancelled && setMountScene(true), 200);
     };
-
-    // Low-end mobile: wait for first user interaction instead of idle.
-    if (isLowEndMobile) {
-      const onEngage = () => {
-        if (cancelled) return;
-        cleanup();
-        idleMount();
-      };
-      const cleanup = () => {
-        window.removeEventListener('scroll', onEngage);
-        window.removeEventListener('touchstart', onEngage);
-        window.removeEventListener('pointerdown', onEngage);
-      };
-      window.addEventListener('scroll', onEngage, { once: true, passive: true });
-      window.addEventListener('touchstart', onEngage, { once: true, passive: true });
-      window.addEventListener('pointerdown', onEngage, { once: true, passive: true });
-      return () => {
-        cancelled = true;
-        cleanup();
-      };
-    }
 
     if ('IntersectionObserver' in window) {
       const io = new IntersectionObserver(
@@ -207,25 +178,7 @@ const InclineAscent = () => {
         Scroll overlay exactly to avoid any visual mismatch during handoff.
       */}
       <main>
-        <section
-          aria-hidden={mountScene}
-          className="fixed inset-0 -z-10 flex items-center px-4 pointer-events-none"
-          style={{ height: '100dvh' }}
-        >
-          <div className="w-full max-w-7xl mx-auto flex justify-end">
-            <div className="max-w-md text-right mr-8 md:mr-32">
-              <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
-                EXPERIENCE THE <span className="text-primary">PINNACLE</span>
-                <br />
-                OF <span className="text-primary">STRENGTH & RECOVERY.</span>
-              </h1>
-              <p className="text-muted-foreground text-base leading-relaxed">
-                Experience Rajasthan's premier luxury fitness destination in Udaipur. Featuring elite Italian 
-                Panatta biomechanics, clinical recovery suites, and precision 3D body analysis.
-              </p>
-            </div>
-          </div>
-        </section>
+        <div className="relative z-[3]"><ScrollOverlay /></div>
 
         {mountScene && (
           <Suspense fallback={null}>
