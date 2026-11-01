@@ -26,15 +26,16 @@ const ScrollOverlay = () => {
   return (
     <div className="w-full">
       {/* Section 1: Hero */}
-      <section className="h-[100dvh] flex items-center relative px-4">
-        <div className="w-full max-w-7xl mx-auto flex justify-end">
-          <div className="max-w-md text-right mr-8 md:mr-32">
-            <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
+      <section className="h-[100dvh] flex items-center relative px-4" data-home-hero>
+        <div className="w-full max-w-7xl mx-auto grid grid-cols-[32%_68%] min-[700px]:grid-cols-2 items-center">
+          <div aria-hidden="true" />
+          <div className="max-w-md text-right pl-3 min-[700px]:pl-6 min-[700px]:pr-8" data-hero-copy>
+            <h1 className="text-xl min-[700px]:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6">
               EXPERIENCE THE <span className="text-primary">PINNACLE</span>
               <br />
               OF <span className="text-primary">STRENGTH & RECOVERY.</span>
-            </h2>
-            <p className="text-muted-foreground text-base leading-relaxed">
+            </h1>
+            <p className="text-muted-foreground text-sm min-[700px]:text-base leading-relaxed">
               Now open in Udaipur. Experience Rajasthan's premier fitness destination featuring Italian 
               Panatta biomechanics and clinical recovery suites.
             </p>

@@ -1,17 +1,19 @@
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { dumbbellPose } from './dumbbellMotion';
 
 interface HeroDumbbellProps {
   scrollProgress: number;
   isMobile: boolean;
+  reducedMotion?: boolean;
 }
 
 const createHexagonalPrismGeometry = (radius: number, height: number) => {
   return new THREE.CylinderGeometry(radius, radius, height, 6);
 };
 
-const HeroDumbbell = ({ scrollProgress, isMobile }: HeroDumbbellProps) => {
+const HeroDumbbell = ({ scrollProgress, isMobile, reducedMotion = false }: HeroDumbbellProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const plate1Ref = useRef<THREE.Group>(null);
   const plate2Ref = useRef<THREE.Group>(null);
@@ -36,58 +38,18 @@ const HeroDumbbell = ({ scrollProgress, isMobile }: HeroDumbbellProps) => {
     emissiveIntensity: 0.5, metalness: 0.8, roughness: 0.2,
   }), []);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!groupRef.current) return;
-    const time = state.clock.getElapsedTime();
-    const baseScale = isMobile ? 0.7 : 1.0;
-    const xOffset = isMobile ? 1.5 : 3.0;
-
-    let posX = 0, posY = 0, scale = baseScale;
-    const rotY = time * 0.3;
-    let rotZ = Math.PI / 2;
-    let plateSpread = 0;
-
-    if (scrollProgress < 0.2) {
-      posX = isMobile ? -xOffset * 0.3 : -xOffset * 0.5;
-      posY = isMobile ? 1.2 + Math.sin(time * 0.5) * 0.1 : Math.sin(time * 0.5) * 0.1;
-      scale = baseScale * (isMobile ? 0.8 : 1.0);
-      rotZ = Math.PI / 3 + Math.sin(time * 0.8) * 0.1;
-    } else if (scrollProgress < 0.4) {
-      const rawT = (scrollProgress - 0.2) / 0.2;
-      const t = Math.min(rawT * 3, 1);
-      posX = THREE.MathUtils.lerp(-xOffset * 0.5, xOffset * 0.7, t);
-      scale = baseScale * THREE.MathUtils.lerp(1.0, 0.9, Math.min(rawT * 2, 1));
-      rotZ = THREE.MathUtils.lerp(Math.PI / 2, Math.PI / 3, t);
-      plateSpread = Math.min(rawT * 2, 1) * 0.15;
-      posY = Math.sin(time * 0.5) * 0.08;
-    } else if (scrollProgress < 0.6) {
-      const rawT = (scrollProgress - 0.4) / 0.2;
-      const t = Math.min(rawT * 3, 1);
-      posX = THREE.MathUtils.lerp(xOffset * 0.7, -xOffset * 0.5, t);
-      scale = baseScale * THREE.MathUtils.lerp(0.9, 0.85, Math.min(rawT * 2, 1));
-      rotZ = THREE.MathUtils.lerp(Math.PI / 3, Math.PI / 4, t);
-      plateSpread = 0.15 - Math.min(rawT * 2, 1) * 0.05;
-      posY = Math.sin(time * 0.5) * 0.06;
-    } else if (scrollProgress < 0.8) {
-      const rawT = (scrollProgress - 0.6) / 0.2;
-      const t = Math.min(rawT * 3, 1);
-      posX = THREE.MathUtils.lerp(-xOffset * 0.5, xOffset * 0.7, t);
-      scale = baseScale * THREE.MathUtils.lerp(0.85, 0.9, Math.min(rawT * 2, 1));
-      rotZ = THREE.MathUtils.lerp(Math.PI / 4, Math.PI / 3, t);
-      plateSpread = 0.1 + Math.min(rawT * 2, 1) * 0.05;
-      posY = Math.sin(time * 0.5) * 0.04;
-    } else {
-      const t = (scrollProgress - 0.8) / 0.2;
-      posX = THREE.MathUtils.lerp(xOffset * 0.7, -xOffset * 0.5, t);
-      posY = THREE.MathUtils.lerp(0, -0.5, Math.pow(t, 2));
-      scale = baseScale * THREE.MathUtils.lerp(0.9, 1.1, t);
-      rotZ = THREE.MathUtils.lerp(Math.PI / 3, Math.PI / 6, t);
-      plateSpread = 0.15 - t * 0.1;
-    }
-
-    groupRef.current.position.set(posX, posY, 0);
-    groupRef.current.rotation.set(0, rotY, rotZ);
-    groupRef.current.scale.setScalar(scale);
+    const time = reducedMotion ? 0 : state.clock.getElapsedTime();
+    const pose = dumbbellPose(scrollProgress, state.viewport.width, state.viewport.height, isMobile);
+    const ease = reducedMotion ? 1 : 1 - Math.exp(-8 * Math.min(delta, 0.05));
+    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, pose.x, ease);
+    groupRef.current.position.y = reducedMotion ? 0 : Math.sin(time * 0.5) * pose.scale * 0.06;
+    groupRef.current.rotation.set(0.15, Math.sin(time * 0.3) * 0.55 + 0.35, pose.rotation);
+    groupRef.current.scale.setScalar(pose.scale);
+    const plateSpread = pose.spread;
+    const wrapper = state.gl.domElement.parentElement?.parentElement;
+    if (wrapper && !wrapper.dataset.sceneReady) wrapper.dataset.sceneReady = 'true';
 
     if (plate1Ref.current && plate2Ref.current && plate3Ref.current && plate4Ref.current) {
       plate1Ref.current.position.x = -0.6 - plateSpread;
