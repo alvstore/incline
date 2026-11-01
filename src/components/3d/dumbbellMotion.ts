@@ -9,7 +9,7 @@ export function dumbbellPose(progress: number, width: number, height: number, co
   return {
     x: compact ? -width * 0.33 : side * width * 0.25,
     y: 0,
-    scale: compact ? Math.min(width * 0.17, height * 0.16) : Math.min(width * 0.18, height * 0.24, 1.45),
+    scale: compact ? Math.min(width * 0.15, height * 0.16) : Math.min(width * 0.18, height * 0.24, 1.45),
     rotation: Math.PI / 3 + Math.sin(p * Math.PI * 4) * 0.18,
     spread: Math.sin(p * Math.PI) * 0.12,
   };

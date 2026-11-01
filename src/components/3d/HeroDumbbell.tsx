@@ -15,6 +15,7 @@ const createHexagonalPrismGeometry = (radius: number, height: number) => {
 
 const HeroDumbbell = ({ scrollProgress, isMobile, reducedMotion = false }: HeroDumbbellProps) => {
   const groupRef = useRef<THREE.Group>(null);
+  const positioned = useRef(false);
   const plate1Ref = useRef<THREE.Group>(null);
   const plate2Ref = useRef<THREE.Group>(null);
   const plate3Ref = useRef<THREE.Group>(null);
@@ -42,7 +43,8 @@ const HeroDumbbell = ({ scrollProgress, isMobile, reducedMotion = false }: HeroD
     if (!groupRef.current) return;
     const time = reducedMotion ? 0 : state.clock.getElapsedTime();
     const pose = dumbbellPose(scrollProgress, state.viewport.width, state.viewport.height, isMobile);
-    const ease = reducedMotion ? 1 : 1 - Math.exp(-8 * Math.min(delta, 0.05));
+    const ease = reducedMotion || !positioned.current ? 1 : 1 - Math.exp(-8 * Math.min(delta, 0.05));
+    positioned.current = true;
     groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, pose.x, ease);
     groupRef.current.position.y = reducedMotion ? 0 : Math.sin(time * 0.5) * pose.scale * 0.06;
     groupRef.current.rotation.set(0.15, Math.sin(time * 0.3) * 0.55 + 0.35, pose.rotation);
