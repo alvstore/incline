@@ -880,3 +880,22 @@ Sources: `src/pages/MyProgress.tsx`, `src/components/members/RecordMeasurementDr
 - Members can no longer read the `inclineexercisedb` bucket directly. Call RPC `can_view_exercise_demos()`; if false, hide all demo pictures/videos (owner/admin control this per branch).
 - When true, request links via edge function `exercise-media-sign` with `{ "paths": ["exercisedb/..."] }` (max 60). Links last 24 h (86,400 s) so native players can buffer, pause, seek and loop for a whole workout; re-request once on any load error (HTTP 400 = expired). Alternatively download directly with the member's session: storage policy `exercisedb_member_assigned_read` lets a member read a file in the private `inclineexercisedb` bucket only when that exact path is in one of their own active workout plans and the branch demo switch is on (any other exercise returns 400/403). Sign MP4s on tap only, and cache files with `flutter_cache_manager` keyed by the stable path (e.g. `exercisedb/lat-pulldown/lat-pulldown.mp4`), never by the signed URL, then play with `VideoPlayerController.file`.
 - Show the WebP poster first; load the MP4 only on tap; small player (≤ 220 px tall), muted, no download / share / picture-in-picture.
+
+## Error logging (mobile)
+
+Report app errors to the shared System Health log via RPC `log_mobile_error` (signed-in users only; source is fixed to `mobile_app`, user is taken from the session, repeats are grouped automatically, and network/offline errors are dropped server-side).
+
+```dart
+await supabase.rpc('log_mobile_error', params: {
+  'p_message': error.toString(),
+  'p_severity': 'error',            // info | warning | error | critical
+  'p_screen': '/member/workouts',   // current route/screen name
+  'p_stack': stack.toString(),
+  'p_app_version': packageInfo.version,
+  'p_platform': Platform.isIOS ? 'ios' : 'android',
+  'p_branch_id': activeBranchId,    // optional
+  'p_context': {'device': deviceModel}, // optional, ≤4 KB, no personal/health data
+});
+```
+
+Wire it in `FlutterError.onError` and `PlatformDispatcher.instance.onError`; never let logging failures throw. Pre-login crashes are not accepted — buffer them locally and send after sign-in.

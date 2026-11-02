@@ -242,6 +242,8 @@ export default function SystemHealth() {
     const source = err.source || 'frontend';
     const where = source === 'frontend'
       ? `React page at route ${err.route || 'unknown'} (src/pages, src/components)`
+      : source === 'mobile_app'
+        ? `Flutter member app screen "${err.route || 'unknown'}" (platform ${err.context?.platform || '?'}, version ${err.context?.app_version || '?'})`
       : source === 'edge_function'
         ? `backend edge function "${err.function_name || err.route || 'unknown'}" (supabase/functions/${err.function_name || '<name>'}/index.ts)`
         : `database (RPC/trigger/cron)${err.function_name ? ` "${err.function_name}"` : ''}`;
