@@ -242,12 +242,16 @@ export default function SystemHealth() {
     toast.success('Exported error logs');
   };
 
-  const openErrors = errors.filter((e) => e.status === 'open');
-  const resolvedErrors = errors.filter((e) => e.status === 'resolved');
-  const todayErrors = errors.filter((e) => new Date(e.created_at).toDateString() === new Date().toDateString());
-  const frontendErrors = errors.filter((e) => (e.source || 'frontend') === 'frontend');
-  const mobileErrors = errors.filter((e) => e.source === 'mobile_app');
-  const backendErrors = errors.filter((e) => e.source && e.source !== 'frontend' && e.source !== 'mobile_app');
+  // Overview stats come from the unfiltered feed (all sources, all statuses).
+  const openErrors = overviewErrors.filter((e) => e.status === 'open');
+  const resolvedErrors = overviewErrors.filter((e) => e.status === 'resolved');
+  const todayErrors = overviewErrors.filter((e) => new Date(e.created_at).toDateString() === new Date().toDateString());
+  const frontendErrors = overviewErrors.filter((e) => (e.source || 'frontend') === 'frontend');
+  const mobileErrors = overviewErrors.filter((e) => e.source === 'mobile_app');
+  const backendErrors = overviewErrors.filter((e) => e.source && e.source !== 'frontend' && e.source !== 'mobile_app');
+  // The Errors tab itself counts what the current filter actually shows.
+  const listOpen = errors.filter((e) => e.status === 'open');
+  const listResolved = errors.filter((e) => e.status === 'resolved');
   const q = search.trim().toLowerCase();
   const visibleErrors = q
     ? errors.filter((e) => [e.error_message, e.function_name, e.route, e.fingerprint, e.source].some((v) => (v || '').toLowerCase().includes(q)))
