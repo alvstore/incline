@@ -102,9 +102,31 @@ export default function SystemHealth() {
 
       if (statusTab === 'open') query = query.eq('status', 'open');
       if (statusTab === 'resolved') query = query.eq('status', 'resolved');
-      if (sourceFilter !== 'all') query = query.eq('source', sourceFilter);
+      if (sourceFilter === 'backend') {
+        // Backend card = every server-side source (edge functions, database,
+        // triggers, cron, AI, …) — everything except the web and mobile apps.
+        query = query.not('source', 'in', '(frontend,mobile_app)');
+      } else if (sourceFilter !== 'all') {
+        query = query.eq('source', sourceFilter);
+      }
       if (!showInfo) query = query.neq('severity', 'info');
 
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as ErrorLog[];
+    },
+  });
+
+  // Unfiltered feed for the Overview stat cards, so their counts stay global
+  // even while the Errors list is filtered by source/status.
+  const { data: overviewErrors = [] } = useQuery({
+    queryKey: ['error-logs-overview', showInfo],
+    queryFn: async () => {
+      let query = (supabase.from('error_logs') as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!showInfo) query = query.neq('severity', 'info');
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as ErrorLog[];
@@ -220,12 +242,16 @@ export default function SystemHealth() {
     toast.success('Exported error logs');
   };
 
-  const openErrors = errors.filter((e) => e.status === 'open');
-  const resolvedErrors = errors.filter((e) => e.status === 'resolved');
-  const todayErrors = errors.filter((e) => new Date(e.created_at).toDateString() === new Date().toDateString());
-  const frontendErrors = errors.filter((e) => (e.source || 'frontend') === 'frontend');
-  const mobileErrors = errors.filter((e) => e.source === 'mobile_app');
-  const backendErrors = errors.filter((e) => e.source && e.source !== 'frontend' && e.source !== 'mobile_app');
+  // Overview stats come from the unfiltered feed (all sources, all statuses).
+  const openErrors = overviewErrors.filter((e) => e.status === 'open');
+  const resolvedErrors = overviewErrors.filter((e) => e.status === 'resolved');
+  const todayErrors = overviewErrors.filter((e) => new Date(e.created_at).toDateString() === new Date().toDateString());
+  const frontendErrors = overviewErrors.filter((e) => (e.source || 'frontend') === 'frontend');
+  const mobileErrors = overviewErrors.filter((e) => e.source === 'mobile_app');
+  const backendErrors = overviewErrors.filter((e) => e.source && e.source !== 'frontend' && e.source !== 'mobile_app');
+  // The Errors tab itself counts what the current filter actually shows.
+  const listOpen = errors.filter((e) => e.status === 'open');
+  const listResolved = errors.filter((e) => e.status === 'resolved');
   const q = search.trim().toLowerCase();
   const visibleErrors = q
     ? errors.filter((e) => [e.error_message, e.function_name, e.route, e.fingerprint, e.source].some((v) => (v || '').toLowerCase().includes(q)))
@@ -287,7 +313,7 @@ export default function SystemHealth() {
   };
 
   const criticalOpen = openErrors.filter((e) => (e.severity || 'error') === 'critical').length;
-  const totalOccurrences = errors.reduce((sum, e) => sum + (e.occurrence_count ?? 1), 0);
+  const totalOccurrences = overviewErrors.reduce((sum, e) => sum + (e.occurrence_count ?? 1), 0);
 
   const stats = [
     { label: 'Open Errors', value: openErrors.length, icon: AlertTriangle, color: 'text-destructive', onClick: () => jumpTo('all', 'open') },
@@ -296,7 +322,7 @@ export default function SystemHealth() {
     { label: 'Total Occurrences', value: totalOccurrences, icon: Layers, color: 'text-primary', onClick: () => jumpTo('all', 'all') },
     { label: 'Web App', value: frontendErrors.length, icon: Monitor, color: 'text-info', onClick: () => jumpTo('frontend', 'all') },
     { label: 'Mobile App', value: mobileErrors.length, icon: Smartphone, color: 'text-accent', onClick: () => jumpTo('mobile_app', 'all') },
-    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success', onClick: () => jumpTo('edge_function', 'all') },
+    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success', onClick: () => jumpTo('backend', 'all') },
   ];
 
   return (
@@ -430,6 +456,7 @@ export default function SystemHealth() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="backend">Backend (all)</SelectItem>
                         <SelectItem value="frontend">Web App</SelectItem>
                         <SelectItem value="mobile_app">Mobile App</SelectItem>
                         <SelectItem value="edge_function">Backend Functions</SelectItem>
@@ -453,8 +480,8 @@ export default function SystemHealth() {
                 <Tabs value={statusTab} onValueChange={setStatusTab}>
                   <TabsList className="mb-4 rounded-xl">
                     <TabsTrigger value="all" className="rounded-lg">All ({errors.length})</TabsTrigger>
-                    <TabsTrigger value="open" className="rounded-lg">Open ({openErrors.length})</TabsTrigger>
-                    <TabsTrigger value="resolved" className="rounded-lg">Resolved ({resolvedErrors.length})</TabsTrigger>
+                    <TabsTrigger value="open" className="rounded-lg">Open ({listOpen.length})</TabsTrigger>
+                    <TabsTrigger value="resolved" className="rounded-lg">Resolved ({listResolved.length})</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value={statusTab}>
