@@ -102,9 +102,31 @@ export default function SystemHealth() {
 
       if (statusTab === 'open') query = query.eq('status', 'open');
       if (statusTab === 'resolved') query = query.eq('status', 'resolved');
-      if (sourceFilter !== 'all') query = query.eq('source', sourceFilter);
+      if (sourceFilter === 'backend') {
+        // Backend card = every server-side source (edge functions, database,
+        // triggers, cron, AI, …) — everything except the web and mobile apps.
+        query = query.not('source', 'in', '(frontend,mobile_app)');
+      } else if (sourceFilter !== 'all') {
+        query = query.eq('source', sourceFilter);
+      }
       if (!showInfo) query = query.neq('severity', 'info');
 
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as ErrorLog[];
+    },
+  });
+
+  // Unfiltered feed for the Overview stat cards, so their counts stay global
+  // even while the Errors list is filtered by source/status.
+  const { data: overviewErrors = [] } = useQuery({
+    queryKey: ['error-logs-overview', showInfo],
+    queryFn: async () => {
+      let query = (supabase.from('error_logs') as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!showInfo) query = query.neq('severity', 'info');
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as ErrorLog[];
