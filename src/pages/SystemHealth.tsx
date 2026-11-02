@@ -5,13 +5,15 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Activity, AlertTriangle, CheckCircle, Copy, Sparkles, Clock, Eye, Monitor, Server, Database, Zap, Trash2, CheckCheck, Download, RotateCcw, Layers } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Copy, Sparkles, Clock, Eye, Monitor, Server, Database, Zap, Trash2, CheckCheck, Download, RotateCcw, Layers, Smartphone, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -65,6 +67,7 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: any; color: string }>
   ai_lead_loss: { label: 'AI Lead-Loss', icon: AlertTriangle, color: 'text-warning' },
   ai_agent_brain: { label: 'AI Brain', icon: Zap, color: 'text-primary' },
   ai_gateway: { label: 'AI Gateway', icon: Zap, color: 'text-primary' },
+  mobile_app: { label: 'Mobile App', icon: Smartphone, color: 'text-accent' },
 };
 
 const FALLBACK_SOURCE = { label: 'Other', icon: Layers, color: 'text-muted-foreground' } as const;
@@ -78,6 +81,8 @@ export default function SystemHealth() {
   const [sourceFilter, setSourceFilter] = useState('all');
   // v: hide info-severity rows (e.g. WhatsApp brain heartbeats) from the
   // default view — they are telemetry, not errors. Toggle to inspect.
+  const [search, setSearch] = useState('');
+  const [mainTab, setMainTab] = useState('overview');
   const [showInfo, setShowInfo] = useState(false);
   const [clearResolvedDialog, setClearResolvedDialog] = useState(false);
   const [resolveAllDialog, setResolveAllDialog] = useState(false);
@@ -219,7 +224,13 @@ export default function SystemHealth() {
   const resolvedErrors = errors.filter((e) => e.status === 'resolved');
   const todayErrors = errors.filter((e) => new Date(e.created_at).toDateString() === new Date().toDateString());
   const frontendErrors = errors.filter((e) => (e.source || 'frontend') === 'frontend');
-  const backendErrors = errors.filter((e) => e.source && e.source !== 'frontend');
+  const mobileErrors = errors.filter((e) => e.source === 'mobile_app');
+  const backendErrors = errors.filter((e) => e.source && e.source !== 'frontend' && e.source !== 'mobile_app');
+  const q = search.trim().toLowerCase();
+  const visibleErrors = q
+    ? errors.filter((e) => [e.error_message, e.function_name, e.route, e.fingerprint, e.source].some((v) => (v || '').toLowerCase().includes(q)))
+    : errors;
+  const jumpTo = (source: string, status = 'open') => { setSourceFilter(source); setStatusTab(status); setMainTab('errors'); };
 
   const handleViewError = (err: ErrorLog) => {
     setSelectedError(err);
@@ -277,12 +288,13 @@ export default function SystemHealth() {
   const totalOccurrences = errors.reduce((sum, e) => sum + (e.occurrence_count ?? 1), 0);
 
   const stats = [
-    { label: 'Open Errors', value: openErrors.length, icon: AlertTriangle, color: 'text-destructive' },
-    { label: 'Critical Open', value: criticalOpen, icon: Zap, color: 'text-destructive' },
-    { label: 'Today', value: todayErrors.length, icon: Clock, color: 'text-warning' },
-    { label: 'Total Occurrences', value: totalOccurrences, icon: Layers, color: 'text-primary' },
-    { label: 'Frontend', value: frontendErrors.length, icon: Monitor, color: 'text-info' },
-    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success' },
+    { label: 'Open Errors', value: openErrors.length, icon: AlertTriangle, color: 'text-destructive', onClick: () => jumpTo('all', 'open') },
+    { label: 'Critical Open', value: criticalOpen, icon: Zap, color: 'text-destructive', onClick: () => jumpTo('all', 'open') },
+    { label: 'Today', value: todayErrors.length, icon: Clock, color: 'text-warning', onClick: () => jumpTo('all', 'all') },
+    { label: 'Total Occurrences', value: totalOccurrences, icon: Layers, color: 'text-primary', onClick: () => jumpTo('all', 'all') },
+    { label: 'Web App', value: frontendErrors.length, icon: Monitor, color: 'text-info', onClick: () => jumpTo('frontend', 'all') },
+    { label: 'Mobile App', value: mobileErrors.length, icon: Smartphone, color: 'text-accent', onClick: () => jumpTo('mobile_app', 'all') },
+    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success', onClick: () => jumpTo('edge_function', 'all') },
   ];
 
   return (
@@ -297,7 +309,7 @@ export default function SystemHealth() {
               System Health
             </h1>
             <p className="text-muted-foreground mt-1">
-              Monitor app, backend function and database errors with AI-assisted diagnostics.
+              Monitor web app, mobile app, backend function and database errors with AI-assisted diagnostics.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -325,17 +337,20 @@ export default function SystemHealth() {
         </div>
 
 
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
           <TabsList className="rounded-xl">
             <TabsTrigger value="overview" className="rounded-lg">Overview</TabsTrigger>
-            <TabsTrigger value="errors" className="rounded-lg">Errors</TabsTrigger>
+            <TabsTrigger value="errors" className="rounded-lg gap-1.5">Errors{openErrors.length > 0 && <Badge variant="destructive" className="h-5 px-1.5 text-[10px] rounded-full">{openErrors.length}</Badge>}</TabsTrigger>
             <TabsTrigger value="audit" className="rounded-lg">Audit</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
               {stats.map((s) => (
-                <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
+                <Card key={s.label} role="button" tabIndex={0} onClick={s.onClick}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); s.onClick(); } }}
+                  className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50 cursor-pointer hover:bg-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`${s.label}: ${s.value}. View details`}>
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className={`p-2 rounded-xl bg-muted ${s.color}`}>
                       <s.icon className="h-5 w-5" />
@@ -375,6 +390,10 @@ export default function SystemHealth() {
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="text-lg">Error Logs</CardTitle>
                   <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search message, screen, function…" aria-label="Search errors" className="pl-9 w-[240px] rounded-xl" />
+                    </div>
                     {selectedIds.size > 0 && (
                       <Button
                         size="sm"
@@ -409,7 +428,8 @@ export default function SystemHealth() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Sources</SelectItem>
-                        <SelectItem value="frontend">Frontend</SelectItem>
+                        <SelectItem value="frontend">Web App</SelectItem>
+                        <SelectItem value="mobile_app">Mobile App</SelectItem>
                         <SelectItem value="edge_function">Backend Functions</SelectItem>
                         <SelectItem value="database">Database</SelectItem>
                         <SelectItem value="trigger">Triggers</SelectItem>
@@ -437,26 +457,30 @@ export default function SystemHealth() {
 
                   <TabsContent value={statusTab}>
                     {isLoading ? (
-                      <p className="text-muted-foreground text-sm py-8 text-center">Loading...</p>
-                    ) : errors.length === 0 ? (
+                      <div className="space-y-2 py-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>
+                    ) : visibleErrors.length === 0 ? (
                       <div className="text-center py-12">
                         <CheckCircle className="h-12 w-12 text-primary mx-auto mb-3" />
-                        <p className="text-muted-foreground">No errors found. System is healthy!</p>
+                        <p className="text-muted-foreground">{q ? `No errors match "${search}".` : 'No errors found. System is healthy!'}</p>
+                        {(q || sourceFilter !== 'all') && (
+                          <Button variant="outline" size="sm" className="rounded-xl mt-3" onClick={() => { setSearch(''); setSourceFilter('all'); }}>Clear filters</Button>
+                        )}
                       </div>
                     ) : (
-                      <div className="overflow-auto">
+                      <div className="overflow-auto max-h-[70vh] rounded-xl border border-border">
+                        <p className="sr-only" aria-live="polite">Showing {visibleErrors.length} of {errors.length} errors</p>
                         <Table>
-                          <TableHeader>
+                          <TableHeader className="sticky top-0 z-10 bg-card">
                             <TableRow>
                               <TableHead className="w-8">
                                 <Checkbox
                                   aria-label="Select all on page"
-                                  checked={errors.length > 0 && errors.every((e) => selectedIds.has(e.id))}
+                                  checked={visibleErrors.length > 0 && visibleErrors.every((e) => selectedIds.has(e.id))}
                                   onCheckedChange={(v) => {
                                     setSelectedIds((prev) => {
                                       const next = new Set(prev);
-                                      if (v) errors.forEach((e) => next.add(e.id));
-                                      else errors.forEach((e) => next.delete(e.id));
+                                      if (v) visibleErrors.forEach((e) => next.add(e.id));
+                                      else visibleErrors.forEach((e) => next.delete(e.id));
                                       return next;
                                     });
                                   }}
@@ -473,7 +497,7 @@ export default function SystemHealth() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {errors.map((err) => {
+                            {visibleErrors.map((err) => {
                               const src = getSourceConfig(err.source);
                               const sev = (err.severity || 'error').toLowerCase();
                               const sevBadgeClass =
@@ -483,7 +507,7 @@ export default function SystemHealth() {
                                 'bg-muted text-foreground';
                               const lastTime = err.last_seen || err.created_at;
                               return (
-                                <TableRow key={err.id} data-state={selectedIds.has(err.id) ? 'selected' : undefined}>
+                                <TableRow key={err.id} data-state={selectedIds.has(err.id) ? 'selected' : undefined} className="hover:bg-muted/50 transition-colors duration-150 cursor-pointer" onClick={(e) => { if ((e.target as HTMLElement).closest('button,[role=checkbox]')) return; handleViewError(err); }}>
                                   <TableCell>
                                     <Checkbox
                                       aria-label={`Select error ${err.id}`}
@@ -619,6 +643,22 @@ export default function SystemHealth() {
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Time</p>
                   <p className="text-sm">{formatISTFull(selectedError.created_at)}</p>
+                </div>
+                {selectedError.source === 'mobile_app' && (
+                  <>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Platform</p>
+                      <p className="text-sm">{selectedError.context?.platform || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">App Version</p>
+                      <p className="text-sm font-mono">{selectedError.context?.app_version || '—'}</p>
+                    </div>
+                  </>
+                )}
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Occurrences</p>
+                  <p className="text-sm font-semibold">{selectedError.occurrence_count ?? 1}</p>
                 </div>
               </div>
 
