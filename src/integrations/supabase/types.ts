@@ -18159,6 +18159,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_mobile_error: {
+        Args: {
+          p_app_version?: string
+          p_branch_id?: string
+          p_context?: Json
+          p_message: string
+          p_platform?: string
+          p_screen?: string
+          p_severity?: string
+          p_stack?: string
+        }
+        Returns: string
+      }
       log_pt_session:
         | {
             Args: {

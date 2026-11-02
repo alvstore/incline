@@ -827,6 +827,13 @@
       "when": 1793515604734,
       "tag": "0117_recover_approval_blocked_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793595562435,
+      "tag": "0118_log_mobile_error",
+      "breakpoints": true
     }
   ]
 }
