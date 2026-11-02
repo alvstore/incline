@@ -313,7 +313,7 @@ export default function SystemHealth() {
   };
 
   const criticalOpen = openErrors.filter((e) => (e.severity || 'error') === 'critical').length;
-  const totalOccurrences = errors.reduce((sum, e) => sum + (e.occurrence_count ?? 1), 0);
+  const totalOccurrences = overviewErrors.reduce((sum, e) => sum + (e.occurrence_count ?? 1), 0);
 
   const stats = [
     { label: 'Open Errors', value: openErrors.length, icon: AlertTriangle, color: 'text-destructive', onClick: () => jumpTo('all', 'open') },
@@ -322,7 +322,7 @@ export default function SystemHealth() {
     { label: 'Total Occurrences', value: totalOccurrences, icon: Layers, color: 'text-primary', onClick: () => jumpTo('all', 'all') },
     { label: 'Web App', value: frontendErrors.length, icon: Monitor, color: 'text-info', onClick: () => jumpTo('frontend', 'all') },
     { label: 'Mobile App', value: mobileErrors.length, icon: Smartphone, color: 'text-accent', onClick: () => jumpTo('mobile_app', 'all') },
-    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success', onClick: () => jumpTo('edge_function', 'all') },
+    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success', onClick: () => jumpTo('backend', 'all') },
   ];
 
   return (
@@ -456,6 +456,7 @@ export default function SystemHealth() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="backend">Backend (all)</SelectItem>
                         <SelectItem value="frontend">Web App</SelectItem>
                         <SelectItem value="mobile_app">Mobile App</SelectItem>
                         <SelectItem value="edge_function">Backend Functions</SelectItem>
@@ -479,8 +480,8 @@ export default function SystemHealth() {
                 <Tabs value={statusTab} onValueChange={setStatusTab}>
                   <TabsList className="mb-4 rounded-xl">
                     <TabsTrigger value="all" className="rounded-lg">All ({errors.length})</TabsTrigger>
-                    <TabsTrigger value="open" className="rounded-lg">Open ({openErrors.length})</TabsTrigger>
-                    <TabsTrigger value="resolved" className="rounded-lg">Resolved ({resolvedErrors.length})</TabsTrigger>
+                    <TabsTrigger value="open" className="rounded-lg">Open ({listOpen.length})</TabsTrigger>
+                    <TabsTrigger value="resolved" className="rounded-lg">Resolved ({listResolved.length})</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value={statusTab}>
