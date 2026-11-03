@@ -1037,7 +1037,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
 
             {formData.type === 'sms' && (
               <div className="space-y-3">
-                <DltSmsPanel name={formData.name} content={formData.content} eventId={formData.trigger} />
+                <DltSmsPanel name={formData.name} content={formData.content} eventId={formData.trigger} category={formData.dlt_category || 'SERVICE_IMPLICIT'} header={formData.dlt_header} onClean={(c) => setFormData({ ...formData, content: c })} />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <Label htmlFor="dlt-id" className="text-xs">DLT Template ID</Label>
@@ -1066,7 +1066,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                     <Select value={formData.dlt_category || 'SERVICE_IMPLICIT'} onValueChange={(v) => setFormData({ ...formData, dlt_category: v })}>
                       <SelectTrigger id="dlt-cat"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="TRANSACTIONAL">Transactional</SelectItem>
+                        <SelectItem value="TRANSACTIONAL" disabled>Transactional (banks only)</SelectItem>
                         <SelectItem value="SERVICE_IMPLICIT">Service Implicit</SelectItem>
                         <SelectItem value="SERVICE_EXPLICIT">Service Explicit</SelectItem>
                         <SelectItem value="PROMOTIONAL">Promotional</SelectItem>
