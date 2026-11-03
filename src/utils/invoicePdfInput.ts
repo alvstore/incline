@@ -62,6 +62,23 @@ export function toInvoicePdfInput(invoice: any): InvoicePdfInput {
   } as InvoicePdfInput;
 }
 
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+
+/** Plain-ASCII date lines for invoice PDFs (Helvetica can't render arrows/em-dashes). */
+export function membershipDateLines(joinedAt: string | null | undefined, start?: string | null, end?: string | null, planDays?: number | null): string[] {
+  const out: string[] = [];
+  if (joinedAt) out.push(`Joined Date: ${fmtDate(joinedAt)}`);
+  if (start) out.push(`Start Date: ${fmtDate(start)}`);
+  if (end) out.push(`End Date: ${fmtDate(end)}`);
+  if (start && end) {
+    const days = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1;
+    let dur = `Duration: ${days} day${days === 1 ? '' : 's'}`;
+    if (planDays && days - planDays >= 25) dur += ` (includes ${days - planDays} complimentary days)`;
+    out.push(dur);
+  }
+  return out;
+}
+
 /**
  * Same as `toInvoicePdfInput` plus async enrichment for membership rows:
  * fetches the plan + benefits and attaches a "Includes:" bullet list and a
@@ -104,31 +121,20 @@ export async function toInvoicePdfInputAsync(invoice: any): Promise<InvoicePdfIn
     const m = byMembership.get(String(raw.reference_id));
     if (!m) return row;
 
-    const subtitleBits: string[] = [];
-    if (m.start_date && m.end_date) {
-      const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-      subtitleBits.push(`Valid ${fmt(m.start_date)} → ${fmt(m.end_date)}`);
-    }
-    if (m.start_date && m.end_date && m.plan?.duration_days) {
-      const actual = Math.round((new Date(m.end_date).getTime() - new Date(m.start_date).getTime()) / 86_400_000);
-      const extra = actual - m.plan.duration_days;
-      if (extra >= 25) {
-        const months = Math.round(extra / 30);
-        subtitleBits.push(`Includes ${extra} complimentary days${months > 0 ? ` (~${months} month${months > 1 ? 's' : ''} extra)` : ''}`);
-      }
-    }
+    const lines = membershipDateLines(invoice?.members?.joined_at, m.start_date, m.end_date, m.plan?.duration_days);
 
     const planBenefits = benefitsByPlan.get(String(m.plan_id)) || [];
-    const bullets = planBenefits.slice(0, 8).map((b: any) => {
+    const bullets = planBenefits.slice(0, 10).map((b: any) => {
       const name = b.benefit?.name || b.benefit_type || 'Benefit';
-      const count = b.limit_count ? `${b.limit_count}${b.frequency ? ` / ${b.frequency}` : ''}` : null;
-      return count ? `${name} — ${count}` : (b.description || name);
+      const count = b.limit_count ? `${b.limit_count}${b.frequency ? ` / ${b.frequency}` : ''}` : 'Included';
+      return `${name} - ${count}`;
     });
 
     return {
       ...row,
       meta: {
-        subtitle: subtitleBits.join(' · ') || undefined,
+        subtitle: lines.join('\n') || undefined,
+        bulletsTitle: bullets.length ? 'Included benefits:' : undefined,
         bullets: bullets.length ? bullets : undefined,
       },
     };

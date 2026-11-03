@@ -27,3 +27,11 @@ describe('customer invoice privacy', () => {
     expect(result.branch_address).toBe('Sector 14, Udaipur, Rajasthan, 313001');
   });
 });
+describe('membership invoice date lines', async () => {
+  const { membershipDateLines } = await import('../../src/utils/invoicePdfInput');
+  it('labels joined/start/end with ASCII only and counts 10 days for 2-11 Nov', () => {
+    const lines = membershipDateLines('2026-11-02T06:00:00Z', '2026-11-02', '2026-11-11', 30);
+    expect(lines).toEqual(['Joined Date: 02 Nov 2026', 'Start Date: 02 Nov 2026', 'End Date: 11 Nov 2026', 'Duration: 10 days']);
+    expect(lines.join('')).toMatch(/^[\x20-\x7E]*$/);
+  });
+});
