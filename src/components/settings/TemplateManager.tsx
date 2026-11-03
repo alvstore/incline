@@ -16,6 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Plus, Edit, Trash2, MessageSquare, Mail, Phone, Copy, Send, CheckCircle, Clock, XCircle, PauseCircle, Info, AlertCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { TEMPLATE_EVENTS, getEvent, validateTemplate, renderPreview } from '@/lib/templates/eventRegistry';
+import { DLT_HEADERS, smsActivationBlocker } from '@/lib/templates/dlt';
 import { type TemplatePreset } from '@/lib/templates/dynamicAttachment';
 import { QuickPresetsMenu } from './QuickPresetsMenu';
 import { SYSTEM_EVENTS } from '@/lib/templates/systemEvents';
@@ -343,6 +344,29 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     onError: (error: any) => toast.error(error.message),
   });
 
+  const toggleSmsMutation = useMutation({
+    mutationFn: async ({ t, next }: { t: Template & { dlt_template_id?: string | null; dlt_header?: string | null }; next: boolean }) => {
+      if (next) {
+        const blocker = smsActivationBlocker(t);
+        if (blocker) throw new Error(blocker);
+      }
+      const { error } = await supabase.from('templates').update({ is_active: next }).eq('id', t.id);
+      if (error) throw error;
+    },
+    onMutate: async ({ t, next }) => {
+      await queryClient.cancelQueries({ queryKey: ['communication-templates'] });
+      const prev = queryClient.getQueryData<any[]>(['communication-templates']);
+      queryClient.setQueryData<any[]>(['communication-templates'], (rows) => (rows || []).map((r) => r.id === t.id ? { ...r, is_active: next } : r));
+      return { prev };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['communication-templates'], ctx.prev);
+      toast.error(e.message);
+    },
+    onSuccess: (_d, { next }) => toast.success(next ? 'SMS template turned on' : 'SMS template turned off'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['communication-templates'] }),
+  });
+
   const openEditor = (template?: Template) => {
     if (template) {
       const trigger = template.trigger || (template as any).trigger_event || 'custom';
@@ -512,6 +536,10 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     };
     if (formData.type !== 'whatsapp') {
       templateData.trigger_event = formData.trigger && formData.trigger !== 'custom' ? formData.trigger : null;
+    }
+    if (formData.type === 'sms' && formData.is_active) {
+      const blocker = smsActivationBlocker(formData);
+      if (blocker) { toast.error(`Cannot turn on this SMS: ${blocker}`); return; }
     }
     if (formData.type === 'sms') {
       templateData.dlt_template_id = formData.dlt_template_id || null;
@@ -824,6 +852,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
               onDelete={(id) => deleteMutation.mutate(id)}
               onSubmitMeta={(t) => openMetaDialog(t as any)}
               onCreate={() => openEditor()}
+              onToggleActive={(t, next) => toggleSmsMutation.mutate({ t: t as any, next })}
             />
           </div>
         ))}
@@ -1017,8 +1046,20 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="dlt-header" className="text-xs">Header (Sender ID)</Label>
-                    <Input id="dlt-header" value={formData.dlt_header} placeholder="INCLIF"
-                      onChange={(e) => setFormData({ ...formData, dlt_header: e.target.value.toUpperCase() })} />
+                    <Select
+                      value={DLT_HEADERS.includes(formData.dlt_header) ? formData.dlt_header : (formData.dlt_header ? '__custom' : '')}
+                      onValueChange={(v) => setFormData({ ...formData, dlt_header: v === '__custom' ? (DLT_HEADERS.includes(formData.dlt_header) ? '' : formData.dlt_header) : v })}
+                    >
+                      <SelectTrigger id="dlt-header"><SelectValue placeholder="Choose approved header" /></SelectTrigger>
+                      <SelectContent>
+                        {DLT_HEADERS.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        <SelectItem value="__custom">Other header…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {!DLT_HEADERS.includes(formData.dlt_header) && (
+                      <Input aria-label="Custom header" value={formData.dlt_header} placeholder="6-letter header" maxLength={6}
+                        onChange={(e) => setFormData({ ...formData, dlt_header: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} />
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="dlt-cat" className="text-xs">DLT Category</Label>
@@ -1184,11 +1225,14 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
               <div>
                 <Label className="font-medium">Active</Label>
                 <p className="text-xs text-muted-foreground">
-                  Only active templates appear in broadcast
+                  {formData.type === 'sms' && smsActivationBlocker(formData)
+                    ? `SMS stays off until DLT approval: ${smsActivationBlocker(formData)}`
+                    : 'Only active templates appear in broadcast'}
                 </p>
               </div>
               <Switch
                 checked={formData.is_active}
+                disabled={formData.type === 'sms' && !formData.is_active && !!smsActivationBlocker(formData)}
                 onCheckedChange={(v) => setFormData({ ...formData, is_active: v })}
               />
             </div>
@@ -1359,13 +1403,14 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
               <Eye className="h-4 w-4" /> Template Preview
             </SheetTitle>
             <SheetDescription>
-              Rendered with sample data for the "{previewTemplate?.trigger || 'custom'}" event.
+              Rendered with sample data for the "{previewTemplate?.trigger || (previewTemplate as any)?.trigger_event || 'custom'}" event.
             </SheetDescription>
           </SheetHeader>
           {previewTemplate && (() => {
             const tpl = previewTemplate;
-            const rendered = renderPreview(tpl.content || '', tpl.trigger);
-            const subject = renderPreview(tpl.subject || '', tpl.trigger);
+            const evId = tpl.trigger || (tpl as any).trigger_event;
+            const rendered = renderPreview(tpl.content || '', evId);
+            const subject = renderPreview(tpl.subject || '', evId);
             const evt = getEvent(tpl.trigger);
             const isEmail = tpl.type === 'email';
             const isWa = tpl.type === 'whatsapp';

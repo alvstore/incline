@@ -841,6 +841,13 @@
       "when": 1793696708540,
       "tag": "0119_templates_dlt_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1793698149251,
+      "tag": "0120_template_view_dlt_fields",
+      "breakpoints": true
     }
   ]
 }

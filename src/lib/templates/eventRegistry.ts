@@ -1,3 +1,4 @@
+import { liveSampleFor } from './dlt';
 // Single source of truth for template trigger events and the variables
 // they emit. Used by both the template editor (preview/validation) and
 // notification edge functions (variable substitution).
@@ -211,5 +212,5 @@ export function renderPreview(content: string, eventId: string | undefined | nul
   const evt = getEvent(eventId || '');
   const samples: Record<string, string> = {};
   if (evt) for (const v of evt.variables) samples[v.key] = v.sample;
-  return content.replace(VARIABLE_REGEX, (_m, key) => samples[key] ?? `{{${key}}}`);
+  return content.replace(VARIABLE_REGEX, (_m, key) => samples[key] ?? liveSampleFor(key, eventId));
 }

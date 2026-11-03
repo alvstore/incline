@@ -16441,6 +16441,9 @@ export type Database = {
           branch_id: string | null
           content: string | null
           created_at: string | null
+          dlt_category: string | null
+          dlt_header: string | null
+          dlt_template_id: string | null
           header_media_url: string | null
           header_type: string | null
           id: string | null

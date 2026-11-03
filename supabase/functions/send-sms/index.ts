@@ -1,3 +1,4 @@
+// v2.3.0 — DLT-aware routing: branch provider first then global, template DLT ID/header per provider, accepts `recipient`.
 // v2.2.0 — Multi-provider SMS Edge Function with RoundSMS full API
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
@@ -24,32 +25,46 @@ serve(async (req: Request) => {
     const __caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin", "manager"] });
     if (!__caller.ok) return __caller.response;
     const body = await req.json();
-    const { action = "send", phone, message, branch_id, provider: providerOverride } = body;
+    const { action = "send", message, branch_id, provider: providerOverride, template_id, skip_log } = body;
+    const phone: string | undefined = body.phone ?? body.recipient;
     if (!__caller.internal && !(await canActOnBranch(__caller, branch_id)) ) {
       return json({ error: "Forbidden" }, 403);
     }
 
-
-    // Get active SMS integration
+    // Active SMS providers: the branch's own provider wins, then the global one.
     let query = supabase
       .from("integration_settings")
       .select("*")
       .eq("integration_type", "sms")
       .eq("is_active", true);
-
-    if (providerOverride) {
-      query = query.eq("provider", providerOverride);
-    }
-
-    const { data: integrations, error: intError } = await query.limit(1);
+    if (providerOverride) query = query.eq("provider", providerOverride);
+    const { data: integrations, error: intError } = await query;
     if (intError || !integrations?.length) {
       return json({ error: "No active SMS provider configured" }, 400);
     }
+    const integration =
+      (branch_id && integrations.find((i: any) => i.branch_id === branch_id)) ||
+      integrations.find((i: any) => i.branch_id === null) ||
+      integrations[0];
 
-    const integration = integrations[0];
-    const config = integration.config || {};
+    const config: Record<string, string> = { ...(integration.config || {}) };
     const credentials = integration.credentials || {};
     const provider = integration.provider;
+
+    // DLT: a template send must use its registered DLT ID + approved header.
+    if (action === "send" && template_id) {
+      const { data: tpl } = await supabase
+        .from("templates")
+        .select("type, is_active, dlt_template_id, dlt_header")
+        .eq("id", template_id)
+        .maybeSingle();
+      if (tpl && tpl.type === "sms") {
+        if (!tpl.is_active) return json({ error: "SMS template is turned off" }, 400);
+        if (!tpl.dlt_template_id) return json({ error: "SMS template has no DLT Template ID" }, 400);
+        config.dlt_template_id = tpl.dlt_template_id;
+        if (tpl.dlt_header) config.sender_id = tpl.dlt_header;
+      }
+    }
 
     // Route based on action
     switch (action) {
@@ -64,13 +79,15 @@ serve(async (req: Request) => {
           case "fast2sms": result = await sendFast2SMS(phone, message, config, credentials); break;
           default: result = { success: false, error: `Unsupported provider: ${provider}` };
         }
-        await supabase.from("sms_logs").insert({
-          phone, message, status: result.success ? "sent" : "failed",
-          message_id: result.message_id || null, provider, branch_id: branch_id || null,
-          error_message: result.error || null,
-        });
+        if (!skip_log) {
+          await supabase.from("sms_logs").insert({
+            phone, message, status: result.success ? "sent" : "failed",
+            message_id: result.message_id || null, provider, branch_id: branch_id || null,
+            error_message: result.error || null,
+          });
+        }
         return result.success
-          ? json({ success: true, message_id: result.message_id })
+          ? json({ success: true, message_id: result.message_id, provider })
           : json({ error: result.error || "SMS sending failed" }, 500);
       }
 
@@ -130,6 +147,14 @@ function roundBaseUrl(config: Record<string, string>) {
   return config.api_base_url || config.api_url || "http://voice.roundsms.co/api";
 }
 
+// Optional DLT query params — only sent when the account's parameter names are configured.
+function roundDltParams(config: Record<string, string>) {
+  let q = "";
+  if (config.dlt_template_param && config.dlt_template_id) q += `&${encodeURIComponent(config.dlt_template_param)}=${encodeURIComponent(config.dlt_template_id)}`;
+  if (config.dlt_entity_param && config.dlt_entity_id) q += `&${encodeURIComponent(config.dlt_entity_param)}=${encodeURIComponent(config.dlt_entity_id)}`;
+  return q;
+}
+
 function roundAuthParams(credentials: Record<string, string>) {
   return `user=${encodeURIComponent(credentials.username || "")}&pass=${encodeURIComponent(credentials.password || "")}`;
 }
@@ -140,7 +165,7 @@ async function sendRoundSMS(phone: string, message: string, config: Record<strin
   const endpoint = config.send_endpoint || "/sendmsg.php";
   const priority = config.priority || "ndnd";
   const stype = config.stype || config.sms_type || "normal";
-  const url = `${base}${endpoint}?${roundAuthParams(credentials)}&sender=${encodeURIComponent(config.sender_id || "")}&phone=${cleanPhone}&text=${encodeURIComponent(message)}&priority=${priority}&stype=${stype}`;
+  const url = `${base}${endpoint}?${roundAuthParams(credentials)}&sender=${encodeURIComponent(config.sender_id || "")}&phone=${cleanPhone}&text=${encodeURIComponent(message)}&priority=${priority}&stype=${stype}${roundDltParams(config)}`;
   try {
     const resp = await fetch(url);
     const text = await resp.text();
@@ -217,7 +242,7 @@ async function sendMSG91(phone: string, message: string, config: Record<string, 
     const resp = await fetch("https://control.msg91.com/api/v5/flow/", {
       method: "POST",
       headers: { "Content-Type": "application/json", authkey: credentials.auth_key || "" },
-      body: JSON.stringify({ sender: config.sender_id, route: config.route || "4", DLT_TE_ID: config.dlt_template_id, mobiles: `91${cleanPhone}`, message }),
+      body: JSON.stringify({ sender: config.sender_id, route: config.route || "4", DLT_TE_ID: config.dlt_template_id, PE_ID: config.dlt_entity_id || undefined, mobiles: `91${cleanPhone}`, message }),
     });
     const data = await resp.json();
     return data.type === "success" ? { success: true, message_id: data.request_id } : { success: false, error: data.message || "MSG91 error" };
@@ -246,7 +271,7 @@ async function sendTextLocal(phone: string, message: string, _config: Record<str
     const resp = await fetch("https://api.textlocal.in/send/", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ apikey: credentials.api_key || "", numbers: `91${cleanPhone}`, message }),
+      body: new URLSearchParams({ apikey: credentials.api_key || "", numbers: `91${cleanPhone}`, message, sender: _config.sender_name || _config.sender_id || "" }),
     });
     const data = await resp.json();
     return data.status === "success" ? { success: true, message_id: data.batch_id } : { success: false, error: JSON.stringify(data.errors || data) };
