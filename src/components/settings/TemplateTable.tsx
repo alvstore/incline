@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { smsActivationBlocker } from '@/lib/templates/dlt';
+import { getSystemEvent } from '@/lib/templates/systemEvents';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -16,6 +19,10 @@ export interface TemplateRow {
   name: string;
   type: string;
   trigger?: string;
+  trigger_event?: string | null;
+  dlt_template_id?: string | null;
+  dlt_header?: string | null;
+  dlt_category?: string | null;
   content: string;
   is_active: boolean;
   created_at?: string;
@@ -46,6 +53,12 @@ interface Props {
   onDelete: (id: string) => void;
   onSubmitMeta: (t: TemplateRow) => void;
   onCreate: () => void;
+  onToggleActive?: (t: TemplateRow, next: boolean) => void;
+}
+
+function eventLabel(id: string | null | undefined) {
+  if (!id || id === 'custom') return 'Custom';
+  return getSystemEvent(id)?.label || id.replace(/_/g, ' ');
 }
 
 function metaStatusBadge(status: string | null | undefined) {
@@ -93,7 +106,7 @@ function formatDate(value?: string) {
 
 export function TemplateTable({
   channel, templates, deliveryStats, isLoading,
-  onPreview, onEdit, onDelete, onSubmitMeta, onCreate,
+  onPreview, onEdit, onDelete, onSubmitMeta, onCreate, onToggleActive,
 }: Props) {
   const [search, setSearch] = useState('');
   const [alignment, setAlignment] = useState<'all' | 'ready' | 'missing' | 'mismatch' | 'pending'>('all');
@@ -114,7 +127,7 @@ export function TemplateTable({
     return templates.filter((t) => {
       if (alignment !== 'all' && alignmentState(t) !== alignment) return false;
       if (!q) return true;
-      return [t.name, t.trigger, t.content, t.meta_template_name].some((v) =>
+      return [t.name, t.trigger_event || t.trigger, t.content, t.dlt_template_id, t.dlt_header, t.meta_template_name].some((v) =>
         String(v || '').toLowerCase().includes(q),
       );
     });
@@ -188,6 +201,7 @@ export function TemplateTable({
                   <TableHead className="hidden md:table-cell">Event</TableHead>
                   <TableHead>Status</TableHead>
                   {channel === 'whatsapp' && <TableHead className="hidden lg:table-cell">Meta</TableHead>}
+                  {channel === 'sms' && <TableHead className="hidden lg:table-cell">DLT</TableHead>}
                   <TableHead className="hidden xl:table-cell">7-day delivery</TableHead>
                   <TableHead className="hidden lg:table-cell">Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -211,13 +225,41 @@ export function TemplateTable({
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        <span className="text-xs text-muted-foreground">{t.trigger || 'custom'}</span>
+                        <span className="text-xs text-muted-foreground">{eventLabel(t.trigger_event || t.trigger)}</span>
                       </TableCell>
                       <TableCell>
-                        {t.is_active
+                        {channel === 'sms' && onToggleActive ? (() => {
+                          const blocker = smsActivationBlocker(t);
+                          return (
+                            <div className="flex items-center gap-2" title={!t.is_active && blocker ? blocker : undefined}>
+                              <Switch
+                                checked={t.is_active}
+                                disabled={!t.is_active && !!blocker}
+                                onCheckedChange={(v) => onToggleActive(t, v)}
+                                aria-label={t.is_active ? 'Turn SMS template off' : 'Turn SMS template on'}
+                              />
+                              <span className={`text-xs font-medium ${t.is_active ? 'text-success' : 'text-muted-foreground'}`}>
+                                {t.is_active ? 'On' : blocker ? 'Needs DLT' : 'Off'}
+                              </span>
+                            </div>
+                          );
+                        })() : t.is_active
                           ? <Badge className="bg-success/10 text-success border-success/20 rounded-full">Active</Badge>
                           : <Badge variant="secondary" className="rounded-full">Inactive</Badge>}
                       </TableCell>
+                      {channel === 'sms' && (
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="flex flex-wrap items-center gap-1">
+                            {t.dlt_header
+                              ? <Badge variant="outline" className="rounded-full font-mono text-[10px]">{t.dlt_header}</Badge>
+                              : <Badge variant="outline" className="rounded-full text-[10px] border-warning/20 bg-warning/10 text-warning">No header</Badge>}
+                            {t.dlt_category && <span className="text-[10px] text-muted-foreground">{t.dlt_category.replace(/_/g, ' ').toLowerCase()}</span>}
+                          </div>
+                          {t.dlt_template_id
+                            ? <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{t.dlt_template_id}</p>
+                            : <Badge variant="outline" className="mt-1 rounded-full text-[10px] border-warning/20 bg-warning/10 text-warning">Missing DLT ID</Badge>}
+                        </TableCell>
+                      )}
                       {channel === 'whatsapp' && (
                         <TableCell className="hidden lg:table-cell">
                           {metaStatusBadge(t.live_meta_status || t.meta_template_status)}
