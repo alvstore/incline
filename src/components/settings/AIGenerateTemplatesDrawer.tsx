@@ -472,9 +472,28 @@ export function AIGenerateTemplatesDrawer({
                       )}
                     </div>
                   </div>
-                  <div className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100 whitespace-pre-wrap font-medium leading-relaxed">
-                    {p.body_text || p.body}
-                  </div>
+                  {channel === 'sms' ? (
+                    <>
+                      <label className="sr-only" htmlFor={`sms-body-${idx}`}>Edit {p.name}</label>
+                      <textarea
+                        id={`sms-body-${idx}`}
+                        rows={4}
+                        disabled={p.state === 'done'}
+                        value={p.body_text || p.body || ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const vars = [...new Set([...v.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)].map((m) => m[1]))];
+                          setProposals((prev) => prev.map((x, j) => (j === idx ? { ...x, body_text: v, variables: vars } : x)));
+                        }}
+                        className="w-full text-sm bg-background p-3 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <DltSmsPanel name={p.name} content={p.body_text || p.body || ''} eventId={p.trigger_event || p.event} compact />
+                    </>
+                  ) : (
+                    <div className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100 whitespace-pre-wrap font-medium leading-relaxed">
+                      {p.body_text || p.body}
+                    </div>
+                  )}
                   {p.footer && <div className="text-[10px] text-slate-400 px-1">Footer: {p.footer}</div>}
                   {p.error && (
                     <p className="text-xs text-red-600 leading-relaxed px-1">{p.error}</p>
