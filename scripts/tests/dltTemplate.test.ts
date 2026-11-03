@@ -33,3 +33,21 @@ test('live preview fills brand as Incline, never the DLT sample brand', () => {
   expect(out).toContain('Team Incline');
   expect(out).not.toContain('{{');
 });
+
+import { dltIssues, cleanDltSpaces, toSmartpingRow } from '../../src/lib/templates/dlt';
+
+test('Smartping: extra spaces flagged and cleaned', () => {
+  expect(dltIssues('Hi  {{member_name}}. Team {{brand_name}}').length).toBe(1);
+  expect(cleanDltSpaces(' Hi  there ')).toBe('Hi there');
+});
+
+test('Smartping: transactional is banks-only, promotional needs numeric sender', () => {
+  const ok = 'Hi {{member_name}}. Team {{brand_name}}';
+  expect(dltIssues(ok, { category: 'TRANSACTIONAL' }).length).toBe(1);
+  expect(dltIssues(ok, { category: 'PROMOTIONAL', header: 'INCLIF' }).length).toBe(1);
+  expect(dltIssues(ok, { category: 'SERVICE_IMPLICIT', header: 'INCLIF' })).toEqual([]);
+});
+
+test('Smartping sheet row uses one header only', () => {
+  expect(toSmartpingRow('t', 'Hi. Team {{brand_name}}', null, 'INCLIF').split('\t')[1]).toBe('INCLIF');
+});

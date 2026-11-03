@@ -3,18 +3,22 @@ import { Copy, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { toDlt, toSmartpingRow } from '@/lib/templates/dlt';
+import { toDlt, toSmartpingRow, cleanDltSpaces } from '@/lib/templates/dlt';
 
 interface Props {
   name: string;
   content: string;
   eventId?: string | null;
   compact?: boolean;
+  category?: string | null;
+  header?: string | null;
+  onClean?: (content: string) => void;
 }
 
 /** Smartping/DLT view of an SMS template: {#var#} content, tagging table and copy buttons. */
-export function DltSmsPanel({ name, content, eventId, compact }: Props) {
-  const d = useMemo(() => toDlt(content || '', eventId), [content, eventId]);
+export function DltSmsPanel({ name, content, eventId, compact, category, header, onClean }: Props) {
+  const d = useMemo(() => toDlt(content || '', eventId, { category, header }), [content, eventId, category, header]);
+  const needsClean = !!content && cleanDltSpaces(content) !== content;
   if (!content) return null;
 
   const copy = async (text: string, label: string) => {
