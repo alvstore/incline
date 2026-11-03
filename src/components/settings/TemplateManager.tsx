@@ -196,6 +196,9 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     attachment_filename_template: '',
     /** Ordered data fields for positional {{1}}…{{n}} placeholders. */
     variables: [] as string[],
+    dlt_template_id: '',
+    dlt_header: '',
+    dlt_category: '',
   });
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
@@ -361,6 +364,9 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
         // Pre-fill the mapper: keep any saved mapping, fill the gaps with the
         // event's known field order / copy heuristics.
         variables: buildOrderedVariables(template.content || '', trigger, existing),
+        dlt_template_id: (template as any).dlt_template_id || '',
+        dlt_header: (template as any).dlt_header || '',
+        dlt_category: (template as any).dlt_category || '',
       });
     } else {
       setSelectedTemplate(null);
@@ -376,6 +382,9 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
         attachment_source: 'none',
         attachment_filename_template: '',
         variables: [],
+        dlt_template_id: '',
+        dlt_header: '',
+        dlt_category: '',
       });
     }
     setShowEditor(true);
@@ -498,6 +507,14 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       attachment_source: formData.attachment_source,
       attachment_filename_template: formData.attachment_filename_template || null,
     };
+    if (formData.type !== 'whatsapp') {
+      templateData.trigger_event = formData.trigger && formData.trigger !== 'custom' ? formData.trigger : null;
+    }
+    if (formData.type === 'sms') {
+      templateData.dlt_template_id = formData.dlt_template_id || null;
+      templateData.dlt_header = formData.dlt_header || null;
+      templateData.dlt_category = formData.dlt_category || null;
+    }
 
     if (selectedTemplate) {
       updateMutation.mutate({ id: selectedTemplate.id, ...templateData });
@@ -985,6 +1002,37 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 );
               })()}
             </div>
+
+            {formData.type === 'sms' && (
+              <div className="space-y-3">
+                <DltSmsPanel name={formData.name} content={formData.content} eventId={formData.trigger} />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="dlt-id" className="text-xs">DLT Template ID</Label>
+                    <Input id="dlt-id" value={formData.dlt_template_id} placeholder="After approval"
+                      onChange={(e) => setFormData({ ...formData, dlt_template_id: e.target.value.trim() })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="dlt-header" className="text-xs">Header (Sender ID)</Label>
+                    <Input id="dlt-header" value={formData.dlt_header} placeholder="INCLIF"
+                      onChange={(e) => setFormData({ ...formData, dlt_header: e.target.value.toUpperCase() })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="dlt-cat" className="text-xs">DLT Category</Label>
+                    <Select value={formData.dlt_category || 'SERVICE_IMPLICIT'} onValueChange={(v) => setFormData({ ...formData, dlt_category: v })}>
+                      <SelectTrigger id="dlt-cat"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TRANSACTIONAL">Transactional</SelectItem>
+                        <SelectItem value="SERVICE_IMPLICIT">Service Implicit</SelectItem>
+                        <SelectItem value="SERVICE_EXPLICIT">Service Explicit</SelectItem>
+                        <SelectItem value="PROMOTIONAL">Promotional</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Keep the template inactive until DLT approves it and the ID is filled in.</p>
+              </div>
+            )}
 
             <TemplateParameterMapper
               content={formData.content}
