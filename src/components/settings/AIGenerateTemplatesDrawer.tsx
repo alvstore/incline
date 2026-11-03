@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { SYSTEM_EVENTS, type EventChannel } from '@/lib/templates/systemEvents';
 import { toast } from 'sonner';
+import { DltSmsPanel } from './DltSmsPanel';
 
 interface Props {
   open: boolean;
@@ -113,9 +114,10 @@ export function AIGenerateTemplatesDrawer({
       };
 
       for (const t of templates || []) {
+        // SMS rows are saved inactive until DLT approval, so any row covers the event.
         const approved = channel === 'whatsapp'
           ? (t.meta_template_status || '').toUpperCase() === 'APPROVED' && !!t.meta_template_name
-          : t.is_active !== false;
+          : channel === 'sms' ? true : t.is_active !== false;
 
         if (!approved || !t.trigger_event) continue;
 
@@ -183,8 +185,12 @@ export function AIGenerateTemplatesDrawer({
     try {
       const { data, error } = await supabase.functions.invoke('ai-generate-whatsapp-templates', {
         body: {
-          events: Array.from(picked).map((e) => ({ event: e })),
+          events: Array.from(picked).map((e) => {
+            const meta = SYSTEM_EVENTS.find((x) => x.event === e);
+            return { event: e, label: meta?.label, hint: meta?.description };
+          }),
           branch_id: effectiveBranchId,
+          channel,
         },
       });
       if (error) throw new Error(error.message || 'AI provider returned an error');
@@ -224,6 +230,25 @@ export function AIGenerateTemplatesDrawer({
         // The edge function contract is `action: 'create'` + `template_data`.
         // Sending anything else returns "Unknown action" — which is exactly
         // why every submit used to fail silently.
+        if (channel !== 'whatsapp') {
+          const content = p.body_text || p.body || '';
+          const { error: insErr } = await supabase.from('templates').insert({
+            name: p.name,
+            type: channel,
+            content,
+            subject: channel === 'email' ? ((p as any).subject || p.name) : null,
+            variables: p.variables || [],
+            trigger_event: p.trigger_event || p.event || null,
+            branch_id: effectiveBranchId ?? null,
+            // SMS must not send until DLT approves it and the ID is entered.
+            is_active: channel !== 'sms',
+            dlt_category: channel === 'sms' ? ((p as any).dlt_category || 'SERVICE_IMPLICIT') : null,
+          });
+          if (insErr) throw insErr;
+          success++;
+          setProposals((prev) => prev.map((x, idx) => (idx === i ? { ...x, state: 'done' } : x)));
+          continue;
+        }
         const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
           body: {
             action: 'upsert',
@@ -263,7 +288,9 @@ export function AIGenerateTemplatesDrawer({
 
     const failed = proposals.length - success;
     if (success > 0 && failed === 0) {
-      toast.success(`Submitted ${success} template${success === 1 ? '' : 's'} for Meta review`);
+      toast.success(channel === 'whatsapp'
+        ? `Submitted ${success} template${success === 1 ? '' : 's'} for Meta review`
+        : `Saved ${success} ${channel.toUpperCase()} template${success === 1 ? '' : 's'}${channel === 'sms' ? ' (inactive until DLT approval)' : ''}`);
       onOpenChange(false);
     } else if (success > 0) {
       toast.warning(`${success} submitted, ${failed} failed — ${firstError}`);
@@ -285,7 +312,9 @@ export function AIGenerateTemplatesDrawer({
             <div className="text-left">
               <SheetTitle>AI Template Studio</SheetTitle>
               <SheetDescription>
-                Generate brand-aligned WhatsApp templates for missing system events.
+                {channel === 'sms'
+                  ? 'Finds missing SMS events and drafts DLT-ready templates with variables and preview.'
+                  : `Generate brand-aligned ${channel === 'email' ? 'email' : 'WhatsApp'} templates for missing system events.`}
               </SheetDescription>
             </div>
           </div>
