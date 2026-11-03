@@ -474,16 +474,16 @@ export function AIGenerateTemplatesDrawer({
                   </div>
                   {channel === 'sms' ? (
                     <>
-                      <label className="sr-only" htmlFor={`sms-body-${idx}`}>Edit {p.name}</label>
+                      <label className="sr-only" htmlFor={`sms-body-${i}`}>Edit {p.name}</label>
                       <textarea
-                        id={`sms-body-${idx}`}
+                        id={`sms-body-${i}`}
                         rows={4}
                         disabled={p.state === 'done'}
                         value={p.body_text || p.body || ''}
                         onChange={(e) => {
                           const v = e.target.value;
                           const vars = [...new Set([...v.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)].map((m) => m[1]))];
-                          setProposals((prev) => prev.map((x, j) => (j === idx ? { ...x, body_text: v, variables: vars } : x)));
+                          setProposals((prev) => prev.map((x, j) => (j === i ? { ...x, body_text: v, variables: vars } : x)));
                         }}
                         className="w-full text-sm bg-background p-3 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-ring"
                       />
