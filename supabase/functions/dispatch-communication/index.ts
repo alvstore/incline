@@ -1,3 +1,4 @@
+// dispatch-communication v1.44.0 — default {{brand_name}} = Incline for DLT SMS templates.
 // dispatch-communication v1.43.0 — prefer templates whose VIDEO/IMAGE header matches the attachment; never paste video/image links as "PDF".
 // dispatch-communication v1.42.0 — signed-in staff/trainers may only message known contacts on phone channels.
 // dispatch-communication v1.41.0 — email attachment fetch is SSRF-guarded (public hosts, no redirects, 5 MB cap).
@@ -897,6 +898,12 @@ Deno.serve(async (req) => {
         if (branch?.name) hydrated.branch_name = branch.name;
       }
       input.payload.variables = hydrated;
+    }
+    // DLT SMS templates carry the brand as {{brand_name}}; customers always see Incline.
+    if (input.payload) {
+      const vars = { ...(input.payload.variables ?? {}) } as Record<string, unknown>;
+      vars.brand_name ??= 'Incline';
+      input.payload.variables = vars;
     }
 
     // ── 0) channel kill-switch (Settings → Integrations) ──

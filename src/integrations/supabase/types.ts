@@ -14190,6 +14190,9 @@ export type Database = {
           branch_id: string | null
           content: string
           created_at: string
+          dlt_category: string | null
+          dlt_header: string | null
+          dlt_template_id: string | null
           evergreen_kind: string | null
           header_media_handle: string | null
           header_media_url: string | null
@@ -14215,6 +14218,9 @@ export type Database = {
           branch_id?: string | null
           content: string
           created_at?: string
+          dlt_category?: string | null
+          dlt_header?: string | null
+          dlt_template_id?: string | null
           evergreen_kind?: string | null
           header_media_handle?: string | null
           header_media_url?: string | null
@@ -14240,6 +14246,9 @@ export type Database = {
           branch_id?: string | null
           content?: string
           created_at?: string
+          dlt_category?: string | null
+          dlt_header?: string | null
+          dlt_template_id?: string | null
           evergreen_kind?: string | null
           header_media_handle?: string | null
           header_media_url?: string | null
