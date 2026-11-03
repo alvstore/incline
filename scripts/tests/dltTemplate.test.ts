@@ -17,3 +17,19 @@ test('variable types follow TRAI categories', () => {
   expect(inferDltType('document_link')).toBe('URL');
   expect(inferDltType('support_phone')).toBe('Phone Number');
 });
+
+import { smsActivationBlocker } from '../../src/lib/templates/dlt';
+import { renderPreview } from '../../src/lib/templates/eventRegistry';
+
+test('SMS template cannot be turned on without DLT ID and header', () => {
+  expect(smsActivationBlocker({ dlt_template_id: '', dlt_header: 'INCLIF' })).not.toBeNull();
+  expect(smsActivationBlocker({ dlt_template_id: '1707168923456789012', dlt_header: '' })).not.toBeNull();
+  expect(smsActivationBlocker({ dlt_template_id: 'abc', dlt_header: 'INCLIF' })).not.toBeNull();
+  expect(smsActivationBlocker({ dlt_template_id: '1707168923456789012', dlt_header: 'INCLIF' })).toBeNull();
+});
+
+test('live preview fills brand as Incline, never the DLT sample brand', () => {
+  const out = renderPreview('Happy Birthday {{member_name}}! Team {{brand_name}}', 'birthday_wish');
+  expect(out).toContain('Team Incline');
+  expect(out).not.toContain('{{');
+});
