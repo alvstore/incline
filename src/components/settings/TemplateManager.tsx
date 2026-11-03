@@ -5,6 +5,7 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DltSmsPanel } from './DltSmsPanel';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -406,6 +407,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       attachment_source: preset.attachment_source,
       attachment_filename_template: preset.attachment_filename_template || '',
       variables: buildOrderedVariables(preset.content || '', preset.trigger, []),
+      dlt_template_id: '', dlt_header: '', dlt_category: '',
     });
     setShowEditor(true);
     toast.success(`Loaded preset: ${preset.label}`);
@@ -476,6 +478,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       attachment_source: 'none',
       attachment_filename_template: '',
       variables: buildOrderedVariables(prefill.content || '', prefill.eventName || prefill.trigger, []),
+      dlt_template_id: '', dlt_header: '', dlt_category: '',
     });
     setShowEditor(true);
     onPrefillConsumed?.();
