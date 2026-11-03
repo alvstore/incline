@@ -27,6 +27,7 @@ export async function generateInvoicePdfBlob(invoiceOrId: any | string): Promise
 function hasJoinedFields(inv: any): boolean {
   // Other screens may provide a partial join; refetch before omitting addresses.
   return !!(inv && inv.invoice_items && inv.branch && 'postal_code' in inv.branch &&
+    (!inv.members || 'joined_at' in inv.members) &&
     (!inv.members?.profiles || 'postal_code' in inv.members.profiles));
 }
 
@@ -35,7 +36,7 @@ async function fetchFullInvoice(id: string) {
     .from('invoices')
     .select(`
       *,
-      members(member_code, profiles:user_id(full_name, email, phone, address, city, state, postal_code), lead:lead_id(full_name, email, phone, avatar_url)),
+      members(member_code, joined_at, profiles:user_id(full_name, email, phone, address, city, state, postal_code), lead:lead_id(full_name, email, phone, avatar_url)),
       branch:branch_id(name, address, city, state, postal_code, phone, email, gstin),
       invoice_items(*),
       pos_sales!invoices_pos_sale_id_fkey(items)

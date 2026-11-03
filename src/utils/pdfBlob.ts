@@ -203,7 +203,7 @@ export interface InvoicePdfInput {
     total_amount: number;
     hsn_code?: string;
     batches?: Array<{ batch_number: string; exp_date?: string | null; quantity?: number }>;
-    meta?: { subtitle?: string; bullets?: string[] };
+    meta?: { subtitle?: string; bulletsTitle?: string; bullets?: string[] };
   }>;
   member_name: string;
   member_code?: string | null;
@@ -360,11 +360,14 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
       return `Batch: ${b.batch_number}${exp}${q}`;
     }).join('\n');
   };
-  const formatMetaSuffix = (meta?: { subtitle?: string; bullets?: string[] }): string => {
+  const formatMetaSuffix = (meta?: { subtitle?: string; bulletsTitle?: string; bullets?: string[] }): string => {
     if (!meta) return '';
     const parts: string[] = [];
     if (meta.subtitle) parts.push(meta.subtitle);
-    if (meta.bullets && meta.bullets.length) parts.push(...meta.bullets.map(b => `• ${b}`));
+    if (meta.bullets && meta.bullets.length) {
+      if (meta.bulletsTitle) parts.push(meta.bulletsTitle);
+      parts.push(...meta.bullets.map(b => `- ${b}`));
+    }
     return parts.length ? '\n' + parts.join('\n') : '';
   };
   const body = data.items.map(i => {
