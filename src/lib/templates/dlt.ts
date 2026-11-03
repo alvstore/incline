@@ -75,3 +75,18 @@ export function toSmartpingRow(name: string, content: string, eventId?: string |
   const vars = d.variables.flatMap((v) => [v.type, v.sample]);
   return [name, JSON.stringify(DLT_HEADERS), d.dltContent.replace(/\n/g, ' '), d.sampleText.replace(/\n/g, ' '), String(d.variables.length), ...vars].join('\t');
 }
+
+/** Live (real-send) sample: brand resolves to Incline, never the DLT preview brand. */
+export function liveSampleFor(key: string, eventId?: string | null): string {
+  if (key === 'brand_name') return 'Incline';
+  return sampleFor(key, eventId);
+}
+
+/** DLT gate: an SMS template may only be switched on once it is registered. */
+export function smsActivationBlocker(t: { dlt_template_id?: string | null; dlt_header?: string | null }): string | null {
+  const id = String(t.dlt_template_id || '').trim();
+  if (!id) return 'Enter the approved DLT Template ID first';
+  if (!/^\d{15,25}$/.test(id)) return 'DLT Template ID must be the numeric ID from the DLT portal';
+  if (!String(t.dlt_header || '').trim()) return 'Choose the approved Header (Sender ID) first';
+  return null;
+}
