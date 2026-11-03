@@ -1,3 +1,4 @@
+// v3.5.0 — SMS: DLT brand-as-variable ({{brand_name}}), forced sign-off, emoji strip.
 // v3.4.0 — Pad bodies that start/end with a variable (Meta rejects those). Auto-prefix "Hi" / suffix brand sign-off.
 // v3.3.0 — Auto-retry in JSON mode when provider skips tool_call; surface 502 (not 500) on AI failures; explicit 403/permission_denied message.
 //          (never write a literal example like "Hi Sample"). Validator strips obvious literal-name
@@ -52,16 +53,18 @@ Rules:
 - For events tagged "[DOCUMENT]" PREFER header_type='document' with header_sample_url='https://www.africau.edu/images/default/sample.pdf' (the platform auto-uploads it to Meta as the approval handle). Body must NOT include {{document_link}} — the file is delivered natively as the header attachment.
 - For other attachment events (e.g. flyers, posters) header_type='image' is allowed with header_sample_url='https://placehold.co/600x400.png'.
 - One template per event.`,
-  sms: `You write Indian-DLT-compliant transactional/promotional SMS for "Incline".
+  sms: `You write Indian DLT (TRAI) compliant SMS templates. The DLT entity is registered under a different business name, so the brand must NEVER be written literally.
 Rules:
 - Output ONLY via the propose_templates tool. No prose.
-- Each body ≤ 160 chars (single segment) unless absolutely needed (max 320 chars).
-- No emojis. No URLs. No phone numbers in body.
-- Variable placeholders use {{snake_case}}; later mapped to {#var#}.
-- End every promotional SMS with the suffix "-INCLNE" (DLT entity tag) — do not add it for transactional.
-- Categories map to dlt_category: TRANSACTIONAL (utility/booking/payment/expiry), SERVICE_IMPLICIT (lifecycle confirmations), SERVICE_EXPLICIT (rich utility w/ promo cross-sell), PROMOTIONAL (offers/marketing/birthday).
-- For events tagged "[DOCUMENT]" reference {{document_link}} (a short URL) in the body and include "document_link" in variables.
-- Names: lower_snake_case ≤ 30 chars.
+- Put the brand ONLY as the variable {{brand_name}}. Never write "Incline" or any business name literally.
+- Every body MUST end with the sign-off line "Team {{brand_name}}".
+- Address the recipient with {{member_name}} (never a literal name).
+- Body ≤ 160 chars ideally (max 320). No emojis. No ₹ symbol (write "Rs."). No phone numbers or URLs typed literally — use {{support_phone}} / {{document_link}} variables.
+- Each variable value must fit in 40 characters (DLT limit); prefer short fields (dates, amounts, names).
+- Variable placeholders use {{snake_case}}; list every placeholder in "variables".
+- dlt_category: TRANSACTIONAL only for OTP; SERVICE_IMPLICIT for confirmations/receipts/reminders/expiry; SERVICE_EXPLICIT for birthday, re-engagement, review requests; PROMOTIONAL for offers.
+- For events tagged "[DOCUMENT]" include {{document_link}}.
+- Names: lower_snake_case ≤ 30 chars, ending in _sms.
 - One template per event.`,
   email: `You write transactional & marketing emails for "Incline", a premium Indian gym brand.
 Rules:
@@ -256,6 +259,15 @@ Deno.serve(async (req) => {
     // Auto-pad with safe static text so the template can be submitted.
     const brand = body.brand || 'Incline';
     for (const t of allTemplates) {
+      if (channel === 'sms') {
+        // DLT: brand is always a variable; guarantee the sign-off and strip literal brand/emojis.
+        let txt = String(t.body_text || t.body || '').replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu, '').replace(/\bIncline( Fitness)?\b/gi, '{{brand_name}}').trim();
+        if (!/\{\{\s*brand_name\s*\}\}\s*$/.test(txt)) txt = `${txt}\nTeam {{brand_name}}`;
+        t.body_text = txt;
+        const vars = new Set<string>([...(Array.isArray(t.variables) ? t.variables : []), ...[...txt.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)].map((m) => m[1])]);
+        t.variables = [...vars];
+        continue;
+      }
       if (typeof t.body_text !== 'string') continue;
       let txt = t.body_text.trim();
       if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) {
