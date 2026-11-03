@@ -52,7 +52,7 @@ export function sampleFor(key: string, eventId?: string | null): string {
 const VAR_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
 /** Each placeholder occurrence becomes its own {#var#} (DLT is positional). */
-export function toDlt(content: string, eventId?: string | null) {
+export function toDlt(content: string, eventId?: string | null, opts: { category?: string | null; header?: string | null } = {}) {
   const variables: DltVariable[] = [];
   let sampleText = content;
   const dltContent = content.replace(VAR_RE, (_m, key: string) => {
@@ -61,19 +61,33 @@ export function toDlt(content: string, eventId?: string | null) {
     return '{#var#}';
   });
   sampleText = content.replace(VAR_RE, (_m, key: string) => sampleFor(key, eventId));
-  const issues: string[] = [];
-  if (!/\{\{\s*brand_name\s*\}\}/.test(content)) issues.push('Add {{brand_name}} — DLT requires the brand in every template.');
-  if (/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(content)) issues.push('Remove emojis — DLT rejects them.');
-  if (/incline/i.test(content.replace(VAR_RE, ''))) issues.push('Brand is hard-coded — use {{brand_name}} instead.');
+  const issues = dltIssues(content, opts);
   if (variables.some((v) => v.tooLong)) issues.push(`A sample value is over ${DLT_VAR_MAX} characters.`);
   return { dltContent, sampleText, variables, issues, length: sampleText.length, segments: Math.max(1, Math.ceil(sampleText.length / 160)) };
 }
 
-/** Tab-separated row matching the Smartping bulk sheet columns. */
-export function toSmartpingRow(name: string, content: string, eventId?: string | null) {
+/** Smartping guideline checks (template_guidelines.pdf, pages 7–8). */
+export function dltIssues(content: string, opts: { category?: string | null; header?: string | null } = {}): string[] {
+  const issues: string[] = [];
+  if (!/\{\{\s*brand_name\s*\}\}/.test(content)) issues.push('Add {{brand_name}} — DLT requires the brand in every template.');
+  if (/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(content)) issues.push('Remove emojis — DLT rejects them.');
+  if (/incline/i.test(content.replace(VAR_RE, ''))) issues.push('Brand is hard-coded — use {{brand_name}} instead.');
+  if (/ {2,}|\t|^ | $/m.test(content)) issues.push('Remove extra spaces — Smartping rejects double, leading or trailing spaces.');
+  if (opts.category === 'TRANSACTIONAL') issues.push('Transactional is for banks only — use Service Implicit.');
+  if (opts.category === 'PROMOTIONAL' && opts.header && !/^\d{6}$/.test(opts.header)) issues.push('Promotional SMS must use a numeric sender ID, not an alpha header.');
+  return issues;
+}
+
+/** Collapse extra spaces so the template matches Smartping formatting rules. */
+export function cleanDltSpaces(content: string): string {
+  return content.replace(/\t/g, ' ').replace(/ {2,}/g, ' ').split('\n').map((l) => l.trim()).join('\n').trim();
+}
+
+/** Tab-separated row for the Smartping sheet — ONE header per template (never the same content on many headers). */
+export function toSmartpingRow(name: string, content: string, eventId?: string | null, header?: string | null) {
   const d = toDlt(content, eventId);
   const vars = d.variables.flatMap((v) => [v.type, v.sample]);
-  return [name, JSON.stringify(DLT_HEADERS), d.dltContent.replace(/\n/g, ' '), d.sampleText.replace(/\n/g, ' '), String(d.variables.length), ...vars].join('\t');
+  return [name, header || DLT_HEADERS[0], d.dltContent.replace(/\n/g, ' '), d.sampleText.replace(/\n/g, ' '), String(d.variables.length), ...vars].join('\t');
 }
 
 /** Live (real-send) sample: brand resolves to Incline, never the DLT preview brand. */
