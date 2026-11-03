@@ -834,6 +834,13 @@
       "when": 1793595562435,
       "tag": "0118_log_mobile_error",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1793696708540,
+      "tag": "0119_templates_dlt_fields",
+      "breakpoints": true
     }
   ]
 }
