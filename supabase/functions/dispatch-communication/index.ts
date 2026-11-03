@@ -898,6 +898,12 @@ Deno.serve(async (req) => {
       }
       input.payload.variables = hydrated;
     }
+    // DLT SMS templates carry the brand as {{brand_name}}; customers always see Incline.
+    if (input.payload) {
+      const vars = { ...(input.payload.variables ?? {}) } as Record<string, unknown>;
+      vars.brand_name ??= 'Incline';
+      input.payload.variables = vars;
+    }
 
     // ── 0) channel kill-switch (Settings → Integrations) ──
     // If the target channel is toggled OFF for this branch (or globally,
