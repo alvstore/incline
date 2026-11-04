@@ -56,7 +56,7 @@ export function PayrollItemDetailsDrawer({open,onOpenChange,item,periodStart,per
     queryKey:['payroll-audit',item?.id],enabled:open && !!item,
     queryFn:async()=>{if(!item)return [];const {data,error}=await supabase.from('payroll_audit').select('id,action,reason,created_at').eq('item_id',item.id).order('created_at',{ascending:false}).limit(30);if(error)throw error;return data || [];},
   });
-  useEffect(()=>{setPreview(false);setPaymentDate(item?.payment_date || today);},[item?.id,open,today]);
+  useEffect(()=>{setPreview(false);setPaymentDate(item?.payment_date || (item?.status==='paid' ? '' : today));},[item?.id,item?.payment_date,item?.status,open,today]);
   const {data:expense,isError:expenseError}=useQuery({queryKey:['payroll-expense',item?.id],enabled:open && paid && !!item,queryFn:async()=>{if(!item)return null;const {data,error}=await supabase.from('expenses').select('id,amount,paid_at,payment_method,payment_reference').eq('payroll_item_id',item.id).maybeSingle();if(error)throw error;return data;}});
   useEffect(()=>{if(!item)return;setValues(Object.fromEntries(fields.map(f=>[f,Number(item[f] || 0)])) as Record<Field,number>);setReason('');setMethod(item.payment_method || 'bank_transfer');setReference(item.payment_reference || '');},[item,open]);
   useEffect(()=>{setSelected(processed ? item?.prepared_installment_ids || [] : pt.filter(r=>paid ? r.settled : !r.settled).map(r=>r.installment_id));},[pt,processed,paid,item?.prepared_installment_ids]);
