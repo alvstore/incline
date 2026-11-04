@@ -17,7 +17,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
-import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
+
 import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
 import { exportToCSV } from '@/lib/csvExport';
 
@@ -52,16 +52,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [adjustItem, setAdjustItem] = useState<PayrollItem | null>(null);
-  const [adjustDrawerOpen, setAdjustDrawerOpen] = useState(false);
-  const [previewItem, setPreviewItem] = useState<any | null>(null);
-  const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
-  
-  const [settleItem, setSettleItem] = useState<any | null>(null);
-  const [settleOpen, setSettleOpen] = useState(false);
-  const [payMethod, setPayMethod] = useState('bank_transfer');
-  const [payRef, setPayRef] = useState('');
-  const [payOpen, setPayOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
 
@@ -90,11 +80,11 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         .select('*')
         .eq('run_id', activeRunId);
       if (error) throw error;
-      const userIds = [...new Set((data || []).map((d: any) => d.user_id))];
+      const userIds = [...new Set((data || []).map(d => d.user_id))];
       const { data: profiles, error: profileError } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
       if(profileError) throw profileError;
-      const map = new Map((profiles || []).map((p: any) => [p.id, p]));
-      return (data || []).map((it: any) => ({ ...it, profile: map.get(it.user_id) }));
+      const map = new Map((profiles || []).map(p => [p.id, p]));
+      return (data || []).map(it => ({ ...it, profile: map.get(it.user_id) }));
     },
   });
 
@@ -117,34 +107,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
     },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const reviewMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.rpc('payroll_review_items', { p_item_ids: ids });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success('Marked reviewed'); setSelectedIds([]); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const approveMut = useMutation({
-    mutationFn: async () => {
-      if (!activeRunId) return;
-      const { error } = await supabase.rpc('payroll_approve_run', { p_run_id: activeRunId });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success('Run approved'); qc.invalidateQueries({ queryKey: ['payroll-items'] }); qc.invalidateQueries({ queryKey: ['payroll-runs'] }); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const processMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.rpc('payroll_process_items', { p_item_ids: ids });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success('Processed'); setSelectedIds([]); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -176,39 +138,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     },
     onError: (e: any) => toast.error(e.message),
   });
-
-
-  const payMut = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc('payroll_mark_paid', {
-        p_item_ids: selectedIds, p_method: payMethod, p_reference: payRef || null,
-      });
-      if (error) throw error;
-
-      // Close out the advance ledger for every staff member whose payslip
-      // deducted an advance in this batch.
-      const paidItems = items.filter((i: any) => selectedIds.includes(i.id) && Number(i.final_advance) > 0);
-      for (const item of paidItems) {
-        try {
-          await applyAdvanceRecovery(item.user_id, Number(item.final_advance));
-        } catch (e) {
-          console.warn('[payroll] advance recovery failed', item.user_id, e);
-        }
-      }
-    },
-    onSuccess: () => {
-      toast.success('Marked paid');
-      setSelectedIds([]); setPayOpen(false); setPayRef('');
-      qc.invalidateQueries({ queryKey: ['payroll-items'] });
-      qc.invalidateQueries({ queryKey: ['salary-advances'] });
-      qc.invalidateQueries({ queryKey: ['pending-advance'] });
-      qc.invalidateQueries({ queryKey: ['pt-commission-ledger'] });
-
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  // Removed adjustMut since it's now handled inside PayrollAdjustmentDrawer
 
 
   const toggleId = (id: string) => setSelectedIds((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
@@ -459,33 +388,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         </SheetContent>
       </Sheet>
 
-      {/* Pay Drawer */}
-
-      <Sheet open={payOpen} onOpenChange={setPayOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Mark {selectedIds.length} item(s) as Paid</SheetTitle>
-            <SheetDescription>Only items currently in <strong>processed</strong> status will be marked paid.</SheetDescription>
-          </SheetHeader>
-          <div className="space-y-4 py-6">
-            <div className="space-y-2">
-              <Label>Payment Method</Label>
-              <Input value={payMethod} onChange={(e) => setPayMethod(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Reference</Label>
-              <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="UTR / Cheque / Txn ID" />
-            </div>
-          </div>
-          <SheetFooter className="mt-auto pt-4 flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setPayOpen(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => payMut.mutate()} disabled={payMut.isPending}>
-              {payMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm Paid
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </Card>
   );
 }

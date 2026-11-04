@@ -89,6 +89,7 @@ function getPayrollMonthLabel(payrollMonth: string): string {
 }
 
 export default function HRMPage() {
+  const { selectedBranch } = useBranchContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const rawInitialTab = searchParams.get('tab') || 'employees';
