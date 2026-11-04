@@ -135,7 +135,7 @@ export default function HRMPage() {
   const [dirSearch, setDirSearch] = useState('');
   const [dirRole, setDirRole] = useState<'all' | StaffRole>('all');
   const [dirDept, setDirDept] = useState<string>('all');
-  const [dirStatus, setDirStatus] = useState<'all' | 'active' | 'inactive' | 'offboarded'>('all');
+  const [dirStatus, setDirStatus] = useState<'all' | 'active' | 'inactive' | 'offboarded'>('active');
 
   const queryClient = useQueryClient();
   const { data: brandData } = useBrandContext(null);
