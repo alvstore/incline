@@ -883,6 +883,20 @@
       "when": 1793787125073,
       "tag": "0125_housekeeping_codes_and_trainer_contract_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1793789586362,
+      "tag": "0126_msg91_template_mapping",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1793789616913,
+      "tag": "0127_template_view_msg91_columns",
+      "breakpoints": true
     }
   ]
 }
