@@ -156,7 +156,7 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
     { key: 'sender_id', label: 'Sender ID', placeholder: 'e.g. GYMBLR', type: 'text', section: 'config' },
     { key: 'dlt_entity_id', label: 'DLT Principal Entity ID', placeholder: 'Enter DLT Entity ID', type: 'text', section: 'config' },
     { key: 'dlt_template_id', label: 'Default DLT Template ID (used only when a template has none)', placeholder: 'Per-template IDs are set in Communication Templates', type: 'text', section: 'config' },
-    { key: 'template_id', label: 'MSG91 Flow Template ID', placeholder: 'Enter MSG91 Flow Template ID', type: 'text', section: 'config' },
+    { key: 'template_id', label: 'Legacy fallback MSG91 template ID (optional)', placeholder: 'Only for old sends without a synced template — sync templates in Communication Templates instead', type: 'text', section: 'config' },
     { key: 'route', label: 'Route', placeholder: '', type: 'select', section: 'config', options: [{ value: '4', label: 'Transactional' }, { value: '1', label: 'Promotional' }] },
     { key: 'auth_key', label: 'Auth Key', placeholder: 'Enter MSG91 Auth Key', type: 'password', section: 'credentials' },
   ],

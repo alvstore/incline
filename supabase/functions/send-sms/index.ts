@@ -1,9 +1,12 @@
+// v2.4.0 — MSG91 sends via Flow API with registered MSG91 template + ordered VARn (fails closed).
 // v2.3.0 — DLT-aware routing: branch provider first then global, template DLT ID/header per provider, accepts `recipient`.
 // v2.2.0 — Multi-provider SMS Edge Function with RoundSMS full API
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { roundBaseUrl, roundAuthParams, roundSendUrl } from "../_shared/roundsms.ts";
+import { sendMSG91, pickIntegration, type Msg91Tpl } from "../_shared/msg91.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,20 +45,18 @@ serve(async (req: Request) => {
     if (intError || !integrations?.length) {
       return json({ error: "No active SMS provider configured" }, 400);
     }
-    const integration =
-      (branch_id && integrations.find((i: any) => i.branch_id === branch_id)) ||
-      integrations.find((i: any) => i.branch_id === null) ||
-      integrations[0];
+    const integration: any = pickIntegration(integrations as any[], branch_id);
 
     const config: Record<string, string> = { ...(integration.config || {}) };
     const credentials = integration.credentials || {};
     const provider = integration.provider;
 
+    let msg91Tpl: Msg91Tpl | null | undefined;
     // DLT: a template send must use its registered DLT ID + approved header.
     if (action === "send" && template_id) {
       const { data: tpl } = await supabase
         .from("templates")
-        .select("type, is_active, dlt_template_id, dlt_header")
+        .select("type, is_active, content, dlt_template_id, dlt_header, msg91_template_id, msg91_sync_status, msg91_synced_content_hash")
         .eq("id", template_id)
         .maybeSingle();
       if (tpl && tpl.type === "sms") {
@@ -64,6 +65,7 @@ serve(async (req: Request) => {
         config.dlt_template_id = tpl.dlt_template_id;
         if (tpl.dlt_header) config.sender_id = tpl.dlt_header;
       }
+      if (provider === "msg91") msg91Tpl = (tpl as Msg91Tpl) ?? null;
     }
 
     // Route based on action
@@ -73,7 +75,7 @@ serve(async (req: Request) => {
         let result: { success: boolean; message_id?: string; error?: string };
         switch (provider) {
           case "roundsms": result = await sendRoundSMS(phone, message, config, credentials); break;
-          case "msg91": result = await sendMSG91(phone, message, config, credentials); break;
+          case "msg91": result = await sendMSG91(phone, config, credentials, msg91Tpl, body.variables); break;
           case "twilio": result = await sendTwilio(phone, message, config, credentials); break;
           case "textlocal": result = await sendTextLocal(phone, message, config, credentials); break;
           case "fast2sms": result = await sendFast2SMS(phone, message, config, credentials); break;
@@ -143,29 +145,8 @@ serve(async (req: Request) => {
 
 // === RoundSMS Functions ===
 
-function roundBaseUrl(config: Record<string, string>) {
-  return config.api_base_url || config.api_url || "http://voice.roundsms.co/api";
-}
-
-// Optional DLT query params — only sent when the account's parameter names are configured.
-function roundDltParams(config: Record<string, string>) {
-  let q = "";
-  if (config.dlt_template_param && config.dlt_template_id) q += `&${encodeURIComponent(config.dlt_template_param)}=${encodeURIComponent(config.dlt_template_id)}`;
-  if (config.dlt_entity_param && config.dlt_entity_id) q += `&${encodeURIComponent(config.dlt_entity_param)}=${encodeURIComponent(config.dlt_entity_id)}`;
-  return q;
-}
-
-function roundAuthParams(credentials: Record<string, string>) {
-  return `user=${encodeURIComponent(credentials.username || "")}&pass=${encodeURIComponent(credentials.password || "")}`;
-}
-
 async function sendRoundSMS(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
-  const cleanPhone = phone.replace(/^(\+?91)/, "");
-  const base = roundBaseUrl(config);
-  const endpoint = config.send_endpoint || "/sendmsg.php";
-  const priority = config.priority || "ndnd";
-  const stype = config.stype || config.sms_type || "normal";
-  const url = `${base}${endpoint}?${roundAuthParams(credentials)}&sender=${encodeURIComponent(config.sender_id || "")}&phone=${cleanPhone}&text=${encodeURIComponent(message)}&priority=${priority}&stype=${stype}${roundDltParams(config)}`;
+  const url = roundSendUrl(phone, message, config, credentials);
   try {
     const resp = await fetch(url);
     const text = await resp.text();
@@ -235,19 +216,6 @@ async function getRoundSMSDeliveryReport(msgid: string, phone: string, msgtype: 
 }
 
 // === Other Providers (unchanged) ===
-
-async function sendMSG91(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
-  const cleanPhone = phone.replace(/^(\+?91)/, "");
-  try {
-    const resp = await fetch("https://control.msg91.com/api/v5/flow/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", authkey: credentials.auth_key || "" },
-      body: JSON.stringify({ sender: config.sender_id, route: config.route || "4", DLT_TE_ID: config.dlt_template_id, PE_ID: config.dlt_entity_id || undefined, mobiles: `91${cleanPhone}`, message }),
-    });
-    const data = await resp.json();
-    return data.type === "success" ? { success: true, message_id: data.request_id } : { success: false, error: data.message || "MSG91 error" };
-  } catch (e) { return { success: false, error: `MSG91 failed: ${(e as Error).message}` }; }
-}
 
 async function sendTwilio(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
   const sid = credentials.account_sid;

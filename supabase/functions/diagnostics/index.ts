@@ -1,4 +1,5 @@
 // v1.0.0 — Consolidated diagnostics endpoint.
+import { msg91Fetch } from "../_shared/msg91.ts";
 // Replaces test-integration, test-ai-provider, test-ai-tool.
 // Dispatched by body.kind: "integration" | "ai_provider" | "ai_tool".
 // Each branch preserves the original handler's auth model and response shape.
@@ -182,18 +183,12 @@ function formatMetaError(error: string, platform: "whatsapp" | "instagram"): str
 async function testSMS(provider: string, config: any, credentials: any) {
   switch (provider) {
     case "msg91": {
+      // Read-only: list templates. Keeps IP-whitelist details from MSG91.
       if (!credentials?.auth_key) return { success: false, error: "Auth Key is required" };
-      try {
-        const resp = await fetch("https://control.msg91.com/api/v5/flow/", {
-          method: "GET",
-          headers: { authkey: credentials.auth_key },
-        });
-        return resp.status !== 401
-          ? { success: true, message: "MSG91 credentials verified ✓" }
-          : { success: false, error: "Invalid MSG91 Auth Key" };
-      } catch (e) {
-        return { success: false, error: `MSG91 connection failed: ${(e as Error).message}` };
-      }
+      const r = await msg91Fetch(credentials.auth_key, "/api/v5/flows", { method: "GET" });
+      if (r.ok) return { success: true, message: "MSG91 credentials verified (template list read)" };
+      const ip = /whitelist|ip/i.test(r.error || "") ? " — add this server's IP in MSG91 → API → IP Whitelist, or disable whitelisting" : "";
+      return { success: false, error: `MSG91 ${r.status || "connection"} error: ${r.error}${ip}` };
     }
     case "roundsms": {
       const base = config?.api_base_url || "http://voice.roundsms.co/api";

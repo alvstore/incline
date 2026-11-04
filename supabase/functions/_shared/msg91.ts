@@ -116,3 +116,47 @@ export async function msg91Fetch(
     return { ok: false, status: 0, data: null, error: redact((e as Error).message, authKey) };
   }
 }
+
+/**
+ * MSG91 Flow send. Template sends need a synced MSG91 mapping (sendBlocker).
+ * Without template_id, the legacy single Flow template ID in settings is used
+ * only when the caller supplies VAR1..VARn values explicitly.
+ */
+export async function sendMSG91(
+  phone: string, config: Record<string, string>, credentials: Record<string, string>,
+  tpl: Msg91Tpl | null | undefined, variables: Record<string, unknown> | undefined, fetchFn: typeof fetch = fetch,
+): Promise<{ success: boolean; message_id?: string; error?: string }> {
+  const authKey = credentials.auth_key || "";
+  if (!authKey) return { success: false, error: "MSG91 Auth Key is not configured" };
+  const mobile = toIndianMobile(phone);
+  if (!mobile) return { success: false, error: "Invalid Indian mobile number" };
+  let templateId: string; let values: Record<string, string>;
+  if (tpl !== undefined) {
+    const block = await sendBlocker(tpl);
+    if (block) return { success: false, error: block };
+    const mapped = mapVariables(tpl!.content, variables);
+    if (mapped.missing.length) return { success: false, error: `Missing SMS variables: ${mapped.missing.join(", ")}` };
+    templateId = tpl!.msg91_template_id!; values = mapped.values;
+  } else {
+    if (!config.template_id) return { success: false, error: "MSG91 needs a synced SMS template (no legacy fallback template set)" };
+    values = Object.fromEntries(Object.entries(variables || {}).filter(([k]) => /^VAR\d+$/.test(k)).map(([k, v]) => [k, String(v)]));
+    if (!Object.keys(values).length) return { success: false, error: "Legacy MSG91 fallback needs VAR1..VARn values" };
+    templateId = config.template_id;
+  }
+  const r = await msg91Fetch(authKey, "/api/v5/flow", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildFlowBody(templateId, mobile, values)),
+  }, fetchFn);
+  return r.ok ? { success: true, message_id: r.data?.message || r.data?.request_id } : { success: false, error: `MSG91: ${r.error}` };
+}
+
+
+const DLT_ID_RE = /^\d{19}$/;
+/** Reason a template cannot be registered in MSG91, or null. DLT approval (SmartPing) must come first. */
+export function registerBlocker(t: { type?: string; content?: string; dlt_template_id?: string | null; dlt_header?: string | null }): string | null {
+  if (t.type && t.type !== "sms") return "Not an SMS template";
+  if (!t.content?.trim()) return "Template body is empty";
+  if (!t.dlt_template_id || !DLT_ID_RE.test(t.dlt_template_id)) return "Approved 19-digit DLT Template ID from SmartPing is required";
+  if (!t.dlt_header || !/^[A-Za-z0-9]{6}$/.test(t.dlt_header)) return "Approved 6-character DLT header is required";
+  return null;
+}
