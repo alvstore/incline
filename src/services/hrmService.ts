@@ -1,3 +1,4 @@
+import { payrollPeriod } from '@/lib/hrm/payroll';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchPrivilegedUserIds } from '@/lib/hrm/excludeAdmins';
 
@@ -394,7 +395,7 @@ export async function calculatePayrollForStaff(
   settings?: HrPayrollSettings
 ) {
   const startDate = `${month}-01`;
-  const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0];
+  const endDate = payrollPeriod(month).end;
   const cfg = settings ?? (await fetchPayrollSettings());
 
   let payableDays = 0;
@@ -542,7 +543,7 @@ export async function calculatePayroll(employeeId: string, month: string) {
   if (!employee) throw new Error('Employee not found');
 
   const startDate = `${month}-01`;
-  const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0];
+  const endDate = payrollPeriod(month).end;
 
   const attendance = await fetchEmployeeAttendance(employeeId, startDate, endDate);
   
