@@ -5,6 +5,7 @@ import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { roundBaseUrl, roundAuthParams, roundSendUrl } from "../_shared/roundsms.ts";
 import { sendMSG91, pickIntegration, type Msg91Tpl } from "../_shared/msg91.ts";
 
 const corsHeaders = {
@@ -144,29 +145,8 @@ serve(async (req: Request) => {
 
 // === RoundSMS Functions ===
 
-function roundBaseUrl(config: Record<string, string>) {
-  return config.api_base_url || config.api_url || "http://voice.roundsms.co/api";
-}
-
-// Optional DLT query params — only sent when the account's parameter names are configured.
-function roundDltParams(config: Record<string, string>) {
-  let q = "";
-  if (config.dlt_template_param && config.dlt_template_id) q += `&${encodeURIComponent(config.dlt_template_param)}=${encodeURIComponent(config.dlt_template_id)}`;
-  if (config.dlt_entity_param && config.dlt_entity_id) q += `&${encodeURIComponent(config.dlt_entity_param)}=${encodeURIComponent(config.dlt_entity_id)}`;
-  return q;
-}
-
-function roundAuthParams(credentials: Record<string, string>) {
-  return `user=${encodeURIComponent(credentials.username || "")}&pass=${encodeURIComponent(credentials.password || "")}`;
-}
-
 async function sendRoundSMS(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
-  const cleanPhone = phone.replace(/^(\+?91)/, "");
-  const base = roundBaseUrl(config);
-  const endpoint = config.send_endpoint || "/sendmsg.php";
-  const priority = config.priority || "ndnd";
-  const stype = config.stype || config.sms_type || "normal";
-  const url = `${base}${endpoint}?${roundAuthParams(credentials)}&sender=${encodeURIComponent(config.sender_id || "")}&phone=${cleanPhone}&text=${encodeURIComponent(message)}&priority=${priority}&stype=${stype}${roundDltParams(config)}`;
+  const url = roundSendUrl(phone, message, config, credentials);
   try {
     const resp = await fetch(url);
     const text = await resp.text();
