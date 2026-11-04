@@ -1903,6 +1903,7 @@ Deno.serve(async (req) => {
               recipient: input.recipient,
               message: input.payload.body,
               template_id: input.template_id,
+              variables: input.payload.variables,
               member_id: input.member_id,
               skip_log: true,
               source_log_id: log!.id,
