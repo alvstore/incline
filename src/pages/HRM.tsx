@@ -41,6 +41,8 @@ import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayro
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { payrollPeriod } from '@/lib/hrm/payroll';
+import { useBranchContext } from '@/contexts/BranchContext';
 import { buildPayslipPdf, buildContractPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
 import { copyToClipboard } from '@/lib/utils/clipboard';
@@ -87,6 +89,7 @@ function getPayrollMonthLabel(payrollMonth: string): string {
 }
 
 export default function HRMPage() {
+  const { selectedBranch } = useBranchContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const rawInitialTab = searchParams.get('tab') || 'employees';
@@ -213,8 +216,8 @@ export default function HRMPage() {
         return [];
       }
 
-      const startDate = `${payrollMonth}-01T00:00:00`;
-      const endDate = new Date(year, month, 0).toISOString();
+      const startDate = `${payrollMonth}-01T00:00:00+05:30`;
+      const endDate = `${payrollPeriod(payrollMonth).end}T23:59:59.999+05:30`;
       const { data, error } = await supabase
         .from('staff_attendance')
         .select('*')
@@ -637,7 +640,7 @@ export default function HRMPage() {
     mutationFn: async () => {
       const [y, m] = payrollMonth.split('-').map(Number);
       const periodStart = `${payrollMonth}-01`;
-      const periodEnd = new Date(y, m, 0).toISOString().split('T')[0];
+      const periodEnd = payrollPeriod(payrollMonth).end;
 
       // Find or create the draft run for this period
       const { data: existingRun } = await supabase
@@ -679,7 +682,7 @@ export default function HRMPage() {
   const ensurePayrollItem = async (userId: string): Promise<string> => {
     const [y, m] = payrollMonth.split('-').map(Number);
     const periodStart = `${payrollMonth}-01`;
-    const periodEnd = new Date(y, m, 0).toISOString().split('T')[0];
+    const periodEnd = payrollPeriod(payrollMonth).end;
 
     let runId: string | undefined;
     const { data: existingRun } = await supabase
@@ -1332,10 +1335,11 @@ export default function HRMPage() {
               </div>
             </div>
             <PayrollRunPanel
+              branchId={selectedBranch === 'all' ? null : selectedBranch}
               periodStart={`${payrollMonth}-01`}
               periodEnd={(() => {
                 const [y, m] = payrollMonth.split('-').map(Number);
-                return new Date(y, m, 0).toISOString().split('T')[0];
+                return payrollPeriod(payrollMonth).end;
               })()}
             />
           </TabsContent>

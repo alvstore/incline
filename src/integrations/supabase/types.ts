@@ -6426,7 +6426,10 @@ export type Database = {
           notice_period_manager_days: number
           notice_period_staff_days: number
           notice_period_trainer_days: number
+          ot_eligible_roles: string[]
+          ot_enabled: boolean
           ot_multiplier: number
+          ot_threshold_hours: number
           pf_employee_pct: number
           pf_enabled: boolean
           pf_wage_ceiling: number | null
@@ -6464,7 +6467,10 @@ export type Database = {
           notice_period_manager_days?: number
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
+          ot_eligible_roles?: string[]
+          ot_enabled?: boolean
           ot_multiplier?: number
+          ot_threshold_hours?: number
           pf_employee_pct?: number
           pf_enabled?: boolean
           pf_wage_ceiling?: number | null
@@ -6502,7 +6508,10 @@ export type Database = {
           notice_period_manager_days?: number
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
+          ot_eligible_roles?: string[]
+          ot_enabled?: boolean
           ot_multiplier?: number
+          ot_threshold_hours?: number
           pf_employee_pct?: number
           pf_enabled?: boolean
           pf_wage_ceiling?: number | null
@@ -10698,7 +10707,9 @@ export type Database = {
           payment_method: string | null
           payment_reference: string | null
           payslip_url: string | null
+          prepared_installment_ids: string[] | null
           run_id: string
+          snapshot_period_end: string | null
           staff_kind: string | null
           status: string
           updated_at: string
@@ -10729,7 +10740,9 @@ export type Database = {
           payment_method?: string | null
           payment_reference?: string | null
           payslip_url?: string | null
+          prepared_installment_ids?: string[] | null
           run_id: string
+          snapshot_period_end?: string | null
           staff_kind?: string | null
           status?: string
           updated_at?: string
@@ -10760,7 +10773,9 @@ export type Database = {
           payment_method?: string | null
           payment_reference?: string | null
           payslip_url?: string | null
+          prepared_installment_ids?: string[] | null
           run_id?: string
+          snapshot_period_end?: string | null
           staff_kind?: string | null
           status?: string
           updated_at?: string
@@ -14562,6 +14577,9 @@ export type Database = {
       trainers: {
         Row: {
           avatar_storage_path: string | null
+          bank_account: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
           bio: string | null
           biometric_enrolled: boolean | null
           biometric_photo_path: string | null
@@ -14600,6 +14618,9 @@ export type Database = {
         }
         Insert: {
           avatar_storage_path?: string | null
+          bank_account?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           bio?: string | null
           biometric_enrolled?: boolean | null
           biometric_photo_path?: string | null
@@ -14638,6 +14659,9 @@ export type Database = {
         }
         Update: {
           avatar_storage_path?: string | null
+          bank_account?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           bio?: string | null
           biometric_enrolled?: boolean | null
           biometric_photo_path?: string | null
@@ -17716,7 +17740,10 @@ export type Database = {
           notice_period_manager_days: number
           notice_period_staff_days: number
           notice_period_trainer_days: number
+          ot_eligible_roles: string[]
+          ot_enabled: boolean
           ot_multiplier: number
+          ot_threshold_hours: number
           pf_employee_pct: number
           pf_enabled: boolean
           pf_wage_ceiling: number | null
@@ -18508,6 +18535,19 @@ export type Database = {
             Returns: number
           }
       payroll_approve_run: { Args: { p_run_id: string }; Returns: undefined }
+      payroll_calculation: {
+        Args: {
+          p_branch_id: string
+          p_end: string
+          p_start: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      payroll_correct_period: {
+        Args: { p_end: string; p_reason: string; p_run_id: string }
+        Returns: undefined
+      }
       payroll_create_run: {
         Args: {
           p_branch_id: string
@@ -18541,6 +18581,17 @@ export type Database = {
         Args: { p_item_ids: string[]; p_method: string; p_reference: string }
         Returns: undefined
       }
+      payroll_prepare_item: {
+        Args: {
+          p_bank?: Json
+          p_installment_ids: string[]
+          p_item_id: string
+          p_method: string
+          p_patch: Json
+          p_reason: string
+        }
+        Returns: Json
+      }
       payroll_process_all_for_run: {
         Args: { p_run_id: string }
         Returns: {
@@ -18562,6 +18613,10 @@ export type Database = {
       }
       payroll_review_items: {
         Args: { p_item_ids: string[] }
+        Returns: undefined
+      }
+      payroll_save_bank: {
+        Args: { p_bank: Json; p_item_id: string }
         Returns: undefined
       }
       payroll_settle_item: {

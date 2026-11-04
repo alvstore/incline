@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import { PayrollItemDetailsDrawer } from './PayrollItemDetailsDrawer';
+import { attendanceValues, type PayrollItem } from '@/lib/hrm/payroll';
+import { can } from '@/lib/auth/permissions';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,23 +12,23 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
-import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
+
+import { PlusCircle, Loader2, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
 import { exportToCSV } from '@/lib/csvExport';
 
-import { PayrollAdjustmentDrawer } from './PayrollAdjustmentDrawer';
-import { PayrollProcessPreviewDrawer } from './PayrollProcessPreviewDrawer';
-import { GeneratePayrollSheet } from './GeneratePayrollSheet';
+
+
+
 import { useAuth } from '@/contexts/AuthContext';
 
-type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
+type Status = 'calculated' | 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
 
 const STATUS_BADGE: Record<Status, string> = {
+  calculated: 'bg-muted text-foreground',
   draft: 'bg-muted text-foreground',
   reviewed: 'bg-info/15 text-info',
   approved: 'bg-primary/15 text-primary',
@@ -39,41 +44,32 @@ interface Props {
 
 export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const qc = useQueryClient();
-  const { hasAnyRole } = useAuth();
+  const { hasAnyRole, roles } = useAuth();
   const isAdmin = hasAnyRole(['admin', 'owner', 'manager']);
   
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [adjustItem, setAdjustItem] = useState<any | null>(null);
-  const [adjustDrawerOpen, setAdjustDrawerOpen] = useState(false);
-  const [previewItem, setPreviewItem] = useState<any | null>(null);
-  const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
-  
-  const [settleItem, setSettleItem] = useState<any | null>(null);
-  const [settleOpen, setSettleOpen] = useState(false);
-  const [payMethod, setPayMethod] = useState('bank_transfer');
-  const [payRef, setPayRef] = useState('');
-  const [payOpen, setPayOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
 
 
-  const { data: runs = [] } = useQuery({
+  const { data: runs = [], isLoading: runsLoading, isError: runsError, refetch: retryRuns } = useQuery({
     queryKey: ['payroll-runs', branchId, periodStart, periodEnd],
     queryFn: async () => {
       let q = supabase.from('payroll_runs').select('*')
-        .eq('period_start', periodStart).eq('period_end', periodEnd)
+        .eq('period_start', periodStart)
         .order('created_at', { ascending: false });
-      if (branchId) q = q.eq('branch_id', branchId);
+      if (branchId) q = q.eq('branch_id', branchId); else q = q.is('branch_id', null);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
 
-  const activeRunId = selectedRunId || runs[0]?.id || null;
+  const activeRunId = (runs.some(r=>r.id===selectedRunId) ? selectedRunId : runs[0]?.id) || null;
 
-  const { data: items = [] } = useQuery({
+  const { data: items = [], isLoading: itemsLoading, isError: itemsError, refetch: retryItems } = useQuery({
     queryKey: ['payroll-items', activeRunId],
     enabled: !!activeRunId,
     queryFn: async () => {
@@ -82,12 +78,16 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         .select('*')
         .eq('run_id', activeRunId);
       if (error) throw error;
-      const userIds = [...new Set((data || []).map((d: any) => d.user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
-      const map = new Map((profiles || []).map((p: any) => [p.id, p]));
-      return (data || []).map((it: any) => ({ ...it, profile: map.get(it.user_id) }));
+      const userIds = [...new Set((data || []).map(d => d.user_id))];
+      const { data: profiles, error: profileError } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
+      if(profileError) throw profileError;
+      const map = new Map((profiles || []).map(p => [p.id, p]));
+      return (data || []).map(it => ({ ...it, profile: map.get(it.user_id) }));
     },
   });
+
+  const {data: banks = [], isError: banksError, isLoading: banksLoading} = useQuery({queryKey:['payroll-banks',activeRunId], enabled:!!activeRunId && items.length>0, queryFn:async()=>{const ids=items.map(i=>i.user_id);const [e,t]=await Promise.all([supabase.from('employees').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids),supabase.from('trainers').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids)]);if(e.error)throw e.error;if(t.error)throw t.error;return [...(e.data || []),...(t.data || [])];}});
+  const correctPeriod = useMutation({mutationFn:async()=>{if(!activeRunId)return;const {error}=await supabase.rpc('payroll_correct_period',{p_run_id:activeRunId,p_end:periodEnd,p_reason:`Correct ${periodStart.slice(0,7)} month-end timezone error; preserve recorded payments and manual adjustments`});if(error)throw error;},onSuccess:()=>{toast.success('Period corrected; paid salaries preserved');qc.invalidateQueries({queryKey:['payroll-runs']});qc.invalidateQueries({queryKey:['payroll-items']});},onError:(e:Error)=>toast.error(e.message)});
 
   const createRun = useMutation({
     mutationFn: async () => {
@@ -103,36 +103,9 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       toast.success('Payroll calculated — review items');
       setSelectedRunId(id);
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
+      qc.invalidateQueries({ queryKey: ['payroll-items'] });
     },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const reviewMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.rpc('payroll_review_items', { p_item_ids: ids });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success('Marked reviewed'); setSelectedIds([]); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const approveMut = useMutation({
-    mutationFn: async () => {
-      if (!activeRunId) return;
-      const { error } = await supabase.rpc('payroll_approve_run', { p_run_id: activeRunId });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success('Run approved'); qc.invalidateQueries({ queryKey: ['payroll-items'] }); qc.invalidateQueries({ queryKey: ['payroll-runs'] }); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const processMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.rpc('payroll_process_items', { p_item_ids: ids });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success('Processed'); setSelectedIds([]); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   // Attendance corrections flag payroll lines as stale; HR recalculates deliberately.
@@ -144,7 +117,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       if (error) throw error;
     },
     onSuccess: () => { toast.success('Recalculated from attendance'); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const reopenMut = useMutation({
@@ -161,56 +134,17 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
 
-  const payMut = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc('payroll_mark_paid', {
-        p_item_ids: selectedIds, p_method: payMethod, p_reference: payRef || null,
-      });
-      if (error) throw error;
+  const activeRun = runs.find((r) => r.id === activeRunId);
 
-      // Close out the advance ledger for every staff member whose payslip
-      // deducted an advance in this batch.
-      const paidItems = items.filter((i: any) => selectedIds.includes(i.id) && Number(i.final_advance) > 0);
-      for (const item of paidItems) {
-        try {
-          await applyAdvanceRecovery(item.user_id, Number(item.final_advance));
-        } catch (e) {
-          console.warn('[payroll] advance recovery failed', item.user_id, e);
-        }
-      }
-    },
-    onSuccess: () => {
-      toast.success('Marked paid');
-      setSelectedIds([]); setPayOpen(false); setPayRef('');
-      qc.invalidateQueries({ queryKey: ['payroll-items'] });
-      qc.invalidateQueries({ queryKey: ['salary-advances'] });
-      qc.invalidateQueries({ queryKey: ['pending-advance'] });
-      qc.invalidateQueries({ queryKey: ['pt-commission-ledger'] });
-
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  // Removed adjustMut since it's now handled inside PayrollAdjustmentDrawer
-
-
-  const toggleId = (id: string) => setSelectedIds((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
-  const toggleAll = (status: Status) => {
-    const ids = items.filter((i: any) => i.status === status).map((i: any) => i.id);
-    setSelectedIds((s) => s.length === ids.length ? [] : ids);
-  };
-
-  const activeRun = runs.find((r: any) => r.id === activeRunId);
-
-  const att = (it: any) => (it?.calc_attendance || {}) as Record<string, number>;
+  const att = (it: PayrollItem) => attendanceValues(it);
   const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
   const totals = items.reduce(
-    (acc: any, it: any) => {
+    (acc, it) => {
       acc.base += Number(it.final_base || 0);
       acc.pt += Number(it.final_pt_commission || 0);
       acc.ot += Number(it.final_ot || 0);
@@ -224,11 +158,15 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   );
 
   const exportCsv = () => {
-    const rows = items.map((it: any) => {
+    const rows = items.map((it) => {
       const a = att(it);
       return {
         Employee: it.profile?.full_name || it.user_id,
         Kind: it.staff_kind,
+        Period: `${periodStart} to ${it.snapshot_period_end || periodEnd}`,
+        'Bank account': banks.find(b=>b.user_id===it.user_id && b.bank_account)?.bank_account || '',
+        IFSC: banks.find(b=>b.user_id===it.user_id && b.bank_account)?.bank_ifsc || '',
+        'Half days': a.half_day ?? '',
         'Month Days': a.total_days ?? '',
         'Total Shifts': a.shifts_rostered ?? '',
         'Missed Shifts': a.shifts_missed ?? '',
@@ -245,15 +183,27 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         Advance: Number(it.final_advance || 0),
         'Net Payout': Number(it.final_net || 0),
         Status: it.status,
+        'Payment method': it.payment_method,
+        Reference: it.payment_reference,
+        'Snapshot end': it.snapshot_period_end,
+        'Adjustment reason': it.adjustment_reason,
       };
     });
     exportToCSV(rows, `payroll-${periodStart}-to-${periodEnd}`);
   };
 
+  const exportRemittance=(method:string)=>{
+    const eligible=items.filter(i=>i.status==='processed' && i.payment_method===method);
+    if(!eligible.length){toast.error('No processed salaries for this payment method');return;}
+    const rows=eligible.map(i=>{const bank=banks.find(b=>b.user_id===i.user_id && b.bank_account) || banks.find(b=>b.user_id===i.user_id);return {Beneficiary:i.profile?.full_name,'Bank account':bank?.bank_account || '',IFSC:bank?.bank_ifsc || '',Bank:bank?.bank_name || '',Amount:Number(i.final_net),'Salary month':periodStart.slice(0,7),Status:i.status,Reference:i.payment_reference || '',Signature:method==='cash'?'________________':'', 'Payment date':i.status==='paid'?i.updated_at:''};});
+    if(method==='bank_transfer' && rows.some(r=>!r['Bank account'] || !r.IFSC)){toast.error('Bank details are missing; complete them in Salary details');return;}
+    exportToCSV(rows,`payroll-${method}-${periodStart}`);
+  };
+
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
+    <Card className="rounded-2xl">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <CardTitle className="text-base">Payroll Run — {periodStart} → {periodEnd}</CardTitle>
           {activeRun && (
@@ -262,57 +212,44 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {activeRun && !['processed', 'paid'].includes(activeRun.status) && activeRun.status !== 'draft'
             && hasAnyRole(['owner', 'admin']) && (
             <Button variant="outline" onClick={() => setReopenOpen(true)}>
               <RotateCcw className="h-4 w-4 mr-2" /> Reopen Run
             </Button>
           )}
-          <Button onClick={() => createRun.mutate()} disabled={createRun.isPending} variant="default">
+          <Button onClick={() => createRun.mutate()} disabled={createRun.isPending || !!activeRunId || runsLoading || !can.manageStaff(roles)} variant="default">
             {createRun.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />}
-            Calculate Run
+            {activeRunId ? 'Saved run' : 'Calculate Run'}
           </Button>
         </div>
 
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
+        {runs.length>1 && <div className="mb-4"><Label htmlFor="saved-run">Saved payroll run</Label><Select value={activeRunId || ''} onValueChange={id=>{setSelectedRunId(id);}}><SelectTrigger id="saved-run"><SelectValue/></SelectTrigger><SelectContent>{runs.map(r=><SelectItem key={r.id} value={r.id}>{new Date(r.created_at).toLocaleString('en-IN')} · {r.period_end} · {r.status}</SelectItem>)}</SelectContent></Select></div>}
+        {activeRun && activeRun.period_end!==periodEnd && <div className="mb-4 bg-warning/10 rounded-xl p-4 text-sm flex flex-wrap items-center gap-3"><span>Saved run ends {activeRun.period_end}; calendar month ends {periodEnd}. Paid salaries will stay unchanged.</span><Button variant="outline" disabled={correctPeriod.isPending || !can.manageStaff(roles)} onClick={()=>correctPeriod.mutate()}>Correct month end</Button></div>}
+        {(runsLoading || itemsLoading) ? <Skeleton className="h-40"/> : (runsError || itemsError) ? <Button variant="outline" onClick={()=>{retryRuns();retryItems();}}>Retry payroll</Button> :
+
+        items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
             No items — click <strong>Calculate Run</strong> to generate payroll items.
           </p>
         ) : (
           <>
             <div className="flex flex-wrap gap-2 mb-3">
-              <Button size="sm" variant="outline" onClick={() => toggleAll('draft')}>Select Draft</Button>
-              <Button size="sm" variant="outline" onClick={() => toggleAll('reviewed')}>Select Reviewed</Button>
-              <Button size="sm" variant="outline" onClick={() => toggleAll('approved')}>Select Approved</Button>
+
+
+
               <div className="flex-1" />
-              <Button size="sm" disabled={selectedIds.length === 0 || reviewMut.isPending}
-                onClick={() => reviewMut.mutate(selectedIds)}>
-                <ClipboardCheck className="h-4 w-4 mr-1" /> Mark Reviewed
-              </Button>
-              <Button size="sm" variant="default" disabled={!activeRunId || approveMut.isPending}
-                onClick={() => approveMut.mutate()}>
-                <CheckCircle2 className="h-4 w-4 mr-1" /> Approve Run
-              </Button>
-              <Button size="sm" disabled={selectedIds.length === 0 || processMut.isPending}
-                onClick={() => processMut.mutate(selectedIds)}>
-                <Send className="h-4 w-4 mr-1" /> Process Selected
-              </Button>
-              <Button size="sm" variant="secondary" disabled={selectedIds.length === 0}
-                onClick={() => setPayOpen(true)}>
-                <Banknote className="h-4 w-4 mr-1" /> Mark Paid
-              </Button>
-              <Button size="sm" variant="outline" onClick={exportCsv} aria-label="Export payroll sheet">
-                <Download className="h-4 w-4 mr-1" /> Export
-              </Button>
+              <Button size="sm" variant="outline" disabled={banksLoading || banksError} onClick={exportCsv}><Download className="h-4 w-4 mr-1"/>Full ledger</Button>
+              <Button size="sm" variant="outline" disabled={banksError || banksLoading} onClick={()=>exportRemittance('bank_transfer')}><Download className="h-4 w-4 mr-1"/>Bank remittance</Button>
+              <Button size="sm" variant="outline" onClick={()=>exportRemittance('cash')}><Download className="h-4 w-4 mr-1"/>Cash payout</Button>
             </div>
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
-                    <TableHead className="w-8"></TableHead>
                     <TableHead>Staff</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Shifts</TableHead>
@@ -328,14 +265,11 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((it: any) => {
+                  {items.map((it) => {
                     const adjusted = Number(it.final_net) !== Number(it.calc_net);
                     const a = att(it);
                     return (
                       <TableRow key={it.id}>
-                        <TableCell>
-                          <Checkbox checked={selectedIds.includes(it.id)} onCheckedChange={() => toggleId(it.id)} />
-                        </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
                           <div className="text-xs text-muted-foreground">
@@ -387,33 +321,15 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                                 <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalculate
                               </Button>
                             )}
-                            <Button size="sm" variant="ghost"
-                              disabled={['processed','paid'].includes(it.status)}
-                              onClick={() => { setPreviewItem(it); setPreviewDrawerOpen(true); }}
-                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                            >
-                              <Eye className="h-3.5 w-3.5 mr-1" /> Preview
-                            </Button>
-                            <Button size="sm" variant="default"
-                              disabled={it.status === 'paid' || !hasAnyRole(['owner', 'admin'])}
-                              onClick={() => { setSettleItem(it); setSettleOpen(true); }}
-                            >
-                              <Banknote className="h-3.5 w-3.5 mr-1" /> Process Salary
-                            </Button>
-                            <Button size="sm" variant="ghost" aria-label="Adjust payroll item"
-                              disabled={['processed','paid'].includes(it.status) || !isAdmin}
-                              onClick={() => { setAdjustItem(it); setAdjustDrawerOpen(true); }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            <Button size="sm" variant="outline" className="min-h-11" onClick={()=>{setDetailId(it.id);setDetailOpen(true);}}><Eye className="h-4 w-4 mr-1"/>Salary details</Button>
                           </div>
                         </TableCell>
 
                       </TableRow>
                     );
                   })}
-                  <TableRow className="bg-slate-50 font-semibold">
-                    <TableCell colSpan={5} className="text-right text-xs uppercase tracking-wider text-slate-500">Total</TableCell>
+                  <TableRow className="bg-muted font-semibold">
+                    <TableCell colSpan={4} className="text-right text-xs uppercase tracking-wider text-muted-foreground">Total</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.base)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.pt)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.ot)}</TableCell>
@@ -435,19 +351,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         )}
       </CardContent>
 
-      <PayrollAdjustmentDrawer 
-        open={adjustDrawerOpen} 
-        onOpenChange={setAdjustDrawerOpen} 
-        item={adjustItem} 
-      />
-
-      <GeneratePayrollSheet open={settleOpen} onOpenChange={setSettleOpen} item={settleItem} periodStart={periodStart} />
-
-      <PayrollProcessPreviewDrawer
-        open={previewDrawerOpen}
-        onOpenChange={setPreviewDrawerOpen}
-        item={previewItem}
-      />
+      <PayrollItemDetailsDrawer open={detailOpen} onOpenChange={setDetailOpen} item={items.find(i=>i.id===detailId) || null} periodStart={periodStart} periodEnd={activeRun?.period_end || periodEnd} branchId={branchId}/>
 
       {/* Reopen Drawer */}
       <Sheet open={reopenOpen} onOpenChange={setReopenOpen}>
@@ -476,33 +380,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         </SheetContent>
       </Sheet>
 
-      {/* Pay Drawer */}
-
-      <Sheet open={payOpen} onOpenChange={setPayOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Mark {selectedIds.length} item(s) as Paid</SheetTitle>
-            <SheetDescription>Only items currently in <strong>processed</strong> status will be marked paid.</SheetDescription>
-          </SheetHeader>
-          <div className="space-y-4 py-6">
-            <div className="space-y-2">
-              <Label>Payment Method</Label>
-              <Input value={payMethod} onChange={(e) => setPayMethod(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Reference</Label>
-              <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="UTR / Cheque / Txn ID" />
-            </div>
-          </div>
-          <SheetFooter className="mt-auto pt-4 flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setPayOpen(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => payMut.mutate()} disabled={payMut.isPending}>
-              {payMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm Paid
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </Card>
   );
 }

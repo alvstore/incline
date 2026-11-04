@@ -32,6 +32,9 @@ type HrSettings = {
   weekly_hour_cap: number;
   daily_hour_cap: number;
   ot_multiplier: number;
+  ot_enabled: boolean;
+  ot_eligible_roles: string[];
+  ot_threshold_hours: number;
   basic_pct_of_ctc: number;
   // Statutory deductions
   pf_enabled: boolean;
@@ -62,6 +65,9 @@ const blank = (branch_id: string | null): HrSettings => ({
   weekly_hour_cap: 48,
   daily_hour_cap: 9,
   ot_multiplier: 2.0,
+  ot_enabled: false,
+  ot_eligible_roles: ['employee'],
+  ot_threshold_hours: 8.5,
   basic_pct_of_ctc: 50.0,
   pf_enabled: false,
   pf_employee_pct: 12,
@@ -81,7 +87,7 @@ export default function HrSettingsTab() {
   const qc = useQueryClient();
   const [form, setForm] = useState<HrSettings>(blank(branchId));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr-settings', branchId],
     queryFn: async () => {
       const q = supabase.from('hr_settings').select('*');
@@ -110,8 +116,10 @@ export default function HrSettingsTab() {
       toast.success('HR settings saved');
       qc.invalidateQueries({ queryKey: ['hr-settings'] });
       qc.invalidateQueries({ queryKey: ['employer-profile'] });
+      qc.invalidateQueries({ queryKey: ['hrm-payroll-settings'] });
+      qc.invalidateQueries({ queryKey: ['payroll-calculation'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to save'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
   });
 
   function patch<K extends keyof HrSettings>(k: K, v: HrSettings[K]) {
@@ -134,9 +142,24 @@ export default function HrSettingsTab() {
 
   if (isLoading) return <div className="space-y-3"><Skeleton className="h-40 w-full rounded-2xl" /><Skeleton className="h-40 w-full rounded-2xl" /></div>;
 
+  if (isError) return <Button variant="outline" onClick={() => refetch()}>Retry HR settings</Button>;
+
   return (
     <div className="space-y-6">
       <EmployerSummaryCard branchId={branchId} />
+      <Card>
+        <CardHeader><CardTitle>Overtime policy</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between"><Label htmlFor="ot-enabled">Include overtime in new payroll calculations</Label><Switch id="ot-enabled" checked={form.ot_enabled} onCheckedChange={v => patch('ot_enabled', v)} /></div>
+          {form.ot_enabled && <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><Label htmlFor="ot-threshold">Daily threshold (hours)</Label><Input id="ot-threshold" type="number" min="1" max="24" step="0.5" value={form.ot_threshold_hours} onChange={e => patch('ot_threshold_hours',Number(e.target.value))} /></div>
+              <div><Label htmlFor="ot-rate">Pay multiplier</Label><Input id="ot-rate" type="number" min="0.1" max="5" step="0.1" value={form.ot_multiplier} onChange={e => patch('ot_multiplier',Number(e.target.value))} /></div>
+            </div>
+            {['employee','trainer'].map(kind => <div key={kind} className="flex items-center justify-between"><Label htmlFor={`ot-${kind}`} className="capitalize">{kind} overtime</Label><Switch id={`ot-${kind}`} checked={form.ot_eligible_roles.includes(kind)} onCheckedChange={v => patch('ot_eligible_roles',v ? [...form.ot_eligible_roles,kind] : form.ot_eligible_roles.filter(r=>r!==kind))} /></div>)}
+          </>}
+        </CardContent>
+      </Card>
 
       <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
@@ -162,7 +185,7 @@ export default function HrSettingsTab() {
           <Field label="Basic % of CTC"><Input type="number" step={0.5} value={form.basic_pct_of_ctc} onChange={(e) => patch('basic_pct_of_ctc', Number(e.target.value))} /></Field>
           <Field label="Daily hours cap"><Input type="number" value={form.daily_hour_cap} onChange={(e) => patch('daily_hour_cap', Number(e.target.value))} /></Field>
           <Field label="Weekly hours cap"><Input type="number" value={form.weekly_hour_cap} onChange={(e) => patch('weekly_hour_cap', Number(e.target.value))} /></Field>
-          <Field label="OT multiplier"><Input type="number" step={0.1} value={form.ot_multiplier} onChange={(e) => patch('ot_multiplier', Number(e.target.value))} /></Field>
+
           <Field label="Arbitration seat"><Input value={form.arbitration_seat} onChange={(e) => patch('arbitration_seat', e.target.value)} /></Field>
           <Field label="Governing jurisdiction" className="md:col-span-2"><Input value={form.governing_jurisdiction} onChange={(e) => patch('governing_jurisdiction', e.target.value)} /></Field>
           <Field label="Reviewed by (lawyer)"><Input value={form.lawyer_reviewed_by ?? ''} onChange={(e) => patch('lawyer_reviewed_by', e.target.value)} /></Field>
