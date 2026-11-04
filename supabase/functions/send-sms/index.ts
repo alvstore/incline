@@ -1,9 +1,11 @@
+// v2.4.0 — MSG91 sends via Flow API with registered MSG91 template + ordered VARn (fails closed).
 // v2.3.0 — DLT-aware routing: branch provider first then global, template DLT ID/header per provider, accepts `recipient`.
 // v2.2.0 — Multi-provider SMS Edge Function with RoundSMS full API
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendBlocker, mapVariables, toIndianMobile, buildFlowBody, msg91Fetch, pickIntegration, type Msg91Tpl } from "../_shared/msg91.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,7 +15,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-serve(async (req: Request) => {
+if (import.meta.main) serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -42,20 +44,18 @@ serve(async (req: Request) => {
     if (intError || !integrations?.length) {
       return json({ error: "No active SMS provider configured" }, 400);
     }
-    const integration =
-      (branch_id && integrations.find((i: any) => i.branch_id === branch_id)) ||
-      integrations.find((i: any) => i.branch_id === null) ||
-      integrations[0];
+    const integration: any = pickIntegration(integrations as any[], branch_id);
 
     const config: Record<string, string> = { ...(integration.config || {}) };
     const credentials = integration.credentials || {};
     const provider = integration.provider;
 
+    let msg91Tpl: Msg91Tpl | null | undefined;
     // DLT: a template send must use its registered DLT ID + approved header.
     if (action === "send" && template_id) {
       const { data: tpl } = await supabase
         .from("templates")
-        .select("type, is_active, dlt_template_id, dlt_header")
+        .select("type, is_active, content, dlt_template_id, dlt_header, msg91_template_id, msg91_sync_status, msg91_synced_content_hash")
         .eq("id", template_id)
         .maybeSingle();
       if (tpl && tpl.type === "sms") {
@@ -64,6 +64,7 @@ serve(async (req: Request) => {
         config.dlt_template_id = tpl.dlt_template_id;
         if (tpl.dlt_header) config.sender_id = tpl.dlt_header;
       }
+      if (provider === "msg91") msg91Tpl = (tpl as Msg91Tpl) ?? null;
     }
 
     // Route based on action
@@ -73,7 +74,7 @@ serve(async (req: Request) => {
         let result: { success: boolean; message_id?: string; error?: string };
         switch (provider) {
           case "roundsms": result = await sendRoundSMS(phone, message, config, credentials); break;
-          case "msg91": result = await sendMSG91(phone, message, config, credentials); break;
+          case "msg91": result = await sendMSG91(phone, config, credentials, msg91Tpl, body.variables); break;
           case "twilio": result = await sendTwilio(phone, message, config, credentials); break;
           case "textlocal": result = await sendTextLocal(phone, message, config, credentials); break;
           case "fast2sms": result = await sendFast2SMS(phone, message, config, credentials); break;
@@ -236,17 +237,37 @@ async function getRoundSMSDeliveryReport(msgid: string, phone: string, msgtype: 
 
 // === Other Providers (unchanged) ===
 
-async function sendMSG91(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
-  const cleanPhone = phone.replace(/^(\+?91)/, "");
-  try {
-    const resp = await fetch("https://control.msg91.com/api/v5/flow/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", authkey: credentials.auth_key || "" },
-      body: JSON.stringify({ sender: config.sender_id, route: config.route || "4", DLT_TE_ID: config.dlt_template_id, PE_ID: config.dlt_entity_id || undefined, mobiles: `91${cleanPhone}`, message }),
-    });
-    const data = await resp.json();
-    return data.type === "success" ? { success: true, message_id: data.request_id } : { success: false, error: data.message || "MSG91 error" };
-  } catch (e) { return { success: false, error: `MSG91 failed: ${(e as Error).message}` }; }
+/**
+ * MSG91 Flow send. Template sends need a synced MSG91 mapping (sendBlocker).
+ * Without template_id, the legacy single Flow template ID in settings is used
+ * only when the caller supplies VAR1..VARn values explicitly.
+ */
+export async function sendMSG91(
+  phone: string, config: Record<string, string>, credentials: Record<string, string>,
+  tpl: Msg91Tpl | null | undefined, variables: Record<string, unknown> | undefined, fetchFn: typeof fetch = fetch,
+): Promise<{ success: boolean; message_id?: string; error?: string }> {
+  const authKey = credentials.auth_key || "";
+  if (!authKey) return { success: false, error: "MSG91 Auth Key is not configured" };
+  const mobile = toIndianMobile(phone);
+  if (!mobile) return { success: false, error: "Invalid Indian mobile number" };
+  let templateId: string; let values: Record<string, string>;
+  if (tpl !== undefined) {
+    const block = await sendBlocker(tpl);
+    if (block) return { success: false, error: block };
+    const mapped = mapVariables(tpl!.content, variables);
+    if (mapped.missing.length) return { success: false, error: `Missing SMS variables: ${mapped.missing.join(", ")}` };
+    templateId = tpl!.msg91_template_id!; values = mapped.values;
+  } else {
+    if (!config.template_id) return { success: false, error: "MSG91 needs a synced SMS template (no legacy fallback template set)" };
+    values = Object.fromEntries(Object.entries(variables || {}).filter(([k]) => /^VAR\d+$/.test(k)).map(([k, v]) => [k, String(v)]));
+    if (!Object.keys(values).length) return { success: false, error: "Legacy MSG91 fallback needs VAR1..VARn values" };
+    templateId = config.template_id;
+  }
+  const r = await msg91Fetch(authKey, "/api/v5/flow", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildFlowBody(templateId, mobile, values)),
+  }, fetchFn);
+  return r.ok ? { success: true, message_id: r.data?.message || r.data?.request_id } : { success: false, error: `MSG91: ${r.error}` };
 }
 
 async function sendTwilio(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
