@@ -1,8 +1,8 @@
 # Payroll correction (4 Nov 2026)
-- [ ] Correct month boundaries and attendance fractions; audit and safely repair saved October run without losing adjustments or payments.
-- [ ] Add default-off overtime settings enforced in payroll calculation.
-- [ ] Unify salary review, adjustment and settlement in one drawer; add bank/cash/ledger downloads.
-- [ ] Run focused tests and signed-in payroll checks.
+- [x] Correct month boundaries and attendance fractions; audit and safely repair saved October run without losing adjustments or payments.
+- [x] Add default-off overtime settings enforced in payroll calculation.
+- [x] Unify salary review, adjustment and settlement in one drawer; add bank/cash/ledger downloads.
+- [x] Run focused tests and signed-in payroll checks.
 
 # Monitoring findings (1 Nov 2026)
 - [x] Alias finding stale: exact live resolver and service-role grants exist; no matching missing-function errors in last 24 hours. No alias/schema changes made.

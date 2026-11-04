@@ -12,13 +12,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
+import { PlusCircle, Loader2, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
 import { exportToCSV } from '@/lib/csvExport';
 
 
@@ -49,7 +48,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const isAdmin = hasAnyRole(['admin', 'owner', 'manager']);
   
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
@@ -89,7 +87,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   });
 
   const {data: banks = [], isError: banksError, isLoading: banksLoading} = useQuery({queryKey:['payroll-banks',activeRunId], enabled:!!activeRunId && items.length>0, queryFn:async()=>{const ids=items.map(i=>i.user_id);const [e,t]=await Promise.all([supabase.from('employees').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids),supabase.from('trainers').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids)]);if(e.error)throw e.error;if(t.error)throw t.error;return [...(e.data || []),...(t.data || [])];}});
-  const correctPeriod = useMutation({mutationFn:async()=>{if(!activeRunId)return;const {error}=await supabase.rpc('payroll_correct_period',{p_run_id:activeRunId,p_end:periodEnd,p_reason:'Correct October month-end timezone error; preserve recorded payments and manual adjustments'});if(error)throw error;},onSuccess:()=>{toast.success('Period corrected; paid salaries preserved');qc.invalidateQueries({queryKey:['payroll-runs']});qc.invalidateQueries({queryKey:['payroll-items']});},onError:(e:Error)=>toast.error(e.message)});
+  const correctPeriod = useMutation({mutationFn:async()=>{if(!activeRunId)return;const {error}=await supabase.rpc('payroll_correct_period',{p_run_id:activeRunId,p_end:periodEnd,p_reason:`Correct ${periodStart.slice(0,7)} month-end timezone error; preserve recorded payments and manual adjustments`});if(error)throw error;},onSuccess:()=>{toast.success('Period corrected; paid salaries preserved');qc.invalidateQueries({queryKey:['payroll-runs']});qc.invalidateQueries({queryKey:['payroll-items']});},onError:(e:Error)=>toast.error(e.message)});
 
   const createRun = useMutation({
     mutationFn: async () => {
@@ -140,12 +138,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   });
 
 
-  const toggleId = (id: string) => setSelectedIds((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
-  const toggleAll = (status: Status) => {
-    const ids = items.filter((i) => i.status === status).map((i) => i.id);
-    setSelectedIds((s) => s.length === ids.length ? [] : ids);
-  };
-
   const activeRun = runs.find((r) => r.id === activeRunId);
 
   const att = (it: PayrollItem) => attendanceValues(it);
@@ -171,6 +163,10 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       return {
         Employee: it.profile?.full_name || it.user_id,
         Kind: it.staff_kind,
+        Period: `${periodStart} to ${it.snapshot_period_end || periodEnd}`,
+        'Bank account': banks.find(b=>b.user_id===it.user_id && b.bank_account)?.bank_account || '',
+        IFSC: banks.find(b=>b.user_id===it.user_id && b.bank_account)?.bank_ifsc || '',
+        'Half days': a.half_day ?? '',
         'Month Days': a.total_days ?? '',
         'Total Shifts': a.shifts_rostered ?? '',
         'Missed Shifts': a.shifts_missed ?? '',
@@ -231,7 +227,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
 
       </CardHeader>
       <CardContent>
-        {runs.length>1 && <div className="mb-4"><Label htmlFor="saved-run">Saved payroll run</Label><Select value={activeRunId || ''} onValueChange={id=>{setSelectedRunId(id);setSelectedIds([]);}}><SelectTrigger id="saved-run"><SelectValue/></SelectTrigger><SelectContent>{runs.map(r=><SelectItem key={r.id} value={r.id}>{new Date(r.created_at).toLocaleString('en-IN')} · {r.period_end} · {r.status}</SelectItem>)}</SelectContent></Select></div>}
+        {runs.length>1 && <div className="mb-4"><Label htmlFor="saved-run">Saved payroll run</Label><Select value={activeRunId || ''} onValueChange={id=>{setSelectedRunId(id);}}><SelectTrigger id="saved-run"><SelectValue/></SelectTrigger><SelectContent>{runs.map(r=><SelectItem key={r.id} value={r.id}>{new Date(r.created_at).toLocaleString('en-IN')} · {r.period_end} · {r.status}</SelectItem>)}</SelectContent></Select></div>}
         {activeRun && activeRun.period_end!==periodEnd && <div className="mb-4 bg-warning/10 rounded-xl p-4 text-sm flex flex-wrap items-center gap-3"><span>Saved run ends {activeRun.period_end}; calendar month ends {periodEnd}. Paid salaries will stay unchanged.</span><Button variant="outline" disabled={correctPeriod.isPending || !can.manageStaff(roles)} onClick={()=>correctPeriod.mutate()}>Correct month end</Button></div>}
         {(runsLoading || itemsLoading) ? <Skeleton className="h-40"/> : (runsError || itemsError) ? <Button variant="outline" onClick={()=>{retryRuns();retryItems();}}>Retry payroll</Button> :
 
@@ -246,7 +242,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
 
 
               <div className="flex-1" />
-              <Button size="sm" variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-1"/>Full ledger</Button>
+              <Button size="sm" variant="outline" disabled={banksLoading || banksError} onClick={exportCsv}><Download className="h-4 w-4 mr-1"/>Full ledger</Button>
               <Button size="sm" variant="outline" disabled={banksError || banksLoading} onClick={()=>exportRemittance('bank_transfer')}><Download className="h-4 w-4 mr-1"/>Bank remittance</Button>
               <Button size="sm" variant="outline" onClick={()=>exportRemittance('cash')}><Download className="h-4 w-4 mr-1"/>Cash payout</Button>
             </div>
@@ -254,7 +250,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
-                    <TableHead className="w-8"></TableHead>
                     <TableHead>Staff</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Shifts</TableHead>
@@ -275,9 +270,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                     const a = att(it);
                     return (
                       <TableRow key={it.id}>
-                        <TableCell>
-                          <Checkbox aria-label={`Select ${it.profile?.full_name || 'staff'}`} checked={selectedIds.includes(it.id)} onCheckedChange={() => toggleId(it.id)} />
-                        </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
                           <div className="text-xs text-muted-foreground">
@@ -337,7 +329,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                     );
                   })}
                   <TableRow className="bg-muted font-semibold">
-                    <TableCell colSpan={5} className="text-right text-xs uppercase tracking-wider text-muted-foreground">Total</TableCell>
+                    <TableCell colSpan={4} className="text-right text-xs uppercase tracking-wider text-muted-foreground">Total</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.base)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.pt)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{inr(totals.ot)}</TableCell>

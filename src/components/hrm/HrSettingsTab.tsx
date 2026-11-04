@@ -119,7 +119,7 @@ export default function HrSettingsTab() {
       qc.invalidateQueries({ queryKey: ['hrm-payroll-settings'] });
       qc.invalidateQueries({ queryKey: ['payroll-calculation'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to save'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
   });
 
   function patch<K extends keyof HrSettings>(k: K, v: HrSettings[K]) {
