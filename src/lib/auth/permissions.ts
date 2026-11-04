@@ -30,7 +30,8 @@ export type Capability =
   | 'rcs_wallet_view'
   | 'manage_class_schedule'
   | 'manage_renewals'
-  | 'manage_standby_copy';
+  | 'manage_standby_copy'
+  | 'sync_sms_templates';
 
 const MATRIX: Record<Capability, AppRole[]> = {
   view_financials:     ['owner', 'admin', 'manager'],
@@ -39,6 +40,7 @@ const MATRIX: Record<Capability, AppRole[]> = {
   approve_discount:    ['owner', 'admin', 'manager'],
   cross_branch_view:   ['owner', 'admin'],
   manage_settings:     ['owner', 'admin'],
+  sync_sms_templates:  ['owner', 'admin', 'manager'],
   cancel_membership:   ['owner', 'admin', 'manager'],
   cancel_invoice:      ['owner', 'admin', 'manager'],
   freeze_membership:   ['owner', 'admin', 'manager'],
@@ -97,6 +99,7 @@ export const can = {
   rcsWalletView:     (r?: RoleLike[]) => hasCapability(r, 'rcs_wallet_view'),
   manageClassSchedule: (r?: RoleLike[]) => hasCapability(r, 'manage_class_schedule'),
   manageStandbyCopy: (r?: RoleLike[]) => hasCapability(r, 'manage_standby_copy'),
+  syncSmsTemplates:  (r?: RoleLike[]) => hasCapability(r, 'sync_sms_templates'),
 };
 
 /**
