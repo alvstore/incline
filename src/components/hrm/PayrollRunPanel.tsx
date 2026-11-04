@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PayrollItemDetailsDrawer } from './PayrollItemDetailsDrawer';
-import { attendanceValues, type PayrollItem } from '@/lib/hrm/payroll';
+import { attendanceValues, preferredPayrollRun, type PayrollItem } from '@/lib/hrm/payroll';
 import { can } from '@/lib/auth/permissions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -60,14 +60,23 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       let q = supabase.from('payroll_runs').select('*')
         .eq('period_start', periodStart)
         .order('created_at', { ascending: false });
-      if (branchId) q = q.eq('branch_id', branchId); else q = q.is('branch_id', null);
+      if (branchId) q = q.eq('branch_id', branchId);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
 
-  const activeRunId = (runs.some(r=>r.id===selectedRunId) ? selectedRunId : runs[0]?.id) || null;
+  const { data: paidRunIds = [], isLoading: priorityLoading } = useQuery({
+    queryKey: ['payroll-run-priority', runs.map(r => r.id)],
+    enabled: runs.length > 0,
+    queryFn: async () => {
+      const {data,error} = await supabase.from('payroll_items').select('run_id').in('run_id',runs.map(r => r.id)).eq('status','paid');
+      if(error) throw error;
+      return [...new Set((data || []).map(i => i.run_id))];
+    },
+  });
+  const activeRunId = preferredPayrollRun(runs, new Set(paidRunIds), selectedRunId);
 
   const { data: items = [], isLoading: itemsLoading, isError: itemsError, refetch: retryItems } = useQuery({
     queryKey: ['payroll-items', activeRunId],
@@ -100,7 +109,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       return data as string;
     },
     onSuccess: (id) => {
-      toast.success('Payroll calculated — review items');
+      toast.success('Payroll calculated — preview each salary');
       setSelectedRunId(id);
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
@@ -221,19 +230,19 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
           )}
           <Button onClick={() => createRun.mutate()} disabled={createRun.isPending || !!activeRunId || runsLoading || !can.manageStaff(roles)} variant="default">
             {createRun.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />}
-            {activeRunId ? 'Saved run' : 'Calculate Run'}
+            {activeRunId ? 'Calculated run' : 'Calculate salaries'}
           </Button>
         </div>
 
       </CardHeader>
       <CardContent>
-        {runs.length>1 && <div className="mb-4"><Label htmlFor="saved-run">Saved payroll run</Label><Select value={activeRunId || ''} onValueChange={id=>{setSelectedRunId(id);}}><SelectTrigger id="saved-run"><SelectValue/></SelectTrigger><SelectContent>{runs.map(r=><SelectItem key={r.id} value={r.id}>{new Date(r.created_at).toLocaleString('en-IN')} · {r.period_end} · {r.status}</SelectItem>)}</SelectContent></Select></div>}
+        {runs.length>1 && <div className="mb-4"><Label htmlFor="saved-run">Saved payroll run</Label><Select value={activeRunId || ''} onValueChange={id=>{setSelectedRunId(id);}}><SelectTrigger id="saved-run"><SelectValue/></SelectTrigger><SelectContent>{runs.map(r=><SelectItem key={r.id} value={r.id}>{new Date(r.created_at).toLocaleString('en-IN')} · {r.period_end} · {paidRunIds.includes(r.id) ? 'Recorded payments' : r.status}</SelectItem>)}</SelectContent></Select></div>}
         {activeRun && activeRun.period_end!==periodEnd && <div className="mb-4 bg-warning/10 rounded-xl p-4 text-sm flex flex-wrap items-center gap-3"><span>Saved run ends {activeRun.period_end}; calendar month ends {periodEnd}. Paid salaries will stay unchanged.</span><Button variant="outline" disabled={correctPeriod.isPending || !can.manageStaff(roles)} onClick={()=>correctPeriod.mutate()}>Correct month end</Button></div>}
-        {(runsLoading || itemsLoading) ? <Skeleton className="h-40"/> : (runsError || itemsError) ? <Button variant="outline" onClick={()=>{retryRuns();retryItems();}}>Retry payroll</Button> :
+        {(runsLoading || priorityLoading || itemsLoading) ? <Skeleton className="h-40"/> : (runsError || itemsError) ? <Button variant="outline" onClick={()=>{retryRuns();retryItems();}}>Retry payroll</Button> :
 
         items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            No items — click <strong>Calculate Run</strong> to generate payroll items.
+            No salaries calculated for this month.
           </p>
         ) : (
           <>

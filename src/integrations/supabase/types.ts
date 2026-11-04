@@ -5008,6 +5008,7 @@ export type Database = {
           paid_by: string | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
           payment_reference: string | null
+          payroll_item_id: string | null
           receipt_url: string | null
           sgst_amount: number | null
           source: string | null
@@ -5040,6 +5041,7 @@ export type Database = {
           paid_by?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           payment_reference?: string | null
+          payroll_item_id?: string | null
           receipt_url?: string | null
           sgst_amount?: number | null
           source?: string | null
@@ -5072,6 +5074,7 @@ export type Database = {
           paid_by?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           payment_reference?: string | null
+          payroll_item_id?: string | null
           receipt_url?: string | null
           sgst_amount?: number | null
           source?: string | null
@@ -5095,6 +5098,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_payroll_item_id_fkey"
+            columns: ["payroll_item_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_items"
             referencedColumns: ["id"]
           },
         ]
@@ -10704,6 +10714,7 @@ export type Database = {
           final_penalty: number
           final_pt_commission: number
           id: string
+          payment_date: string | null
           payment_method: string | null
           payment_reference: string | null
           payslip_url: string | null
@@ -10737,6 +10748,7 @@ export type Database = {
           final_penalty?: number
           final_pt_commission?: number
           id?: string
+          payment_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
           payslip_url?: string | null
@@ -10770,6 +10782,7 @@ export type Database = {
           final_penalty?: number
           final_pt_commission?: number
           id?: string
+          payment_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
           payslip_url?: string | null
@@ -18606,6 +18619,15 @@ export type Database = {
       payroll_recalculate_item: {
         Args: { p_item_id: string; p_reason?: string }
         Returns: undefined
+      }
+      payroll_record_payment: {
+        Args: {
+          p_item_id: string
+          p_method: string
+          p_payment_date: string
+          p_reference: string
+        }
+        Returns: Json
       }
       payroll_reopen_run: {
         Args: { p_reason: string; p_run_id: string }

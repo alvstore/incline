@@ -1,3 +1,8 @@
+# Salary payment flow (4 Nov 2026)
+- [x] Restore branch visibility of historical paid runs and commission detail without changing payouts; prefer recorded-payments run over newer duplicate drafts.
+- [x] Align calculate, preview, save and bank/cash remittance with atomic expense recording; enforce UTR, payment date, idempotency and duplicate monthly salary guards.
+- [x] Seven regression tests pass; signed-in October saved commission, paid lock, cash preview/edit/download and phone layout checked. Six paid salaries remain ₹103,297.14; build OK. No salary payment or historical expense backfill performed, so successful real settlement and expense readback remain unverified until an actual remittance is confirmed.
+
 # Payroll correction (4 Nov 2026)
 - [x] Correct month boundaries and attendance fractions; audit and safely repair saved October run without losing adjustments or payments.
 - [x] Add default-off overtime settings enforced in payroll calculation.
