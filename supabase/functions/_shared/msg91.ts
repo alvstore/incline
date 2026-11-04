@@ -150,3 +150,13 @@ export async function sendMSG91(
   return r.ok ? { success: true, message_id: r.data?.message || r.data?.request_id } : { success: false, error: `MSG91: ${r.error}` };
 }
 
+
+const DLT_ID_RE = /^\d{19}$/;
+/** Reason a template cannot be registered in MSG91, or null. DLT approval (SmartPing) must come first. */
+export function registerBlocker(t: { type?: string; content?: string; dlt_template_id?: string | null; dlt_header?: string | null }): string | null {
+  if (t.type && t.type !== "sms") return "Not an SMS template";
+  if (!t.content?.trim()) return "Template body is empty";
+  if (!t.dlt_template_id || !DLT_ID_RE.test(t.dlt_template_id)) return "Approved 19-digit DLT Template ID from SmartPing is required";
+  if (!t.dlt_header || !/^[A-Za-z0-9]{6}$/.test(t.dlt_header)) return "Approved 6-character DLT header is required";
+  return null;
+}
