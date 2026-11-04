@@ -1,3 +1,8 @@
+# Salary payment flow (4 Nov 2026)
+- [ ] Restore branch visibility of historical paid runs and commission detail without changing payouts.
+- [ ] Align calculate, preview, save and bank/cash remittance with atomic expense recording.
+- [ ] Verify salary flow, payment guards, downloads and paid-record preservation.
+
 # Payroll correction (4 Nov 2026)
 - [x] Correct month boundaries and attendance fractions; audit and safely repair saved October run without losing adjustments or payments.
 - [x] Add default-off overtime settings enforced in payroll calculation.
