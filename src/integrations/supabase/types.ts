@@ -16508,6 +16508,11 @@ export type Database = {
           meta_synced_at: string | null
           meta_template_name: string | null
           meta_template_status: string | null
+          msg91_sync_error: string | null
+          msg91_sync_status: string | null
+          msg91_synced_at: string | null
+          msg91_template_id: string | null
+          msg91_version_id: string | null
           name: string | null
           send_risk: string | null
           subject: string | null
