@@ -1348,10 +1348,10 @@ export function buildPayslipPdf(data: PayslipPdfInput, brand: BrandContext): Blo
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setColor(doc, BRAND.muted);
-  const sub = [data.employee_code, data.designation].filter(Boolean).join(' • ');
+  const sub = [data.employee_code, data.designation].filter(Boolean).join(' | ');
   if (sub) { doc.text(sub, 14, y + 5); }
   doc.text(
-    `Period: ${new Date(data.period_start).toLocaleDateString('en-IN')} – ${new Date(data.period_end).toLocaleDateString('en-IN')}`,
+    `Period: ${new Date(data.period_start).toLocaleDateString('en-IN')} to ${new Date(data.period_end).toLocaleDateString('en-IN')}`,
     196, y, { align: 'right' },
   );
 
