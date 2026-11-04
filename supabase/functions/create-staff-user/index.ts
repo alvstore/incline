@@ -335,7 +335,7 @@ Deno.serve(async (req) => {
     // Must not be a breached/common password: the auth service rejects those (HIBP check).
     // Ground staff never log in: random unknowable password + permanent ban.
     const tempPassword = groundStaff
-      ? crypto.randomUUID() + crypto.randomUUID().toUpperCase() + '!'
+      ? crypto.randomUUID() + crypto.randomUUID().slice(0, 8).toUpperCase() + '!'
       : (suppliedPassword || 'Incline#Udaipur@2026')
 
     // MIPS code must not already belong to someone in the CRM.
