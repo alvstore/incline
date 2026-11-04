@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
 import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
 import { Dumbbell } from 'lucide-react';
+import { calculateMemberStreaks, loadAttendancePages, streakWindow } from '@/lib/attendance/memberStreaks';
 
 import { StaffRosterBoard } from '@/components/attendance/StaffRosterBoard';
 import { StaffMonthHistory } from '@/components/attendance/StaffMonthHistory';
@@ -67,6 +68,7 @@ export default function AttendanceDashboard() {
     tables: ['member_attendance', 'staff_attendance', 'members'],
     invalidateKeys: [
       ['member-attendance-dashboard'],
+      ['member-attendance-streaks'],
       ['staff-attendance-dashboard'],
       ['staff-attendance-history'],
       ['attendance-trends'],
@@ -503,33 +505,22 @@ export default function AttendanceDashboard() {
   const presentMemberIds = useMemo(() => consolidatedMemberAttendance.map((a) => a.member_id).sort(), [consolidatedMemberAttendance]);
 
   // Streak + last previous visit for members seen on the selected day (IST calendar days).
-  const { data: memberStreaks = {} } = useQuery({
-    queryKey: ['member-attendance-streaks', branchFilter, dateFilter, presentMemberIds.join(',')],
+  const { data: memberStreaks = {}, isError: streaksError } = useQuery({
+    queryKey: ['member-attendance-streaks', 'paged-ist-v2', branchFilter, dateFilter, presentMemberIds.join(',')],
     enabled: presentMemberIds.length > 0,
     queryFn: async () => {
-      const istKey = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
-      const end = endOfDay(new Date(dateFilter));
-      const from = new Date(end.getTime() - 90 * 86400000).toISOString();
-      const { data, error } = await supabase.from('member_attendance').select('member_id, check_in')
-        .in('member_id', presentMemberIds).gte('check_in', from).lte('check_in', end.toISOString()).limit(5000);
-      if (error) throw error;
-      const days = new Map<string, Set<string>>();
-      for (const r of data ?? []) {
-        const set = days.get(r.member_id) ?? new Set<string>();
-        set.add(istKey(new Date(r.check_in)));
-        days.set(r.member_id, set);
-      }
-      const result: Record<string, { streak: number; gapDays: number | null; lastVisit: string | null }> = {};
-      for (const id of presentMemberIds) {
-        const set = days.get(id) ?? new Set<string>();
-        let streak = 0;
-        const cursor = new Date(`${dateFilter}T00:00:00Z`);
-        while (set.has(cursor.toISOString().slice(0, 10))) { streak++; cursor.setUTCDate(cursor.getUTCDate() - 1); }
-        const prior = [...set].filter((k) => k < dateFilter).sort().pop() ?? null;
-        const gapDays = prior ? Math.round((new Date(`${dateFilter}T00:00:00Z`).getTime() - new Date(`${prior}T00:00:00Z`).getTime()) / 86400000) : null;
-        result[id] = { streak, gapDays, lastVisit: prior };
-      }
-      return result;
+      const { from, until } = streakWindow(dateFilter);
+      const data = await loadAttendancePages(async (offset, end) => {
+        let query = supabase.from('member_attendance').select('member_id, check_in')
+          .in('member_id', presentMemberIds).gte('check_in', from).lt('check_in', until)
+          .order('check_in', { ascending: false }).order('id', { ascending: false })
+          .range(offset, end);
+        if (branchFilter) query = query.eq('branch_id', branchFilter);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data ?? [];
+      });
+      return calculateMemberStreaks(data, presentMemberIds, dateFilter);
     },
   });
 
@@ -591,12 +582,14 @@ export default function AttendanceDashboard() {
     : <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100"><CheckCircle className="h-3 w-3" />Completed</Badge>;
 
   const getStreakBadge = (memberId: string) => {
+    if (streaksError) return null;
     const s = memberStreaks[memberId];
     if (!s) return null;
     if (s.streak >= 2) return <Badge className="gap-1 rounded-full border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50"><Flame className="h-3 w-3" />{s.streak}-day streak</Badge>;
     if (s.gapDays === null) return <Badge className="gap-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><Sparkles className="h-3 w-3" />First visit</Badge>;
     if (s.gapDays >= 5) return <Badge className="gap-1 rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50"><Undo2 className="h-3 w-3" />Back after {s.gapDays}d</Badge>;
-    return <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-50"><CalendarDays className="h-3 w-3" />Last {format(new Date(s.lastVisit!), 'dd MMM')}</Badge>;
+    if (!s.lastVisit) return null;
+    return <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-50"><CalendarDays className="h-3 w-3" />Last {format(new Date(s.lastVisit), 'dd MMM')}</Badge>;
   };
 
   const absenceBadge = (days: number) => {
