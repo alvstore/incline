@@ -1,4 +1,6 @@
+// v2.0.0 — Ground staff (no app login) mode + MIPS code binding and photo import.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCachedMipsToken } from '../_shared/mipsTokenCache.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -154,6 +156,13 @@ Deno.serve(async (req) => {
 
     // Body parsed once below; pre-parse here for role-hierarchy check
     const body = await req.json()
+    const groundStaff = body?.groundStaff === true
+    const mipsCode = sanitizeString(body?.mipsCode, 32).toUpperCase()
+    if (mipsCode && !/^[A-Z0-9_-]{2,32}$/.test(mipsCode)) {
+      return new Response(JSON.stringify({ error: 'MIPS code may only contain letters, numbers, - and _' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    if (groundStaff) body.role = 'staff'
 
     // Role hierarchy: prevent privilege escalation.
     // A caller can only assign roles strictly LOWER than their highest role.
@@ -177,7 +186,13 @@ Deno.serve(async (req) => {
 
     
     // Sanitize and extract inputs
-    const email = sanitizeString(body.email, MAX_EMAIL_LENGTH);
+    let email = sanitizeString(body.email, MAX_EMAIL_LENGTH);
+    if (groundStaff && !email) {
+      const slug = (sanitizeString(body.fullName || body.full_name, 60) || 'staff')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '') || 'staff'
+      email = `${slug}.${(mipsCode || crypto.randomUUID().slice(0, 6)).toLowerCase()}@internal.theincline.in`
+    }
+    const avatarUrlIn = sanitizeString(body.avatarUrl, 1000);
     const fullName = sanitizeString(body.fullName || body.full_name, MAX_NAME_LENGTH);
     const phone = sanitizeString(body.phone, MAX_PHONE_LENGTH);
     const role = sanitizeString(body.role, 20).toLowerCase();
@@ -318,7 +333,22 @@ Deno.serve(async (req) => {
     }
     // Fixed default password for all staff/trainer/manager users — they must change it on first login.
     // Must not be a breached/common password: the auth service rejects those (HIBP check).
-    const tempPassword = suppliedPassword || 'Incline#Udaipur@2026'
+    // Ground staff never log in: random unknowable password + permanent ban.
+    const tempPassword = groundStaff
+      ? crypto.randomUUID() + crypto.randomUUID().slice(0, 8).toUpperCase() + '!'
+      : (suppliedPassword || 'Incline#Udaipur@2026')
+
+    // MIPS code must not already belong to someone in the CRM.
+    if (mipsCode) {
+      const [{ data: aliasHit }, { data: empHit }] = await Promise.all([
+        supabaseAdmin.from('mips_person_aliases').select('id').ilike('person_code', mipsCode).limit(1),
+        supabaseAdmin.from('employees').select('id').or(`employee_code.eq.${mipsCode},mips_person_sn.eq.${mipsCode}`).limit(1),
+      ])
+      if ((aliasHit && aliasHit.length) || (empHit && empHit.length)) {
+        return new Response(JSON.stringify({ error: `MIPS code ${mipsCode} is already linked to a staff record.` }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+    }
     console.log('Creating user with email:', email)
 
     // Create the user with email confirmed (they'll set password on first login)
@@ -326,7 +356,8 @@ Deno.serve(async (req) => {
       email,
       password: tempPassword,
       email_confirm: true,
-      user_metadata: { full_name: fullName }
+      user_metadata: { full_name: fullName, ground_staff: groundStaff },
+      ...(groundStaff ? { ban_duration: '876000h' } : {}),
     })
 
     if (createError) {
@@ -360,7 +391,8 @@ Deno.serve(async (req) => {
         postal_code: postalCode || null,
         emergency_contact_name: emergencyContactName || null,
         emergency_contact_phone: emergencyContactPhone || null,
-        must_set_password: true,
+        must_set_password: !groundStaff,
+        ...(avatarUrlIn ? { avatar_url: avatarUrlIn } : {}),
       })
       .eq('id', authData.user.id)
 
@@ -432,7 +464,9 @@ Deno.serve(async (req) => {
     // If role is staff or manager, create employee record
     let employeeId = null
     if (role === 'staff' || role === 'manager') {
-      const employeeCode = 'EMP-' + Date.now().toString(36).toUpperCase()
+      // A MIPS code becomes the employee code so gate sync reuses the existing
+      // MIPS person instead of creating a duplicate.
+      const employeeCode = mipsCode || ('EMP-' + Date.now().toString(36).toUpperCase())
       const { data: employeeData, error: employeeError } = await supabaseAdmin
         .from('employees')
         .insert({
@@ -447,6 +481,8 @@ Deno.serve(async (req) => {
           bank_name: bankName || null,
           bank_account: bankAccount || null,
           tax_id: taxId || null,
+          bank_ifsc: sanitizeString(body.bankIfsc || body.bank_ifsc, 20) || null,
+          ...(mipsCode ? { mips_person_sn: mipsCode } : {}),
           is_active: true,
         })
         .select('id')
@@ -477,13 +513,31 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Bind MIPS code + import face photo from the gate server (best effort).
+    let photoImported = false
+    if (mipsCode && employeeId) {
+      await supabaseAdmin.from('mips_person_aliases').insert({
+        person_code: mipsCode, target_type: 'employee', target_id: employeeId,
+        person_name: fullName || null, note: groundStaff ? 'Ground staff (no app login)' : 'Linked at staff creation',
+        created_by: callingUser.id,
+      })
+      try {
+        photoImported = await importMipsPhoto(supabaseAdmin, branchId, mipsCode, employeeId, authData.user.id, !avatarUrlIn)
+      } catch (e) {
+        console.log('MIPS photo import failed:', e instanceof Error ? e.message : e)
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
+        groundStaff,
+        mipsCode: mipsCode || null,
+        photoImported,
         userId: authData.user.id,
         trainerId,
         employeeId,
-        tempPassword,
+        tempPassword: groundStaff ? null : tempPassword,
         message: `${role} user created successfully. They will set their password on first login.`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -497,3 +551,41 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+// deno-lint-ignore no-explicit-any
+async function importMipsPhoto(db: any, branchId: string, code: string, employeeId: string, userId: string, setAvatar: boolean): Promise<boolean> {
+  const { data: conn } = await db.from('mips_connections')
+    .select('server_url, username, password').eq('branch_id', branchId).eq('is_active', true).maybeSingle()
+  if (!conn) return false
+  const raw = String(conn.server_url || '').trim()
+  const baseUrl = (/^https?:\/\//i.test(raw) ? raw : `http://${raw}`).replace(/\/+$/, '')
+  const token = await getCachedMipsToken(db, branchId, { baseUrl, username: conn.username, password: conn.password })
+  const headers = { Authorization: `Bearer ${token}`, 'TENANT-ID': '1' }
+  const res = await fetch(`${baseUrl}/personInfo/person/list?personSn=${encodeURIComponent(code)}&pageNum=1&pageSize=5`,
+    { headers, signal: AbortSignal.timeout(15_000) })
+  const j = await res.json().catch(() => ({}))
+  const rows = j?.rows || j?.data?.rows || []
+  const person = (Array.isArray(rows) ? rows : []).find((r: { personSn?: string }) => String(r.personSn).toUpperCase() === code)
+  const uri = person?.photoUri
+  if (!uri || typeof uri !== 'string' || !uri.startsWith('/') || uri.includes('..')) return false
+  const img = await fetch(`${baseUrl}${uri}`, { headers, signal: AbortSignal.timeout(20_000) })
+  if (!img.ok) return false
+  const bytes = new Uint8Array(await img.arrayBuffer())
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50
+  if ((!isJpeg && !isPng) || bytes.length > 3_000_000) return false
+  const ct = isPng ? 'image/png' : 'image/jpeg'
+  const bioPath = `biometric/employees/${employeeId}.jpg`
+  const avatarPath = `${userId}/mips-${Date.now()}.jpg`
+  const up1 = await db.storage.from('member-photos').upload(bioPath, bytes, { upsert: true, contentType: ct })
+  const up2 = await db.storage.from('avatars').upload(avatarPath, bytes, { upsert: true, contentType: ct })
+  if (up1.error && up2.error) return false
+  const publicUrl = up2.error ? null : db.storage.from('avatars').getPublicUrl(avatarPath).data.publicUrl
+  await db.from('employees').update({
+    ...(up1.error ? {} : { biometric_photo_path: bioPath }),
+    ...(publicUrl ? { biometric_photo_url: publicUrl } : {}),
+    face_photo_source: 'mips_import',
+  }).eq('id', employeeId)
+  if (setAvatar && publicUrl) await db.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId)
+  return true
+}
