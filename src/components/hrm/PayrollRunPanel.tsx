@@ -17,7 +17,9 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 
-import { PlusCircle, Loader2, Eye, RefreshCw, RotateCcw, Download } from 'lucide-react';
+import { PlusCircle, Loader2, Eye, RefreshCw, RotateCcw, Download, FileText, Search, Wallet, Dumbbell, HandCoins, Users } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { downloadSalarySlip } from '@/lib/hrm/salarySlip';
 import { exportToCSV } from '@/lib/csvExport';
 
 
@@ -52,6 +54,10 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
+  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [slipId, setSlipId] = useState<string | null>(null);
 
 
   const { data: runs = [], isLoading: runsLoading, isError: runsError, refetch: retryRuns } = useQuery({
@@ -88,14 +94,14 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         .eq('run_id', activeRunId);
       if (error) throw error;
       const userIds = [...new Set((data || []).map(d => d.user_id))];
-      const { data: profiles, error: profileError } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
+      const { data: profiles, error: profileError } = await supabase.from('profiles').select('id, full_name, email, avatar_url').in('id', userIds);
       if(profileError) throw profileError;
       const map = new Map((profiles || []).map(p => [p.id, p]));
       return (data || []).map(it => ({ ...it, profile: map.get(it.user_id) }));
     },
   });
 
-  const {data: banks = [], isError: banksError, isLoading: banksLoading} = useQuery({queryKey:['payroll-banks',activeRunId], enabled:!!activeRunId && items.length>0, queryFn:async()=>{const ids=items.map(i=>i.user_id);const [e,t]=await Promise.all([supabase.from('employees').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids),supabase.from('trainers').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids)]);if(e.error)throw e.error;if(t.error)throw t.error;return [...(e.data || []),...(t.data || [])];}});
+  const {data: banks = [], isError: banksError, isLoading: banksLoading} = useQuery({queryKey:['payroll-banks',activeRunId], enabled:!!activeRunId && items.length>0, queryFn:async()=>{const ids=items.map(i=>i.user_id);const [e,t]=await Promise.all([supabase.from('employees').select('user_id,bank_name,bank_account,bank_ifsc,biometric_photo_url').in('user_id',ids),supabase.from('trainers').select('user_id,bank_name,bank_account,bank_ifsc,biometric_photo_url').in('user_id',ids)]);if(e.error)throw e.error;if(t.error)throw t.error;return [...(e.data || []),...(t.data || [])];}});
   const correctPeriod = useMutation({mutationFn:async()=>{if(!activeRunId)return;const {error}=await supabase.rpc('payroll_correct_period',{p_run_id:activeRunId,p_end:periodEnd,p_reason:`Correct ${periodStart.slice(0,7)} month-end timezone error; preserve recorded payments and manual adjustments`});if(error)throw error;},onSuccess:()=>{toast.success('Period corrected; paid salaries preserved');qc.invalidateQueries({queryKey:['payroll-runs']});qc.invalidateQueries({queryKey:['payroll-items']});},onError:(e:Error)=>toast.error(e.message)});
 
   const createRun = useMutation({
@@ -165,6 +171,17 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     },
     { base: 0, pt: 0, ot: 0, bonus: 0, advance: 0, deductions: 0, net: 0 },
   );
+
+  const visible = items.filter(it => (kind === 'all' || it.staff_kind === kind) && (statusFilter === 'all' || it.status === statusFilter) && (!search.trim() || (it.profile?.full_name || '').toLowerCase().includes(search.trim().toLowerCase())));
+  const paidCount = items.filter(i => i.status === 'paid').length;
+  const photo = (it: PayrollItem) => it.profile?.avatar_url || (banks.find(b => b.user_id === it.user_id && 'biometric_photo_url' in b) as { biometric_photo_url?: string | null } | undefined)?.biometric_photo_url || undefined;
+  const initials = (name?: string | null) => (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const slip = async (it: PayrollItem) => {
+    setSlipId(it.id);
+    try { await downloadSalarySlip(it, periodStart, activeRun?.period_end || periodEnd, branchId); toast.success('Salary slip downloaded'); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not create salary slip'); }
+    finally { setSlipId(null); }
+  };
 
   const exportCsv = () => {
     const rows = items.map((it) => {
@@ -246,10 +263,24 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
           </p>
         ) : (
           <>
-            <div className="flex flex-wrap gap-2 mb-3">
-
-
-
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+              {[
+                { label: 'Net payout', value: inr(totals.net), sub: `${paidCount}/${items.length} paid`, Icon: Wallet },
+                { label: 'Salary earned', value: inr(totals.base), sub: `${items.length} staff`, Icon: Users },
+                { label: 'PT commission', value: inr(totals.pt), sub: `${items.filter(i => Number(i.final_pt_commission) > 0).length} trainers`, Icon: Dumbbell },
+                { label: 'Advance recovered', value: inr(totals.advance), sub: `Deductions ${inr(totals.deductions)}`, Icon: HandCoins },
+              ].map(({ label, value, sub, Icon }) => (
+                <div key={label} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</span><Icon className="h-4 w-4 text-accent" aria-hidden /></div>
+                  <div className="text-2xl font-bold tabular-nums mt-2">{value}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{sub}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3 items-center">
+              <div className="relative w-full sm:w-56"><Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden /><Input aria-label="Search staff" placeholder="Search staff" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} /></div>
+              <Select value={kind} onValueChange={setKind}><SelectTrigger className="w-36" aria-label="Staff type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All staff</SelectItem><SelectItem value="trainer">Trainers</SelectItem><SelectItem value="employee">Employees</SelectItem></SelectContent></Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-36" aria-label="Salary status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All status</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="processed">Saved</SelectItem><SelectItem value="paid">Paid</SelectItem></SelectContent></Select>
               <div className="flex-1" />
               <Button size="sm" variant="outline" disabled={banksLoading || banksError} onClick={exportCsv}><Download className="h-4 w-4 mr-1"/>Full ledger</Button>
               <Button size="sm" variant="outline" disabled={banksError || banksLoading} onClick={()=>exportRemittance('bank_transfer')}><Download className="h-4 w-4 mr-1"/>Bank remittance</Button>
@@ -274,16 +305,21 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((it) => {
+                  {visible.map((it) => {
                     const adjusted = Number(it.final_net) !== Number(it.calc_net);
                     const a = att(it);
                     return (
-                      <TableRow key={it.id}>
+                      <TableRow key={it.id} className="hover:bg-muted/50 transition-colors duration-150">
                         <TableCell>
-                          <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {it.staff_kind}
-                            {a.monthly_salary ? ` · ${inr(Number(a.monthly_salary))}/mo` : ''}
+                          <div className="flex items-center gap-3 min-w-[180px]">
+                            <Avatar className="h-10 w-10"><AvatarImage src={photo(it)} alt="" className="object-cover" /><AvatarFallback className="text-xs font-semibold">{initials(it.profile?.full_name)}</AvatarFallback></Avatar>
+                            <div>
+                              <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
+                              <div className="text-xs text-muted-foreground capitalize">
+                                {it.staff_kind}
+                                {a.monthly_salary ? ` · ${inr(Number(a.monthly_salary))}/mo` : ''}
+                              </div>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -330,7 +366,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                                 <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalculate
                               </Button>
                             )}
-                            <Button size="sm" variant="outline" className="min-h-11" onClick={()=>{setDetailId(it.id);setDetailOpen(true);}}><Eye className="h-4 w-4 mr-1"/>Salary details</Button>
+                            <Button size="sm" variant="ghost" className="min-h-11" aria-label={`Download salary slip for ${it.profile?.full_name || 'staff'}`} disabled={slipId===it.id} onClick={()=>slip(it)}>{slipId===it.id?<Loader2 className="h-4 w-4 mr-1 animate-spin"/>:<FileText className="h-4 w-4 mr-1"/>}Slip</Button>
+                            <Button size="sm" variant="outline" className="min-h-11" onClick={()=>{setDetailId(it.id);setDetailOpen(true);}}><Eye className="h-4 w-4 mr-1"/>Details</Button>
                           </div>
                         </TableCell>
 

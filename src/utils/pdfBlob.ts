@@ -1327,6 +1327,10 @@ export interface PayslipPdfInput {
   paid_date?: string | null;
   prepared_by?: string | null;
   notes?: string | null;
+  status?: string | null;
+  shifts?: { attended?: number; rostered?: number; missed?: number };
+  pt_entries?: Array<{ member_name: string; payout_month: string; amount: number }>;
+  bank?: { bank_name?: string | null; bank_account?: string | null; bank_ifsc?: string | null } | null;
 }
 
 export function buildPayslipPdf(data: PayslipPdfInput, brand: BrandContext): Blob {
@@ -1344,10 +1348,10 @@ export function buildPayslipPdf(data: PayslipPdfInput, brand: BrandContext): Blo
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setColor(doc, BRAND.muted);
-  const sub = [data.employee_code, data.designation].filter(Boolean).join(' • ');
+  const sub = [data.employee_code, data.designation].filter(Boolean).join(' | ');
   if (sub) { doc.text(sub, 14, y + 5); }
   doc.text(
-    `Period: ${new Date(data.period_start).toLocaleDateString('en-IN')} – ${new Date(data.period_end).toLocaleDateString('en-IN')}`,
+    `Period: ${new Date(data.period_start).toLocaleDateString('en-IN')} to ${new Date(data.period_end).toLocaleDateString('en-IN')}`,
     196, y, { align: 'right' },
   );
 
@@ -1428,14 +1432,46 @@ export function buildPayslipPdf(data: PayslipPdfInput, brand: BrandContext): Blo
   doc.text(rupeesInWords(data.net), 18, ny + 14);
 
   let py = ny + 24;
-  doc.setFontSize(9);
-  setColor(doc, BRAND.muted);
-  if (data.payment_method) { doc.text(`Payment: ${data.payment_method.toUpperCase()}${data.payment_reference ? ` (${data.payment_reference})` : ''}`, 14, py); py += 4; }
-  if (data.paid_date) { doc.text(`Paid on: ${new Date(data.paid_date).toLocaleDateString('en-IN')}`, 14, py); py += 4; }
-  if (data.prepared_by) { doc.text(`Prepared by: ${data.prepared_by}`, 14, py); py += 4; }
-  if (data.notes) {
-    py += 2;
-    doc.text('Notes: ' + data.notes, 14, py);
+  const ascii = (s: string) => s.replace(/[^\x20-\x7E]/g, '-');
+  if (data.pt_entries && data.pt_entries.length) {
+    autoTable(doc, {
+      startY: py,
+      head: [['#', 'PT member', 'Payout month', 'Commission']],
+      body: data.pt_entries.map((e, i) => [String(i + 1), ascii(e.member_name || '-'), ascii(e.payout_month || '-'), inr(e.amount)]),
+      foot: [['', '', 'Total PT commission', inr(data.pt_entries.reduce((s, e) => s + Number(e.amount || 0), 0))]],
+      theme: 'grid',
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontSize: 8 },
+      footStyles: { fillColor: [241, 245, 249], textColor: BRAND.text, fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      columnStyles: { 0: { cellWidth: 10 }, 3: { halign: 'right' } },
+      margin: { left: 14, right: 14 },
+    });
+    py = (doc as any).lastAutoTable.finalY + 6;
+  }
+  const s = data.shifts;
+  const info: Array<[string, string]> = [];
+  if (s && (s.rostered || s.attended)) info.push(['Shifts attended', `${s.attended ?? 0} / ${s.rostered ?? 0}${s.missed ? ` (${s.missed} missed)` : ''}`]);
+  if (data.attendance?.monthly_salary) info.push(['Monthly salary', inr(data.attendance.monthly_salary)]);
+  if (data.deductions.advance) info.push(['Advance recovered this month', inr(data.deductions.advance)]);
+  if (data.payment_method) info.push(['Payment method', ascii(data.payment_method.replace('_', ' ').toUpperCase())]);
+  if (data.payment_reference) info.push(['UTR / reference', ascii(data.payment_reference)]);
+  if (data.paid_date) info.push(['Paid on', new Date(data.paid_date).toLocaleDateString('en-IN')]);
+  if (data.bank?.bank_account) info.push(['Bank', ascii(`${data.bank.bank_name || ''} A/c ${data.bank.bank_account} IFSC ${data.bank.bank_ifsc || ''}`)]);
+  if (data.status) info.push(['Status', ascii(data.status)]);
+  if (data.prepared_by) info.push(['Prepared by', ascii(data.prepared_by)]);
+  if (data.notes) info.push(['Notes', ascii(data.notes)]);
+  if (info.length) {
+    autoTable(doc, {
+      startY: py, body: info, theme: 'plain',
+      bodyStyles: { fontSize: 8.5, textColor: BRAND.text },
+      columnStyles: { 0: { cellWidth: 55, textColor: BRAND.muted } },
+      margin: { left: 14, right: 14 },
+    });
+    py = (doc as any).lastAutoTable.finalY + 14;
+  }
+  if (data.payment_method === 'cash' && py < 270) {
+    doc.setFontSize(8); setColor(doc, BRAND.muted);
+    doc.line(130, py, 196, py); doc.text('Received by (signature)', 196, py + 4, { align: 'right' });
   }
 
   footer(doc, brand);

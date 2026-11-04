@@ -9,7 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Download, RefreshCw } from 'lucide-react';
+import { Loader2, Download, RefreshCw, FileText } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { downloadSalarySlip } from '@/lib/hrm/salarySlip';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { can, canManageHrRow } from '@/lib/auth/permissions';
@@ -34,6 +36,7 @@ export function PayrollItemDetailsDrawer({open,onOpenChange,item,periodStart,per
   const today = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const [paymentDate,setPaymentDate]=useState(today);
   const [preview,setPreview]=useState(false);
+  const [slipBusy,setSlipBusy]=useState(false);
   const [bank,setBank]=useState<Bank>({bank_name:'',bank_account:'',bank_ifsc:''});
   const paid=item?.status==='paid';
   const processed=item?.status==='processed';
@@ -86,7 +89,7 @@ export function PayrollItemDetailsDrawer({open,onOpenChange,item,periodStart,per
   const readyForSave=!invalid && !ptLoading && !ptError && !stale && (method!=='bank_transfer' || (!bankLoading && !bankError && !bankInvalid));
   const download=()=>{if(!item)return;exportToCSV([{Staff:item.profile?.full_name,Period:`${periodStart} to ${item.snapshot_period_end || periodEnd}`,Status:item.status,'Payable days':a.payable_days,'Month days':a.total_days,'Half days':a.half_day,'Monthly salary':a.monthly_salary,'Salary earned':values.final_base,'PT commission':ptTotal,Overtime:values.final_ot,Bonus:values.final_bonus,Deductions:values.final_deductions,Advance:values.final_advance,Penalty:values.final_penalty,'Net payout':net,Method:method,Reference:reference,'Payment date':paymentDate,Reason:item.adjustment_reason,Bank:bank.bank_name,'Bank account':bank.bank_account,IFSC:bank.bank_ifsc,'PT entries':pt.filter(r=>selected.includes(r.installment_id)).map(r=>`${r.member_name}: ${money(r.amount)} (${r.payout_month})`).join('; '),'OT hours':a.ot_hours,'OT rate':a.ot_hourly_rate,'OT multiplier':a.ot_multiplier}],`salary-${item.profile?.full_name || item.id}`);};
   return <Sheet open={open} onOpenChange={onOpenChange}><SheetContent className="w-full sm:max-w-xl p-0 flex flex-col h-[100dvh]">
-    <SheetHeader className="px-6 py-5 border-b border-border shrink-0"><SheetTitle>Salary — {item?.profile?.full_name || 'Staff'}</SheetTitle><SheetDescription>{periodStart} to {periodEnd} · <Badge variant="outline">{item?.status}</Badge></SheetDescription></SheetHeader>
+    <SheetHeader className="px-6 py-5 border-b border-border shrink-0"><div className="flex items-center gap-4"><Avatar className="h-14 w-14"><AvatarImage src={item?.profile?.avatar_url || undefined} alt="" className="object-cover"/><AvatarFallback className="font-semibold">{(item?.profile?.full_name || '?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0 text-left"><SheetTitle className="truncate">Salary — {item?.profile?.full_name || 'Staff'}</SheetTitle><SheetDescription className="capitalize">{item?.staff_kind} · {new Date(`${periodStart}T00:00:00`).toLocaleDateString('en-IN',{month:'long',year:'numeric'})} · <Badge variant="outline">{item?.status}</Badge></SheetDescription></div></div></SheetHeader>
     <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
       <ol aria-label="Salary progress" className="grid grid-cols-4 gap-2 text-xs">{['Calculate','Preview','Saved','Paid'].map((step,index)=><li key={step} aria-current={index===(paid?3:processed?2:preview?1:0)?'step':undefined} className={index===(paid?3:processed?2:preview?1:0)?'font-semibold text-primary border-b-2 border-primary pb-2':'text-muted-foreground border-b border-border pb-2'}>{index+1}. {step}</li>)}</ol>
       {preview && !processed && !paid && <h2 className="font-semibold">Salary preview</h2>}
@@ -107,7 +110,8 @@ export function PayrollItemDetailsDrawer({open,onOpenChange,item,periodStart,per
     <div className="border-t border-border px-6 py-4 pb-safe space-y-3 bg-card shrink-0">
       <div className="flex justify-between items-center" aria-live="polite"><span>Net payout</span><strong className="text-2xl tabular-nums">{money(net)}</strong></div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={download} disabled={!item || ptLoading || ptError}><Download className="h-4 w-4 mr-2"/>Download</Button>
+        <Button variant="outline" className="min-h-11" disabled={!item || slipBusy} onClick={async()=>{if(!item)return;setSlipBusy(true);try{await downloadSalarySlip(item,periodStart,periodEnd,branchId);toast.success('Salary slip downloaded');}catch(e){toast.error(e instanceof Error?e.message:'Could not create salary slip');}finally{setSlipBusy(false);}}}>{slipBusy?<Loader2 className="h-4 w-4 mr-2 animate-spin"/>:<FileText className="h-4 w-4 mr-2"/>}Salary slip (PDF)</Button>
+        <Button variant="ghost" className="min-h-11" onClick={download} disabled={!item || ptLoading || ptError}><Download className="h-4 w-4 mr-2"/>CSV</Button>
         {editing && <Button className="flex-1 min-h-11" disabled={!readyForSave || mutation.isPending} onClick={()=>setPreview(true)}>Preview salary</Button>}
         {preview && canEdit && <><Button variant="outline" disabled={mutation.isPending} onClick={()=>setPreview(false)}>Back to edit</Button>{canProcess && <Button className="flex-1 min-h-11" disabled={!readyForSave || mutation.isPending} onClick={()=>mutation.mutate('process')}>{mutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin"/>}Save salary</Button>}</>}
         {processed && canProcess && <Button className="flex-1 min-h-11" disabled={mutation.isPending || !!paymentBlocker} onClick={()=>mutation.mutate('pay')}>{mutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin"/>}Record payment & expense</Button>}
