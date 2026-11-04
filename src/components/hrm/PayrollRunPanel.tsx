@@ -60,7 +60,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       let q = supabase.from('payroll_runs').select('*')
         .eq('period_start', periodStart)
         .order('created_at', { ascending: false });
-      if (branchId) q = q.eq('branch_id', branchId); else q = q.is('branch_id', null);
+      if (branchId) q = q.eq('branch_id', branchId);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
