@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PayrollItemDetailsDrawer } from './PayrollItemDetailsDrawer';
-import { type PayrollItem } from '@/lib/hrm/payroll';
+import { attendanceValues, type PayrollItem } from '@/lib/hrm/payroll';
 import { can } from '@/lib/auth/permissions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -88,7 +88,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     },
   });
 
-  const {data: banks = [], isError: banksError} = useQuery({queryKey:['payroll-banks',activeRunId], enabled:!!activeRunId && items.length>0, queryFn:async()=>{const ids=items.map(i=>i.user_id);const [e,t]=await Promise.all([supabase.from('employees').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids),supabase.from('trainers').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids)]);if(e.error)throw e.error;if(t.error)throw t.error;return [...(e.data || []),...(t.data || [])];}});
+  const {data: banks = [], isError: banksError, isLoading: banksLoading} = useQuery({queryKey:['payroll-banks',activeRunId], enabled:!!activeRunId && items.length>0, queryFn:async()=>{const ids=items.map(i=>i.user_id);const [e,t]=await Promise.all([supabase.from('employees').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids),supabase.from('trainers').select('user_id,bank_name,bank_account,bank_ifsc').in('user_id',ids)]);if(e.error)throw e.error;if(t.error)throw t.error;return [...(e.data || []),...(t.data || [])];}});
   const correctPeriod = useMutation({mutationFn:async()=>{if(!activeRunId)return;const {error}=await supabase.rpc('payroll_correct_period',{p_run_id:activeRunId,p_end:periodEnd,p_reason:'Correct October month-end timezone error; preserve recorded payments and manual adjustments'});if(error)throw error;},onSuccess:()=>{toast.success('Period corrected; paid salaries preserved');qc.invalidateQueries({queryKey:['payroll-runs']});qc.invalidateQueries({queryKey:['payroll-items']});},onError:(e:Error)=>toast.error(e.message)});
 
   const createRun = useMutation({
@@ -107,7 +107,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   // Attendance corrections flag payroll lines as stale; HR recalculates deliberately.
@@ -119,7 +119,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       if (error) throw error;
     },
     onSuccess: () => { toast.success('Recalculated from attendance'); qc.invalidateQueries({ queryKey: ['payroll-items'] }); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const reopenMut = useMutation({
@@ -136,23 +136,23 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
 
   const toggleId = (id: string) => setSelectedIds((s) => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   const toggleAll = (status: Status) => {
-    const ids = items.filter((i: any) => i.status === status).map((i: any) => i.id);
+    const ids = items.filter((i) => i.status === status).map((i) => i.id);
     setSelectedIds((s) => s.length === ids.length ? [] : ids);
   };
 
-  const activeRun = runs.find((r: any) => r.id === activeRunId);
+  const activeRun = runs.find((r) => r.id === activeRunId);
 
-  const att = (it: any) => (it?.calc_attendance || {}) as Record<string, number>;
+  const att = (it: PayrollItem) => attendanceValues(it);
   const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
   const totals = items.reduce(
-    (acc: any, it: any) => {
+    (acc, it) => {
       acc.base += Number(it.final_base || 0);
       acc.pt += Number(it.final_pt_commission || 0);
       acc.ot += Number(it.final_ot || 0);
@@ -166,7 +166,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   );
 
   const exportCsv = () => {
-    const rows = items.map((it: any) => {
+    const rows = items.map((it) => {
       const a = att(it);
       return {
         Employee: it.profile?.full_name || it.user_id,
@@ -197,7 +197,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   };
 
   const exportRemittance=(method:string)=>{
-    const eligible=items.filter(i=>['processed','paid'].includes(i.status) && i.payment_method===method);
+    const eligible=items.filter(i=>i.status==='processed' && i.payment_method===method);
     if(!eligible.length){toast.error('No processed salaries for this payment method');return;}
     const rows=eligible.map(i=>{const bank=banks.find(b=>b.user_id===i.user_id && b.bank_account) || banks.find(b=>b.user_id===i.user_id);return {Beneficiary:i.profile?.full_name,'Bank account':bank?.bank_account || '',IFSC:bank?.bank_ifsc || '',Bank:bank?.bank_name || '',Amount:Number(i.final_net),'Salary month':periodStart.slice(0,7),Status:i.status,Reference:i.payment_reference || '',Signature:method==='cash'?'________________':'', 'Payment date':i.status==='paid'?i.updated_at:''};});
     if(method==='bank_transfer' && rows.some(r=>!r['Bank account'] || !r.IFSC)){toast.error('Bank details are missing; complete them in Salary details');return;}
@@ -242,12 +242,12 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         ) : (
           <>
             <div className="flex flex-wrap gap-2 mb-3">
-              <Button size="sm" variant="outline" onClick={() => toggleAll('draft')}>Select Draft</Button>
-              <Button size="sm" variant="outline" onClick={() => toggleAll('reviewed')}>Select Reviewed</Button>
-              <Button size="sm" variant="outline" onClick={() => toggleAll('approved')}>Select Approved</Button>
+
+
+
               <div className="flex-1" />
               <Button size="sm" variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-1"/>Full ledger</Button>
-              <Button size="sm" variant="outline" disabled={banksError} onClick={()=>exportRemittance('bank_transfer')}><Download className="h-4 w-4 mr-1"/>Bank remittance</Button>
+              <Button size="sm" variant="outline" disabled={banksError || banksLoading} onClick={()=>exportRemittance('bank_transfer')}><Download className="h-4 w-4 mr-1"/>Bank remittance</Button>
               <Button size="sm" variant="outline" onClick={()=>exportRemittance('cash')}><Download className="h-4 w-4 mr-1"/>Cash payout</Button>
             </div>
             <div className="overflow-x-auto">
@@ -270,13 +270,13 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((it: any) => {
+                  {items.map((it) => {
                     const adjusted = Number(it.final_net) !== Number(it.calc_net);
                     const a = att(it);
                     return (
                       <TableRow key={it.id}>
                         <TableCell>
-                          <Checkbox checked={selectedIds.includes(it.id)} onCheckedChange={() => toggleId(it.id)} />
+                          <Checkbox aria-label={`Select ${it.profile?.full_name || 'staff'}`} checked={selectedIds.includes(it.id)} onCheckedChange={() => toggleId(it.id)} />
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{it.profile?.full_name || it.user_id.slice(0, 8)}</div>
