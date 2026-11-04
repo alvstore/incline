@@ -10,7 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useBranches } from '@/hooks/useBranches';
-import { UserPlus, Link, Info } from 'lucide-react';
+import { UserPlus, Link, Info, HardHat, ScanFace, Loader2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { StaffAvatarUpload } from '@/components/common/StaffAvatarUpload';
 import { DEPARTMENTS, POSITIONS, SALARY_TYPES } from '@/constants/employeeConstants';
 import { DefaultPasswordCard, DEFAULT_TEMP_PASSWORD } from '@/components/auth/TempPasswordField';
@@ -26,6 +27,9 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'new' | 'link'>('new');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [groundStaff, setGroundStaff] = useState(false);
+  const [mipsCode, setMipsCode] = useState('');
+  const [mipsLookup, setMipsLookup] = useState<{ status: 'idle' | 'loading' | 'found' | 'missing' | 'error'; hasPhoto?: boolean }>({ status: 'idle' });
 
   // Form data for linking existing user
   const [linkFormData, setLinkFormData] = useState({
@@ -153,8 +157,12 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
 
   const handleCreateNew = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserFormData.email || !newUserFormData.branch_id) {
-      toast.error('Please fill in email and branch');
+    if (!newUserFormData.branch_id || !newUserFormData.full_name.trim()) {
+      toast.error('Please fill in name and branch');
+      return;
+    }
+    if (!groundStaff && !newUserFormData.email) {
+      toast.error('Email is required for staff who use the app');
       return;
     }
 
@@ -162,7 +170,10 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
     try {
       const { data: result, error: createError } = await supabase.functions.invoke('create-staff-user', {
         body: {
-          email: newUserFormData.email,
+          email: newUserFormData.email || undefined,
+          groundStaff,
+          mipsCode: mipsCode.trim() || undefined,
+          avatarUrl: avatarUrl || undefined,
           fullName: newUserFormData.full_name,
           phone: newUserFormData.phone,
           role: newUserFormData.role,
@@ -181,10 +192,16 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
       if (createError) throw createError;
       if (result?.error) throw new Error(result.error);
 
-      toast.success(`Employee created. Default password: ${DEFAULT_TEMP_PASSWORD}`, {
-        duration: 12000,
-        action: { label: 'Copy', onClick: () => navigator.clipboard.writeText(DEFAULT_TEMP_PASSWORD) },
-      });
+      if (groundStaff) {
+        toast.success(
+          `Ground staff added without app login${result?.mipsCode ? ` · gate code ${result.mipsCode} linked` : ''}${result?.photoImported ? ' · photo imported' : ''}`,
+        );
+      } else {
+        toast.success(`Employee created. Default password: ${DEFAULT_TEMP_PASSWORD}`, {
+          duration: 12000,
+          action: { label: 'Copy', onClick: () => navigator.clipboard.writeText(DEFAULT_TEMP_PASSWORD) },
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['all-staff'] });
       queryClient.invalidateQueries({ queryKey: ['branches'] });
@@ -200,8 +217,34 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
     }
   };
 
+  const lookupMips = async () => {
+    const code = mipsCode.trim().toUpperCase();
+    if (!code || !newUserFormData.branch_id) {
+      toast.error('Select a branch and enter the gate (MIPS) code first');
+      return;
+    }
+    setMipsLookup({ status: 'loading' });
+    const { data, error } = await supabase.functions.invoke('mips-proxy', {
+      body: { endpoint: '/personInfo/person/list', method: 'GET', params: { personSn: code, pageNum: 1, pageSize: 5 }, branch_id: newUserFormData.branch_id },
+    });
+    if (error) { setMipsLookup({ status: 'error' }); return; }
+    const rows: Array<{ personSn?: string; name?: string; mobile?: string | null; photoUri?: string | null }> =
+      data?.rows || data?.data?.rows || [];
+    const p = rows.find((r) => String(r.personSn).toUpperCase() === code);
+    if (!p) { setMipsLookup({ status: 'missing' }); return; }
+    setNewUserFormData((f) => ({
+      ...f,
+      full_name: f.full_name || p.name || '',
+      phone: f.phone || (p.mobile ? `+91${String(p.mobile).replace(/\D/g, '').slice(-10)}` : ''),
+    }));
+    setMipsLookup({ status: 'found', hasPhoto: !!p.photoUri });
+  };
+
   const resetForms = () => {
     setAvatarUrl('');
+    setGroundStaff(false);
+    setMipsCode('');
+    setMipsLookup({ status: 'idle' });
     setLinkFormData({
       user_id: '',
       branch_id: '',
@@ -377,6 +420,38 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
                 </div>
               </div>
 
+              <div className="flex items-start justify-between gap-3 rounded-xl border border-border p-4">
+                <div className="flex gap-3">
+                  <HardHat className="h-5 w-5 text-accent mt-0.5 shrink-0" />
+                  <div>
+                    <Label htmlFor="ground-staff" className="font-medium">Ground staff (no app login)</Label>
+                    <p className="text-xs text-muted-foreground mt-1">Housekeeping, cleaning, security. No email or password — attendance, advances, KYC and payroll still recorded.</p>
+                  </div>
+                </div>
+                <Switch id="ground-staff" checked={groundStaff} onCheckedChange={setGroundStaff} />
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-border p-4">
+                <Label className="flex items-center gap-2"><ScanFace className="h-4 w-4" /> Gate (MIPS) code {groundStaff ? '' : '(optional)'}</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={mipsCode}
+                    onChange={(e) => { setMipsCode(e.target.value.toUpperCase()); setMipsLookup({ status: 'idle' }); }}
+                    placeholder="e.g. HS1001"
+                    maxLength={32}
+                  />
+                  <Button type="button" variant="outline" onClick={lookupMips} disabled={mipsLookup.status === 'loading'}>
+                    {mipsLookup.status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Fetch'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {mipsLookup.status === 'found' && `Found on the gate server${mipsLookup.hasPhoto ? ' — face photo will be imported on save' : ''}.`}
+                  {mipsLookup.status === 'missing' && 'No person with this code on the gate server.'}
+                  {mipsLookup.status === 'error' && 'Could not reach the gate server. You can still save.'}
+                  {mipsLookup.status === 'idle' && 'Links existing gate scans to this person so punches record immediately.'}
+                </p>
+              </div>
+
               {/* Avatar Upload */}
               <div className="flex justify-center pb-2">
                 <StaffAvatarUpload
@@ -406,6 +481,7 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
                 </div>
               </div>
 
+              {!groundStaff && (
               <div className="space-y-2">
                 <Label>Email *</Label>
                 <Input
@@ -416,6 +492,7 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
                   required
                 />
               </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -439,7 +516,8 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
                 <div className="space-y-2">
                   <Label>Role *</Label>
                   <Select
-                    value={newUserFormData.role}
+                    value={groundStaff ? 'staff' : newUserFormData.role}
+                    disabled={groundStaff}
                     onValueChange={(value: 'staff' | 'manager') => setNewUserFormData({ ...newUserFormData, role: value })}
                   >
                     <SelectTrigger>
@@ -455,7 +533,7 @@ export function AddEmployeeDrawer({ open, onOpenChange }: AddEmployeeDrawerProps
 
               {renderEmploymentFields(newUserFormData, setNewUserFormData)}
 
-              <DefaultPasswordCard />
+              {!groundStaff && <DefaultPasswordCard />}
               <SheetFooter className="pt-4">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
