@@ -14232,6 +14232,12 @@ export type Database = {
           meta_rejection_reason: string | null
           meta_template_name: string | null
           meta_template_status: string | null
+          msg91_sync_error: string | null
+          msg91_sync_status: string
+          msg91_synced_at: string | null
+          msg91_synced_content_hash: string | null
+          msg91_template_id: string | null
+          msg91_version_id: string | null
           name: string
           subject: string | null
           trigger_event: string | null
@@ -14260,6 +14266,12 @@ export type Database = {
           meta_rejection_reason?: string | null
           meta_template_name?: string | null
           meta_template_status?: string | null
+          msg91_sync_error?: string | null
+          msg91_sync_status?: string
+          msg91_synced_at?: string | null
+          msg91_synced_content_hash?: string | null
+          msg91_template_id?: string | null
+          msg91_version_id?: string | null
           name: string
           subject?: string | null
           trigger_event?: string | null
@@ -14288,6 +14300,12 @@ export type Database = {
           meta_rejection_reason?: string | null
           meta_template_name?: string | null
           meta_template_status?: string | null
+          msg91_sync_error?: string | null
+          msg91_sync_status?: string
+          msg91_synced_at?: string | null
+          msg91_synced_content_hash?: string | null
+          msg91_template_id?: string | null
+          msg91_version_id?: string | null
           name?: string
           subject?: string | null
           trigger_event?: string | null
