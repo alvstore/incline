@@ -5,7 +5,7 @@ import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendBlocker, mapVariables, toIndianMobile, buildFlowBody, msg91Fetch, pickIntegration, type Msg91Tpl } from "../_shared/msg91.ts";
+import { sendMSG91, pickIntegration, type Msg91Tpl } from "../_shared/msg91.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +15,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-if (import.meta.main) serve(async (req: Request) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -236,39 +236,6 @@ async function getRoundSMSDeliveryReport(msgid: string, phone: string, msgtype: 
 }
 
 // === Other Providers (unchanged) ===
-
-/**
- * MSG91 Flow send. Template sends need a synced MSG91 mapping (sendBlocker).
- * Without template_id, the legacy single Flow template ID in settings is used
- * only when the caller supplies VAR1..VARn values explicitly.
- */
-export async function sendMSG91(
-  phone: string, config: Record<string, string>, credentials: Record<string, string>,
-  tpl: Msg91Tpl | null | undefined, variables: Record<string, unknown> | undefined, fetchFn: typeof fetch = fetch,
-): Promise<{ success: boolean; message_id?: string; error?: string }> {
-  const authKey = credentials.auth_key || "";
-  if (!authKey) return { success: false, error: "MSG91 Auth Key is not configured" };
-  const mobile = toIndianMobile(phone);
-  if (!mobile) return { success: false, error: "Invalid Indian mobile number" };
-  let templateId: string; let values: Record<string, string>;
-  if (tpl !== undefined) {
-    const block = await sendBlocker(tpl);
-    if (block) return { success: false, error: block };
-    const mapped = mapVariables(tpl!.content, variables);
-    if (mapped.missing.length) return { success: false, error: `Missing SMS variables: ${mapped.missing.join(", ")}` };
-    templateId = tpl!.msg91_template_id!; values = mapped.values;
-  } else {
-    if (!config.template_id) return { success: false, error: "MSG91 needs a synced SMS template (no legacy fallback template set)" };
-    values = Object.fromEntries(Object.entries(variables || {}).filter(([k]) => /^VAR\d+$/.test(k)).map(([k, v]) => [k, String(v)]));
-    if (!Object.keys(values).length) return { success: false, error: "Legacy MSG91 fallback needs VAR1..VARn values" };
-    templateId = config.template_id;
-  }
-  const r = await msg91Fetch(authKey, "/api/v5/flow", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildFlowBody(templateId, mobile, values)),
-  }, fetchFn);
-  return r.ok ? { success: true, message_id: r.data?.message || r.data?.request_id } : { success: false, error: `MSG91: ${r.error}` };
-}
 
 async function sendTwilio(phone: string, message: string, config: Record<string, string>, credentials: Record<string, string>) {
   const sid = credentials.account_sid;

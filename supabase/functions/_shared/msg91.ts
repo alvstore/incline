@@ -116,3 +116,37 @@ export async function msg91Fetch(
     return { ok: false, status: 0, data: null, error: redact((e as Error).message, authKey) };
   }
 }
+
+/**
+ * MSG91 Flow send. Template sends need a synced MSG91 mapping (sendBlocker).
+ * Without template_id, the legacy single Flow template ID in settings is used
+ * only when the caller supplies VAR1..VARn values explicitly.
+ */
+export async function sendMSG91(
+  phone: string, config: Record<string, string>, credentials: Record<string, string>,
+  tpl: Msg91Tpl | null | undefined, variables: Record<string, unknown> | undefined, fetchFn: typeof fetch = fetch,
+): Promise<{ success: boolean; message_id?: string; error?: string }> {
+  const authKey = credentials.auth_key || "";
+  if (!authKey) return { success: false, error: "MSG91 Auth Key is not configured" };
+  const mobile = toIndianMobile(phone);
+  if (!mobile) return { success: false, error: "Invalid Indian mobile number" };
+  let templateId: string; let values: Record<string, string>;
+  if (tpl !== undefined) {
+    const block = await sendBlocker(tpl);
+    if (block) return { success: false, error: block };
+    const mapped = mapVariables(tpl!.content, variables);
+    if (mapped.missing.length) return { success: false, error: `Missing SMS variables: ${mapped.missing.join(", ")}` };
+    templateId = tpl!.msg91_template_id!; values = mapped.values;
+  } else {
+    if (!config.template_id) return { success: false, error: "MSG91 needs a synced SMS template (no legacy fallback template set)" };
+    values = Object.fromEntries(Object.entries(variables || {}).filter(([k]) => /^VAR\d+$/.test(k)).map(([k, v]) => [k, String(v)]));
+    if (!Object.keys(values).length) return { success: false, error: "Legacy MSG91 fallback needs VAR1..VARn values" };
+    templateId = config.template_id;
+  }
+  const r = await msg91Fetch(authKey, "/api/v5/flow", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildFlowBody(templateId, mobile, values)),
+  }, fetchFn);
+  return r.ok ? { success: true, message_id: r.data?.message || r.data?.request_id } : { success: false, error: `MSG91: ${r.error}` };
+}
+
