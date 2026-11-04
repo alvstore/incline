@@ -78,7 +78,7 @@ export function PayrollItemDetailsDrawer({open,onOpenChange,item,periodStart,per
       if(action==='pay'){const {error}=await supabase.rpc('payroll_record_payment',{p_item_id:item.id,p_method:method,p_reference:reference.trim(),p_payment_date:paymentDate});if(error)throw error;}
       return action;
     },
-    onSuccess:action=>{toast.success(action==='bank'?'Bank details saved':action==='pay'?'Payment and salary expense recorded':action==='process'?'Salary saved — ready for remittance':action==='save'?'Salary adjustments saved':'Salary recalculated; manual adjustments preserved');['expenses','expense-stats','payroll-expense','payroll-run-priority','payroll-items','payroll-runs','payroll-audit','payroll-calculation','payroll-bank','payroll-banks','pt_settlements','salary-advances','pending-advance'].forEach(k=>qc.invalidateQueries({queryKey:[k]}));},
+    onSuccess:action=>{toast.success(action==='bank'?'Bank details saved':action==='pay'?'Payment and salary expense recorded':action==='process'?'Salary saved — ready for remittance':action==='save'?'Salary adjustments saved':'Salary recalculated; manual adjustments preserved');['finance-expenses','expenses-console','finance-monthly-report','pending-expenses','expenses','expense-stats','payroll-expense','payroll-run-priority','payroll-items','payroll-runs','payroll-audit','payroll-calculation','payroll-bank','payroll-banks','pt_settlements','salary-advances','pending-advance'].forEach(k=>qc.invalidateQueries({queryKey:[k]}));},
     onError:(e:Error)=>toast.error(e.message),
   });
   const a=item?attendanceValues(item):{};
