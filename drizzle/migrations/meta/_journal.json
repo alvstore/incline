@@ -869,6 +869,13 @@
       "when": 1793782296743,
       "tag": "0123_payroll_remittance_expense_flow",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1793782376600,
+      "tag": "0124_payroll_duplicate_salary_guard",
+      "breakpoints": true
     }
   ]
 }
