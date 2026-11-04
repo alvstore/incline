@@ -18615,6 +18615,10 @@ export type Database = {
         Args: { p_item_ids: string[] }
         Returns: undefined
       }
+      payroll_save_bank: {
+        Args: { p_bank: Json; p_item_id: string }
+        Returns: undefined
+      }
       payroll_settle_item: {
         Args: {
           p_adjustment: number

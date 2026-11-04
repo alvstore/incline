@@ -855,6 +855,13 @@
       "when": 1793779649725,
       "tag": "0121_payroll_policy_unified_processing",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1793779905627,
+      "tag": "0122_payroll_settlement_claim_and_bank_guards",
+      "breakpoints": true
     }
   ]
 }
