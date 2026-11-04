@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { smsActivationBlocker } from '@/lib/templates/dlt';
+import { Msg91SyncCell, Msg91BulkSync, Msg91Notice } from './Msg91SyncControls';
 import { getSystemEvent } from '@/lib/templates/systemEvents';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -37,6 +38,11 @@ export interface TemplateRow {
   live_meta_header_type?: string | null;
   live_meta_stale?: boolean | null;
   live_synced_at?: string | null;
+  msg91_template_id?: string | null;
+  msg91_version_id?: string | null;
+  msg91_sync_status?: string | null;
+  msg91_sync_error?: string | null;
+  msg91_synced_at?: string | null;
 }
 
 export interface DeliveryStat {
@@ -173,7 +179,9 @@ export function TemplateTable({
             </div>
           )}
         </div>
+        {channel === 'sms' && <Msg91BulkSync />}
       </div>
+      {channel === 'sms' && <Msg91Notice />}
 
 
       {rows.length === 0 ? (
@@ -201,7 +209,8 @@ export function TemplateTable({
                   <TableHead className="hidden md:table-cell">Event</TableHead>
                   <TableHead>Status</TableHead>
                   {channel === 'whatsapp' && <TableHead className="hidden lg:table-cell">Meta</TableHead>}
-                  {channel === 'sms' && <TableHead className="hidden lg:table-cell">DLT</TableHead>}
+                  {channel === 'sms' && <TableHead className="hidden lg:table-cell">DLT (SmartPing)</TableHead>}
+                  {channel === 'sms' && <TableHead className="hidden lg:table-cell">MSG91</TableHead>}
                   <TableHead className="hidden xl:table-cell">7-day delivery</TableHead>
                   <TableHead className="hidden lg:table-cell">Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -259,6 +268,9 @@ export function TemplateTable({
                             ? <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{t.dlt_template_id}</p>
                             : <Badge variant="outline" className="mt-1 rounded-full text-[10px] border-warning/20 bg-warning/10 text-warning">Missing DLT ID</Badge>}
                         </TableCell>
+                      )}
+                      {channel === 'sms' && (
+                        <TableCell className="hidden lg:table-cell"><Msg91SyncCell t={t} /></TableCell>
                       )}
                       {channel === 'whatsapp' && (
                         <TableCell className="hidden lg:table-cell">
