@@ -1,7 +1,7 @@
 import type { Database } from '@/integrations/supabase/types';
 
 export type PayrollItem = Database['public']['Tables']['payroll_items']['Row'] & {
-  profile?: { full_name: string | null; email?: string | null };
+  profile?: { full_name: string | null; email?: string | null; avatar_url?: string | null };
 };
 
 export function payrollPeriod(month: string) {
