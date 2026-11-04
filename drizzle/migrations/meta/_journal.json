@@ -876,6 +876,13 @@
       "when": 1793782376600,
       "tag": "0124_payroll_duplicate_salary_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793787125073,
+      "tag": "0125_housekeeping_codes_and_trainer_contract_reset",
+      "breakpoints": true
     }
   ]
 }
