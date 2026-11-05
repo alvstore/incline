@@ -75,7 +75,7 @@ export default function AnnouncementsPage() {
               </Link>
             </Button>
             <Button onClick={() => setShowBroadcastDrawer(true)} className="gap-2 rounded-xl shadow-lg shadow-primary/20">
-              <Plus className="h-4 w-4" />New Announcement
+              <Plus className="h-4 w-4" />New message
             </Button>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function AnnouncementsPage() {
                   <h3 className="font-semibold text-lg mb-1">No Announcements</h3>
                   <p className="text-sm text-muted-foreground mb-4">Create your first announcement to notify members</p>
                   <Button onClick={() => setShowBroadcastDrawer(true)} className="gap-2 rounded-xl">
-                    <Plus className="h-4 w-4" />New Announcement
+                    <Plus className="h-4 w-4" />New message
                   </Button>
                 </CardContent>
               </Card>

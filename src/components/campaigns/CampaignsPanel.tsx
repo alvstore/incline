@@ -26,6 +26,8 @@ import {
   type Campaign,
 } from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
+import { MessageComposerSheet } from '@/components/campaigns/MessageComposerSheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawer';
 import { CampaignReportDrawer } from '@/components/campaigns/CampaignReportDrawer';
 import { CampaignFailureBreakdown } from '@/components/campaigns/CampaignFailureBreakdown';
@@ -49,6 +51,7 @@ export function CampaignsPanel() {
   const { selectedBranch } = useBranchContext();
   const branchId = selectedBranch && selectedBranch !== 'all' ? selectedBranch : null;
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const [reportCampaign, setReportCampaign] = useState<Campaign | null>(null);
@@ -83,10 +86,7 @@ export function CampaignsPanel() {
     enabled: !!branchId,
     // Poll fast while anything is actively sending so the card reflects
     // send-broadcast's live progress writes; slow poll otherwise.
-    refetchInterval: (q) => {
-      const rows = (q.state.data || []) as Campaign[];
-      return rows.some((c) => c.status === 'sending') ? 3000 : 30000;
-    },
+    // Live progress comes from the realtime subscription below — no polling.
   });
 
   useRealtimeInvalidate({
@@ -120,7 +120,8 @@ export function CampaignsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Retry failed'),
   });
 
-  const openCreate = () => { setEditingCampaign(null); setWizardOpen(true); };
+  const openCreate = () => setComposerOpen(true);
+  const openAdvanced = () => { setEditingCampaign(null); setWizardOpen(true); };
   const openEdit = (c: Campaign) => { setEditingCampaign(c); setWizardOpen(true); };
 
   const filteredCampaigns = useMemo(() => {
@@ -139,19 +140,42 @@ export function CampaignsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Marketing & Campaigns</h2>
-          <p className="text-sm text-muted-foreground">Promotional events, offers, images and PDFs to members, leads and contacts. For quick one-shot announcements use the <strong>New Announcement</strong> button above.</p>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Campaigns</h2>
+          <p className="text-sm text-muted-foreground">Every message you send to members, staff and leads — with live delivery progress.</p>
         </div>
-        <Button
-          onClick={openCreate}
-          className="rounded-xl bg-primary hover:bg-primary text-primary-foreground gap-2"
-          disabled={!branchId}
-        >
-          <Plus className="h-4 w-4" /> New Campaign
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openAdvanced} disabled={!branchId} className="rounded-xl min-h-[44px]">Advanced campaign</Button>
+          <Button onClick={openCreate} disabled={!branchId} className="rounded-xl gap-2 min-h-[44px]"><Plus className="h-4 w-4" /> New message</Button>
+        </div>
       </div>
+
+      {branchId && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {([
+            ['all', 'All', Megaphone],
+            ['draft', 'Drafts', Pencil],
+            ['scheduled', 'Scheduled', Clock],
+            ['pending_template_approval', 'Waiting approval', ShieldAlert],
+            ['sending', 'Sending', Loader2],
+            ['failed', 'Failed', AlertTriangle],
+          ] as const).map(([key, label, Ico]) => {
+            const n = key === 'all' ? campaigns.length : (campaigns as Campaign[]).filter((c) => c.status === key || (key === 'pending_template_approval' && c.approval_required && !c.approved_at && c.status !== 'sent')).length;
+            const active = statusFilter === key;
+            return (
+              <button key={key} type="button" onClick={() => setStatusFilter(key)} aria-pressed={active}
+                className={`rounded-xl border p-4 text-left transition-colors duration-150 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-secondary'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</span>
+                  <Ico className={`h-4 w-4 text-muted-foreground ${key === 'sending' && n > 0 ? 'animate-spin' : ''}`} />
+                </div>
+                {isLoading ? <Skeleton className="h-8 w-10 mt-2" /> : <div className="text-3xl font-bold tabular-nums text-foreground mt-1">{n}</div>}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {!branchId && (
         <div className="rounded-2xl bg-warning/10 border border-warning/25 p-4 text-warning text-sm">
@@ -178,12 +202,13 @@ export function CampaignsPanel() {
       )}
 
       {branchId && isLoading ? (
-        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div>
       ) : branchId && filteredCampaigns.length === 0 ? (
         <div className="rounded-2xl bg-card border border-dashed border-border p-12 text-center">
           <Megaphone className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
           <h3 className="text-lg font-semibold text-foreground">{campaigns.length === 0 ? 'No campaigns yet' : 'No campaigns match your filters'}</h3>
-          <p className="text-sm text-muted-foreground mt-1">{campaigns.length === 0 ? 'Create your first marketing campaign to engage with members.' : 'Try a different search or status.'}</p>
+          <p className="text-sm text-muted-foreground mt-1">{campaigns.length === 0 ? 'Send your first message to members, staff or leads.' : 'Try a different search or status.'}</p>
+          {campaigns.length === 0 && <Button onClick={openCreate} className="mt-4 rounded-xl gap-2"><Plus className="h-4 w-4" />New message</Button>}
         </div>
       ) : branchId && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -330,6 +355,7 @@ export function CampaignsPanel() {
       )}
 
       {branchId && (
+        <MessageComposerSheet open={composerOpen} onOpenChange={setComposerOpen} branchId={branchId} />
         <CampaignWizard
           open={wizardOpen}
           onOpenChange={(o) => { setWizardOpen(o); if (!o) { setEditingCampaign(null); setAnnounceClassId(null); } }}
