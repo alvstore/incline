@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     const { lead_id, branch_id, suppress_lead_welcome } = await req.json();
     // Only trusted server callers (service role, e.g. capture-lead for website-chatbot
     // captures) may suppress prospect-facing welcomes. Team alerts are unaffected.
-    const suppressLeadWelcome = suppress_lead_welcome === true && __caller.isService === true;
+    const suppressLeadWelcome = suppress_lead_welcome === true && __caller.internal === true;
     if (!lead_id || !branch_id) return json({ error: "Missing lead_id or branch_id" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
