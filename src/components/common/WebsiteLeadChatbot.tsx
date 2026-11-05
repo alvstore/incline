@@ -112,6 +112,7 @@ export default function WebsiteLeadChatbot() {
   const userSay = (text: string) => setMessages((m) => [...m, { from: 'user', text }]);
 
   const saveMutation = useMutation({
+    retry: false, // visitor retries explicitly; never double-submit silently
     mutationFn: async (): Promise<SaveResult> => {
       const ft = getFirstTouch() || captureFirstTouch();
       const params = new URLSearchParams(window.location.search);
@@ -142,6 +143,7 @@ export default function WebsiteLeadChatbot() {
   });
 
   const visitMutation = useMutation({
+    retry: false,
     mutationFn: async (visit: string) => {
       if (!leadId) return;
       const { error } = await supabase.functions.invoke('capture-lead', {
