@@ -32,6 +32,8 @@ export function getAllToolDefinitions() {
       "Resume a frozen membership immediately.", {}),
 
     // Benefits & Bookings
+    tool("get_member_addon_prices",
+      "Member-only add-on prices: sauna (Spectrum Lounge), cold plunge and 3D posture/body scan. Never share these with non-members."),
     tool("get_benefit_balance",
       "Get remaining benefit credits (sauna, ice bath, group classes). Optional benefit_type filter.",
       { benefit_type: ["string", "Optional: 'sauna', 'ice_bath', 'group_classes', etc."] }),

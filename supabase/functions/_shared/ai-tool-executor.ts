@@ -301,6 +301,15 @@ export async function executeSharedToolCall(
         }
       }
 
+      case "get_member_addon_prices": {
+        if (!ctx.memberId) return { error: "Add-on rates for non-members are different. Please call the front desk on 8298293003." };
+        const sp = await import("./salesPricing.ts");
+        if (!(await sp.flagEnabled(supabase, "sales_member_addon_prices"))) return { error: "Please ask the front desk for add-on rates." };
+        const items = await sp.memberAddonPrices(supabase, branchId ?? null);
+        await sp.logSalesEvent(supabase, { branch_id: branchId ?? null, channel: "whatsapp", event: "addon_prices_shown", metadata: { member_id: ctx.memberId } });
+        return { member_rates: items.map((i) => ({ name: i.name, price: sp.inr(i.price), sessions: i.sessions })) };
+      }
+
       case "get_wallet_balance": {
         if (!ctx.memberId) return { error: "Not a registered member." };
         const { data: wallet } = await supabase
