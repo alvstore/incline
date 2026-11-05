@@ -324,6 +324,14 @@ async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps):
   if (!topic && !message) return bad("Invalid request");
   const [k, plans] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db)]);
   const reply = topic ? webTopicReply(topic, state, k, plans) : webConciergeReply(message, state, k, plans);
+  // Remember what the visitor already told us — reference it instead of re-asking.
+  if (reply.topic === "membership" || reply.topic === "pricing") {
+    const { data: lp } = await deps.db.from("leads").select("plan_interest, fitness_goal").eq("id", p.lead.id).maybeSingle();
+    if (lp?.plan_interest) {
+      const goalTxt = lp.fitness_goal ? ` with a focus on ${String(lp.fitness_goal).toLowerCase()}` : "";
+      reply.messages.splice(1, 0, { text: `You mentioned ${lp.plan_interest}${goalTxt}, so our team will walk you through exactly that option during your visit.` });
+    }
+  }
   try {
     await storeTurns(deps.db, p.lead, [
       { from: "user", text: topic ? (label || topic) : message },

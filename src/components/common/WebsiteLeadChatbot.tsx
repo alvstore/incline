@@ -350,13 +350,6 @@ export default function WebsiteLeadChatbot() {
                 ))}
               </div>
             )}
-            {step === 'chat' && !typing && (
-              <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Suggested questions">
-                {FOLLOW_UPS.map((f) => (
-                  <button key={f.topic} type="button" className={cn(chip, 'shrink-0')} onClick={() => pickTopic(f.label, f.topic)}>{f.label}</button>
-                ))}
-              </div>
-            )}
             {saveError && step === 'goal' && (
               <div role="alert" className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
                 <p>{saveError}</p>
