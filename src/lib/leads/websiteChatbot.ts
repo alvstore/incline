@@ -47,9 +47,9 @@ export function newSubmissionId(): string {
 }
 
 // ── Concierge ────────────────────────────────────────────────────────────────
-export type Topic = 'location' | 'hours' | 'member_service' | 'greeting' | 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
+export type Topic = 'objection' | 'location' | 'hours' | 'member_service' | 'greeting' | 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
 export type BotMessage = { text: string; tel?: boolean };
-export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic };
+export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic; visitOffers?: number; declinedVisit?: boolean };
 export type ConciergeReply = { messages: BotMessage[]; topic: Topic; state: ConciergeState; visitPreference?: string };
 
 export const FOLLOW_UPS = [
@@ -82,6 +82,9 @@ const RE = {
 };
 
 const ASK_NEXT = 'What would you like to know next?';
+export const OBJECTION_RE = /\b(before (a |the |my )?visit|without (coming|visiting|a visit)|can'?t (come|visit)|cannot (come|visit)|won'?t (come|visit)|no time to visit|just tell( me)?|tell me (the )?(price|cost|fees?|rate)|on (the )?(phone|chat)|over (the )?(phone|chat)|why (can'?t|won'?t|not|don'?t) you|abhi batao|yahin batao|seedha batao)\b/i;
+export const OBJECTION_COPY = "I understand you'd like the numbers first. Fees depend on the plan length and what's included, so our team shares the exact figure personally rather than a generic list here.";
+export const OBJECTION_CALL = `If you'd rather not visit first, call our team on ${ESCALATION_PHONE} and they'll explain the options on the phone.`;
 
 function topicAnswer(topic: Topic, plans: string[]): string[] {
   switch (topic) {
@@ -145,8 +148,18 @@ function finalize(reply: ConciergeReply, prev: ConciergeState): ConciergeReply {
     if (reply.topic === 'visit' || messages.length < reply.messages.length) messages = [...messages, { text: MEMBER_HELP }];
     if (!messages.length) messages = [{ text: MEMBER_HELP }];
   }
+  // Visit-offer cooldown: never offer twice in a row, at most twice per chat, never after a "no".
+  const offers = prev.visitOffers ?? 0;
+  const declined = prev.declinedVisit === true || reply.state.declinedVisit === true;
+  if (!isMember && (prev.offeredVisit || offers >= 2 || declined) && reply.topic !== 'visit') {
+    const last = messages[messages.length - 1];
+    if (last && VISIT_OFFER_RE.test(last.text)) {
+      const trimmed = last.text.replace(/\s*(Would you like to plan (a visit|one)[^?]*\?)\s*$/i, '').trim();
+      messages = [...messages.slice(0, -1), ...(trimmed ? [{ ...last, text: trimmed }] : []), { text: ASK_NEXT }];
+    }
+  }
   const offeredVisit = !isMember && VISIT_OFFER_RE.test(messages[messages.length - 1]?.text ?? '');
-  return { ...reply, messages, state: { ...reply.state, isMember, offeredVisit, awaitingVisit: isMember ? false : reply.state.awaitingVisit, lastTopic: reply.topic } };
+  return { ...reply, messages, state: { ...reply.state, declinedVisit: declined, visitOffers: offers + (offeredVisit ? 1 : 0), isMember, offeredVisit, awaitingVisit: isMember ? false : reply.state.awaitingVisit, lastTopic: reply.topic } };
 }
 
 const isTopicQuestion = (t: string) => [RE.discount, RE.group, RE.pricing, RE.location, RE.memberService, RE.recovery, RE.amenities, RE.pt, RE.floor, RE.membership, RE.hours].some((r) => r.test(t));
@@ -181,7 +194,7 @@ function rawReply(raw: string, state: ConciergeState): ConciergeReply {
   if (THANKS_RE.test(text)) return { messages: [{ text: "You're welcome! Anything else I can help with?" }], topic: 'greeting', state: { ...base, awaitingVisit: false } };
   if (state.offeredVisit && YES_RE.test(text) && !isTopicQuestion(text)) return rawTopic('visit', base);
   if (NO_RE.test(text) && !isTopicQuestion(text)) {
-    return { messages: [{ text: 'No problem.' }, { text: ASK_NEXT }], topic: 'unknown', state: { ...base, awaitingVisit: false } };
+    return { messages: [{ text: 'No problem.' }, { text: ASK_NEXT }], topic: 'unknown', state: { ...base, awaitingVisit: false, declinedVisit: state.offeredVisit || state.declinedVisit } };
   }
   if (YES_RE.test(text) && !isTopicQuestion(text)) {
     return { messages: [{ text: 'Happy to help. You can ask about the training floor, recovery, amenities, memberships or classes.' }], topic: 'unknown', state: { ...base, awaitingVisit: false } };
@@ -200,6 +213,9 @@ function rawReply(raw: string, state: ConciergeState): ConciergeReply {
     if (asks === 1) return { messages: [{ text: FIXED_PRICING_POLICY }, { text: 'Would you like to hear more about the facilities, or plan a visit?' }], topic: 'discount', state: s2 };
     return { messages: [{ text: FIXED_PRICING_POLICY }, { text: ESCALATION_COPY, tel: true }], topic: 'discount', state: s2 };
   }
+  if (OBJECTION_RE.test(text) && !state.isMember) {
+    return { messages: [{ text: OBJECTION_COPY }, { text: OBJECTION_CALL, tel: true }], topic: 'objection', state: next };
+  }
   if (RE.memberService.test(text) && (state.isMember || !RE.membership.test(text) || /renew|freeze|expir/i.test(text))) {
     return { messages: [{ text: MEMBER_SERVICE }], topic: 'member_service', state: next };
   }
@@ -217,4 +233,82 @@ export function welcomeAfterCapture(name: string, interest: string): string[] {
     `Thanks, ${firstName(name)}! Your enquiry is saved, and it's great to hear you're interested in ${interest}.`,
     'Incline is a premium, fully air-conditioned fitness and recovery club. I can tell you about the training floor, recovery suites, amenities, membership options, or help you plan a visit.',
   ];
+}
+
+// ── Intake understanding ────────────────────────────────────────────────────
+const QUESTION_START = /^(what|whats|what's|how|where|when|why|which|who|can|could|do|does|is|are|will|kya|kitna|kitne|kitni|kab|kaise|kahan|tell|show|give|any)\b/i;
+const NAME_PREFIX = /^(hi|hello|hey|namaste)?[,! ]*(my name is|my name's|name is|i am|i'm|im|this is|it's|its|mera naam|main|myself)\s+/i;
+const NAME_SUFFIX = /\s+(hoon|hu|hai|here)\.?$/i;
+
+/** True when the visitor asked something instead of answering the intake question. */
+export function isQuestionLike(raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return false;
+  return /\?/.test(t) || QUESTION_START.test(t) || isTopicQuestion(t) || RE.visit.test(t) || OBJECTION_RE.test(t);
+}
+
+/** Stricter: an explicit question or money/objection talk (used when the field itself is topical, e.g. "join the gym"). */
+export function isDirectQuestion(raw: string): boolean {
+  const t = raw.trim();
+  return /\?/.test(t) || QUESTION_START.test(t) || RE.pricing.test(t) || RE.discount.test(t) || RE.group.test(t) || OBJECTION_RE.test(t);
+}
+
+/** Pulls a plausible full name out of "my name is Rajat Lekhari" etc.; null if it isn't a name. */
+export function extractName(raw: string): string | null {
+  const t = raw.trim().replace(NAME_PREFIX, '').replace(NAME_SUFFIX, '').replace(/[.!,]+$/, '').trim();
+  if (t.length < 2 || t.length > 60) return null;
+  if (!/^[\p{L}][\p{L}.' -]*$/u.test(t)) return null; // letters only — no digits, @, ?
+  const words = t.split(/\s+/);
+  if (words.length > 4) return null;
+  if (isQuestionLike(t) || GREET_RE.test(t) || THANKS_RE.test(t) || YES_RE.test(t) || NO_RE.test(t)) return null;
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+export function extractEmail(raw: string): string | null {
+  const m = raw.match(/[^\s@<>(),;:]+@[^\s@<>(),;:]+\.[a-z]{2,}/i);
+  return m && isValidEmail(m[0]) ? m[0].toLowerCase() : null;
+}
+
+export function extractMobile(raw: string): string | null {
+  const m = raw.match(/(\+?\d[\d\s-]{8,15}\d)/);
+  return m ? normalizeIndianMobile(m[1]) : null;
+}
+
+const INTENT_MAP: Array<[RegExp, string]> = [
+  [/\b(personal train\w*|pt|trainer|coach)\b/i, 'Personal training'],
+  [/\b(recovery|sauna|steam|plunge|ice bath|red[- ]?light|wellness|spa)\b/i, 'Recovery & wellness'],
+  [/\b(class|classes|pilates|yoga|zumba|group)\b/i, 'Group classes & Pilates'],
+  [/\b(explor\w*|just looking|looking around|browsing|not sure|dekh)\b/i, 'Just exploring'],
+  [/\b(membership|member|join|gym|plan)\b/i, 'Membership'],
+];
+const GOAL_MAP: Array<[RegExp, string]> = [
+  [/\b(fat|weight|slim|lose|loss|cut|belly|vajan|motapa)\b/i, 'Fat loss'],
+  [/\b(muscle|bulk|gain|strength|strong|build|mass)\b/i, 'Build muscle'],
+  [/\b(recover\w*|injur\w*|rehab|pain|relax|stress|mobility)\b/i, 'Recovery & wellness'],
+  [/\b(athlet\w*|sport\w*|performance|endurance|stamina|marathon|run)\b/i, 'Athletic performance'],
+  [/\b(general|fit|fitness|health\w*|active|tone|overall)\b/i, 'General fitness'],
+];
+const DURATION_MAP: Array<[RegExp, string]> = [
+  [/\b(half[- ]?year\w*|6 ?months?|six months?|semi)\b/i, 'Half-Yearly'],
+  [/\b(annual\w*|year\w*|12 ?months?|1 ?yr)\b/i, 'Annual'],
+  [/\b(quarter\w*|3 ?months?|three months?)\b/i, 'Quarterly'],
+  [/\b(month\w*|1 ?month|mahina)\b/i, 'Monthly'],
+];
+const pick = (map: Array<[RegExp, string]>, raw: string, exact: readonly string[]) => {
+  const t = raw.trim();
+  const hit = exact.find((e) => e.toLowerCase() === t.toLowerCase());
+  if (hit) return hit;
+  for (const [re, v] of map) if (re.test(t)) return v;
+  return null;
+};
+export const matchIntent = (raw: string, exact: readonly string[] = []) => pick(INTENT_MAP, raw, exact);
+export const matchGoal = (raw: string, exact: readonly string[] = []) => pick(GOAL_MAP, raw, exact);
+export const matchDuration = (raw: string, exact: readonly string[] = []) => pick(DURATION_MAP, raw, exact);
+
+/** A short, honest answer to a question asked mid-intake — no visit offers, then the caller re-asks the field. */
+export function intakeAside(raw: string, state: ConciergeState): { messages: BotMessage[]; state: ConciergeState } {
+  const r = conciergeReply(raw, { ...state, offeredVisit: false, awaitingVisit: false });
+  const body = r.messages.filter((m) => !VISIT_OFFER_RE.test(m.text) && m.text !== ASK_NEXT && !/which day and time/i.test(m.text));
+  const kept = r.topic === 'unknown' ? [{ text: "Good question — our team will answer that properly once your enquiry is saved." }] : body.slice(0, 2);
+  return { messages: kept, state: { ...state, discountAsks: r.state.discountAsks } };
 }

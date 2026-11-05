@@ -58,3 +58,29 @@ Deno.test("web chat thread key is synthetic and stable, never a real Indian mobi
   assert(isWebChatKey(k));
   assert(!k.startsWith("+91"));
 });
+
+const VISIT_RE = /plan (a visit|one)/i;
+Deno.test("server: after the visitor says no, visit is never offered again", () => {
+  const r1 = webConciergeReply("what is the cost", S, K);
+  assert(VISIT_RE.test(all(r1)), all(r1));
+  const r2 = webConciergeReply("no", r1.state, K);
+  assertEquals(r2.state.declinedVisit, true);
+  const r3 = webConciergeReply("membership plans", r2.state, K);
+  assert(!VISIT_RE.test(all(r3)), all(r3));
+});
+Deno.test("server: no back-to-back visit offers, max two per chat", () => {
+  let st: typeof S & Record<string, unknown> = S; let offers = 0; let prevOffered = false;
+  for (const q of ["price", "membership", "fees", "membership plans", "cost", "price"]) {
+    const r = webConciergeReply(q, st, K); const o = VISIT_RE.test(all(r));
+    assert(!(o && prevOffered), `back-to-back on ${q}`); if (o) offers++; prevOffered = o; st = r.state;
+  }
+  assert(offers <= 2, String(offers));
+});
+Deno.test("server: price objection gets an explanation and tel option, not a tour loop", () => {
+  for (const q of ["I want the price before visit", "just tell me the fees", "can't visit, tell me on chat"]) {
+    const r = webConciergeReply(q, S, K);
+    assert(r.messages.some((m) => m.tel), q);
+    assert(/exact figure/i.test(all(r)), all(r));
+    assert(!/₹|wa\.me|whatsapp/i.test(all(r)), all(r));
+  }
+});

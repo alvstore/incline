@@ -10,7 +10,7 @@ import {
   EMAIL_REQUIRED_COPY, ESCALATION_TEL, ESCALATION_PHONE,
   type ConciergeState, type Topic, type BotMessage,
   normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
-  conciergeReply,
+  conciergeReply, extractName, extractEmail, extractMobile, isQuestionLike, isDirectQuestion, intakeAside, matchIntent, matchGoal, matchDuration,
 } from '@/lib/leads/websiteChatbot';
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat' | 'handoff';
@@ -46,8 +46,11 @@ async function readFnError(err: unknown): Promise<string> {
 
 const PROMPTS: Partial<Record<Step, { label: string; placeholder: string; type: string; autoComplete: string; inputMode?: 'tel' | 'email' | 'text' }>> = {
   name: { label: 'Your full name', placeholder: 'Full name', type: 'text', autoComplete: 'name' },
-  email: { label: 'Your email address (required)', placeholder: 'you@example.com', type: 'email', autoComplete: 'email', inputMode: 'email' },
+  email: { label: 'Your email address (required)', placeholder: 'you@example.com', type: 'text', autoComplete: 'email', inputMode: 'email' },
   phone: { label: 'Your mobile number', placeholder: '98XXXXXXXX', type: 'tel', autoComplete: 'tel', inputMode: 'tel' },
+  intent: { label: 'What are you looking for?', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
+  goal: { label: 'Your main fitness goal', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
+  interest: { label: 'Membership duration', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
   chat: { label: 'Ask a question', placeholder: 'Ask about facilities, membership, visits…', type: 'text', autoComplete: 'off' },
 };
 
@@ -85,7 +88,7 @@ export default function WebsiteLeadChatbot() {
   useEffect(() => {
     try {
       const data: Saved & { at: number } = { at: Date.now(), step, messages: messages.slice(-80), name, email, phone, intent, goal, interest, leadId, submissionId: submissionId.current,
-        concierge: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit, isMember: concierge.isMember } };
+        concierge: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit, isMember: concierge.isMember, lastTopic: concierge.lastTopic, visitOffers: concierge.visitOffers, declinedVisit: concierge.declinedVisit } };
       window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
     } catch { /* storage unavailable */ }
   }, [step, messages, name, email, phone, intent, goal, interest, leadId, concierge]);
@@ -214,16 +217,16 @@ export default function WebsiteLeadChatbot() {
     }
   };
 
-  const pickIntent = (v: string) => {
-    setIntent(v); userSay(v);
+  const pickIntent = (v: string, said = v) => {
+    setIntent(v); userSay(said);
     if (v !== 'Membership') setInterest(v);
     botSay([{ text: 'Got it. What is your main fitness goal?' }], 'goal');
   };
-  const pickGoal = (v: string) => {
-    setGoal(v); userSay(v);
+  const pickGoal = (v: string, said = v) => {
+    setGoal(v); userSay(said);
     if (intent === 'Membership') botSay([{ text: 'Great. Which membership duration are you considering?' }], 'interest');
   };
-  const pickInterest = (v: string) => { setInterest(`${v} membership`); userSay(v); };
+  const pickInterest = (v: string, said = v) => { setInterest(`${v} membership`); userSay(said); };
   const ready = !!goal && !!interest && !leadId && step !== 'chat' && step !== 'saving' && step !== 'handoff';
   useEffect(() => { if (ready && !saveError && !inFlight.current) void save(); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -243,12 +246,12 @@ export default function WebsiteLeadChatbot() {
       const { data, error } = await supabase.functions.invoke('capture-lead', {
         body: {
           intake_type: 'website_chatbot', action: 'chat', lead_id: leadId, submission_id: submissionId.current,
-          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true, lastTopic: concierge.lastTopic }, ...input,
+          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true, lastTopic: concierge.lastTopic, visitOffers: concierge.visitOffers ?? 0, declinedVisit: concierge.declinedVisit === true }, ...input,
         },
       });
       if (error || !Array.isArray(data?.messages)) throw error ?? new Error('bad reply');
       topics.current.add(data.topic as Topic);
-      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true, lastTopic: data.state?.lastTopic as Topic | undefined }));
+      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true, lastTopic: data.state?.lastTopic as Topic | undefined, visitOffers: Number(data.state?.visitOffers) || 0, declinedVisit: data.state?.declinedVisit === true }));
       setTyping(false);
       setMessages((m) => [...m, ...(data.messages as BotMessage[]).map((b) => ({ from: 'bot' as const, text: String(b.text), tel: b.tel === true }))]);
     } catch {
@@ -257,26 +260,66 @@ export default function WebsiteLeadChatbot() {
     }
   };
 
+  /** Visitor asked something mid-intake: answer briefly, then re-ask the same field. */
+  const aside = (v: string, reask: string) => {
+    userSay(v); setDraft('');
+    const a = intakeAside(v, concierge);
+    topics.current.add('unknown');
+    setConcierge((c) => ({ ...c, discountAsks: a.state.discountAsks }));
+    botSay([...a.messages, { text: reask }]);
+  };
+  const REASK: Partial<Record<Step, string>> = {
+    name: 'To help you properly, may I have your full name first?',
+    phone: `Thanks${name ? `, ${firstName(name)}` : ''}. Could you share your mobile number next?`,
+    email: 'And your email address, please? It is required to register your enquiry.',
+    intent: 'What are you looking for today — membership, personal training, recovery, classes, or just exploring?',
+    goal: 'What is your main fitness goal?',
+    interest: 'Which membership duration are you considering — Monthly, Quarterly, Half-Yearly or Annual?',
+  };
+
   const submitText = (e: FormEvent) => {
     e.preventDefault();
     const v = draft.trim();
     setFieldError('');
+    if (!v && step !== 'email') return;
     if (step === 'name') {
-      if (v.length < 2) return setFieldError('Please enter your full name.');
-      setName(v); userSay(v); setDraft('');
-      botSay([{ text: `Thanks, ${firstName(v)}. What's your mobile number?` }], 'phone');
-    } else if (step === 'email') {
+      const n = extractName(v);
+      if (n) { setName(n); userSay(v); setDraft(''); return botSay([{ text: `Nice to meet you, ${firstName(n)}. What's your mobile number?` }], 'phone'); }
+      if (isQuestionLike(v)) return aside(v, REASK.name!);
+      return setFieldError('Please enter your full name (letters only).');
+    }
+    if (step === 'phone') {
+      const n = extractMobile(v);
+      if (n) { setPhone(n); userSay(v); setDraft(''); return botSay([{ text: 'And your email address?' }, { text: EMAIL_REQUIRED_COPY }], 'email'); }
+      if (isQuestionLike(v)) return aside(v, REASK.phone!);
+      return setFieldError('Enter a valid 10-digit Indian mobile number.');
+    }
+    if (step === 'email') {
       if (!v) return setFieldError(`Email is required. ${EMAIL_REQUIRED_COPY}`);
-      if (!isValidEmail(v)) return setFieldError('Please enter a valid email address, like name@example.com.');
-      setEmail(v); userSay(v); setDraft('');
-      botSay([{ text: 'What are you looking for today?' }], 'intent');
-    } else if (step === 'phone') {
-      const n = normalizeIndianMobile(v);
-      if (!n) return setFieldError('Enter a valid 10-digit Indian mobile number.');
-      setPhone(n); userSay(n); setDraft('');
-      botSay([{ text: "And your email address?" }, { text: EMAIL_REQUIRED_COPY }], 'email');
-    } else if (step === 'chat') {
-      if (!v) return;
+      const em = extractEmail(v);
+      if (em) { setEmail(em); userSay(v); setDraft(''); return botSay([{ text: 'What are you looking for today?' }], 'intent'); }
+      if (isQuestionLike(v) && !v.includes('@')) return aside(v, REASK.email!);
+      return setFieldError('Please enter a valid email address, like name@example.com.');
+    }
+    if (step === 'intent') {
+      const m = !isDirectQuestion(v) ? matchIntent(v, INTENTS) : null;
+      if (m) { setDraft(''); return pickIntent(m, v); }
+      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: REASK.intent! }]); }
+      return aside(v, REASK.intent!);
+    }
+    if (step === 'goal') {
+      const m = !isDirectQuestion(v) ? matchGoal(v, GOALS) : null;
+      if (m) { setDraft(''); return pickGoal(m, v); }
+      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: "Sorry, I didn't catch that. " + REASK.goal! }]); }
+      return aside(v, REASK.goal!);
+    }
+    if (step === 'interest') {
+      const m = !isDirectQuestion(v) ? matchDuration(v, DURATIONS) : null;
+      if (m) { setDraft(''); return pickInterest(m, v); }
+      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: "Sorry, I didn't catch that. " + REASK.interest! }]); }
+      return aside(v, REASK.interest!);
+    }
+    if (step === 'chat') {
       userSay(v); setDraft('');
       void askServer({ message: v }, () => conciergeReply(v, concierge));
     }
@@ -285,7 +328,7 @@ export default function WebsiteLeadChatbot() {
   const restart = () => {
     setStep('name'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
-    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false }));
+    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false, lastTopic: undefined, visitOffers: 0, declinedVisit: false }));
     submissionId.current = newSubmissionId();
     setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
     try { window.localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
@@ -383,7 +426,7 @@ export default function WebsiteLeadChatbot() {
                   <label htmlFor="wcb-input" className="sr-only">{prompt.label}</label>
                   <Input id="wcb-input" data-step-focus value={draft} onChange={(e) => { setDraft(e.target.value); setFieldError(''); }}
                     type={prompt.type} inputMode={prompt.inputMode} autoComplete={prompt.autoComplete} placeholder={prompt.placeholder}
-                    maxLength={step === 'email' ? 255 : step === 'phone' ? 16 : step === 'name' ? 100 : MAX_NOTE}
+                    maxLength={step === 'email' ? 255 : step === 'phone' ? 100 : step === 'name' ? 100 : MAX_NOTE}
                     required={step === 'email' || step === 'name' || step === 'phone'}
                     aria-invalid={!!fieldError} aria-describedby={fieldError ? errId : undefined} />
                   {fieldError && <p id={errId} role="alert" className="mt-1 text-xs text-destructive">{fieldError}</p>}

@@ -10,7 +10,7 @@ export const WEB_TOPICS = [
   "visit", "pricing", "discount", "group_pricing", "member_service", "greeting", "unknown",
 ] as const;
 export type WebTopic = (typeof WEB_TOPICS)[number];
-export type WebState = { discountAsks: number; awaitingVisit: boolean; offeredVisit?: boolean; isMember?: boolean; lastTopic?: string };
+export type WebState = { discountAsks: number; awaitingVisit: boolean; offeredVisit?: boolean; isMember?: boolean; lastTopic?: string; visitOffers?: number; declinedVisit?: boolean };
 export type WebMsg = { text: string; tel?: boolean };
 export type WebReply = { messages: WebMsg[]; topic: WebTopic; state: WebState; visitPreference?: string };
 /** topic -> visitor-facing text, loaded from ai_knowledge */
@@ -107,6 +107,8 @@ const THANKS_RE = /^(thanks|thank you|thankyou|thx|shukriya|dhanyavaad)[!. ]*$/i
 const TIME_RE = /\b(mon|tue|wed|thu|fri|sat|sun)\w*|\b(today|tomorrow|tmrw|kal|weekend|morning|afternoon|evening|night)\b|\b\d{1,2}(:\d{2})?\s*(am|pm)\b|\b\d{1,2}(st|nd|rd|th)?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*/i;
 const MEMBER_PRICE = "Your current plan, renewal and upgrade options are in the Member Portal under My Plan, and the front desk can confirm renewal pricing for you.";
 const MEMBER_HELP = "As a member, you can renew, book classes or recovery slots and view your plan in the Member Portal, or ask the front desk.";
+const OBJECTION_RE = /\b(before (a |the |my )?visit|without (coming|visiting|a visit)|can'?t (come|visit)|cannot (come|visit)|won'?t (come|visit)|no time to visit|just tell( me)?|tell me (the )?(price|cost|fees?|rate)|on (the )?(phone|chat)|over (the )?(phone|chat)|why (can'?t|won'?t|not|don'?t) you|abhi batao|yahin batao|seedha batao)\b/i;
+const OBJECTION_COPY = "I understand you'd like the numbers first. Fees depend on the plan length and what's included, so our team shares the exact figure personally rather than a generic list here.";
 const YES_RE = /^(yes|yeah|yep|ya|yup|sure|ok|okay|haan|han|ha|please|definitely|of course|why not)\b/i;
 const NO_RE = /^(no|nope|nah|not now|later|maybe later|nahi|na)\b/i;
 const VISIT_OFFER_RE = /plan (a visit|one)/i;
@@ -124,8 +126,17 @@ function withOffer(r: WebReply, prev?: WebState): WebReply {
     messages = kept.length < messages.length || r.topic === "visit" ? [...kept, { text: MEMBER_HELP }] : kept;
     if (!messages.length) messages = [{ text: MEMBER_HELP }];
   }
+  const offers = prev?.visitOffers ?? 0;
+  const declined = prev?.declinedVisit === true || r.state.declinedVisit === true;
+  if (!isMember && (prev?.offeredVisit || offers >= 2 || declined) && r.topic !== "visit") {
+    const last = messages[messages.length - 1];
+    if (last && VISIT_OFFER_RE.test(last.text)) {
+      const trimmed = last.text.replace(/\s*(Would you like to plan (a visit|one)[^?]*\?)\s*$/i, "").trim();
+      messages = [...messages.slice(0, -1), ...(trimmed ? [{ ...last, text: trimmed }] : []), { text: ASK_NEXT }];
+    }
+  }
   const offeredVisit = !isMember && VISIT_OFFER_RE.test(messages[messages.length - 1]?.text ?? "");
-  return { ...r, messages, state: { ...r.state, isMember, offeredVisit, awaitingVisit: isMember ? false : r.state.awaitingVisit, lastTopic: r.topic } };
+  return { ...r, messages, state: { ...r.state, declinedVisit: declined, visitOffers: offers + (offeredVisit ? 1 : 0), isMember, offeredVisit, awaitingVisit: isMember ? false : r.state.awaitingVisit, lastTopic: r.topic } };
 }
 
 export function webTopicReply(topic: WebTopic, state: WebState, k: Knowledge, plans: string[] = []): WebReply {
@@ -151,7 +162,7 @@ function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[])
   if (GREET_RE.test(t)) return { messages: [{ text: prev.isMember ? "Hello! How can I help you today?" : FALLBACK.greeting }], topic: "greeting", state };
   if (THANKS_RE.test(t)) return { messages: [{ text: "You're welcome! Anything else I can help with?" }], topic: "greeting", state: { ...state, awaitingVisit: false } };
   if (prev.offeredVisit && YES_RE.test(t) && !topical) return webTopicReply("visit", state, k, plans);
-  if (NO_RE.test(t) && !topical) return { messages: [{ text: "No problem." }, { text: ASK_NEXT }], topic: "unknown", state: { ...state, awaitingVisit: false } };
+  if (NO_RE.test(t) && !topical) return { messages: [{ text: "No problem." }, { text: ASK_NEXT }], topic: "unknown", state: { ...state, awaitingVisit: false, declinedVisit: prev.offeredVisit === true || prev.declinedVisit === true } };
   if (YES_RE.test(t) && !topical) return { messages: [{ text: "Happy to help. You can ask about the training floor, recovery, amenities, memberships or classes." }], topic: "unknown", state: { ...state, awaitingVisit: false } };
   if (state.awaitingVisit && t && !topical) {
     return { messages: [{ text: 'Please share a day and time that suits you, for example "Saturday 11am" or "tomorrow evening".' }], topic: "visit", state: { ...state, awaitingVisit: true } };
@@ -163,6 +174,9 @@ function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[])
     const s2 = { ...next, discountAsks: asks };
     if (asks === 1) return { messages: [{ text: text(k, "discount") }, { text: "Would you like to hear more about the facilities, or plan a visit?" }], topic: "discount", state: s2 };
     return { messages: [{ text: text(k, "discount") }, { text: text(k, "escalation"), tel: true }], topic: "discount", state: s2 };
+  }
+  if (OBJECTION_RE.test(t) && !prev.isMember) {
+    return { messages: [{ text: OBJECTION_COPY }, { text: `If you'd rather not visit first, call our team on 8298293003 and they'll explain the options on the phone.`, tel: true }], topic: "pricing", state: next };
   }
   if (RE.memberService.test(t)) return { messages: [{ text: FALLBACK.member_service }], topic: "member_service", state: next };
   if (RE.pricing.test(t) || PRICE_ASK_RE.test(t)) return webTopicReply("pricing", next, k, plans);
