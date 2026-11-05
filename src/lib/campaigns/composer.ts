@@ -3,13 +3,12 @@ import type { AudienceFilter, CampaignChannel } from '@/services/campaignService
 
 export type ComposerChannel = 'inapp' | 'whatsapp' | 'sms' | 'email';
 
-export type AudiencePreset = 'active' | 'members_and_staff' | 'all' | 'expiring' | 'expired' | 'staff' | 'leads';
+export type AudiencePreset = 'active' | 'members_and_staff' | 'all' | 'expired' | 'staff' | 'leads';
 
 export const AUDIENCE_PRESETS: { id: AudiencePreset; label: string; desc: string; inApp: boolean }[] = [
   { id: 'active', label: 'Active members', desc: 'Live or frozen memberships', inApp: true },
   { id: 'members_and_staff', label: 'Members + staff', desc: 'Active members, staff and trainers', inApp: true },
   { id: 'all', label: 'All members', desc: 'Everyone on the branch roster', inApp: true },
-  { id: 'expiring', label: 'Expiring in 7 days', desc: 'Renewal reminders', inApp: true },
   { id: 'expired', label: 'Expired members', desc: 'Win-back messages', inApp: true },
   { id: 'staff', label: 'Staff only', desc: 'Team notices', inApp: true },
   { id: 'leads', label: 'Leads', desc: 'Enquiries (no app account)', inApp: false },
@@ -28,7 +27,6 @@ export function presetToFilter(p: AudiencePreset): AudienceFilter {
     case 'active': return { audience_kind: 'members', member_status: 'active' };
     case 'all': return { audience_kind: 'members', member_status: 'all' };
     case 'expired': return { audience_kind: 'members', member_status: 'expired' };
-    case 'expiring': return { audience_kind: 'members', member_status: 'active', status: 'active' };
     case 'members_and_staff': return { audience_kind: 'members_and_staff', member_status: 'active' };
     case 'staff': return { audience_kind: 'staff', staff_roles: ['owner', 'admin', 'manager', 'staff', 'trainer'] };
     case 'leads': return { audience_kind: 'leads' };
