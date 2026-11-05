@@ -11,13 +11,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   MessageSquare, Instagram, Facebook, PhoneCall, ShieldCheck, Split,
   UserPlus, IdCard, Brain, Wrench, UserCog, CheckCircle2, Ban, ArrowDown,
-  Sparkles, Users,
+  Sparkles, Users, Globe,
 } from 'lucide-react';
 
-type Journey = 'lead' | 'member' | 'internal' | 'voice';
+type Journey = 'lead' | 'web' | 'member' | 'internal' | 'voice';
 
 const JOURNEYS: { id: Journey; label: string; icon: React.ElementType; blurb: string }[] = [
   { id: 'lead', label: 'New enquiry', icon: UserPlus, blurb: 'Someone who is not a member yet' },
+  { id: 'web', label: 'Website lead', icon: Globe, blurb: 'A visitor using the website chat' },
   { id: 'member', label: 'Member', icon: IdCard, blurb: 'A recognised member asking for help' },
   { id: 'internal', label: 'Team member', icon: Users, blurb: 'A trainer or employee messaging in' },
   { id: 'voice', label: 'Voice call', icon: PhoneCall, blurb: 'Outbound renewal / retention call' },
@@ -142,6 +143,59 @@ export function AgentFlowCanvas() {
       ];
     }
 
+    if (journey === 'web') {
+      return [
+        {
+          id: 'web-entry',
+          title: 'Visitor opens Chat with Incline',
+          detail: 'The website chat starts on the public site. It is only for new enquiries and never opens WhatsApp.',
+          tone: 'entry',
+          icon: Globe,
+          items: ['Public pages only', 'No WhatsApp links', 'Chat saved if the page is refreshed'],
+        },
+        {
+          id: 'web-capture',
+          title: 'Details collected in the chat',
+          detail: 'The visitor is asked one question at a time. Questions typed early are understood and answered after the details.',
+          tone: 'check',
+          icon: UserPlus,
+          items: ['Full name', 'Mobile (+91)', 'Email (required)', 'What they are looking for', 'Fitness goal', 'Plan length'],
+        },
+        {
+          id: 'web-identity',
+          title: 'Who is this?',
+          detail: 'Once saved, the mobile number is checked. Members, trainers and staff get Call or WhatsApp 8298293003 buttons to use the member menu instead of the sales chat.',
+          tone: 'check',
+          icon: Split,
+          items: ['New visitor continues', 'Member / team redirected', 'Duplicate enquiry updated, not repeated'],
+        },
+        {
+          id: 'web-agent',
+          title: 'Website concierge',
+          detail: 'Answers from the same knowledge base as WhatsApp and remembers the visitor’s name, interest and goal.',
+          tone: 'agent',
+          icon: Sparkles,
+          items: ['Shared knowledge base', 'Remembers details', 'Plans a club visit'],
+        },
+        {
+          id: 'web-guard',
+          title: 'Fixed pricing, no discounts',
+          detail: 'Never quotes fees or bargains. Repeated discount or group pricing requests get a call link to 8298293003.',
+          tone: 'stop',
+          icon: Ban,
+          status: { label: 'No prices, no payment links', ok: true },
+        },
+        {
+          id: 'web-out',
+          title: 'Lead saved and chat in the inbox',
+          detail: 'The enquiry appears in Leads as Website Chatbot, and the full conversation shows under Web Chat in the inbox.',
+          tone: 'end',
+          icon: CheckCircle2,
+          items: ['Lead created', 'Web Chat transcript', 'Staff notified'],
+        },
+      ];
+    }
+
     if (journey === 'member') {
       return [
         entry,
@@ -259,7 +313,7 @@ export function AgentFlowCanvas() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {JOURNEYS.map((j) => {
               const Icon = j.icon;
               const active = journey === j.id;
