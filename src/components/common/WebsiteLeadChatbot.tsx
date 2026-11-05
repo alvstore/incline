@@ -13,12 +13,14 @@ import {
   conciergeReply,
 } from '@/lib/leads/websiteChatbot';
 
-type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
+type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat' | 'handoff';
+/** Registered members/trainers/staff only — leads never see a WhatsApp link. */
+const MEMBER_WHATSAPP = 'https://wa.me/918298293003?text=Menu';
 const INTENTS = ['Membership', 'Personal training', 'Recovery & wellness', 'Group classes & Pilates', 'Just exploring'] as const;
 const DURATIONS = ['Monthly', 'Quarterly', 'Half-Yearly', 'Annual'] as const;
 const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Athletic performance'] as const;
 const STAGES = ['Your details', 'Your interest', 'Concierge'] as const;
-const stageOf = (s: Step) => (s === 'name' || s === 'phone' || s === 'email' ? 0 : s === 'chat' ? 2 : 1);
+const stageOf = (s: Step) => (s === 'name' || s === 'phone' || s === 'email' ? 0 : s === 'chat' || s === 'handoff' ? 2 : 1);
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
@@ -28,7 +30,7 @@ const MAX_NOTE = 280;
 const STORE_KEY = 'incline-web-chat-v1';
 type Saved = { step: Step; messages: Msg[]; name: string; email: string; phone: string; intent: string; goal: string; interest: string; leadId: string | null; submissionId: string; concierge: Partial<ConciergeState> };
 function loadSaved(): Saved | null {
-  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; if (!raw) return null; const v = JSON.parse(raw) as Saved & { at?: number }; const ok = ['name','phone','email','intent','interest','goal','chat'].includes(v?.step) && Array.isArray(v?.messages) && (!v.at || Date.now() - v.at < 7 * 864e5); return ok ? v : null; } catch { return null; }
+  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; if (!raw) return null; const v = JSON.parse(raw) as Saved & { at?: number }; const ok = ['name','phone','email','intent','interest','goal','chat','handoff'].includes(v?.step) && Array.isArray(v?.messages) && (!v.at || Date.now() - v.at < 7 * 864e5); return ok ? v : null; } catch { return null; }
 }
 
 async function readFnError(err: unknown): Promise<string> {
@@ -181,10 +183,12 @@ export default function WebsiteLeadChatbot() {
     try {
       const data = await saveMutation.mutateAsync();
       if (data.status === 'already_member') {
+        // Members, trainers and staff are not served by this lead chat: they use the
+        // WhatsApp self-service concierge (plan, PT, classes, recovery, gate pass) or call the desk.
         botSay([
-          { text: `Welcome back, ${firstName(name)}! You're already an Incline member, so we haven't created a new enquiry.` },
-          { text: 'I can still answer questions about the club here.' },
-        ], 'chat');
+          { text: `Welcome back, ${firstName(name)}! This chat is for new enquiries, and your number is already registered with Incline.` },
+          { text: `For your plan, PT sessions, classes, recovery bookings or gate pass, message our WhatsApp concierge or call us on ${ESCALATION_PHONE}.` },
+        ], 'handoff');
         setConcierge((c) => ({ ...c, isMember: true }));
       } else {
         setLeadId(data.lead_id ?? null);
@@ -393,7 +397,19 @@ export default function WebsiteLeadChatbot() {
             <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
               <label>Company website<input tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)} /></label>
             </div>
-            {step === 'chat' && (
+            {step === 'handoff' && (
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Contact Incline">
+                <a data-step-focus href={MEMBER_WHATSAPP} target="_blank" rel="noopener noreferrer"
+                  className="flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" /> WhatsApp
+                </a>
+                <a href={ESCALATION_TEL}
+                  className="flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold text-foreground hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Phone className="h-4 w-4" aria-hidden="true" /> Call
+                </a>
+              </div>
+            )}
+            {(step === 'chat' || step === 'handoff') && (
               <button type="button" onClick={restart} className="flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-lg text-xs text-muted-foreground hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Start a new enquiry
               </button>
