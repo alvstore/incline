@@ -13289,6 +13289,93 @@ export type Database = {
           },
         ]
       }
+      sales_payment_links: {
+        Row: {
+          amount: number
+          branch_id: string
+          channel: string
+          created_at: string
+          gateway_link_id: string | null
+          gateway_payment_id: string | null
+          id: string
+          lead_id: string
+          paid_at: string | null
+          plan_id: string
+          short_url: string | null
+          stage: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          branch_id: string
+          channel: string
+          created_at?: string
+          gateway_link_id?: string | null
+          gateway_payment_id?: string | null
+          id?: string
+          lead_id: string
+          paid_at?: string | null
+          plan_id: string
+          short_url?: string | null
+          stage: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string
+          channel?: string
+          created_at?: string
+          gateway_link_id?: string | null
+          gateway_payment_id?: string | null
+          id?: string
+          lead_id?: string
+          paid_at?: string | null
+          plan_id?: string
+          short_url?: string | null
+          stage?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sales_quote_events: {
+        Row: {
+          amount: number | null
+          branch_id: string | null
+          channel: string
+          created_at: string
+          event: string
+          id: string
+          lead_id: string | null
+          metadata: Json
+          plan_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          branch_id?: string | null
+          channel: string
+          created_at?: string
+          event: string
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          plan_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          branch_id?: string | null
+          channel?: string
+          created_at?: string
+          event?: string
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          plan_id?: string | null
+        }
+        Relationships: []
+      }
       saved_lead_views: {
         Row: {
           created_at: string
