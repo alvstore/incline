@@ -20333,7 +20333,7 @@ export type Database = {
         | "cancelled"
         | "transferred"
         | "upgraded"
-      messaging_platform: "whatsapp" | "instagram" | "messenger"
+      messaging_platform: "whatsapp" | "instagram" | "messenger" | "web_chat"
       no_show_policy: "mark_used" | "allow_reschedule" | "charge_penalty"
       order_status:
         | "pending"
@@ -20645,7 +20645,7 @@ export const Constants = {
         "transferred",
         "upgraded",
       ],
-      messaging_platform: ["whatsapp", "instagram", "messenger"],
+      messaging_platform: ["whatsapp", "instagram", "messenger", "web_chat"],
       no_show_policy: ["mark_used", "allow_reschedule", "charge_penalty"],
       order_status: [
         "pending",
