@@ -49,7 +49,7 @@ export function newSubmissionId(): string {
 // ── Concierge ────────────────────────────────────────────────────────────────
 export type Topic = 'objection' | 'location' | 'hours' | 'member_service' | 'greeting' | 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
 export type BotMessage = { text: string; tel?: boolean };
-export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic; visitOffers?: number; declinedVisit?: boolean };
+export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; prices?: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic; visitOffers?: number; declinedVisit?: boolean };
 export type ConciergeReply = { messages: BotMessage[]; topic: Topic; state: ConciergeState; visitPreference?: string };
 
 export const FOLLOW_UPS = [
@@ -62,7 +62,7 @@ export const FOLLOW_UPS = [
 ] as const;
 
 export const FIXED_PRICING_POLICY =
-  'Incline follows a fixed and transparent pricing policy. We do not offer discounts or negotiate membership prices. Our focus is on the facilities, service and overall experience.';
+  "Thanks for asking! Our membership rates are fixed and the same for every member, so we don't offer individual discounts. That keeps things fair and lets us invest in the facilities and service you'll enjoy.";
 export const ESCALATION_COPY =
   `For group membership enquiries or any further pricing discussion, please call our team directly on ${ESCALATION_PHONE}.`;
 
@@ -108,8 +108,8 @@ function topicAnswer(topic: Topic, plans: string[]): string[] {
       return ['We would love to show you around in person. Which day and time suit you for a visit? (e.g. "Saturday 11am")'];
     case 'pricing':
       return [
-        `${FIXED_PRICING_POLICY}`,
-        'Our team walks you through membership pricing and inclusions during your visit. Would you like to plan one?',
+        'Our team will happily share current membership rates and what each plan includes.',
+        'Would you like to plan a visit?',
       ];
     case 'location':
       return ['Incline is at Sector 14, Udaipur, Rajasthan.', ASK_NEXT];
