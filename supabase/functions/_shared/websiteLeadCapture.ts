@@ -317,6 +317,7 @@ async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps):
     discountAsks: Math.min(Math.max(Number(s.discountAsks) || 0, 0), 20),
     awaitingVisit: s.awaitingVisit === true,
     offeredVisit: s.offeredVisit === true,
+    lastTopic: typeof s.lastTopic === 'string' ? String(s.lastTopic).slice(0, 32) : undefined,
   };
   const topic = typeof body.topic === "string" && (WEB_TOPICS as readonly string[]).includes(body.topic) ? body.topic as WebTopic : null;
   const message = sanitize(body.message, 300);

@@ -28,7 +28,7 @@ const MAX_NOTE = 280;
 const STORE_KEY = 'incline-web-chat-v1';
 type Saved = { step: Step; messages: Msg[]; name: string; email: string; phone: string; intent: string; goal: string; interest: string; leadId: string | null; submissionId: string; concierge: Partial<ConciergeState> };
 function loadSaved(): Saved | null {
-  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
+  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; if (!raw) return null; const v = JSON.parse(raw) as Saved & { at?: number }; const ok = ['name','phone','email','intent','interest','goal','chat'].includes(v?.step) && Array.isArray(v?.messages) && (!v.at || Date.now() - v.at < 7 * 864e5); return ok ? v : null; } catch { return null; }
 }
 
 async function readFnError(err: unknown): Promise<string> {
@@ -82,7 +82,7 @@ export default function WebsiteLeadChatbot() {
   // Remember the conversation so refresh / close / reopen never loses it.
   useEffect(() => {
     try {
-      const data: Saved = { step, messages: messages.slice(-80), name, email, phone, intent, goal, interest, leadId, submissionId: submissionId.current,
+      const data: Saved & { at: number } = { at: Date.now(), step, messages: messages.slice(-80), name, email, phone, intent, goal, interest, leadId, submissionId: submissionId.current,
         concierge: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit, isMember: concierge.isMember } };
       window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
     } catch { /* storage unavailable */ }
@@ -239,12 +239,12 @@ export default function WebsiteLeadChatbot() {
       const { data, error } = await supabase.functions.invoke('capture-lead', {
         body: {
           intake_type: 'website_chatbot', action: 'chat', lead_id: leadId, submission_id: submissionId.current,
-          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true }, ...input,
+          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true, lastTopic: concierge.lastTopic }, ...input,
         },
       });
       if (error || !Array.isArray(data?.messages)) throw error ?? new Error('bad reply');
       topics.current.add(data.topic as Topic);
-      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true }));
+      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true, lastTopic: data.state?.lastTopic as Topic | undefined }));
       setTyping(false);
       setMessages((m) => [...m, ...(data.messages as BotMessage[]).map((b) => ({ from: 'bot' as const, text: String(b.text), tel: b.tel === true }))]);
     } catch {

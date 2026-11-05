@@ -47,9 +47,9 @@ export function newSubmissionId(): string {
 }
 
 // ── Concierge ────────────────────────────────────────────────────────────────
-export type Topic = 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
+export type Topic = 'location' | 'hours' | 'member_service' | 'greeting' | 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
 export type BotMessage = { text: string; tel?: boolean };
-export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; offeredVisit?: boolean; isMember?: boolean };
+export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic };
 export type ConciergeReply = { messages: BotMessage[]; topic: Topic; state: ConciergeState; visitPreference?: string };
 
 export const FOLLOW_UPS = [
@@ -69,14 +69,16 @@ export const ESCALATION_COPY =
 const RE = {
   discount: /\b(discount|discounts|disc|(any|special|festive|current|best) offers?|deal|deals|coupon|promo|cheaper|cheap|negotiat\w*|bargain|waive\w*|waiver|price ?match|best price|lower (the )?price|reduce|concession|kam|less price|special (price|rate|deal))\b/i,
   group: /\b(group (membership|rate|price|pricing|discount|deal|plan)|corporate|couple|family (plan|membership|rate)|bulk|for (my )?(friends|team|office))\b/i,
-  pricing: /\b(price|prices|pricing|cost|costs|fee|fees|charges?|rate|rates|how much|tariff|rs\.?|₹|inr)\b/i,
+  pricing: /\b(price|prices|pricing|cost|costs|fee|fees|charges?|rate|rates|how much|tariff|rs\.?|inr|kitna|kitne|kitni|paisa|paise)\b|₹/i,
+  location: /\b(where|location|address|located|directions?|map|kahan|kaha)\b/i,
+  memberService: /\b(renew\w*|freeze|unfreeze|expir\w*|my plan|my membership|validity|upgrade)\b/i,
   recovery: /\b(recovery|sauna|steam|cold plunge|plunge|ice bath|red[- ]?light|wellness|spa)\b/i,
   amenities: /\b(locker|lockers|ac|air[- ]?condition\w*|music|audio|sound|amenit\w*|shower|changing)\b/i,
-  pt: /\b(pt|personal train\w*|trainer|coach|class|classes|pilates|yoga|zumba)\b/i,
+  pt: /\b(pt|personal train\w*|trainers?|coach(es)?|class|classes|pilates|yoga|zumba)\b/i,
   floor: /\b(equipment|machines?|weights?|strength|floor|gym|cardio|panatta)\b/i,
   membership: /\b(membership|plans?|join|package|annual|monthly|quarterly)\b/i,
   visit: /\b(visit|tour|walk ?through|come (by|over|in)|see the (club|gym)|trial|experience)\b/i,
-  hours: /\b(timing|timings|hours|open|close|opening)\b/i,
+  hours: /\b(timing|timings|hours|open|close|opening|24 ?x ?7)\b/i,
 };
 
 const ASK_NEXT = 'What would you like to know next?';
@@ -106,6 +108,10 @@ function topicAnswer(topic: Topic, plans: string[]): string[] {
         `${FIXED_PRICING_POLICY}`,
         'Our team walks you through membership pricing and inclusions during your visit. Would you like to plan one?',
       ];
+    case 'location':
+      return ['Incline is at Sector 14, Udaipur, Rajasthan.', ASK_NEXT];
+    case 'hours':
+      return ['Our team will confirm current club timings with you.', ASK_NEXT];
     default:
       return [
         "I don't have a confirmed answer for that here, and I'd rather not guess.",
@@ -117,22 +123,33 @@ function topicAnswer(topic: Topic, plans: string[]): string[] {
 const YES_RE = /^(yes|yeah|yep|ya|yup|sure|ok|okay|haan|han|ha|please|definitely|of course|why not)\b/i;
 const NO_RE = /^(no|nope|nah|not now|later|maybe later|nahi|na)\b/i;
 const VISIT_OFFER_RE = /plan (a visit|one)|plan a visit/i;
+const GREET_RE = /^(hi+|hello|hey|namaste|good (morning|afternoon|evening))[!. ]*$/i;
+const THANKS_RE = /^(thanks|thank you|thankyou|thx|shukriya|dhanyavaad)[!. ]*$/i;
+const TIME_RE = /\b(mon|tue|wed|thu|fri|sat|sun)\w*|\b(today|tomorrow|tmrw|kal|weekend|morning|afternoon|evening|night)\b|\b\d{1,2}(:\d{2})?\s*(am|pm)\b|\b\d{1,2}(st|nd|rd|th)?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*/i;
+const UNSAFE_RE = /₹|\b(rs\.?|inr)\s*\d|whatsapp|wa\.me|https?:\/\//i;
+const MEMBER_PRICE = 'Your current plan, renewal and upgrade options are in the Member Portal under My Plan, and the front desk can confirm renewal pricing for you.';
+const MEMBER_SERVICE = 'For renewals, freezes, plan expiry or upgrades, open My Plan in the Member Portal, or ask the front desk and they will sort it for you. I won\'t guess dates or eligibility here.';
 const MEMBER_HELP = 'As a member, you can renew, book classes or recovery slots and view your plan in the Member Portal, or ask the front desk.';
 
 /** Members never get tour invites; any visit offer turns on yes/no handling for the next reply. */
 function finalize(reply: ConciergeReply, prev: ConciergeState): ConciergeReply {
   const isMember = prev.isMember === true;
   let messages = reply.messages;
+  if (isMember && (reply.topic === 'pricing' || reply.topic === 'discount')) {
+    messages = [{ text: FIXED_PRICING_POLICY }, { text: MEMBER_PRICE }, ...messages.filter((m) => m.tel)];
+  } else if (!isMember && reply.topic === prev.lastTopic && reply.topic !== 'unknown' && reply.topic !== 'discount' && reply.topic !== 'greeting' && messages.length > 1 && !reply.visitPreference) {
+    messages = [{ text: 'As I mentioned, ' + messages[0].text.charAt(0).toLowerCase() + messages[0].text.slice(1) }, ...messages.slice(-1)];
+  }
   if (isMember) {
     messages = messages.filter((m) => !VISIT_OFFER_RE.test(m.text) && !/which day and time/i.test(m.text));
     if (reply.topic === 'visit' || messages.length < reply.messages.length) messages = [...messages, { text: MEMBER_HELP }];
     if (!messages.length) messages = [{ text: MEMBER_HELP }];
   }
   const offeredVisit = !isMember && VISIT_OFFER_RE.test(messages[messages.length - 1]?.text ?? '');
-  return { ...reply, messages, state: { ...reply.state, isMember, offeredVisit, awaitingVisit: isMember ? false : reply.state.awaitingVisit } };
+  return { ...reply, messages, state: { ...reply.state, isMember, offeredVisit, awaitingVisit: isMember ? false : reply.state.awaitingVisit, lastTopic: reply.topic } };
 }
 
-const isTopicQuestion = (t: string) => [RE.discount, RE.group, RE.pricing, RE.recovery, RE.amenities, RE.pt, RE.floor, RE.membership, RE.hours].some((r) => r.test(t));
+const isTopicQuestion = (t: string) => [RE.discount, RE.group, RE.pricing, RE.location, RE.memberService, RE.recovery, RE.amenities, RE.pt, RE.floor, RE.membership, RE.hours].some((r) => r.test(t));
 
 export function conciergeTopic(topic: Topic, state: ConciergeState): ConciergeReply {
   return finalize(rawTopic(topic, state), state);
@@ -154,6 +171,14 @@ export function conciergeReply(raw: string, state: ConciergeState): ConciergeRep
 function rawReply(raw: string, state: ConciergeState): ConciergeReply {
   const text = raw.trim().slice(0, 300);
   const base = { ...state, offeredVisit: false };
+  if (!state.isMember && (state.offeredVisit || state.awaitingVisit) && TIME_RE.test(text) && !UNSAFE_RE.test(text) && !RE.pricing.test(text)) {
+    return {
+      messages: [{ text: "Thanks, I've noted your preferred visit time." }, { text: 'Our team will contact you to confirm. This is not a confirmed booking yet.' }, { text: ASK_NEXT }],
+      topic: 'visit', state: { ...base, awaitingVisit: false }, visitPreference: text.slice(0, 120),
+    };
+  }
+  if (GREET_RE.test(text)) return { messages: [{ text: state.isMember ? 'Hello! How can I help you today?' : 'Hello! Ask me anything about memberships, training, recovery or planning a visit.' }], topic: 'greeting', state: { ...base, awaitingVisit: state.awaitingVisit } };
+  if (THANKS_RE.test(text)) return { messages: [{ text: "You're welcome! Anything else I can help with?" }], topic: 'greeting', state: { ...base, awaitingVisit: false } };
   if (state.offeredVisit && YES_RE.test(text) && !isTopicQuestion(text)) return rawTopic('visit', base);
   if (NO_RE.test(text) && !isTopicQuestion(text)) {
     return { messages: [{ text: 'No problem.' }, { text: ASK_NEXT }], topic: 'unknown', state: { ...base, awaitingVisit: false } };
@@ -162,16 +187,7 @@ function rawReply(raw: string, state: ConciergeState): ConciergeReply {
     return { messages: [{ text: 'Happy to help. You can ask about the training floor, recovery, amenities, memberships or classes.' }], topic: 'unknown', state: { ...base, awaitingVisit: false } };
   }
   if (state.awaitingVisit && text && !isTopicQuestion(text)) {
-    return {
-      messages: [
-        { text: `Thanks, I've noted "${text}" as your preferred visit time.` },
-        { text: 'Our team will contact you to confirm. This is not a confirmed booking yet.' },
-        { text: ASK_NEXT },
-      ],
-      topic: 'visit',
-      state: { ...state, awaitingVisit: false },
-      visitPreference: text,
-    };
+    return { messages: [{ text: 'Please share a day and time that suits you, for example "Saturday 11am" or "tomorrow evening".' }], topic: 'visit', state: { ...base, awaitingVisit: true } };
   }
   const next = { ...base, awaitingVisit: false };
 
@@ -184,12 +200,12 @@ function rawReply(raw: string, state: ConciergeState): ConciergeReply {
     if (asks === 1) return { messages: [{ text: FIXED_PRICING_POLICY }, { text: 'Would you like to hear more about the facilities, or plan a visit?' }], topic: 'discount', state: s2 };
     return { messages: [{ text: FIXED_PRICING_POLICY }, { text: ESCALATION_COPY, tel: true }], topic: 'discount', state: s2 };
   }
-  if (RE.pricing.test(text)) return rawTopic('pricing', next);
-  if (RE.hours.test(text)) {
-    return { messages: [{ text: 'Our team will confirm current club timings with you.' }, { text: 'Would you like to plan a visit?' }], topic: 'unknown', state: next };
+  if (RE.memberService.test(text) && (state.isMember || !RE.membership.test(text) || /renew|freeze|expir/i.test(text))) {
+    return { messages: [{ text: MEMBER_SERVICE }], topic: 'member_service', state: next };
   }
+  if (RE.pricing.test(text)) return rawTopic('pricing', next);
   const order: Array<[RegExp, Topic]> = [
-    [RE.visit, 'visit'], [RE.recovery, 'recovery'], [RE.pt, 'pt_classes'], [RE.amenities, 'amenities'],
+    [RE.visit, 'visit'], [RE.hours, 'hours'], [RE.location, 'location'], [RE.recovery, 'recovery'], [RE.pt, 'pt_classes'], [RE.amenities, 'amenities'],
     [RE.membership, 'membership'], [RE.floor, 'training_floor'],
   ];
   for (const [re, topic] of order) if (re.test(text)) return rawTopic(topic, next);
