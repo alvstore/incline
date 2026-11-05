@@ -35,7 +35,9 @@ import {
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Bell } from 'lucide-react';
+import { filterToInAppPreset } from '@/lib/campaigns/composer';
+import { deliverInApp, fetchInAppUserIds } from '@/lib/campaigns/inAppDelivery';
 
 interface Props {
   open: boolean;
@@ -44,6 +46,10 @@ interface Props {
   editingCampaign?: Campaign | null;
   /** Deep-link from the Classes page — pre-selects this class as an Event campaign. */
   prefillClassId?: string | null;
+  /** Pre-filled message text (e.g. coupon share). */
+  initialMessage?: string;
+  /** Start with In-App (bell + browser + phone app) switched on. */
+  initialInApp?: boolean;
 }
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
@@ -203,7 +209,7 @@ const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; Icon: Luc
   { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', Icon: RefreshCw, color: 'emerald' },
 ];
 
-export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, prefillClassId }: Props) {
+export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, prefillClassId, initialMessage, initialInApp }: Props) {
   const qc = useQueryClient();
   const isEditing = !!editingCampaign;
   const [step, setStep] = useState(1);
@@ -215,6 +221,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   // WhatsApp positional-slot body.
   const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
   const [selectedChannels, setSelectedChannels] = useState<CampaignChannel[]>(['whatsapp']);
+  // In-App rides alongside campaign channels: board post + bell + browser/phone push.
+  const [inAppOn, setInAppOn] = useState(false);
   const [channelDrafts, setChannelDrafts] = useState<Record<string, ChannelDraft>>({});
   // Multiple classes can go out in one announcement (e.g. morning + evening
   // Yoga). The first picked class drives the event fields; every picked class
@@ -914,6 +922,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
     setDraftCampaignId(null); setShowAllTemplates(false);
     setEvergreenAppliedFor(null); setEvergreenPickedName(null);
     setVarOverrides({});
+    setInAppOn(false);
   };
 
   const close = () => { reset(); onOpenChange(false); };
@@ -1147,7 +1156,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   const toggleChannel = (id: CampaignChannel) => {
     const isOn = selectedChannels.includes(id);
     if (isOn) {
-      if (selectedChannels.length === 1) { switchChannel(id); return; }
+      if (selectedChannels.length === 1 && !inAppOn) { switchChannel(id); return; }
+      if (selectedChannels.length === 1) { setSelectedChannels([]); return; }
       const remaining = selectedChannels.filter((c) => c !== id);
       setSelectedChannels(remaining);
       setChannelDrafts((d) => { const n = { ...d }; delete n[id]; return n; });
@@ -1155,10 +1165,28 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
       return;
     }
     setSelectedChannels([...selectedChannels, id]);
+    if (selectedChannels.length === 0) { setChannel(id); return; }
     switchChannel(id);
   };
 
   /** Drafts for every selected channel, with the live editor state folded in. */
+  const inAppPreset = filterToInAppPreset(filter);
+  const inAppCount = useQuery({
+    queryKey: ['wizard-inapp-count', branchId, inAppPreset],
+    enabled: open && inAppOn && !!branchId && !!inAppPreset,
+    queryFn: () => fetchInAppUserIds(branchId, inAppPreset!),
+  });
+  const inAppOnly = inAppOn && selectedChannels.length === 0;
+
+  /** In-App text: the live editor when In-App is alone, otherwise the plainest channel draft. */
+  const inAppBody = (): string => {
+    if (inAppOnly) return buildFinalMessage(message);
+    const drafts = allChannelDrafts();
+    const pick = ['whatsapp', 'sms', 'email', 'rcs'].map((c) => drafts.find((d) => d.channel === c)).find((d) => d && d.draft.message.trim());
+    const raw = pick ? buildFinalMessage(pick.draft.message) : '';
+    return raw.replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ').trim();
+  };
+
   const allChannelDrafts = (): Array<{ channel: CampaignChannel; draft: ChannelDraft }> =>
     selectedChannels.map((c) => ({
       channel: c,
@@ -1167,8 +1195,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
 
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
-    if (selectedChannels.length === 0) { toast.error('Pick at least one channel'); return; }
-    if (totalCount === 0) { toast.error('Audience is empty'); return; }
+    if (selectedChannels.length === 0 && !inAppOn) { toast.error('Pick at least one channel'); return; }
+    if (inAppOn && !inAppPreset) { toast.error('In-App works only for members and staff — leads have no app account'); return; }
+    if (inAppOn && trigger === 'recurring') { toast.error('In-App cannot repeat automatically — use Send now or Schedule'); return; }
+    if (inAppOnly && !message.trim()) { toast.error('IN-APP: message is empty'); return; }
+    if (!inAppOnly && totalCount === 0) { toast.error('Audience is empty'); return; }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
     if (trigger === 'scheduled' && !scheduledAt) { toast.error('Pick a date and time'); return; }
     if (trigger === 'scheduled' && new Date(scheduledAt).getTime() <= Date.now()) {
