@@ -215,6 +215,7 @@ function rawReply(raw: string, state: ConciergeState): ConciergeReply {
     if (asks === 1) return { messages: [{ text: FIXED_PRICING_POLICY }, { text: 'Would you like to hear more about the facilities, or plan a visit?' }], topic: 'discount', state: s2 };
     return { messages: [{ text: FIXED_PRICING_POLICY }, { text: ESCALATION_COPY, tel: true }], topic: 'discount', state: s2 };
   }
+  if (OBJECTION_RE.test(text) && !state.isMember && state.prices?.length) return conciergeTopic('pricing', state);
   if (OBJECTION_RE.test(text) && !state.isMember) {
     return { messages: [{ text: OBJECTION_COPY }, { text: OBJECTION_CALL, tel: true }], topic: 'objection', state: next };
   }
