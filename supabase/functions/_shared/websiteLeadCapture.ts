@@ -9,6 +9,7 @@
 import { normalizePhone, phoneVariants, isValidIndianMobile } from "./phone.ts";
 import { knowledgeFromRows, webConciergeReply, webTopicReply, WEB_TOPICS, type Knowledge, type WebState, type WebTopic } from "./websiteConcierge.ts";
 import { storeTurns, webChatKey } from "./websiteChatStore.ts";
+import { salesTurn, loadSalesCatalog, flagEnabled, logSalesEvent, ensureLeadPaymentLink, linkMessages, allowedAmounts, hasUnlistedAmount, matchDuration, DESK_PHONE, type QuoteState, type SalesMsg } from "./salesPricing.ts";
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
@@ -125,8 +126,8 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return bad("Invalid request");
   const body = raw as Record<string, unknown>;
   if (body.intake_type === CHATBOT_SOURCE && body.action === "plans") {
-    const [plans, prices] = await Promise.all([activePlanNames(deps.db), publicPriceLines(deps.db)]);
-    return { status: 200, body: { success: true, plans, prices, categories: INTEREST_CATEGORIES } };
+    const plans = await activePlanNames(deps.db);
+    return { status: 200, body: { success: true, plans, prices: [], categories: INTEREST_CATEGORIES } };
   }
   if (body.intake_type === CHATBOT_SOURCE && body.action === "visit_preference") {
     if (deps.rateLimit && !(await deps.rateLimit(meta.ip))) return bad("Too many submissions. Please try again in a few minutes.", 429);
@@ -327,8 +328,8 @@ async function chatProof(body: Record<string, unknown>, db: Db) {
   const { data: proof } = await db.from("lead_activities").select("id").eq("lead_id", leadId)
     .eq("metadata->>submission_id", sid).limit(1).maybeSingle();
   if (!proof) return null;
-  const { data: lead } = await db.from("leads").select("id, branch_id, full_name").eq("id", leadId).maybeSingle();
-  return lead?.branch_id ? { lead: lead as { id: string; branch_id: string; full_name: string | null }, sid } : null;
+  const { data: lead } = await db.from("leads").select("id, branch_id, full_name, phone, email, plan_interest").eq("id", leadId).maybeSingle();
+  return lead?.branch_id ? { lead: lead as { id: string; branch_id: string; full_name: string | null; phone: string | null; email: string | null; plan_interest: string | null }, sid } : null;
 }
 
 async function loadWebKnowledge(db: Db, branchId: string): Promise<Knowledge> {
@@ -355,8 +356,41 @@ async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps):
   const message = sanitize(body.message, 300);
   const label = sanitize(body.label, 60);
   if (!topic && !message) return bad("Invalid request");
-  const [k, plans, prices] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db), publicPriceLines(deps.db)]);
-  const reply = topic ? webTopicReply(topic, state, k, plans, prices) : webConciergeReply(message, state, k, plans, prices);
+  const q = (s.quote && typeof s.quote === "object") ? s.quote as Record<string, unknown> : {};
+  const quote: QuoteState = {
+    dur: matchDuration(String(q.dur ?? "").replace("_", "-")) ?? (["monthly", "quarterly", "half_yearly", "annual"].includes(String(q.dur)) ? q.dur as QuoteState["dur"] : undefined),
+    stage: ["original", "offer", "floor", "desk"].includes(String(q.stage)) ? q.stage as QuoteState["stage"] : undefined,
+    awaitingDuration: q.awaitingDuration === true,
+    awaitingLinkConfirm: q.awaitingLinkConfirm === true,
+  };
+  const [k, plans, pricesOn] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db), webPricesEnabled(deps.db)]);
+  let reply: { messages: SalesMsg[]; topic: WebTopic; state: WebState & { quote?: QuoteState }; visitPreference?: string } | null = null;
+  if (pricesOn && !topic && message) {
+    const [catalog, linksOn] = await Promise.all([loadSalesCatalog(deps.db, p.lead.branch_id), flagEnabled(deps.db, "sales_chat_payment_links")]);
+    const sr = salesTurn(message, quote, catalog, { interest: p.lead.plan_interest, linksEnabled: linksOn });
+    if (sr) {
+      let msgs = sr.messages;
+      if (sr.createLink) {
+        const res = await ensureLeadPaymentLink(deps.db, { lead: p.lead, ...sr.createLink, channel: "web_chat" });
+        if ("url" in res) {
+          msgs = linkMessages(res.url, sr.createLink.plan, sr.createLink.amount, sr.quote.dur);
+          await logSalesEvent(deps.db, { branch_id: p.lead.branch_id, lead_id: p.lead.id, channel: "web_chat", event: "payment_link_sent", plan_id: sr.createLink.plan.id, amount: sr.createLink.amount, metadata: { stage: sr.createLink.stage, reused: res.reused } });
+        } else {
+          msgs = [{ text: `I couldn't create the payment link just now. Please call the front desk on ${DESK_PHONE} and they will complete it for you.`, tel: true }];
+          await logSalesEvent(deps.db, { branch_id: p.lead.branch_id, lead_id: p.lead.id, channel: "web_chat", event: "desk_handoff", metadata: { reason: res.error } });
+        }
+      } else if (sr.event) {
+        await logSalesEvent(deps.db, { branch_id: p.lead.branch_id, lead_id: p.lead.id, channel: "web_chat", event: sr.event, plan_id: sr.plan?.id ?? null, amount: sr.amount ?? null, metadata: { stage: sr.quote.stage ?? null } });
+      }
+      const allowed = allowedAmounts(catalog);
+      msgs = msgs.map((m) => hasUnlistedAmount(m.text, allowed) ? { text: `Please call the front desk on ${DESK_PHONE} for the exact figure.`, tel: true } : m);
+      reply = { messages: msgs, topic: sr.event === "desk_handoff" ? "discount" : "pricing", state: { ...state, offeredVisit: false, awaitingVisit: false, lastTopic: "pricing", quote: sr.quote } };
+    }
+  }
+  if (!reply) {
+    const r = topic ? webTopicReply(topic, state, k, plans, []) : webConciergeReply(message, state, k, plans, []);
+    reply = { ...r, state: { ...r.state, quote } };
+  }
   try {
     await storeTurns(deps.db, p.lead, [
       { from: "user", text: topic ? (label || topic) : message },
