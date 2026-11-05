@@ -1,4 +1,5 @@
 // Run: bun test src/lib/leads/websiteChatbot.test.ts
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
 import { describe, expect, test } from 'bun:test';
 import {
   conciergeReply, extractName, extractEmail, extractMobile, isQuestionLike, intakeAside,
