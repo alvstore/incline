@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+// Run: bun test src/lib/campaigns/composer.test.ts
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
+import { describe, it, expect } from 'bun:test';
 import { channelReadiness, validateDraft, inAppAudienceKey, presetToFilter, externalChannels } from './composer';
 
 const base = { channels: ['inapp'] as const, title: 'T', message: 'M', subject: '', sendNow: true, scheduledAt: null };
