@@ -41,7 +41,7 @@ import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayro
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { payrollPeriod } from '@/lib/hrm/payroll';
+import { payrollPeriod, payrollRunBranch } from '@/lib/hrm/payroll';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { buildPayslipPdf, buildContractPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
@@ -643,18 +643,21 @@ export default function HRMPage() {
       const periodEnd = payrollPeriod(payrollMonth).end;
 
       // Find or create the draft run for this period
-      const { data: existingRun } = await supabase
+      let runQuery = supabase
         .from('payroll_runs')
         .select('id,status')
         .eq('period_start', periodStart)
         .eq('period_end', periodEnd)
-        .not('status', 'in', '(processed,paid)')
-        .maybeSingle();
+        .not('status', 'in', '(processed,paid)');
+      const branchId = payrollRunBranch(selectedBranch);
+      runQuery = branchId ? runQuery.eq('branch_id', branchId) : runQuery.is('branch_id', null);
+      const { data: existingRun, error: runError } = await runQuery.order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (runError) throw runError;
 
       let runId = existingRun?.id as string | undefined;
       if (!runId) {
         const { data: newId, error } = await supabase.rpc('payroll_create_run', {
-          p_branch_id: null,
+          p_branch_id: branchId,
           p_period_start: periodStart,
           p_period_end: periodEnd,
         });
@@ -685,17 +688,20 @@ export default function HRMPage() {
     const periodEnd = payrollPeriod(payrollMonth).end;
 
     let runId: string | undefined;
-    const { data: existingRun } = await supabase
+    let runQuery = supabase
       .from('payroll_runs')
       .select('id')
       .eq('period_start', periodStart)
       .eq('period_end', periodEnd)
-      .not('status', 'in', '(processed,paid)')
-      .maybeSingle();
+      .not('status', 'in', '(processed,paid)');
+    const branchId = payrollRunBranch(selectedBranch);
+    runQuery = branchId ? runQuery.eq('branch_id', branchId) : runQuery.is('branch_id', null);
+    const { data: existingRun, error: runError } = await runQuery.order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (runError) throw runError;
     runId = existingRun?.id as string | undefined;
     if (!runId) {
       const { data: newId, error } = await supabase.rpc('payroll_create_run', {
-        p_branch_id: null,
+        p_branch_id: branchId,
         p_period_start: periodStart,
         p_period_end: periodEnd,
       });
@@ -703,10 +709,11 @@ export default function HRMPage() {
       runId = newId as unknown as string;
     }
 
+    if (!runId) throw new Error('Could not find or create the payroll run');
     const { data: item, error: itemErr } = await supabase
       .from('payroll_items')
       .select('id')
-      .eq('run_id', runId!)
+      .eq('run_id', runId)
       .eq('user_id', userId)
       .maybeSingle();
     if (itemErr) throw itemErr;
