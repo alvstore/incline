@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { communicationService } from '@/services/communicationService';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { BroadcastDrawer } from '@/components/announcements/BroadcastDrawer';
+import { MessageComposerSheet } from '@/components/campaigns/MessageComposerSheet';
 import { AnnouncementAttachment } from '@/components/announcements/AnnouncementAttachment';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { LiveFeed } from '@/components/communications/LiveFeed';
@@ -194,7 +194,7 @@ export default function AnnouncementsPage() {
         </Tabs>
       </div>
 
-      <BroadcastDrawer
+      <MessageComposerSheet
         open={showBroadcastDrawer}
         onOpenChange={setShowBroadcastDrawer}
         branchId={defaultBranchId}
