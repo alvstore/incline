@@ -12,7 +12,7 @@ import { GymLoader } from "@/components/ui/gym-loader";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardRedirect } from "@/components/auth/DashboardRedirect";
-import WhatsAppWidget from "@/components/common/WhatsAppWidget";
+import WebsiteLeadChatbot from "@/components/common/WebsiteLeadChatbot";
 
 
 // Critical auth pages — loaded eagerly (small bundles)
@@ -151,7 +151,7 @@ function PublicWhatsAppWidget() {
     (p) => location.pathname === p || location.pathname.startsWith("/embed/")
   );
   if (!isPublic) return null;
-  return <WhatsAppWidget />;
+  return <WebsiteLeadChatbot />;
 }
 
 function RoutedContent() {

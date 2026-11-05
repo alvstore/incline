@@ -21,6 +21,7 @@ type LeadSourceMeta = {
 
 const SOURCE_META: Record<string, LeadSourceMeta> = {
   website: { label: 'Website', icon: Globe, iconClassName: 'text-sky-600' },
+  website_chatbot: { label: 'Website Chatbot', icon: MessageCircle, iconClassName: 'text-sky-600' },
   instagram: { label: 'Instagram', icon: Instagram, iconClassName: 'text-pink-600' },
   facebook: { label: 'Facebook', icon: Facebook, iconClassName: 'text-blue-600' },
   google: { label: 'Google', icon: Search, iconClassName: 'text-emerald-600' },

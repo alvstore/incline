@@ -1,3 +1,4 @@
+// v3.5.0 — suppress_lead_welcome (internal callers only) skips prospect-facing welcomes for website-chatbot leads; team alerts unchanged.
 // v3.4.0 — Staff WhatsApp alerts throttled to 1/15min per staff member;
 //          in-app notification always fires.
 // v3.3.0 — Per-recipient staff_name variable for team alerts (fixes 132018
@@ -39,7 +40,10 @@ Deno.serve(async (req) => {
   const __caller = __res as CallerResult;
 
   try {
-    const { lead_id, branch_id } = await req.json();
+    const { lead_id, branch_id, suppress_lead_welcome } = await req.json();
+    // Only trusted server callers (service role, e.g. capture-lead for website-chatbot
+    // captures) may suppress prospect-facing welcomes. Team alerts are unaffected.
+    const suppressLeadWelcome = suppress_lead_welcome === true && __caller.internal === true;
     if (!lead_id || !branch_id) return json({ error: "Missing lead_id or branch_id" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -220,7 +224,7 @@ Deno.serve(async (req) => {
     const esc = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const buildAutoEmailBody = (): string => {
-      const rows: Array<[string, string]> = [
+      const rows = ([
         ["Name", vars.lead_name],
         ["Phone", vars.lead_phone],
         ["Email", vars.lead_email],
@@ -246,7 +250,7 @@ Deno.serve(async (req) => {
         ["Referrer", vars.referrer_url],
         ["Notes", vars.notes],
         ["Captured At", vars.captured_at],
-      ].filter(([, v]) => v && v.trim().length);
+      ] as Array<[string, string]>).filter(([, v]) => v && v.trim().length);
 
       const tableRows = rows
         .map(
