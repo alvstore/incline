@@ -1,0 +1,1 @@
+ALTER TABLE public.google_reviews_inbound ADD COLUMN IF NOT EXISTS removed_from_google_at timestamptz;
