@@ -22,7 +22,9 @@ const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellne
 const STAGES = ['Your details', 'Saving', 'Concierge'] as const;
 const stageOf = (s: Step) => (s === 'chat' || s === 'handoff' ? 2 : s === 'saving' ? 1 : 0);
 type FormErrors = Partial<Record<'name' | 'phone' | 'email' | 'intent' | 'duration' | 'goal', string>>;
-type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
+type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean; url?: string };
+/** Only gateway payment links may be rendered as a link. */
+const safePayUrl = (u: unknown) => (typeof u === 'string' && /^https:\/\/(rzp\.io|razorpay\.me|pages\.razorpay\.com)\//.test(u) ? u : undefined);
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
 const WELCOME = 'Hi! Welcome to Incline. I can help you explore training, membership and recovery.';
@@ -234,14 +236,14 @@ export default function WebsiteLeadChatbot() {
       const { data, error } = await supabase.functions.invoke('capture-lead', {
         body: {
           intake_type: 'website_chatbot', action: 'chat', lead_id: leadId, submission_id: submissionId.current,
-          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true, lastTopic: concierge.lastTopic, visitOffers: concierge.visitOffers ?? 0, declinedVisit: concierge.declinedVisit === true }, ...input,
+          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true, lastTopic: concierge.lastTopic, visitOffers: concierge.visitOffers ?? 0, declinedVisit: concierge.declinedVisit === true, quote: concierge.quote ?? {} }, ...input,
         },
       });
       if (error || !Array.isArray(data?.messages)) throw error ?? new Error('bad reply');
       topics.current.add(data.topic as Topic);
-      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true, lastTopic: data.state?.lastTopic as Topic | undefined, visitOffers: Number(data.state?.visitOffers) || 0, declinedVisit: data.state?.declinedVisit === true }));
+      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true, lastTopic: data.state?.lastTopic as Topic | undefined, visitOffers: Number(data.state?.visitOffers) || 0, declinedVisit: data.state?.declinedVisit === true, quote: (data.state?.quote && typeof data.state.quote === 'object') ? data.state.quote as Record<string, unknown> : {} }));
       setTyping(false);
-      setMessages((m) => [...m, ...(data.messages as BotMessage[]).map((b) => ({ from: 'bot' as const, text: String(b.text), tel: b.tel === true }))]);
+      setMessages((m) => [...m, ...(data.messages as BotMessage[]).map((b) => ({ from: 'bot' as const, text: String(b.text), tel: b.tel === true, url: safePayUrl((b as { url?: unknown }).url) }))]);
     } catch {
       setTyping(false);
       runConcierge(fallback());
@@ -289,7 +291,7 @@ export default function WebsiteLeadChatbot() {
   const restart = () => {
     setStep('form'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal(''); setDuration('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
-    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false, lastTopic: undefined, visitOffers: 0, declinedVisit: false }));
+    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false, lastTopic: undefined, visitOffers: 0, declinedVisit: false, quote: {} }));
     submissionId.current = newSubmissionId();
     setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]); setFormErrors({});
     try { window.localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
@@ -334,6 +336,11 @@ export default function WebsiteLeadChatbot() {
                 <p className={cn('max-w-[85%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-relaxed',
                   m.from === 'user' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm border border-border bg-card text-foreground')}>
                   <span className="sr-only">{m.from === 'user' ? 'You: ' : 'Incline: '}</span>{m.text}
+                  {m.url && (
+                    <a href={m.url} target="_blank" rel="noopener noreferrer" className="mt-2 flex min-h-[44px] items-center gap-2 font-semibold text-primary underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <CreditCard className="h-4 w-4" aria-hidden="true" /> Pay securely
+                    </a>
+                  )}
                   {m.tel && (
                     <a href={ESCALATION_TEL} className="mt-2 flex min-h-[44px] items-center gap-2 font-semibold text-primary underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <Phone className="h-4 w-4" aria-hidden="true" /> Call {ESCALATION_PHONE}
