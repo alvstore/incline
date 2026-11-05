@@ -7,7 +7,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { getFirstTouch, captureFirstTouch } from '@/lib/leads/firstTouch';
-import { deriveLeadSource } from '@/lib/leads/sourceFromReferrer';
 import {
   CHATBOT_GOALS, CHATBOT_TIMEFRAMES, WHATSAPP_HANDOFF_CONSENT, SAVED_NOTICE,
   type ChatbotTimeframe, normalizeIndianMobile, isValidEmail, buildWhatsAppDraft, buildWhatsAppUrl,
@@ -135,7 +134,6 @@ export default function WebsiteLeadChatbot() {
         body: {
           intake_type: 'website_chatbot',
           source: 'website_chatbot',
-          first_touch_source: ft?.source || deriveLeadSource(utmSource || '', referrer || '', 'website'),
           fullName: name.trim(),
           phone: normalizeIndianMobile(phone),
           email: email.trim() || undefined,
@@ -324,7 +322,7 @@ export default function WebsiteLeadChatbot() {
                   <Checkbox id={consentId} data-step-focus checked={consent} onCheckedChange={(v) => { setConsent(v === true); setSubmitError(''); }} className="mt-0.5" />
                   <Label htmlFor={consentId} className="cursor-pointer text-xs font-normal leading-relaxed text-foreground">{WHATSAPP_HANDOFF_CONSENT}</Label>
                 </div>
-                <Button type="button" className="min-h-[44px] w-full" onClick={() => save('whatsapp')} disabled={!!submitting || !consent} aria-describedby={consentId}>
+                <Button type="button" className="min-h-[44px] w-full" onClick={() => save('whatsapp')} disabled={!!submitting || !consent}>
                   {submitting === 'whatsapp' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <MessageCircle className="mr-2 h-4 w-4" aria-hidden="true" />}
                   Save enquiry &amp; continue on WhatsApp
                 </Button>

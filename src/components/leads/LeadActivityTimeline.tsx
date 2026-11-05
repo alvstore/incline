@@ -15,6 +15,8 @@ const ACTIVITY_ICONS: Record<string, any> = {
   conversion: Flame,
   created: Clock,
   sms: MessageSquare,
+  website_chatbot_lead_saved: MessageSquare,
+  website_chatbot_returned: MessageSquare,
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
@@ -27,6 +29,8 @@ const ACTIVITY_COLORS: Record<string, string> = {
   assignment: 'bg-primary/10 text-primary border-primary/25',
   conversion: 'bg-success/10 text-success border-success/25',
   created: 'bg-muted text-muted-foreground border-border',
+  website_chatbot_lead_saved: 'bg-primary/10 text-primary border-primary/25',
+  website_chatbot_returned: 'bg-primary/10 text-primary border-primary/25',
 };
 
 export function LeadActivityTimeline({ leadId }: { leadId: string }) {
