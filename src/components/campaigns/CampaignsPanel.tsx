@@ -354,8 +354,8 @@ export function CampaignsPanel() {
         </div>
       )}
 
+      <MessageComposerSheet open={composerOpen} onOpenChange={setComposerOpen} branchId={branchId} />
       {branchId && (
-        <MessageComposerSheet open={composerOpen} onOpenChange={setComposerOpen} branchId={branchId} />
         <CampaignWizard
           open={wizardOpen}
           onOpenChange={(o) => { setWizardOpen(o); if (!o) { setEditingCampaign(null); setAnnounceClassId(null); } }}
