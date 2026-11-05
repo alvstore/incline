@@ -46,7 +46,7 @@ async function readFnError(err: unknown): Promise<string> {
 
 const PROMPTS: Partial<Record<Step, { label: string; placeholder: string; type: string; autoComplete: string; inputMode?: 'tel' | 'email' | 'text' }>> = {
   name: { label: 'Your full name', placeholder: 'Full name', type: 'text', autoComplete: 'name' },
-  email: { label: 'Your email address (required)', placeholder: 'you@example.com', type: 'email', autoComplete: 'email', inputMode: 'email' },
+  email: { label: 'Your email address (required)', placeholder: 'you@example.com', type: 'text', autoComplete: 'email', inputMode: 'email' },
   phone: { label: 'Your mobile number', placeholder: '98XXXXXXXX', type: 'tel', autoComplete: 'tel', inputMode: 'tel' },
   intent: { label: 'What are you looking for?', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
   goal: { label: 'Your main fitness goal', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
@@ -423,7 +423,7 @@ export default function WebsiteLeadChatbot() {
                   <label htmlFor="wcb-input" className="sr-only">{prompt.label}</label>
                   <Input id="wcb-input" data-step-focus value={draft} onChange={(e) => { setDraft(e.target.value); setFieldError(''); }}
                     type={prompt.type} inputMode={prompt.inputMode} autoComplete={prompt.autoComplete} placeholder={prompt.placeholder}
-                    maxLength={step === 'email' ? 255 : step === 'phone' ? 16 : step === 'name' ? 100 : MAX_NOTE}
+                    maxLength={step === 'email' ? 255 : step === 'phone' ? 100 : step === 'name' ? 100 : MAX_NOTE}
                     required={step === 'email' || step === 'name' || step === 'phone'}
                     aria-invalid={!!fieldError} aria-describedby={fieldError ? errId : undefined} />
                   {fieldError && <p id={errId} role="alert" className="mt-1 text-xs text-destructive">{fieldError}</p>}
