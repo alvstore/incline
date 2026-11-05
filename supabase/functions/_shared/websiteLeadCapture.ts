@@ -24,6 +24,8 @@ export const CHATBOT_TIMEFRAMES: Record<string, string> = {
 };
 export const INTEREST_CATEGORIES = [
   "Membership", "Personal training", "Group / class training", "Recovery & wellness", "Club visit",
+  "Group classes & Pilates", "Just exploring",
+  "Monthly membership", "Quarterly membership", "Half-Yearly membership", "Annual membership",
 ] as const;
 export const CHAT_TOPICS = ["training_floor", "membership", "pt_classes", "recovery", "amenities", "assessment", "location", "hours", "visit", "pricing", "discount", "group_pricing", "unknown"] as const;
 
