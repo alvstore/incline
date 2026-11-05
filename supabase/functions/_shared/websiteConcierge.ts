@@ -82,7 +82,7 @@ function topicMessages(topic: WebTopic, k: Knowledge, plans: string[]): WebMsg[]
     case "membership": {
       const m: WebMsg[] = [{ text: text(k, "membership") }];
       void plans; // internal plan names are never shown to visitors
-      m.push({ text: "Memberships are available as Monthly, Quarterly, Half-Yearly and Annual." });
+      if (!/monthly|quarterly|annual/i.test(m[0].text)) m.push({ text: "Memberships are available as Monthly, Quarterly, Half-Yearly and Annual." });
       m.push({ text: VISIT_ASK });
       return m;
     }

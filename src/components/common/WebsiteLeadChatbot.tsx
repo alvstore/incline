@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { getFirstTouch, captureFirstTouch } from '@/lib/leads/firstTouch';
 import {
-  EMAIL_REQUIRED_COPY, FOLLOW_UPS, ESCALATION_TEL, ESCALATION_PHONE,
+  EMAIL_REQUIRED_COPY, ESCALATION_TEL, ESCALATION_PHONE,
   type ConciergeState, type Topic, type BotMessage,
   normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
-  conciergeReply, conciergeTopic,
+  conciergeReply,
 } from '@/lib/leads/websiteChatbot';
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
@@ -176,7 +176,7 @@ export default function WebsiteLeadChatbot() {
         setLeadId(data.lead_id ?? null);
         const welcome = [
           { text: `Thanks ${firstName(name)}! I've noted your interest in ${interest}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}.` },
-          { text: 'Ask me anything about our training floor, recovery suites, classes or planning a visit.' },
+          { text: 'What would you like to know? Just type your question below.' },
         ];
         botSay(welcome, 'chat');
         if (data.lead_id) {
@@ -235,7 +235,6 @@ export default function WebsiteLeadChatbot() {
       runConcierge(fallback());
     }
   };
-  const pickTopic = (label: string, topic: Topic) => { userSay(label); void askServer({ topic, label }, () => conciergeTopic(topic, concierge)); };
 
   const submitText = (e: FormEvent) => {
     e.preventDefault();
@@ -347,13 +346,6 @@ export default function WebsiteLeadChatbot() {
               <div className="flex flex-wrap gap-2" role="group" aria-label="What is your main fitness goal?">
                 {GOALS.map((t, i) => (
                   <button key={t} type="button" className={chip} onClick={() => pickGoal(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
-                ))}
-              </div>
-            )}
-            {step === 'chat' && !typing && (
-              <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Suggested questions">
-                {FOLLOW_UPS.map((f) => (
-                  <button key={f.topic} type="button" className={cn(chip, 'shrink-0')} onClick={() => pickTopic(f.label, f.topic)}>{f.label}</button>
                 ))}
               </div>
             )}
