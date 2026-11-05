@@ -1,7 +1,7 @@
 // Run: bun test src/lib/campaigns/composer.test.ts
 // @ts-expect-error -- bun's built-in test runner has no types in the app build
 import { describe, it, expect } from 'bun:test';
-import { channelReadiness, validateDraft, inAppAudienceKey, presetToFilter, externalChannels } from './composer';
+import { channelReadiness, validateDraft, inAppAudienceKey, presetToFilter, externalChannels, filterToInAppPreset } from './composer';
 
 const base = { channels: ['inapp'] as const, title: 'T', message: 'M', subject: '', sendNow: true, scheduledAt: null };
 
@@ -29,5 +29,18 @@ describe('composer rules', () => {
   });
   it('in-app is never sent as an external campaign', () => {
     expect(externalChannels(['inapp', 'whatsapp', 'email'])).toEqual(['whatsapp', 'email']);
+  });
+});
+
+describe('campaign drawer → In-App audience', () => {
+  it('leads, contacts and CSV imports have no app audience', () => {
+    expect(filterToInAppPreset({ audience_kind: 'leads' } as never)).toBeNull();
+    expect(filterToInAppPreset({ audience_kind: 'csv_import' } as never)).toBeNull();
+  });
+  it('members, staff and mixed audiences map to the matching app audience', () => {
+    expect(filterToInAppPreset({ status: 'active' } as never)).toBe('active');
+    expect(filterToInAppPreset({ audience_kind: 'members', member_status: 'expired' } as never)).toBe('expired');
+    expect(filterToInAppPreset({ audience_kind: 'staff' } as never)).toBe('staff');
+    expect(filterToInAppPreset({ audience_kind: 'members_and_staff' } as never)).toBe('members_and_staff');
   });
 });
