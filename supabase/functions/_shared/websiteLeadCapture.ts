@@ -109,7 +109,7 @@ const durLabel = (d: number) => d <= 1 ? "Day pass" : d <= 31 ? "Monthly" : d <=
 export async function publicPriceLines(db: Db): Promise<string[]> {
   if (!(await webPricesEnabled(db))) return [];
   const { data } = await db.from("membership_plans").select("name, duration_days, price, discounted_price")
-    .eq("is_active", true).order("duration_days", { ascending: true });
+    .eq("is_active", true).eq("is_visible_to_members", true).order("duration_days", { ascending: true });
   return (Array.isArray(data) ? data : [])
     .filter((r: { price?: unknown }) => Number(r.price) > 0)
     .slice(0, 8)
