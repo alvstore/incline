@@ -185,7 +185,7 @@ export default function ExternalReviewsTab() {
     const rated = rows.filter(r => r.rating != null);
     const localAvg = rated.length ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length : 0;
     const fakes = rows.filter(r => r.ai_classification === 'suspected_fake' || r.ai_classification === 'spam').length;
-    const pending = rows.filter(r => r.reply_status === 'draft' || r.reply_status === 'approved').length;
+    const pending = rows.filter(r => !(r as any).removed_from_google_at && (r.reply_status === 'draft' || r.reply_status === 'approved')).length;
     const replied = rows.filter(r => r.reply_status === 'sent').length;
     return { week: recent.length, localAvg, fakes, pending, replied, total: rows.length };
   }, [rows]);
@@ -604,6 +604,9 @@ export default function ExternalReviewsTab() {
                         </Badge>
                       )}
                       <Badge className={cb.cls}><Icon className="h-3 w-3 mr-1" />{cb.label}</Badge>
+                      {(r as any).removed_from_google_at && (
+                        <Badge className="bg-destructive/10 text-destructive border border-destructive/20">Removed by reviewer</Badge>
+                      )}
                       {r.source === 'places' && (
                         <Badge className="bg-slate-100 text-slate-600">Places · read-only</Badge>
                       )}
