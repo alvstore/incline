@@ -1,3 +1,4 @@
+// v2.3.0 — Chat sales links (notes.kind=sales_lead) marked paid idempotently with a desk task.
 // v2.2.1 — STRICT FAIL-CLOSED: Refuses to process any payment webhook without a valid provider signature.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
