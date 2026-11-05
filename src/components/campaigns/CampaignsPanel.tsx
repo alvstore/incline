@@ -50,7 +50,6 @@ export function CampaignsPanel() {
   const { selectedBranch } = useBranchContext();
   const branchId = selectedBranch && selectedBranch !== 'all' ? selectedBranch : null;
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [composerOpen, setComposerOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const [reportCampaign, setReportCampaign] = useState<Campaign | null>(null);
