@@ -1,4 +1,5 @@
 // _shared/websiteLeadCapture.ts
+// v2.0.0 — Chatbot: email required, interest from active plans/categories, no WhatsApp handoff/consent, visit preference.
 // v1.0.0 — Pure, dependency-injected lead capture used by `capture-lead`.
 // Serves both the legacy embed form (anti-enumeration response contract kept)
 // and the Website Lead Chatbot (returns lead reference for WhatsApp handoff).
@@ -19,9 +20,12 @@ export const CHATBOT_TIMEFRAMES: Record<string, string> = {
   within_30_days: "Within 30 days",
   exploring: "Just exploring",
 };
-export const CHANNELS = ["whatsapp", "callback"] as const;
+export const INTEREST_CATEGORIES = [
+  "Membership", "Personal training", "Group / class training", "Recovery & wellness", "Club visit",
+] as const;
+export const CHAT_TOPICS = ["training_floor", "membership", "pt_classes", "recovery", "amenities", "visit", "pricing", "discount", "group_pricing", "unknown"] as const;
 
-const MAX_NAME = 100, MAX_EMAIL = 255, MAX_PHONE = 20, MAX_NOTE = 280, MAX_CONSENT = 600;
+const MAX_NAME = 100, MAX_EMAIL = 255, MAX_PHONE = 20, MAX_NOTE = 280;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{10,15}$/;
 const SUBMISSION_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -74,9 +78,24 @@ export type CaptureResult = { status: number; body: Record<string, unknown> };
 
 const bad = (error: string, status = 400): CaptureResult => ({ status, body: { error } });
 
+/** Active plan names only — never prices, discounts or fees (pricing blackout). */
+export async function activePlanNames(db: Db): Promise<string[]> {
+  const { data } = await db.from("membership_plans").select("name, display_order")
+    .eq("is_active", true).eq("is_visible_to_members", true).order("display_order", { ascending: true });
+  const names = (Array.isArray(data) ? data : []).map((r: { name?: unknown }) => sanitize(r?.name, 60)).filter(Boolean);
+  return Array.from(new Set(names)).slice(0, 12);
+}
+
 export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: CaptureDeps): Promise<CaptureResult> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return bad("Invalid request");
   const body = raw as Record<string, unknown>;
+  if (body.intake_type === CHATBOT_SOURCE && body.action === "plans") {
+    return { status: 200, body: { success: true, plans: await activePlanNames(deps.db), categories: INTEREST_CATEGORIES } };
+  }
+  if (body.intake_type === CHATBOT_SOURCE && body.action === "visit_preference") {
+    if (deps.rateLimit && !(await deps.rateLimit(meta.ip))) return bad("Too many submissions. Please try again in a few minutes.", 429);
+    return recordVisitPreference(body, deps);
+  }
   const isChatbot = body.intake_type === CHATBOT_SOURCE;
 
   // Honeypot: bots fill hidden fields. Pretend success, write nothing.
@@ -97,17 +116,22 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
   if (isChatbot ? !isValidIndianMobile(phone) : (!phone || phone.length < 10 || !PHONE_RE.test(phone))) {
     return bad(isChatbot ? "Please enter a valid 10-digit Indian mobile number" : "Valid phone number is required");
   }
-  if (email && !EMAIL_RE.test(email)) return bad("Invalid email format");
+  if (isChatbot && !email) return bad("Email is required to register your enquiry");
+  if (email && !EMAIL_RE.test(email)) return bad(isChatbot ? "Please enter a valid email address" : "Invalid email format");
 
   // Chatbot-only fields — allow-listed.
   const goal = isChatbot ? opt(body.fitness_goal, 40) : null;
   if (goal && !(CHATBOT_GOALS as readonly string[]).includes(goal)) return bad("Invalid goal");
   const timeframe = isChatbot ? opt(body.joining_timeframe, 20) : null;
   if (timeframe && !(timeframe in CHATBOT_TIMEFRAMES)) return bad("Invalid timeframe");
-  const channel = isChatbot ? (opt(body.preferred_contact_channel, 20) ?? "callback") : null;
-  if (channel && !(CHANNELS as readonly string[]).includes(channel)) return bad("Invalid contact preference");
   const note = isChatbot ? opt(body.notes, MAX_NOTE) : null;
-  const planInterest = isChatbot ? opt(body.plan_interest, 40) : null;
+  const planInterest = isChatbot ? opt(body.plan_interest, 60) : null;
+  if (isChatbot) {
+    if (!planInterest) return bad("Please choose what you're interested in");
+    const allowed = (INTEREST_CATEGORIES as readonly string[]).includes(planInterest)
+      || (await activePlanNames(deps.db)).includes(planInterest);
+    if (!allowed) return bad("Please choose one of the listed options");
+  }
   const preferredTime = isChatbot ? opt(body.preferred_time, 40) : null;
   const submissionId = isChatbot && typeof body.submission_id === "string" && SUBMISSION_RE.test(body.submission_id)
     ? body.submission_id : null;
@@ -119,11 +143,6 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
   };
   const source = deriveSource(body, utm.utm_source, utm.referrer_url);
   const consent = (body.consent && typeof body.consent === "object") ? body.consent as Record<string, unknown> : null;
-  const whatsappConsent = isChatbot && channel === "whatsapp" && consent?.granted === true;
-  const consentText = whatsappConsent ? sanitize(consent?.text, MAX_CONSENT) : "";
-  if (isChatbot && channel === "whatsapp" && (!whatsappConsent || !consentText)) {
-    return bad("Please confirm the WhatsApp handoff to continue on WhatsApp");
-  }
 
   const db = deps.db;
   const variants = phoneVariants(phone);
@@ -142,12 +161,12 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
   }
 
   const activityMeta = {
-    submission_id: submissionId, fitness_goal: goal, joining_timeframe: timeframe,
-    handoff_choice: channel, utm_source: utm.utm_source, intake_type: CHATBOT_SOURCE,
+    submission_id: submissionId, plan_interest: planInterest, fitness_goal: goal, joining_timeframe: timeframe,
+    utm_source: utm.utm_source, intake_type: CHATBOT_SOURCE,
   };
   const activitySummary = [
-    goal && `Goal: ${goal}`, timeframe && `Joining: ${CHATBOT_TIMEFRAMES[timeframe]}`,
-    utm.utm_source && `UTM: ${utm.utm_source}`, `Handoff: ${channel === "whatsapp" ? "WhatsApp" : "Team callback"}`,
+    planInterest && `Interest: ${planInterest}`, goal && `Goal: ${goal}`, timeframe && `Joining: ${CHATBOT_TIMEFRAMES[timeframe]}`,
+    utm.utm_source && `UTM: ${utm.utm_source}`,
   ].filter(Boolean).join(" · ");
 
   if (isChatbot && existing) {
@@ -171,7 +190,6 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
         lead_id: existing.id, branch_id: existing.branch_id, activity_type: "website_chatbot_returned",
         title: "Returned through Website Chatbot", notes: activitySummary, metadata: activityMeta,
       });
-      if (whatsappConsent) await recordWhatsappConsent(db, existing.id, consentText, meta);
     }
     return { status: 200, body: chatbotOk(existing.id, existing.branch_id, false) };
   }
@@ -194,7 +212,7 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
     ...utm,
     ...(isChatbot ? {
       fitness_goal: goal, plan_interest: planInterest, expected_start_date: expectedStartFor(timeframe, deps.now),
-      preferred_time: preferredTime, notes: note, ...(channel === "whatsapp" ? { preferred_contact_channel: "whatsapp" } : {}),
+      preferred_time: preferredTime, notes: note,
     } : {}),
   }).select("id").single();
   if (error || !lead) {
@@ -207,7 +225,6 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
       lead_id: lead.id, branch_id: branchId, activity_type: "website_chatbot_lead_saved",
       title: "Enquiry captured from Website Chatbot", notes: activitySummary, metadata: activityMeta,
     });
-    if (whatsappConsent) await recordWhatsappConsent(db, lead.id, consentText, meta);
   } else if (consent?.granted === true) {
     // Legacy embed consent behaviour unchanged.
     try {
@@ -236,13 +253,29 @@ function chatbotOk(leadId: string, branchId: string, created: boolean) {
   };
 }
 
-async function recordWhatsappConsent(db: Db, leadId: string, text: string, meta: CaptureMeta) {
-  try {
-    await db.rpc("record_consent", {
-      p_subject_type: "lead", p_subject_id: leadId, p_channels: ["whatsapp"], p_source: CHATBOT_SOURCE,
-      p_consent_text: text, p_ip: meta.ip, p_user_agent: meta.userAgent, p_action: "grant",
-    });
-  } catch { console.error("[capture-lead] whatsapp consent record failed (non-fatal)"); }
+/** Appends a visit preference + chat topics to a lead the same browser just created/updated.
+ *  Requires the lead_id AND the original submission_id (proof of the capture). No appointment is booked. */
+async function recordVisitPreference(body: Record<string, unknown>, deps: CaptureDeps): Promise<CaptureResult> {
+  const db = deps.db;
+  const leadId = typeof body.lead_id === "string" && /^[0-9a-f-]{36}$/i.test(body.lead_id) ? body.lead_id : null;
+  const sid = typeof body.submission_id === "string" && SUBMISSION_RE.test(body.submission_id) ? body.submission_id : null;
+  const visit = opt(body.visit_preference, 120);
+  const topics = Array.isArray(body.topics)
+    ? Array.from(new Set(body.topics.filter((t): t is string => typeof t === "string" && (CHAT_TOPICS as readonly string[]).includes(t)))).slice(0, 10)
+    : [];
+  if (!leadId || !sid || !visit) return bad("Invalid request");
+  const { data: proof } = await db.from("lead_activities").select("id, branch_id").eq("lead_id", leadId)
+    .eq("metadata->>submission_id", sid).limit(1).maybeSingle();
+  if (!proof) return bad("Enquiry not found", 404);
+  const { data: lead } = await db.from("leads").select("id, preferred_time").eq("id", leadId).maybeSingle();
+  if (lead && !lead.preferred_time) await db.from("leads").update({ preferred_time: visit.slice(0, 40) }).eq("id", leadId);
+  await db.from("lead_activities").insert({
+    lead_id: leadId, branch_id: proof.branch_id, activity_type: "website_chatbot_visit_request",
+    title: "Visit preference from Website Chatbot (team to confirm)",
+    notes: `Preferred visit: ${visit}${topics.length ? ` · Asked about: ${topics.join(", ")}` : ""}`,
+    metadata: { submission_id: `${sid}:visit`, visit_preference: visit, topics, intake_type: CHATBOT_SOURCE },
+  });
+  return { status: 200, body: { success: true, status: "visit_noted" } };
 }
 
 export async function hashKey(input: string): Promise<string> {
