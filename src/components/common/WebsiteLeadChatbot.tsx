@@ -224,7 +224,7 @@ export default function WebsiteLeadChatbot() {
     if (intent === 'Membership') botSay([{ text: 'Great. Which membership duration are you considering?' }], 'interest');
   };
   const pickInterest = (v: string) => { setInterest(`${v} membership`); userSay(v); };
-  const ready = !!goal && !!interest && !leadId && step !== 'chat' && step !== 'saving';
+  const ready = !!goal && !!interest && !leadId && step !== 'chat' && step !== 'saving' && step !== 'handoff';
   useEffect(() => { if (ready && !saveError && !inFlight.current) void save(); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runConcierge = (reply: ReturnType<typeof conciergeReply>) => {
