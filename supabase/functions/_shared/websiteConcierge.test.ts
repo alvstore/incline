@@ -28,7 +28,8 @@ Deno.test("a knowledge row containing a price is never shown", () => {
 Deno.test("first discount ask gets fixed-pricing policy, no phone", () => {
   const r = webConciergeReply("any discount?", S, K);
   assertEquals(r.state.discountAsks, 1);
-  assert(all(r).includes("do not offer discounts"));
+  assert(all(r).includes("don't offer individual discounts"));
+  assert(!/do not offer discounts or negotiate/.test(all(r)));
   assert(!r.messages.some((m) => m.tel));
 });
 
@@ -83,4 +84,22 @@ Deno.test("server: price objection gets an explanation and tel option, not a tou
     assert(/exact figure/i.test(all(r)), all(r));
     assert(!/₹|wa\.me|whatsapp/i.test(all(r)), all(r));
   }
+});
+
+Deno.test("price question shows live rates when prices are enabled", () => {
+  const prices = ["• Monthly — Premium Monthly: ₹5,000", "• Annual — Essential Annual: ₹25,000 (about ₹2,055/month)"];
+  const r = webConciergeReply("what is price", S, K, [], prices);
+  assert(all(r).includes("₹5,000") && all(r).includes("₹25,000"));
+  assert(!/negotiate/.test(all(r)));
+});
+
+Deno.test("price question without enabled prices stays polite and shows no amounts", () => {
+  const r = webConciergeReply("what is price", S, {}, [], []);
+  assert(!/₹/.test(all(r)));
+  assert(!/negotiate/.test(all(r)));
+});
+
+Deno.test("just tell me the price shows rates instead of pushing a visit", () => {
+  const r = webConciergeReply("just tell me the price", S, K, [], ["• Monthly — Premium Monthly: ₹5,000"]);
+  assert(all(r).includes("₹5,000"));
 });

@@ -36,7 +36,7 @@ describe('intake: typed choices are understood', () => {
 describe('intake aside: answers mid-intake questions without visit offers', () => {
   test('price asked at name step', () => {
     const a = intakeAside('WHAT IS PRICE', S());
-    expect(txt(a)).toContain(FIXED_PRICING_POLICY);
+    expect(txt(a)).not.toMatch(/negotiate/i);
     expect(txt(a)).not.toMatch(VISIT);
     expect(txt(a)).not.toMatch(/₹|wa\.me|whatsapp/i);
   });
