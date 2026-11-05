@@ -1928,7 +1928,31 @@ Deno.serve(async (req) => {
             const safeName = input.attachment.filename || 'attachment';
 
             if (kind === 'image' || contentType.startsWith('image/')) {
-              attachmentHtml = `<p style="margin:24px 0 0;"><img src="${safeUrl}" alt="${safeName}" style="max-width:100%;height:auto;border-radius:12px;display:block;" /></p>`;
+              // v1.45.0: show the banner inline, add a "View flyer" button (works when the
+              // mail app blocks images), and attach the real file when it is small enough.
+              attachmentHtml = `<p style="margin:24px 0 0;"><img src="${safeUrl}" alt="${safeName}" style="max-width:100%;height:auto;border-radius:12px;display:block;" /></p>`
+                + `<p style="margin:12px 0 0;"><a href="${safeUrl}" style="display:inline-block;padding:10px 18px;background:#EAB308;color:#111;font-weight:700;border-radius:8px;text-decoration:none;">View / download ${safeName}</a></p>`;
+              try {
+                const guarded = await assertPublicUrl(String(input.attachment.url));
+                const res = await fetch(guarded.toString(), { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+                const declared = Number(res.headers.get('content-length') || 0);
+                if (res.ok && declared <= 2_000_000) {
+                  const buf = new Uint8Array(await res.arrayBuffer());
+                  if (buf.byteLength >= 512 && buf.byteLength <= 2_000_000) {
+                    let bin = '';
+                    for (let i = 0; i < buf.length; i += 0x8000) {
+                      bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + 0x8000)));
+                    }
+                    emailAttachments = [{
+                      filename: safeName,
+                      content_base64: btoa(bin),
+                      content_type: contentType || res.headers.get('content-type') || 'image/jpeg',
+                    }];
+                  }
+                }
+              } catch (_e) {
+                // Non-fatal: the inline banner and download button still go out.
+              }
             } else if (input.category === 'marketing') {
               attachmentHtml = `<p style="margin:24px 0 0;"><a href="${safeUrl}" style="color:#EAB308;font-weight:700;">Open ${safeName}</a></p>`;
             } else {
