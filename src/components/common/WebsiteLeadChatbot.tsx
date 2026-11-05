@@ -66,6 +66,8 @@ export default function WebsiteLeadChatbot() {
   const titleId = useId();
   const errId = useId();
 
+  const messagesRef = useRef<Msg[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { captureFirstTouch(); }, []);
 
   // Active plan names only (server returns no prices); grounded categories always available.
@@ -167,7 +169,16 @@ export default function WebsiteLeadChatbot() {
         ], 'chat');
       } else {
         setLeadId(data.lead_id ?? null);
-        botSay([...welcomeAfterCapture(name, interest).map((text) => ({ text })), { text: 'What would you like to know first?' }], 'chat');
+        const welcome = [...welcomeAfterCapture(name, interest).map((text) => ({ text })), { text: 'What would you like to know first?' }];
+        botSay(welcome, 'chat');
+        if (data.lead_id) {
+          // Copy the conversation so far into the team's chat inbox (best effort).
+          const transcript = [...messagesRef.current, ...welcome.map((w) => ({ from: 'bot' as const, text: w.text }))]
+            .slice(-40).map((m) => ({ from: m.from, text: m.text.slice(0, 600) }));
+          void supabase.functions.invoke('capture-lead', {
+            body: { intake_type: 'website_chatbot', action: 'sync_transcript', lead_id: data.lead_id, submission_id: submissionId.current, messages: transcript },
+          }).catch(() => undefined);
+        }
       }
     } catch (err) {
       setSaveError(await readFnError(err));
@@ -189,7 +200,30 @@ export default function WebsiteLeadChatbot() {
     botSay(reply.messages);
     if (reply.visitPreference) visitMutation.mutate(reply.visitPreference);
   };
-  const pickTopic = (label: string, topic: Topic) => { userSay(label); runConcierge(conciergeTopic(topic, concierge)); };
+
+  /** Saved enquiries: answer from the shared knowledge base and log both sides to the team inbox.
+   *  Falls back to the built-in answers if the network fails, so the visitor is never stuck. */
+  const askServer = async (input: { message?: string; topic?: Topic; label?: string }, fallback: () => ReturnType<typeof conciergeReply>) => {
+    if (!leadId) return runConcierge(fallback());
+    setTyping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('capture-lead', {
+        body: {
+          intake_type: 'website_chatbot', action: 'chat', lead_id: leadId, submission_id: submissionId.current,
+          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit }, ...input,
+        },
+      });
+      if (error || !Array.isArray(data?.messages)) throw error ?? new Error('bad reply');
+      topics.current.add(data.topic as Topic);
+      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true }));
+      setTyping(false);
+      setMessages((m) => [...m, ...(data.messages as BotMessage[]).map((b) => ({ from: 'bot' as const, text: String(b.text), tel: b.tel === true }))]);
+    } catch {
+      setTyping(false);
+      runConcierge(fallback());
+    }
+  };
+  const pickTopic = (label: string, topic: Topic) => { userSay(label); void askServer({ topic, label }, () => conciergeTopic(topic, concierge)); };
 
   const submitText = (e: FormEvent) => {
     e.preventDefault();
@@ -215,7 +249,7 @@ export default function WebsiteLeadChatbot() {
     } else if (step === 'chat') {
       if (!v) return;
       userSay(v); setDraft('');
-      runConcierge(conciergeReply(v, concierge));
+      void askServer({ message: v }, () => conciergeReply(v, concierge));
     }
   };
 
