@@ -18184,6 +18184,12 @@ export type Database = {
         Returns: Json
       }
       import_purchase_bill: { Args: { p_payload: Json }; Returns: Json }
+      inapp_audience_user_ids: {
+        Args: { p_audience: string; p_branch_id: string }
+        Returns: {
+          user_id: string
+        }[]
+      }
       internal_fn_token: { Args: never; Returns: string }
       is_bot_paused: {
         Args: { p_branch_id: string; p_phone: string }
