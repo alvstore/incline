@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
 
   try {
     const contentLength = parseInt(req.headers.get('content-length') || '0');
-    if (contentLength > 10240) return json({ error: 'Request too large' }, 413);
+    if (contentLength > 32768) return json({ error: 'Request too large' }, 413);
 
     let body: unknown;
     try { body = await req.json(); } catch { return json({ error: 'Invalid request' }, 400); }
