@@ -7,18 +7,20 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { getFirstTouch, captureFirstTouch } from '@/lib/leads/firstTouch';
 import {
-  INTEREST_CATEGORIES, CHATBOT_TIMEFRAMES, EMAIL_REQUIRED_COPY, FOLLOW_UPS, ESCALATION_TEL, ESCALATION_PHONE,
-  type ChatbotTimeframe, type ConciergeState, type Topic, type BotMessage,
-  normalizeIndianMobile, isValidEmail, newSubmissionId, timeframeLabel, firstName,
+  INTEREST_CATEGORIES, EMAIL_REQUIRED_COPY, FOLLOW_UPS, ESCALATION_TEL, ESCALATION_PHONE,
+  type ConciergeState, type Topic, type BotMessage,
+  normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
   conciergeReply, conciergeTopic, welcomeAfterCapture,
 } from '@/lib/leads/websiteChatbot';
 
-type Step = 'interest' | 'name' | 'email' | 'phone' | 'timeline' | 'note' | 'saving' | 'chat';
+type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
+const INTENTS = ['Membership', 'Personal training', 'Recovery (sauna, steam, cold plunge)', 'Pilates / group classes', 'Just looking'] as const;
+const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Personal training'] as const;
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
 const WELCOME = 'Hi! Welcome to Incline. I can help you explore training, membership and recovery.';
-const FIRST_Q = 'To get started, what are you interested in?';
+const FIRST_Q = 'To get started, may I have your full name?';
 const MAX_NOTE = 280;
 
 async function readFnError(err: unknown): Promise<string> {
@@ -36,21 +38,20 @@ const PROMPTS: Partial<Record<Step, { label: string; placeholder: string; type: 
   name: { label: 'Your full name', placeholder: 'Full name', type: 'text', autoComplete: 'name' },
   email: { label: 'Your email address (required)', placeholder: 'you@example.com', type: 'email', autoComplete: 'email', inputMode: 'email' },
   phone: { label: 'Your mobile number', placeholder: '98XXXXXXXX', type: 'tel', autoComplete: 'tel', inputMode: 'tel' },
-  note: { label: 'Optional question or note', placeholder: 'Optional — e.g. Do you have morning Pilates?', type: 'text', autoComplete: 'off' },
   chat: { label: 'Ask a question', placeholder: 'Ask about facilities, membership, visits…', type: 'text', autoComplete: 'off' },
 };
 
 export default function WebsiteLeadChatbot() {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>('interest');
+  const [step, setStep] = useState<Step>('name');
   const [messages, setMessages] = useState<Msg[]>([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
   const [typing, setTyping] = useState(false);
   const [interest, setInterest] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [timeframe, setTimeframe] = useState<ChatbotTimeframe | null>(null);
-  const [note, setNote] = useState('');
+  const [intent, setIntent] = useState('');
+  const [goal, setGoal] = useState('');
   const [draft, setDraft] = useState('');
   const [hp, setHp] = useState('');
   const [fieldError, setFieldError] = useState('');
@@ -126,8 +127,8 @@ export default function WebsiteLeadChatbot() {
           email: email.trim(),
           phone: normalizeIndianMobile(phone),
           plan_interest: interest,
-          joining_timeframe: timeframe ?? undefined,
-          notes: note.trim() || undefined,
+          fitness_goal: goal || undefined,
+          notes: intent ? `Enquiry type: ${intent}${goal ? ` · Goal: ${goal}` : ''}` : undefined,
           submission_id: submissionId.current,
           company_website: hp,
           utm_source: ft?.utm_source || params.get('utm_source') || null,
@@ -182,17 +183,16 @@ export default function WebsiteLeadChatbot() {
       }
     } catch (err) {
       setSaveError(await readFnError(err));
-      setStep('note');
+      setStep('goal');
     } finally {
       inFlight.current = false;
     }
   };
 
-  const pickInterest = (v: string) => { setInterest(v); userSay(v); botSay([{ text: 'Great choice. What is your full name?' }], 'name'); };
-  const pickTimeline = (v: ChatbotTimeframe | null) => {
-    setTimeframe(v); userSay(v ? timeframeLabel(v) : 'Skip');
-    botSay([{ text: 'Any short question or note for the team? (optional — please no medical details)' }], 'note');
-  };
+  const pickIntent = (v: string) => { setIntent(v); userSay(v); botSay([{ text: 'Which plan or service interests you most?' }], 'interest'); };
+  const pickInterest = (v: string) => { setInterest(v); userSay(v); botSay([{ text: 'Great choice. What is your main fitness goal?' }], 'goal'); };
+  const pickGoal = (v: string) => { setGoal(v); userSay(v); };
+  useEffect(() => { if (goal && step === 'goal' && !saveError && !inFlight.current && !leadId) void save(); }, [goal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runConcierge = (reply: ReturnType<typeof conciergeReply>) => {
     topics.current.add(reply.topic);
@@ -232,20 +232,17 @@ export default function WebsiteLeadChatbot() {
     if (step === 'name') {
       if (v.length < 2) return setFieldError('Please enter your full name.');
       setName(v); userSay(v); setDraft('');
-      botSay([{ text: `Thanks, ${firstName(v)}. What's your email address?` }, { text: EMAIL_REQUIRED_COPY }], 'email');
+      botSay([{ text: `Thanks, ${firstName(v)}. What's your mobile number?` }], 'phone');
     } else if (step === 'email') {
       if (!v) return setFieldError(`Email is required. ${EMAIL_REQUIRED_COPY}`);
       if (!isValidEmail(v)) return setFieldError('Please enter a valid email address, like name@example.com.');
       setEmail(v); userSay(v); setDraft('');
-      botSay([{ text: 'And your mobile number, so the team can reach you?' }], 'phone');
+      botSay([{ text: 'What are you looking for today?' }], 'intent');
     } else if (step === 'phone') {
       const n = normalizeIndianMobile(v);
       if (!n) return setFieldError('Enter a valid 10-digit Indian mobile number.');
       setPhone(n); userSay(n); setDraft('');
-      botSay([{ text: 'When are you hoping to start? (optional)' }], 'timeline');
-    } else if (step === 'note') {
-      setNote(v.slice(0, MAX_NOTE)); userSay(v || 'No note'); setDraft('');
-      void save();
+      botSay([{ text: "And your email address?" }, { text: EMAIL_REQUIRED_COPY }], 'email');
     } else if (step === 'chat') {
       if (!v) return;
       userSay(v); setDraft('');
@@ -254,7 +251,7 @@ export default function WebsiteLeadChatbot() {
   };
 
   const restart = () => {
-    setStep('interest'); setInterest(''); setName(''); setEmail(''); setPhone(''); setTimeframe(null); setNote('');
+    setStep('name'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
     setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false }));
     submissionId.current = newSubmissionId();
@@ -318,12 +315,18 @@ export default function WebsiteLeadChatbot() {
                 ))}
               </div>
             )}
-            {step === 'timeline' && !typing && (
-              <div className="flex flex-wrap gap-2" role="group" aria-label="When are you hoping to start?">
-                {CHATBOT_TIMEFRAMES.map((t, i) => (
-                  <button key={t.value} type="button" className={chip} onClick={() => pickTimeline(t.value)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t.label}</button>
+            {step === 'intent' && !typing && (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="What are you looking for?">
+                {INTENTS.map((t, i) => (
+                  <button key={t} type="button" className={chip} onClick={() => pickIntent(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
                 ))}
-                <button type="button" className={chip} onClick={() => pickTimeline(null)}>Skip</button>
+              </div>
+            )}
+            {step === 'goal' && !typing && !saveError && !goal && (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="What is your main fitness goal?">
+                {GOALS.map((t, i) => (
+                  <button key={t} type="button" className={chip} onClick={() => pickGoal(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
+                ))}
               </div>
             )}
             {step === 'chat' && !typing && (
@@ -333,13 +336,13 @@ export default function WebsiteLeadChatbot() {
                 ))}
               </div>
             )}
-            {saveError && step === 'note' && (
+            {saveError && step === 'goal' && (
               <div role="alert" className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
                 <p>{saveError}</p>
                 <Button type="button" size="sm" variant="outline" className="min-h-[44px]" onClick={() => void save()}>Try again</Button>
               </div>
             )}
-            {prompt && !typing && (step !== 'note' || !saveError) && (
+            {prompt && !typing && (
               <form onSubmit={submitText} noValidate className="flex items-start gap-2">
                 <div className="flex-1">
                   <label htmlFor="wcb-input" className="sr-only">{prompt.label}</label>
@@ -350,7 +353,7 @@ export default function WebsiteLeadChatbot() {
                     aria-invalid={!!fieldError} aria-describedby={fieldError ? errId : undefined} />
                   {fieldError && <p id={errId} role="alert" className="mt-1 text-xs text-destructive">{fieldError}</p>}
                 </div>
-                <Button type="submit" size="icon" className="h-11 w-11 shrink-0" aria-label={step === 'note' && !draft.trim() ? 'Skip and save enquiry' : 'Send'}>
+                <Button type="submit" size="icon" className="h-11 w-11 shrink-0" aria-label="Send">
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
