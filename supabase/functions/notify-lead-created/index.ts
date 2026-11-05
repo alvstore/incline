@@ -1,3 +1,4 @@
+// v3.5.0 — suppress_lead_welcome (internal callers only) skips prospect-facing welcomes for website-chatbot leads; team alerts unchanged.
 // v3.4.0 — Staff WhatsApp alerts throttled to 1/15min per staff member;
 //          in-app notification always fires.
 // v3.3.0 — Per-recipient staff_name variable for team alerts (fixes 132018
