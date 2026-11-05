@@ -25,6 +25,11 @@ type SaveResult = { status?: string; lead_id?: string; reference?: string };
 const WELCOME = 'Hi! Welcome to Incline. I can help you explore training, membership and recovery.';
 const FIRST_Q = 'To get started, may I have your full name?';
 const MAX_NOTE = 280;
+const STORE_KEY = 'incline-web-chat-v1';
+type Saved = { step: Step; messages: Msg[]; name: string; email: string; phone: string; intent: string; goal: string; interest: string; leadId: string | null; submissionId: string; concierge: Partial<ConciergeState> };
+function loadSaved(): Saved | null {
+  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
+}
 
 async function readFnError(err: unknown): Promise<string> {
   const ctx = (err as { context?: Response })?.context;
@@ -45,24 +50,25 @@ const PROMPTS: Partial<Record<Step, { label: string; placeholder: string; type: 
 };
 
 export default function WebsiteLeadChatbot() {
+  const saved = useRef(loadSaved()).current;
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>('name');
-  const [messages, setMessages] = useState<Msg[]>([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
+  const [step, setStep] = useState<Step>(saved?.step === 'saving' ? 'goal' : saved?.step ?? 'name');
+  const [messages, setMessages] = useState<Msg[]>(saved?.messages?.length ? saved.messages : [{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
   const [typing, setTyping] = useState(false);
-  const [interest, setInterest] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [intent, setIntent] = useState('');
-  const [goal, setGoal] = useState('');
+  const [interest, setInterest] = useState(saved?.interest ?? '');
+  const [name, setName] = useState(saved?.name ?? '');
+  const [email, setEmail] = useState(saved?.email ?? '');
+  const [phone, setPhone] = useState(saved?.phone ?? '');
+  const [intent, setIntent] = useState(saved?.intent ?? '');
+  const [goal, setGoal] = useState(saved?.goal ?? '');
   const [draft, setDraft] = useState('');
   const [hp, setHp] = useState('');
   const [fieldError, setFieldError] = useState('');
   const [saveError, setSaveError] = useState('');
-  const [leadId, setLeadId] = useState<string | null>(null);
-  const [concierge, setConcierge] = useState<ConciergeState>({ discountAsks: 0, awaitingVisit: false, plans: [] });
+  const [leadId, setLeadId] = useState<string | null>(saved?.leadId ?? null);
+  const [concierge, setConcierge] = useState<ConciergeState>({ discountAsks: 0, awaitingVisit: false, plans: [], ...(saved?.concierge ?? {}) });
   const topics = useRef<Set<Topic>>(new Set());
-  const submissionId = useRef(newSubmissionId());
+  const submissionId = useRef(saved?.submissionId || newSubmissionId());
   const inFlight = useRef(false);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -73,6 +79,14 @@ export default function WebsiteLeadChatbot() {
   const messagesRef = useRef<Msg[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { captureFirstTouch(); }, []);
+  // Remember the conversation so refresh / close / reopen never loses it.
+  useEffect(() => {
+    try {
+      const data: Saved = { step, messages: messages.slice(-80), name, email, phone, intent, goal, interest, leadId, submissionId: submissionId.current,
+        concierge: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit, isMember: concierge.isMember } };
+      window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
+    } catch { /* storage unavailable */ }
+  }, [step, messages, name, email, phone, intent, goal, interest, leadId, concierge]);
 
   // Active plan names only (server returns no prices); grounded categories always available.
   const plansQuery = useQuery({
@@ -190,7 +204,7 @@ export default function WebsiteLeadChatbot() {
       }
     } catch (err) {
       setSaveError(await readFnError(err));
-      setStep('goal');
+      setStep(intent === 'Membership' ? 'interest' : 'goal');
     } finally {
       inFlight.current = false;
     }
@@ -198,13 +212,16 @@ export default function WebsiteLeadChatbot() {
 
   const pickIntent = (v: string) => {
     setIntent(v); userSay(v);
-    if (v === 'Membership') return botSay([{ text: 'Which membership duration are you considering?' }], 'interest');
-    setInterest(v);
+    if (v !== 'Membership') setInterest(v);
     botSay([{ text: 'Got it. What is your main fitness goal?' }], 'goal');
   };
-  const pickInterest = (v: string) => { setInterest(`${v} membership`); userSay(v); botSay([{ text: 'Great choice. What is your main fitness goal?' }], 'goal'); };
-  const pickGoal = (v: string) => { setGoal(v); userSay(v); };
-  useEffect(() => { if (goal && step === 'goal' && !saveError && !inFlight.current && !leadId) void save(); }, [goal]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickGoal = (v: string) => {
+    setGoal(v); userSay(v);
+    if (intent === 'Membership') botSay([{ text: 'Great. Which membership duration are you considering?' }], 'interest');
+  };
+  const pickInterest = (v: string) => { setInterest(`${v} membership`); userSay(v); };
+  const ready = !!goal && !!interest && !leadId && step !== 'chat' && step !== 'saving';
+  useEffect(() => { if (ready && !saveError && !inFlight.current) void save(); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runConcierge = (reply: ReturnType<typeof conciergeReply>) => {
     topics.current.add(reply.topic);
@@ -267,6 +284,7 @@ export default function WebsiteLeadChatbot() {
     setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false }));
     submissionId.current = newSubmissionId();
     setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
+    try { window.localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
   };
 
   const chip = 'min-h-[44px] cursor-pointer rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
@@ -290,7 +308,7 @@ export default function WebsiteLeadChatbot() {
             <button type="button" onClick={close} aria-label="Minimise chat" className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-primary-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground">
               <Minus className="h-4 w-4" />
             </button>
-            <button type="button" onClick={() => { restart(); close(); }} aria-label="Close chat and clear answers" className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-primary-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground">
+            <button type="button" onClick={close} aria-label="Close chat" className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-primary-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground">
               <X className="h-4 w-4" />
             </button>
           </header>
@@ -327,7 +345,7 @@ export default function WebsiteLeadChatbot() {
           </div>
 
           <div className="space-y-2 border-t border-border bg-card p-3">
-            {step === 'interest' && !typing && (
+            {step === 'interest' && !typing && !saveError && !interest && (
               <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto" role="group" aria-label="What are you interested in?">
                 {plansQuery.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading options" />}
                 {interestOptions.map((v, i) => (
@@ -349,7 +367,7 @@ export default function WebsiteLeadChatbot() {
                 ))}
               </div>
             )}
-            {saveError && step === 'goal' && (
+            {saveError && (step === 'goal' || step === 'interest') && (
               <div role="alert" className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
                 <p>{saveError}</p>
                 <Button type="button" size="sm" variant="outline" className="min-h-[44px]" onClick={() => void save()}>Try again</Button>
