@@ -45,4 +45,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - MSG91 sends only synced templates; DLT approval stays in SmartPing (details in supabase/functions/AGENTS.md).
 - Website Lead Chatbot is leads-only, never WhatsApp; registered numbers get a no-chat WhatsApp-menu/call handoff (see supabase/functions/AGENTS.md).
 - "In-App" is one delivery path: a `notifications` row (via dispatchCommunication) fans out through the single `web-push` worker to every registered device in `web_push_subscriptions` (kind web|fcm; Flutter registers with `register_device`), because separate phone/browser pipelines drift.
-- `CampaignWizard` is the only campaign composer (Campaigns, Announcements, coupon share); In-App is a channel inside it delivered via `src/lib/campaigns/inAppDelivery.ts`, with rules in `src/lib/campaigns/composer.ts`, because parallel composers drifted.
+- `CampaignWizard` is the sole campaign composer (In-App via `src/lib/campaigns/inAppDelivery.ts`), because parallel composers drifted.
