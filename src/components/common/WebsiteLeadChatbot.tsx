@@ -271,11 +271,14 @@ export default function WebsiteLeadChatbot() {
     setName(n); setEmail(email.trim());
     const chosen = intent === 'Membership' ? `${duration} membership` : intent;
     setInterest(chosen);
-    userSay(`${n} · ${chosen} · ${goal}`);
-    pendingSave.current = true;
+    const summary = `${n} · ${chosen} · ${goal}`;
+    if (lastSubmitted.current !== summary) { userSay(summary); lastSubmitted.current = summary; }
+    // A counter (not `interest`) triggers the save, so retries with unchanged answers still send.
+    setSaveTick((t) => t + 1);
   };
-  const pendingSave = useRef(false);
-  useEffect(() => { if (pendingSave.current && interest) { pendingSave.current = false; void save(); } }, [interest]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastSubmitted = useRef('');
+  const [saveTick, setSaveTick] = useState(0);
+  useEffect(() => { if (saveTick > 0) void save(); }, [saveTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitText = (e: FormEvent) => {
     e.preventDefault();
