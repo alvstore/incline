@@ -16,7 +16,7 @@ type Db = any;
 
 export const CHATBOT_SOURCE = "website_chatbot";
 export const CHATBOT_GOALS = [
-  "Build muscle", "Fat loss", "General fitness", "Personal training", "Recovery & wellness", "Explore membership",
+  "Build muscle", "Fat loss", "General fitness", "Personal training", "Recovery & wellness", "Explore membership", "Athletic performance",
 ] as const;
 export const CHATBOT_TIMEFRAMES: Record<string, string> = {
   ready_now: "Ready to start",
