@@ -927,6 +927,13 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
 
   const close = () => { reset(); onOpenChange(false); };
 
+  useEffect(() => {
+    if (!open || editingCampaign) return;
+    if (initialInApp) setInAppOn(true);
+    if (initialMessage) setMessage(initialMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const insertVar = (v: string) => setMessage((m) => `${m}${v}`);
 
   const buildFinalMessage = (body0?: string) => {
@@ -1197,7 +1204,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
     if (!name.trim()) { toast.error('Campaign name required'); return; }
     if (selectedChannels.length === 0 && !inAppOn) { toast.error('Pick at least one channel'); return; }
     if (inAppOn && !inAppPreset) { toast.error('In-App works only for members and staff — leads have no app account'); return; }
-    if (inAppOn && trigger === 'recurring') { toast.error('In-App cannot repeat automatically — use Send now or Schedule'); return; }
+    if (inAppOn && trigger === 'automated') { toast.error('In-App cannot repeat automatically — use Send now or Schedule'); return; }
     if (inAppOnly && !message.trim()) { toast.error('IN-APP: message is empty'); return; }
     if (!inAppOnly && totalCount === 0) { toast.error('Audience is empty'); return; }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
@@ -1242,6 +1249,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
     setSubmitting(true);
     try {
       const groupId = drafts.length > 1 ? crypto.randomUUID() : null;
+      const inAppText = inAppOn ? inAppBody() : '';
       let lastError: any = null;
       let created = 0;
 
@@ -1328,6 +1336,21 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         }
       }
 
+      if (inAppOn && inAppPreset) {
+        try {
+          const note = await deliverInApp({
+            branchId, preset: inAppPreset, title: name.trim(), message: inAppText,
+            attachment, scheduledIso: trigger === 'scheduled' ? new Date(scheduledAt).toISOString() : null,
+          });
+          toast.success(note);
+          created += 1;
+          qc.invalidateQueries({ queryKey: ['announcements'] });
+        } catch (err: any) {
+          lastError = err;
+          toast.error(`IN-APP: ${err?.message || 'failed'}`);
+        }
+      }
+
       if (trigger === 'scheduled' && created > 0) {
         toast.success(`Scheduled for ${new Date(scheduledAt).toLocaleString()} on ${created} channel(s)`);
       }
@@ -1343,7 +1366,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   };
 
   const isEvent = campaignType === 'event';
-  const stepLabels = isEvent ? ['Type', 'Audience', 'Message', 'Event', 'Trigger'] : ['Type', 'Audience', 'Message', 'Trigger'];
+  const stepLabels = isEvent ? ['Type', 'Audience', 'Message', 'Event', 'Review & send'] : ['Type', 'Audience', 'Message', 'Review & send'];
   const totalSteps = stepLabels.length;
   const eventStepIndex = isEvent ? 4 : -1;
   const triggerStepIndex = totalSteps;
@@ -1355,21 +1378,30 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
     <ResponsiveSheet open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
       <ResponsiveSheetHeader>
         <ResponsiveSheetTitle className="flex items-center gap-2">
-          <Megaphone className="h-5 w-5 text-primary" /> Create Marketing Campaign
+          <Megaphone className="h-5 w-5 text-primary" /> {editingCampaign ? 'Edit campaign' : 'Create campaign'}
         </ResponsiveSheetTitle>
-        <ResponsiveSheetDescription>Reach the right members with the right message</ResponsiveSheetDescription>
+        <ResponsiveSheetDescription>One place for In-App, WhatsApp, SMS, Email and RCS — write once, reach everyone.</ResponsiveSheetDescription>
       </ResponsiveSheetHeader>
 
       <div className="px-1 pb-2">
         {/* Stepper */}
         <div className="flex items-center justify-between mb-6">
           {stepLabels.map((label, i) => (
-            <div key={label} className="flex-1 flex items-center">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                step > i + 1 ? 'bg-success text-primary-foreground' : step === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-              }`}>{i + 1}</div>
-              <span className={`ml-2 text-sm ${step === i + 1 ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>
-              {i < stepLabels.length - 1 && <div className="flex-1 h-px bg-border mx-3" />}
+            <div key={label} className="flex-1 flex items-center min-w-0">
+              <button
+                type="button"
+                disabled={step <= i + 1}
+                onClick={() => setStep(i + 1)}
+                aria-current={step === i + 1 ? 'step' : undefined}
+                aria-label={`Step ${i + 1}: ${label}`}
+                className="flex items-center min-w-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary enabled:cursor-pointer disabled:cursor-default"
+              >
+                <span className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                  step > i + 1 ? 'bg-success text-primary-foreground' : step === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}>{step > i + 1 ? <Check className="h-4 w-4" /> : i + 1}</span>
+                <span className={`ml-2 text-sm truncate ${step === i + 1 ? 'font-semibold inline' : 'text-muted-foreground hidden sm:inline'}`}>{label}</span>
+              </button>
+              {i < stepLabels.length - 1 && <div className="flex-1 h-px bg-border mx-2 sm:mx-3 min-w-3" />}
             </div>
           ))}
         </div>
@@ -1456,7 +1488,28 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channels</Label>
                 <span className="text-[11px] text-muted-foreground">Tap to add · tap the × to remove</span>
               </div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                <button
+                  type="button"
+                  aria-label="In-App channel"
+                  aria-pressed={inAppOn}
+                  title="Bell + browser pop-up + phone app + announcement board"
+                  onClick={() => {
+                    if (inAppOn && selectedChannels.length === 0) { toast.error('Keep at least one channel'); return; }
+                    setInAppOn(!inAppOn);
+                  }}
+                  className={`w-full relative cursor-pointer rounded-xl p-3 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
+                    inAppOn ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:border-primary/30'
+                  }`}
+                >
+                  {inAppOn && (
+                    <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                      <Check className="h-2.5 w-2.5" />
+                    </span>
+                  )}
+                  <Bell className={`h-5 w-5 mx-auto ${inAppOn ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <p className={`text-xs mt-1 font-medium ${inAppOn ? 'text-foreground' : 'text-muted-foreground'}`}>In-App</p>
+                </button>
                 {([
                   { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'emerald' },
                   { id: 'rcs', label: 'RCS', icon: Radio, color: 'violet' },
@@ -1502,6 +1555,17 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                   );
                 })}
               </div>
+              {inAppOn && (
+                <div className={`mt-2 rounded-xl p-2.5 text-[11px] border ${inAppPreset ? 'bg-primary/5 border-primary/20 text-muted-foreground' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
+                  {inAppPreset ? (
+                    <>
+                      <span className="font-semibold text-foreground">In-App:</span>{' '}
+                      {inAppCount.isLoading ? 'counting app users…' : `${inAppCount.data?.length ?? 0} people with the app`} get a bell notification, browser and phone pop-up, plus an announcement-board post titled with the campaign name.{' '}
+                      {inAppOnly ? 'You are writing the In-App message below.' : 'It uses the text of your WhatsApp/SMS/Email message.'}
+                    </>
+                  ) : 'In-App works only for members and staff — leads, contacts and imported lists have no app account. Change the audience or switch In-App off.'}
+                </div>
+              )}
               {selectedChannels.length > 1 && (
                 <div className="mt-2 rounded-xl bg-primary/5 border border-primary/20 p-2.5">
                   <p className="text-[11px] text-muted-foreground">
@@ -2213,7 +2277,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               <div className="text-sm space-y-1">
                 <div><span className="text-muted-foreground">Type:</span> <span className="font-medium capitalize">{campaignType.replace('_', ' ')}</span></div>
                 <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{name || '—'}</span></div>
-                <div><span className="text-muted-foreground">Channels:</span> <span className="font-medium">{selectedChannels.map((c) => c.toUpperCase()).join(' + ')}</span>{selectedChannels.length > 1 ? <span className="text-muted-foreground text-xs"> · one campaign per channel</span> : null}</div>
+                <div><span className="text-muted-foreground">Channels:</span> <span className="font-medium">{[...(inAppOn ? ['IN-APP'] : []), ...selectedChannels.map((c) => c.toUpperCase())].join(' + ')}</span>{selectedChannels.length > 1 ? <span className="text-muted-foreground text-xs"> · one campaign per channel</span> : null}</div>
+                {inAppOn && <div><span className="text-muted-foreground">App users:</span> <span className="font-medium">{inAppPreset ? (inAppCount.data?.length ?? '…') : 'not available for this audience'}</span></div>}
                 <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{totalCount}{coldCount > 0 ? ` · ${coldCount} cold` : ''}</span></div>
                 {requiresTemplate && (
                   <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-success' : 'text-warning'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>
@@ -2225,7 +2290,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         )}
 
         {/* Footer nav */}
-        <div className="flex items-center justify-between mt-6 pt-4 border-t">
+        <div className="sticky bottom-0 z-10 -mx-1 px-1 bg-card flex items-center justify-between mt-6 py-4 border-t border-border pb-safe">
           {step > 1 ? (
             <Button variant="outline" onClick={() => setStep(step - 1)} className="rounded-xl">
               <ChevronLeft className="h-4 w-4" /> Back
