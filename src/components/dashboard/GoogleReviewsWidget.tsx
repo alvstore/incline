@@ -41,6 +41,8 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
       let q = supabase
         .from('google_reviews_inbound')
         .select('id, author_name, rating, review_text, posted_at, reply_status')
+        .eq('source', 'business_profile')
+        .is('removed_from_google_at', null)
         .order('posted_at', { ascending: false, nullsFirst: false })
         .limit(5);
       if (branchId) q = q.eq('branch_id', branchId);
@@ -132,7 +134,7 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
                   <span className="text-[11px] text-slate-400">
                     {r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy') : '—'}
                   </span>
-                  {r.reply_status !== 'replied' && (
+                  {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                       Needs reply
                     </span>

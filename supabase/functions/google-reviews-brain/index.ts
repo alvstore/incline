@@ -754,27 +754,42 @@ async function fetchReviewsForBranch(branch_id: string) {
     return await fetchPlacesReviewsForBranch(branch_id);
   }
   const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return { branch_id, fetched: 0, reason: "no_token" };
-
-  const url = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=50`;
-  // Pacing + backoff: Google's v4 reviews endpoint is quota-starved by default.
-  let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  for (let attempt = 1; attempt <= 2 && (res.status === 429 || res.status >= 500); attempt++) {
-    await new Promise((r) => setTimeout(r, attempt * 1500 + Math.random() * 500));
-    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  }
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error("fetch reviews failed", branch_id, res.status, txt.slice(0, 300));
-    await recordFetchError(branch_id, friendlyGoogleError(res.status, txt));
-    // Fall back to the public Places snapshot so the dashboard stays alive.
+  if (!token) {
+    // v8 — an expired/revoked Google login used to fail silently, freezing replies.
+    const msg = "Google connection expired. Click Reconnect Google to resume syncing reviews and replies.";
+    await recordFetchError(branch_id, msg);
     const places = await fetchPlacesReviewsForBranch(branch_id);
-    return { ...places, gbp_reason: `api_${res.status}`, gbp_error: friendlyGoogleError(res.status, txt) };
+    return { ...places, reason: "no_token", gbp_error: msg };
   }
-  await recordFetchError(branch_id, null);
 
-  const body = await res.json();
-  const reviews = (body.reviews ?? []) as any[];
+  const baseUrl = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=50`;
+  const reviews: any[] = [];
+  let pageToken: string | undefined;
+  let complete = false;
+  for (let page = 0; page < 20; page++) {
+    const url = pageToken ? `${baseUrl}&pageToken=${encodeURIComponent(pageToken)}` : baseUrl;
+    // Pacing + backoff: Google's v4 reviews endpoint is quota-starved by default.
+    let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    for (let attempt = 1; attempt <= 2 && (res.status === 429 || res.status >= 500); attempt++) {
+      await new Promise((r) => setTimeout(r, attempt * 1500 + Math.random() * 500));
+      res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    }
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error("fetch reviews failed", branch_id, res.status, txt.slice(0, 300));
+      await recordFetchError(branch_id, friendlyGoogleError(res.status, txt));
+      if (page === 0) {
+        const places = await fetchPlacesReviewsForBranch(branch_id);
+        return { ...places, gbp_reason: `api_${res.status}`, gbp_error: friendlyGoogleError(res.status, txt) };
+      }
+      break;
+    }
+    const body = await res.json();
+    reviews.push(...((body.reviews ?? []) as any[]));
+    pageToken = body.nextPageToken;
+    if (!pageToken) { complete = true; break; }
+  }
+  if (complete) await recordFetchError(branch_id, null);
   let inserted = 0;
   let repliesSynced = 0;
   const newIds: string[] = [];
@@ -796,6 +811,7 @@ async function fetchReviewsForBranch(branch_id: string) {
       source: "business_profile",
       gbp_review_name: reviewName,
       raw: r,
+      removed_from_google_at: null,
     };
     // v7 — a reply that already exists on Google (posted from Maps, the GBP app
     // or by another manager) closes the row here, with Google's own timestamp.
@@ -822,6 +838,25 @@ async function fetchReviewsForBranch(branch_id: string) {
       inserted++;
     }
   }
+  // v8 — only with the full list in hand: reviews Google no longer returns were
+  // deleted by the reviewer (or removed by Google). Flag them, never delete.
+  let removed: string[] = [];
+  if (complete && reviews.length > 0) {
+    const liveIds = new Set(reviews.map((r) => String(r.reviewId ?? r.name)));
+    const { data: existing } = await sb
+      .from("google_reviews_inbound")
+      .select("id, google_review_id, author_name")
+      .eq("branch_id", branch_id)
+      .eq("source", "business_profile")
+      .is("removed_from_google_at", null);
+    const gone = (existing ?? []).filter((e: any) => !liveIds.has(String(e.google_review_id)));
+    if (gone.length) {
+      await sb.from("google_reviews_inbound")
+        .update({ removed_from_google_at: new Date().toISOString() })
+        .in("id", gone.map((g: any) => g.id));
+      removed = gone.map((g: any) => g.author_name ?? "Google user");
+    }
+  }
   // classify new ones inline (best effort)
   for (const id of newIds.slice(0, 10)) {
     try { await classifyOne(id); } catch (e) { console.error("classify err", id, e); }
@@ -831,6 +866,7 @@ async function fetchReviewsForBranch(branch_id: string) {
     fetched: reviews.length,
     classified: newIds.length,
     replies_synced: repliesSynced,
+    removed,
     source: "business_profile",
   };
 }

@@ -5705,6 +5705,7 @@ export type Database = {
           rating: number | null
           raw: Json | null
           relative_time: string | null
+          removed_from_google_at: string | null
           replied_at: string | null
           replied_by: string | null
           reply_mode: string | null
@@ -5741,6 +5742,7 @@ export type Database = {
           rating?: number | null
           raw?: Json | null
           relative_time?: string | null
+          removed_from_google_at?: string | null
           replied_at?: string | null
           replied_by?: string | null
           reply_mode?: string | null
@@ -5777,6 +5779,7 @@ export type Database = {
           rating?: number | null
           raw?: Json | null
           relative_time?: string | null
+          removed_from_google_at?: string | null
           replied_at?: string | null
           replied_by?: string | null
           reply_mode?: string | null
