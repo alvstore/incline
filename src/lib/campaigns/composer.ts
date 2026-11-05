@@ -81,3 +81,15 @@ export function validateDraft(d: ComposerDraft, now = Date.now()): string[] {
 
 export const externalChannels = (c: ComposerChannel[]): CampaignChannel[] =>
   c.filter((x): x is Exclude<ComposerChannel, 'inapp'> => x !== 'inapp');
+
+/** Map the campaign drawer's audience filter onto an In-App audience (null = no app accounts, e.g. leads/CSV). */
+export function filterToInAppPreset(f: AudienceFilter): AudiencePreset | null {
+  const kind = (f as { audience_kind?: string }).audience_kind ?? 'members';
+  const status = (f as { member_status?: string; status?: string }).member_status ?? (f as { status?: string }).status ?? 'active';
+  if (kind === 'staff') return 'staff';
+  if (kind === 'members_and_staff') return 'members_and_staff';
+  if (kind !== 'members') return null;
+  if (status === 'all') return 'all';
+  if (status === 'expired') return 'expired';
+  return 'active';
+}
