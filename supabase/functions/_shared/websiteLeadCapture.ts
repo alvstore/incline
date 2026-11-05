@@ -190,7 +190,7 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
     ...utm,
     ...(isChatbot ? {
       fitness_goal: goal, plan_interest: planInterest, expected_start_date: expectedStartFor(timeframe, deps.now),
-      preferred_time: preferredTime, notes: note, preferred_contact_channel: "whatsapp",
+      preferred_time: preferredTime, notes: note, ...(channel === "whatsapp" ? { preferred_contact_channel: "whatsapp" } : {}),
     } : {}),
   }).select("id").single();
   if (error || !lead) {
