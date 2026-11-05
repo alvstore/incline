@@ -49,7 +49,7 @@ export function newSubmissionId(): string {
 // ── Concierge ────────────────────────────────────────────────────────────────
 export type Topic = 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
 export type BotMessage = { text: string; tel?: boolean };
-export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[] };
+export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; offeredVisit?: boolean; isMember?: boolean };
 export type ConciergeReply = { messages: BotMessage[]; topic: Topic; state: ConciergeState; visitPreference?: string };
 
 export const FOLLOW_UPS = [
@@ -114,7 +114,31 @@ function topicAnswer(topic: Topic, plans: string[]): string[] {
   }
 }
 
+const YES_RE = /^(yes|yeah|yep|ya|yup|sure|ok|okay|haan|han|ha|please|definitely|of course|why not)\b/i;
+const NO_RE = /^(no|nope|nah|not now|later|maybe later|nahi|na)\b/i;
+const VISIT_OFFER_RE = /plan (a visit|one)|plan a visit/i;
+const MEMBER_HELP = 'As a member, you can renew, book classes or recovery slots and view your plan in the Member Portal, or ask the front desk.';
+
+/** Members never get tour invites; any visit offer turns on yes/no handling for the next reply. */
+function finalize(reply: ConciergeReply, prev: ConciergeState): ConciergeReply {
+  const isMember = prev.isMember === true;
+  let messages = reply.messages;
+  if (isMember) {
+    messages = messages.filter((m) => !VISIT_OFFER_RE.test(m.text) && !/which day and time/i.test(m.text));
+    if (reply.topic === 'visit' || messages.length < reply.messages.length) messages = [...messages, { text: MEMBER_HELP }];
+    if (!messages.length) messages = [{ text: MEMBER_HELP }];
+  }
+  const offeredVisit = !isMember && VISIT_OFFER_RE.test(messages[messages.length - 1]?.text ?? '');
+  return { ...reply, messages, state: { ...reply.state, isMember, offeredVisit, awaitingVisit: isMember ? false : reply.state.awaitingVisit } };
+}
+
+const isTopicQuestion = (t: string) => [RE.discount, RE.group, RE.pricing, RE.recovery, RE.amenities, RE.pt, RE.floor, RE.membership, RE.hours].some((r) => r.test(t));
+
 export function conciergeTopic(topic: Topic, state: ConciergeState): ConciergeReply {
+  return finalize(rawTopic(topic, state), state);
+}
+
+function rawTopic(topic: Topic, state: ConciergeState): ConciergeReply {
   return {
     messages: topicAnswer(topic, state.plans).map((text) => ({ text })),
     topic,
@@ -124,8 +148,20 @@ export function conciergeTopic(topic: Topic, state: ConciergeState): ConciergeRe
 
 /** Deterministic reply to free text. Never invents prices, discounts, timings or outcomes. */
 export function conciergeReply(raw: string, state: ConciergeState): ConciergeReply {
+  return finalize(rawReply(raw, state), state);
+}
+
+function rawReply(raw: string, state: ConciergeState): ConciergeReply {
   const text = raw.trim().slice(0, 300);
-  if (state.awaitingVisit && text && !RE.discount.test(text) && !RE.pricing.test(text)) {
+  const base = { ...state, offeredVisit: false };
+  if (state.offeredVisit && YES_RE.test(text) && !isTopicQuestion(text)) return rawTopic('visit', base);
+  if (NO_RE.test(text) && !isTopicQuestion(text)) {
+    return { messages: [{ text: 'No problem.' }, { text: ASK_NEXT }], topic: 'unknown', state: { ...base, awaitingVisit: false } };
+  }
+  if (YES_RE.test(text) && !isTopicQuestion(text)) {
+    return { messages: [{ text: 'Happy to help. You can ask about the training floor, recovery, amenities, memberships or classes.' }], topic: 'unknown', state: { ...base, awaitingVisit: false } };
+  }
+  if (state.awaitingVisit && text && !isTopicQuestion(text)) {
     return {
       messages: [
         { text: `Thanks, I've noted "${text}" as your preferred visit time.` },
@@ -137,7 +173,7 @@ export function conciergeReply(raw: string, state: ConciergeState): ConciergeRep
       visitPreference: text,
     };
   }
-  const next = { ...state, awaitingVisit: false };
+  const next = { ...base, awaitingVisit: false };
 
   if (RE.group.test(text)) {
     return { messages: [{ text: ESCALATION_COPY, tel: true }], topic: 'group_pricing', state: next };
@@ -148,7 +184,7 @@ export function conciergeReply(raw: string, state: ConciergeState): ConciergeRep
     if (asks === 1) return { messages: [{ text: FIXED_PRICING_POLICY }, { text: 'Would you like to hear more about the facilities, or plan a visit?' }], topic: 'discount', state: s2 };
     return { messages: [{ text: FIXED_PRICING_POLICY }, { text: ESCALATION_COPY, tel: true }], topic: 'discount', state: s2 };
   }
-  if (RE.pricing.test(text)) return conciergeTopic('pricing', next);
+  if (RE.pricing.test(text)) return rawTopic('pricing', next);
   if (RE.hours.test(text)) {
     return { messages: [{ text: 'Our team will confirm current club timings with you.' }, { text: 'Would you like to plan a visit?' }], topic: 'unknown', state: next };
   }
@@ -156,8 +192,8 @@ export function conciergeReply(raw: string, state: ConciergeState): ConciergeRep
     [RE.visit, 'visit'], [RE.recovery, 'recovery'], [RE.pt, 'pt_classes'], [RE.amenities, 'amenities'],
     [RE.membership, 'membership'], [RE.floor, 'training_floor'],
   ];
-  for (const [re, topic] of order) if (re.test(text)) return conciergeTopic(topic, next);
-  return conciergeTopic('unknown', next);
+  for (const [re, topic] of order) if (re.test(text)) return rawTopic(topic, next);
+  return rawTopic('unknown', next);
 }
 
 export function welcomeAfterCapture(name: string, interest: string): string[] {

@@ -171,6 +171,7 @@ export default function WebsiteLeadChatbot() {
           { text: `Welcome back, ${firstName(name)}! You're already an Incline member, so we haven't created a new enquiry.` },
           { text: 'I can still answer questions about the club here.' },
         ], 'chat');
+        setConcierge((c) => ({ ...c, isMember: true }));
       } else {
         setLeadId(data.lead_id ?? null);
         const welcome = [
@@ -221,12 +222,12 @@ export default function WebsiteLeadChatbot() {
       const { data, error } = await supabase.functions.invoke('capture-lead', {
         body: {
           intake_type: 'website_chatbot', action: 'chat', lead_id: leadId, submission_id: submissionId.current,
-          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit }, ...input,
+          state: { discountAsks: concierge.discountAsks, awaitingVisit: concierge.awaitingVisit, offeredVisit: concierge.offeredVisit === true }, ...input,
         },
       });
       if (error || !Array.isArray(data?.messages)) throw error ?? new Error('bad reply');
       topics.current.add(data.topic as Topic);
-      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true }));
+      setConcierge((c) => ({ ...c, discountAsks: Number(data.state?.discountAsks) || 0, awaitingVisit: data.state?.awaitingVisit === true, offeredVisit: data.state?.offeredVisit === true }));
       setTyping(false);
       setMessages((m) => [...m, ...(data.messages as BotMessage[]).map((b) => ({ from: 'bot' as const, text: String(b.text), tel: b.tel === true }))]);
     } catch {
@@ -264,7 +265,7 @@ export default function WebsiteLeadChatbot() {
   const restart = () => {
     setStep('name'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
-    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false }));
+    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false }));
     submissionId.current = newSubmissionId();
     setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
   };

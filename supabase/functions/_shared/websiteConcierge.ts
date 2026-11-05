@@ -10,7 +10,7 @@ export const WEB_TOPICS = [
   "visit", "pricing", "discount", "group_pricing", "unknown",
 ] as const;
 export type WebTopic = (typeof WEB_TOPICS)[number];
-export type WebState = { discountAsks: number; awaitingVisit: boolean };
+export type WebState = { discountAsks: number; awaitingVisit: boolean; offeredVisit?: boolean };
 export type WebMsg = { text: string; tel?: boolean };
 export type WebReply = { messages: WebMsg[]; topic: WebTopic; state: WebState; visitPreference?: string };
 /** topic -> visitor-facing text, loaded from ai_knowledge */
@@ -97,15 +97,32 @@ function topicMessages(topic: WebTopic, k: Knowledge, plans: string[]): WebMsg[]
   }
 }
 
+const YES_RE = /^(yes|yeah|yep|ya|yup|sure|ok|okay|haan|han|ha|please|definitely|of course|why not)\b/i;
+const NO_RE = /^(no|nope|nah|not now|later|maybe later|nahi|na)\b/i;
+const VISIT_OFFER_RE = /plan (a visit|one)/i;
+const isTopicQuestion = (t: string) => [RE.discount, RE.group, RE.pricing, RE.recovery, RE.amenities, RE.assessment, RE.location, RE.pt, RE.floor, RE.membership, RE.hours].some((r) => r.test(t));
+function withOffer(r: WebReply): WebReply {
+  return { ...r, state: { ...r.state, offeredVisit: VISIT_OFFER_RE.test(r.messages[r.messages.length - 1]?.text ?? "") } };
+}
+
 export function webTopicReply(topic: WebTopic, state: WebState, k: Knowledge, plans: string[] = []): WebReply {
-  return { messages: topicMessages(topic, k, plans), topic, state: { ...state, awaitingVisit: topic === "visit" } };
+  return withOffer({ messages: topicMessages(topic, k, plans), topic, state: { ...state, awaitingVisit: topic === "visit" } });
 }
 
 /** Deterministic reply to free text. Never invents prices, discounts, timings or outcomes. */
 export function webConciergeReply(raw: string, state: WebState, k: Knowledge, plans: string[] = []): WebReply {
+  return withOffer(rawWebReply(raw, state, k, plans));
+}
+
+function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[]): WebReply {
   const t = String(raw ?? "").trim().slice(0, 300);
+  const state = { ...prev, offeredVisit: false };
   const isMoney = RE.discount.test(t) || RE.pricing.test(t) || PRICE_ASK_RE.test(t);
-  if (state.awaitingVisit && t && !isMoney) {
+  const topical = isTopicQuestion(t) || isMoney;
+  if (prev.offeredVisit && YES_RE.test(t) && !topical) return webTopicReply("visit", state, k, plans);
+  if (NO_RE.test(t) && !topical) return { messages: [{ text: "No problem." }, { text: ASK_NEXT }], topic: "unknown", state: { ...state, awaitingVisit: false } };
+  if (YES_RE.test(t) && !topical) return { messages: [{ text: "Happy to help. You can ask about the training floor, recovery, amenities, memberships or classes." }], topic: "unknown", state: { ...state, awaitingVisit: false } };
+  if (state.awaitingVisit && t && !topical) {
     return {
       messages: [
         { text: `Thanks, I've noted "${t}" as your preferred visit time.` },
