@@ -1075,6 +1075,18 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
   }
 
 
+  // 5b.2 SALES PLAYBOOK (shared with website chat, _shared/salesPricing.ts) — price,
+  // discount, free-days/freeze/group and payment-link turns are answered deterministically
+  // from membership_plans so the LLM never invents prices or offers.
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
+    try {
+      const sales = await runSalesPlaybook(supabase, ctx, memory, leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null);
+      if (sales) return { replyText: sales, leadCaptured: false, leadId: leadCtx?.leadId ?? null, handoffTriggered: false, skipped: false };
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] sales playbook failed (continuing to LLM):`, (e as Error).message);
+    }
+  }
+
   // 5c. AUTO-LEARN: extract structured facts from the user's last message and
   // merge into ai_memory BEFORE building the prompt. This is what stops the
   // bot from re-asking phone / fitness goal / name on every turn and makes it
@@ -1404,7 +1416,7 @@ HARD RULES:
 - DO NOT run the Turn 1 → Turn 5 onboarding sequence.
 - Answer their question directly in ONE short sentence.
 - OPERATIONAL STATUS: Incline is OPEN. Open 24×7 at Sector 14, Udaipur. NEVER say we haven't launched, never reference an opening / launch date.
-- PRICING BLACKOUT: You are strictly forbidden from quoting any prices, fees, GST %, MRP, plan names, plan durations, session counts, or discounts. If they ask about pricing / plans / fees / cost / membership options, reply with the "Pricing Blackout & VIP Tour Protocol" (warm welcome → tailored-to-goals → offer VIP tour or front-desk call → ask which day works best).
+- PRICING: Price, discount, offer and payment-link questions are answered by the system from the live plan list before you are called. You must NEVER state any amount, discount, free days, extra months, freeze/unfreeze terms or group/couple deals yourself. If asked, say the front desk (8298293003) handles any special arrangement.
 - If the user asks to speak to a person or wants a tour: acknowledge and ask which day/time suits them; a teammate at the front desk will confirm.
 - Keep replies under 45 words, one question max, at most 1 emoji.`;
 
@@ -3505,3 +3517,34 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
   return rules.length ? `\n\n[RUNTIME RULES — non-negotiable, override softer instructions below]\n- ${rules.join("\n- ")}` : "";
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SALES PLAYBOOK (new enquiries) — same rules as the website chat. Negotiation stage is
+// kept in ai_memory.facts.sales_quote. Returns reply text or null (let the LLM answer).
+// ═══════════════════════════════════════════════════════════════════════════════
+async function runSalesPlaybook(supabase: any, ctx: AgentContext, memory: any, leadId: string | null): Promise<string | null> {
+  const sp = await import("./salesPricing.ts");
+  if (!(await sp.flagEnabled(supabase, "website_chat_show_prices"))) return null;
+  const q = (memory?.facts?.sales_quote && typeof memory.facts.sales_quote === "object") ? memory.facts.sales_quote : {};
+  const [catalog, linksOn] = await Promise.all([sp.loadSalesCatalog(supabase, ctx.branchId), sp.flagEnabled(supabase, "sales_chat_payment_links")]);
+  const sr = sp.salesTurn(ctx.messageContent, q, catalog, { interest: memory?.facts?.plan_interest ?? null, linksEnabled: linksOn && !!leadId });
+  if (!sr) return null;
+  let msgs = sr.messages;
+  if (sr.createLink) {
+    const { data: lead } = leadId ? await supabase.from("leads").select("id, branch_id, full_name, phone, email").eq("id", leadId).maybeSingle() : { data: null };
+    const res = lead?.branch_id ? await sp.ensureLeadPaymentLink(supabase, { lead, ...sr.createLink, channel: "whatsapp" }) : { error: "no_lead" };
+    if ("url" in res) {
+      msgs = sp.linkMessages(res.url, sr.createLink.plan, sr.createLink.amount, sr.quote.dur);
+      await sp.logSalesEvent(supabase, { branch_id: ctx.branchId, lead_id: leadId, channel: "whatsapp", event: "payment_link_sent", plan_id: sr.createLink.plan.id, amount: sr.createLink.amount, metadata: { stage: sr.createLink.stage, reused: res.reused } });
+    } else {
+      msgs = [{ text: `I couldn't create the payment link just now. Please call the front desk on ${sp.DESK_PHONE} and they will complete it for you.` }];
+      await sp.logSalesEvent(supabase, { branch_id: ctx.branchId, lead_id: leadId, channel: "whatsapp", event: "desk_handoff", metadata: { reason: (res as { error: string }).error } });
+    }
+  } else if (sr.event) {
+    await sp.logSalesEvent(supabase, { branch_id: ctx.branchId, lead_id: leadId, channel: "whatsapp", event: sr.event, plan_id: sr.plan?.id ?? null, amount: sr.amount ?? null, metadata: { stage: sr.quote.stage ?? null } });
+  }
+  await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, { facts: { sales_quote: sr.quote } });
+  const allowed = sp.allowedAmounts(catalog);
+  const text = msgs.map((m: { text: string; url?: string }) => (m.url ? `${m.text}\n${m.url}` : m.text)).join("\n\n");
+  return sp.hasUnlistedAmount(text, allowed) ? `Please call the front desk on ${sp.DESK_PHONE} for the exact figure.` : text;
+}

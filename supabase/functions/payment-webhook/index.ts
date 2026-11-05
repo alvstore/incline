@@ -1,3 +1,4 @@
+// v2.3.0 — Chat sales links (notes.kind=sales_lead) marked paid idempotently with a desk task.
 // v2.2.1 — STRICT FAIL-CLOSED: Refuses to process any payment webhook without a valid provider signature.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -273,6 +274,25 @@ serve(async (req: Request) => {
         outcome.gatewayPaymentId = paymentId || null;
         outcome.amount = rzpAmount;
         outcome.status = 'captured';
+
+        // Chat sales links (new enquiries): not invoice-bound. Mark paid once and alert the desk;
+        // the desk converts the lead and records the payment through record_payment.
+        if (plinkEntity?.notes?.kind === "sales_lead" && plinkEntity?.id) {
+          const { data: link } = await supabase.from("sales_payment_links")
+            .update({ status: "paid", paid_at: capturedAt, gateway_payment_id: paymentId, updated_at: new Date().toISOString() })
+            .eq("gateway_link_id", plinkEntity.id).eq("status", "created")
+            .select("id, branch_id, lead_id, plan_id, amount").maybeSingle();
+          if (link) {
+            outcome.branchId = link.branch_id;
+            await supabase.from("sales_quote_events").insert({ branch_id: link.branch_id, lead_id: link.lead_id, channel: "web_chat", event: "payment_link_paid", plan_id: link.plan_id, amount: rzpAmount, metadata: { gateway_payment_id: paymentId } });
+            await supabase.from("tasks").insert({
+              branch_id: link.branch_id, title: `Chat payment received: ₹${Math.round(rzpAmount).toLocaleString("en-IN")}`,
+              description: "A new enquiry paid through a chat payment link. Convert the lead to a member and record this payment.",
+              priority: "urgent", status: "pending", linked_entity_type: "lead", linked_entity_id: link.lead_id,
+            });
+          }
+          return await reply({ received: true, sales_link: link ? "paid" : "duplicate" }, 200);
+        }
 
         if (referenceId && isValidUUID(referenceId)) {
           const { data: invoice } = await supabase

@@ -49,7 +49,7 @@ export function newSubmissionId(): string {
 // ── Concierge ────────────────────────────────────────────────────────────────
 export type Topic = 'objection' | 'location' | 'hours' | 'member_service' | 'greeting' | 'training_floor' | 'membership' | 'pt_classes' | 'recovery' | 'amenities' | 'visit' | 'pricing' | 'discount' | 'group_pricing' | 'unknown';
 export type BotMessage = { text: string; tel?: boolean };
-export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; prices?: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic; visitOffers?: number; declinedVisit?: boolean };
+export type ConciergeState = { discountAsks: number; awaitingVisit: boolean; plans: string[]; prices?: string[]; offeredVisit?: boolean; isMember?: boolean; lastTopic?: Topic; visitOffers?: number; declinedVisit?: boolean; quote?: Record<string, unknown> };
 export type ConciergeReply = { messages: BotMessage[]; topic: Topic; state: ConciergeState; visitPreference?: string };
 
 export const FOLLOW_UPS = [
