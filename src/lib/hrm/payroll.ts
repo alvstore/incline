@@ -31,3 +31,7 @@ export function payrollPaymentBlocker(method: string, reference: string, date: s
 export function preferredPayrollRun<T extends { id: string; status: string }>(runs: T[], paidRunIds: Set<string>, selected: string | null) {
   return runs.find(r => r.id === selected)?.id || runs.find(r => paidRunIds.has(r.id))?.id || runs[0]?.id || null;
 }
+
+export function payrollRunBranch(selectedBranch: string): string | null {
+  return selectedBranch === 'all' ? null : selectedBranch;
+}

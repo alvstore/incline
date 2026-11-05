@@ -245,7 +245,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
               <RotateCcw className="h-4 w-4 mr-2" /> Reopen Run
             </Button>
           )}
-          <Button onClick={() => createRun.mutate()} disabled={createRun.isPending || !!activeRunId || runsLoading || !can.manageStaff(roles)} variant="default">
+          <Button onClick={() => createRun.mutate()} disabled={createRun.isPending || !!activeRunId || runsLoading || runsError || priorityLoading || !can.manageStaff(roles)} variant="default">
             {createRun.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />}
             {activeRunId ? 'Calculated run' : 'Calculate salaries'}
           </Button>

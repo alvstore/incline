@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { payrollPeriod, payrollNet, payrollPaymentBlocker, preferredPayrollRun } from '../../src/lib/hrm/payroll';
+import { payrollPeriod, payrollNet, payrollPaymentBlocker, preferredPayrollRun, payrollRunBranch } from '../../src/lib/hrm/payroll';
 
 test('October payroll includes October 31 in every timezone', () => {
   assert.deepEqual(payrollPeriod('2026-10'), { start: '2026-10-01', end: '2026-10-31', days: 31 });
@@ -26,4 +26,10 @@ test('historical paid run is preferred over newer unpaid duplicate', () => {
   const runs = [{id:'new-draft',status:'calculated'}, {id:'saved-paid',status:'calculated'}];
   assert.equal(preferredPayrollRun(runs, new Set(['saved-paid']), null), 'saved-paid');
   assert.equal(preferredPayrollRun(runs, new Set(['saved-paid']), 'new-draft'), 'new-draft');
+});
+test('selected branch is retained when creating or looking up payroll runs', () => {
+  assert.equal(payrollRunBranch('11111111-1111-1111-1111-111111111111'), '11111111-1111-1111-1111-111111111111');
+});
+test('all-branches payroll uses the global run scope', () => {
+  assert.equal(payrollRunBranch('all'), null);
 });
