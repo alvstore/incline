@@ -174,7 +174,11 @@ Read flags from `settings` (branch row first, then global `branch_id IS NULL`) a
 ## 8. Notifications
 
 - In-app inbox = `notifications` table (+ realtime subscription on own rows).
-- Web push already mirrors in-app notifications through an event queue. Native push (FCM/APNs) requires a backend addition: a device-token table + delivery worker behind `dispatch-communication`. Until that ships, the app uses in-app + realtime only. Token registration must be consent-gated and deleted on logout.
+- **One path for every device.** "In-App" = bell row in `notifications` + a pop-up on every registered device (browser and Flutter). Flutter uses the SAME `web-push` function the browser uses — no separate tables or functions.
+  - Register (after the user allows notifications, and on token refresh): `supabase.functions.invoke('web-push', body: {action:'register_device', branch_id, token: <FCM token>, platform:'android'|'ios'})`.
+  - Unregister on logout: `{action:'unsubscribe', branch_id, token}`.
+  - Push data: `{url, notification_id}`; tap → open `url` (fallback member home), then load the notification from the inbox.
+  - Requires the Firebase Cloud Messaging connection on the backend; without it phone pops are skipped but the bell still updates.
 - Payload text is generic ("You have a new update from Incline"); details load after unlock.
 
 ---

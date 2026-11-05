@@ -15425,32 +15425,38 @@ export type Database = {
       }
       web_push_subscriptions: {
         Row: {
-          auth_key: string
+          auth_key: string | null
           branch_id: string
           created_at: string
           endpoint: string
           id: string
-          p256dh: string
+          kind: string
+          p256dh: string | null
+          platform: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          auth_key: string
+          auth_key?: string | null
           branch_id: string
           created_at?: string
           endpoint: string
           id?: string
-          p256dh: string
+          kind?: string
+          p256dh?: string | null
+          platform?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          auth_key?: string
+          auth_key?: string | null
           branch_id?: string
           created_at?: string
           endpoint?: string
           id?: string
-          p256dh?: string
+          kind?: string
+          p256dh?: string | null
+          platform?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -18178,6 +18184,12 @@ export type Database = {
         Returns: Json
       }
       import_purchase_bill: { Args: { p_payload: Json }; Returns: Json }
+      inapp_audience_user_ids: {
+        Args: { p_audience: string; p_branch_id: string }
+        Returns: {
+          user_id: string
+        }[]
+      }
       internal_fn_token: { Args: never; Returns: string }
       is_bot_paused: {
         Args: { p_branch_id: string; p_phone: string }
