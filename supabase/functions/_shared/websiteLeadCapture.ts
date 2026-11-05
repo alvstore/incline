@@ -145,6 +145,10 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
     submission_id: submissionId, fitness_goal: goal, joining_timeframe: timeframe,
     handoff_choice: channel, utm_source: utm.utm_source, intake_type: CHATBOT_SOURCE,
   };
+  const activitySummary = [
+    goal && `Goal: ${goal}`, timeframe && `Joining: ${CHATBOT_TIMEFRAMES[timeframe]}`,
+    utm.utm_source && `UTM: ${utm.utm_source}`, `Handoff: ${channel === "whatsapp" ? "WhatsApp" : "Team callback"}`,
+  ].filter(Boolean).join(" · ");
 
   if (isChatbot && existing) {
     // Same submission retried → no duplicate activity/consent.
@@ -165,7 +169,7 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
       if (Object.keys(patch).length) await db.from("leads").update(patch).eq("id", existing.id);
       await db.from("lead_activities").insert({
         lead_id: existing.id, branch_id: existing.branch_id, activity_type: "website_chatbot_returned",
-        title: "Returned through Website Chatbot", notes: null, metadata: activityMeta,
+        title: "Returned through Website Chatbot", notes: activitySummary, metadata: activityMeta,
       });
       if (whatsappConsent) await recordWhatsappConsent(db, existing.id, consentText, meta);
     }
@@ -201,7 +205,7 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
   if (isChatbot) {
     await db.from("lead_activities").insert({
       lead_id: lead.id, branch_id: branchId, activity_type: "website_chatbot_lead_saved",
-      title: "Enquiry captured from Website Chatbot", notes: null, metadata: activityMeta,
+      title: "Enquiry captured from Website Chatbot", notes: activitySummary, metadata: activityMeta,
     });
     if (whatsappConsent) await recordWhatsappConsent(db, lead.id, consentText, meta);
   } else if (consent?.granted === true) {
