@@ -10,7 +10,7 @@ import {
   EMAIL_REQUIRED_COPY, ESCALATION_TEL, ESCALATION_PHONE,
   type ConciergeState, type Topic, type BotMessage,
   normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
-  conciergeReply, conciergeTopic,
+  conciergeReply,
 } from '@/lib/leads/websiteChatbot';
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
