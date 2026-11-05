@@ -51,6 +51,7 @@ export default function WebsiteLeadChatbot() {
   const [waUrl, setWaUrl] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
   const submissionId = useRef(newSubmissionId());
+  const inFlight = useRef(false);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -117,8 +118,9 @@ export default function WebsiteLeadChatbot() {
   };
 
   const save = async (channel: 'whatsapp' | 'callback') => {
-    if (submitting) return; // duplicate-click guard
+    if (inFlight.current) return; // duplicate-click guard (sync, before re-render)
     if (channel === 'whatsapp' && !consent) { setSubmitError('Please tick the WhatsApp box to continue on WhatsApp.'); return; }
+    inFlight.current = true;
     setSubmitError('');
     setSubmitting(channel);
     // Open the tab synchronously inside the click so browsers don't block it.
@@ -170,6 +172,7 @@ export default function WebsiteLeadChatbot() {
       if (tab && !tab.closed) tab.close();
       setSubmitError(await readFnError(err));
     } finally {
+      inFlight.current = false;
       setSubmitting(null);
     }
   };
