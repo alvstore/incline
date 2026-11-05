@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
     const esc = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const buildAutoEmailBody = (): string => {
-      const rows: Array<[string, string]> = [
+      const rows = ([
         ["Name", vars.lead_name],
         ["Phone", vars.lead_phone],
         ["Email", vars.lead_email],
@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
         ["Referrer", vars.referrer_url],
         ["Notes", vars.notes],
         ["Captured At", vars.captured_at],
-      ].filter(([, v]) => v && v.trim().length);
+      ] as Array<[string, string]>).filter(([, v]) => v && v.trim().length);
 
       const tableRows = rows
         .map(
