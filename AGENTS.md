@@ -42,7 +42,6 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - Database cleanup must check live function bodies as well as source callers: pt_attendance_corrections, pt_trainer_transfers and referral_code_attempts support active workflows/security even when empty, so do not classify them as deprecated.
 - Facility booking channel lives in `benefit_bookings.source` (allow-list shared by the check constraint and `book_facility_slot`); signed-in members may only self-report `app_android`/`app_ios`, everything else from a member is forced to `member_portal`. UI labels/badges come only from `src/lib/bookings/bookingSource.ts` so staff views and filters never drift from the server list.
 - SMS templates are DLT-shaped: brand only as {{brand_name}} (dispatcher defaults it to the customer brand), each placeholder maps positionally to {#var#} via src/lib/templates/dlt.ts, and SMS rows can be switched on only when `smsActivationBlocker` passes (DLT ID + header); `send-sms` re-checks this server-side and maps the template's DLT ID/header into whichever provider is active (branch row before global), because unregistered SMS content is blocked by operators.
-- MSG91 sends only synced templates; DLT approval stays in SmartPing (details in supabase/functions/AGENTS.md).
-- Website Lead Chatbot is leads-only, never WhatsApp; registered numbers get a no-chat WhatsApp-menu/call handoff (see supabase/functions/AGENTS.md).
-- "In-App" is one path: `notifications` rows fan out via the single `web-push` worker to all devices (details in supabase/functions/AGENTS.md), because split pipelines drift.
+- MSG91/web chatbot/In-App rules: supabase/functions/AGENTS.md.
+- "In-App" is one path (notifications → single `web-push` worker → all devices), because split pipelines drift.
 - `CampaignWizard` is the sole campaign composer (In-App via `src/lib/campaigns/inAppDelivery.ts`), because parallel composers drifted.
