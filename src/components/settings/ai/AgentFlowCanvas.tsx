@@ -156,7 +156,7 @@ export function AgentFlowCanvas() {
         {
           id: 'web-capture',
           title: 'Details collected in the chat',
-          detail: 'The visitor is asked one question at a time. Questions typed early are understood and answered after the details.',
+          detail: 'The visitor is asked one question at a time.',
           tone: 'check',
           icon: UserPlus,
           items: ['Full name', 'Mobile (+91)', 'Email (required)', 'What they are looking for', 'Fitness goal', 'Plan length'],
