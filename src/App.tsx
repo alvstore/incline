@@ -145,7 +145,7 @@ const HowbodyLogin = lazy(() => import("./pages/HowbodyLogin"));
 const HowbodyPublicReport = lazy(() => import("./pages/HowbodyPublicReport"));
 const MyScanReport = lazy(() => import("./pages/MyScanReport"));
 
-function PublicWhatsAppWidget() {
+function PublicLeadChatbot() {
   const location = useLocation();
   const isPublic = PUBLIC_PATHS.some(
     (p) => location.pathname === p || location.pathname.startsWith("/embed/")
@@ -363,7 +363,7 @@ const App = () => (
         <AuthProvider>
           <BranchProvider>
           
-          <PublicWhatsAppWidget />
+          <PublicLeadChatbot />
           <RoutedContent />
           </BranchProvider>
         </AuthProvider>
