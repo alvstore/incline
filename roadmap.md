@@ -191,3 +191,9 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] Builder: Library tab in VideoAttachmentControl; member DaySessionCard inline player; planNormalize carries video fields; tests pass
 - [ ] Add real demo video URLs to catalog rows (currently cues-only) or connect ExerciseDB API key if licensed
 - [ ] Visual check of member player at /my-workout with a member session once a plan carries a video
+
+# Unified chat knowledge & web chat inbox (5 Nov 2026)
+- [x] Removed duplicate/outdated knowledge (old tour rule, duplicate pricing and PT rows); shared facts tagged for website.
+- [x] Website chat answers from the shared knowledge base with pricing guard and tel escalation; built-in answers as fallback.
+- [x] Website chat transcripts saved to the team inbox under a read-only Web Chat filter.
+- [x] 21 tests pass. Live end-to-end chat not run (would create a real lead and staff alert).
