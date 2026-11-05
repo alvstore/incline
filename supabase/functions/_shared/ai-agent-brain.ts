@@ -3517,3 +3517,34 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
   return rules.length ? `\n\n[RUNTIME RULES — non-negotiable, override softer instructions below]\n- ${rules.join("\n- ")}` : "";
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SALES PLAYBOOK (new enquiries) — same rules as the website chat. Negotiation stage is
+// kept in ai_memory.facts.sales_quote. Returns reply text or null (let the LLM answer).
+// ═══════════════════════════════════════════════════════════════════════════════
+async function runSalesPlaybook(supabase: any, ctx: AgentContext, memory: any, leadId: string | null): Promise<string | null> {
+  const sp = await import("./salesPricing.ts");
+  if (!(await sp.flagEnabled(supabase, "website_chat_show_prices"))) return null;
+  const q = (memory?.facts?.sales_quote && typeof memory.facts.sales_quote === "object") ? memory.facts.sales_quote : {};
+  const [catalog, linksOn] = await Promise.all([sp.loadSalesCatalog(supabase, ctx.branchId), sp.flagEnabled(supabase, "sales_chat_payment_links")]);
+  const sr = sp.salesTurn(ctx.messageContent, q, catalog, { interest: memory?.facts?.plan_interest ?? null, linksEnabled: linksOn && !!leadId });
+  if (!sr) return null;
+  let msgs = sr.messages;
+  if (sr.createLink) {
+    const { data: lead } = leadId ? await supabase.from("leads").select("id, branch_id, full_name, phone, email").eq("id", leadId).maybeSingle() : { data: null };
+    const res = lead?.branch_id ? await sp.ensureLeadPaymentLink(supabase, { lead, ...sr.createLink, channel: "whatsapp" }) : { error: "no_lead" };
+    if ("url" in res) {
+      msgs = sp.linkMessages(res.url, sr.createLink.plan, sr.createLink.amount, sr.quote.dur);
+      await sp.logSalesEvent(supabase, { branch_id: ctx.branchId, lead_id: leadId, channel: "whatsapp", event: "payment_link_sent", plan_id: sr.createLink.plan.id, amount: sr.createLink.amount, metadata: { stage: sr.createLink.stage, reused: res.reused } });
+    } else {
+      msgs = [{ text: `I couldn't create the payment link just now. Please call the front desk on ${sp.DESK_PHONE} and they will complete it for you.` }];
+      await sp.logSalesEvent(supabase, { branch_id: ctx.branchId, lead_id: leadId, channel: "whatsapp", event: "desk_handoff", metadata: { reason: (res as { error: string }).error } });
+    }
+  } else if (sr.event) {
+    await sp.logSalesEvent(supabase, { branch_id: ctx.branchId, lead_id: leadId, channel: "whatsapp", event: sr.event, plan_id: sr.plan?.id ?? null, amount: sr.amount ?? null, metadata: { stage: sr.quote.stage ?? null } });
+  }
+  await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, { facts: { sales_quote: sr.quote } });
+  const allowed = sp.allowedAmounts(catalog);
+  const text = msgs.map((m: { text: string; url?: string }) => (m.url ? `${m.text}\n${m.url}` : m.text)).join("\n\n");
+  return sp.hasUnlistedAmount(text, allowed) ? `Please call the front desk on ${sp.DESK_PHONE} for the exact figure.` : text;
+}
