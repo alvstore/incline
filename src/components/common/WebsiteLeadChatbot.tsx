@@ -14,8 +14,11 @@ import {
 } from '@/lib/leads/websiteChatbot';
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
-const INTENTS = ['Membership', 'Personal training', 'Recovery (sauna, steam, cold plunge)', 'Pilates / group classes', 'Just looking'] as const;
-const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Personal training'] as const;
+const INTENTS = ['Membership', 'Personal training', 'Recovery & wellness', 'Group classes & Pilates', 'Just exploring'] as const;
+const DURATIONS = ['Monthly', 'Quarterly', 'Half-Yearly', 'Annual'] as const;
+const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Athletic performance'] as const;
+const STAGES = ['Your details', 'Your interest', 'Concierge'] as const;
+const stageOf = (s: Step) => (s === 'name' || s === 'phone' || s === 'email' ? 0 : s === 'chat' ? 2 : 1);
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
@@ -170,7 +173,10 @@ export default function WebsiteLeadChatbot() {
         ], 'chat');
       } else {
         setLeadId(data.lead_id ?? null);
-        const welcome = [...welcomeAfterCapture(name, interest).map((text) => ({ text })), { text: 'What would you like to know first?' }];
+        const welcome = [
+          { text: `Thanks ${firstName(name)}! I've noted your interest in ${interest}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}.` },
+          { text: 'Ask me anything about our training floor, recovery suites, classes or planning a visit.' },
+        ];
         botSay(welcome, 'chat');
         if (data.lead_id) {
           // Copy the conversation so far into the team's chat inbox (best effort).
@@ -189,8 +195,13 @@ export default function WebsiteLeadChatbot() {
     }
   };
 
-  const pickIntent = (v: string) => { setIntent(v); userSay(v); botSay([{ text: 'Which plan or service interests you most?' }], 'interest'); };
-  const pickInterest = (v: string) => { setInterest(v); userSay(v); botSay([{ text: 'Great choice. What is your main fitness goal?' }], 'goal'); };
+  const pickIntent = (v: string) => {
+    setIntent(v); userSay(v);
+    if (v === 'Membership') return botSay([{ text: 'Which membership duration are you considering?' }], 'interest');
+    setInterest(v);
+    botSay([{ text: 'Got it. What is your main fitness goal?' }], 'goal');
+  };
+  const pickInterest = (v: string) => { setInterest(`${v} membership`); userSay(v); botSay([{ text: 'Great choice. What is your main fitness goal?' }], 'goal'); };
   const pickGoal = (v: string) => { setGoal(v); userSay(v); };
   useEffect(() => { if (goal && step === 'goal' && !saveError && !inFlight.current && !leadId) void save(); }, [goal]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -260,7 +271,8 @@ export default function WebsiteLeadChatbot() {
 
   const chip = 'min-h-[44px] cursor-pointer rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
   const prompt = PROMPTS[step];
-  const interestOptions = Array.from(new Set([...plans, ...INTEREST_CATEGORIES]));
+  const interestOptions: readonly string[] = DURATIONS;
+  const stage = stageOf(step);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-end p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6">
@@ -282,6 +294,14 @@ export default function WebsiteLeadChatbot() {
               <X className="h-4 w-4" />
             </button>
           </header>
+          <ol className="flex items-center gap-2 border-b border-border bg-card px-4 py-2" aria-label="Progress">
+            {STAGES.map((s, i) => (
+              <li key={s} className="flex flex-1 flex-col gap-1" aria-current={i === stage ? 'step' : undefined}>
+                <span className={cn('h-1 rounded-full transition-colors duration-300', i <= stage ? 'bg-accent' : 'bg-muted')} />
+                <span className={cn('text-[11px] font-medium', i === stage ? 'text-foreground' : 'text-muted-foreground')}>{s}</span>
+              </li>
+            ))}
+          </ol>
 
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/40 px-4 py-4" aria-live="polite" aria-relevant="additions">
             {messages.map((m, i) => (

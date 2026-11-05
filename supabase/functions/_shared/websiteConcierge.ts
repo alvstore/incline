@@ -81,7 +81,8 @@ function topicMessages(topic: WebTopic, k: Knowledge, plans: string[]): WebMsg[]
       return [{ text: text(k, "visit").split(/(?<=\.)\s/)[0] }, { text: 'Which day and time suit you for a visit? (e.g. "Saturday 11am")' }];
     case "membership": {
       const m: WebMsg[] = [{ text: text(k, "membership") }];
-      if (plans.length) m.push({ text: `Current options include: ${plans.join(", ")}.` });
+      void plans; // internal plan names are never shown to visitors
+      m.push({ text: "Memberships are available as Monthly, Quarterly, Half-Yearly and Annual." });
       m.push({ text: VISIT_ASK });
       return m;
     }
