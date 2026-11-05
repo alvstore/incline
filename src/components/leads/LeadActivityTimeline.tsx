@@ -17,6 +17,7 @@ const ACTIVITY_ICONS: Record<string, any> = {
   sms: MessageSquare,
   website_chatbot_lead_saved: MessageSquare,
   website_chatbot_returned: MessageSquare,
+  website_chatbot_visit_request: MapPin,
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
@@ -31,6 +32,7 @@ const ACTIVITY_COLORS: Record<string, string> = {
   created: 'bg-muted text-muted-foreground border-border',
   website_chatbot_lead_saved: 'bg-primary/10 text-primary border-primary/25',
   website_chatbot_returned: 'bg-primary/10 text-primary border-primary/25',
+  website_chatbot_visit_request: 'bg-warning/10 text-warning border-warning/25',
 };
 
 export function LeadActivityTimeline({ leadId }: { leadId: string }) {

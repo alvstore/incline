@@ -241,6 +241,17 @@ export function LeadProfileDrawer({ open, onOpenChange, lead, onFollowup, onConv
                   {lead.email && <div className="flex items-center gap-2 text-sm"><Mail className="h-4 w-4 text-muted-foreground" /><span>{lead.email}</span></div>}
                 </div>
               </div>
+              {(lead.plan_interest || lead.fitness_goal || lead.expected_start_date || lead.preferred_time) && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Enquiry</h4>
+                  <div className="grid gap-1 text-sm">
+                    {lead.plan_interest && <div><span className="text-muted-foreground">Plan / service interest:</span> {lead.plan_interest}</div>}
+                    {lead.fitness_goal && <div><span className="text-muted-foreground">Goal:</span> {lead.fitness_goal}</div>}
+                    {lead.expected_start_date && <div><span className="text-muted-foreground">Expected start:</span> {lead.expected_start_date}</div>}
+                    {lead.preferred_time && <div><span className="text-muted-foreground">Preferred visit / time:</span> {lead.preferred_time}</div>}
+                  </div>
+                </div>
+              )}
               {(lead.source || lead.utm_source || lead.utm_campaign) && (
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Attribution</h4>
