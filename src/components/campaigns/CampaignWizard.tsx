@@ -1399,7 +1399,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                 <span className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                   step > i + 1 ? 'bg-success text-primary-foreground' : step === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                 }`}>{step > i + 1 ? <Check className="h-4 w-4" /> : i + 1}</span>
-                <span className={`ml-2 text-sm truncate ${step === i + 1 ? 'font-semibold inline' : 'text-muted-foreground hidden sm:inline'}`}>{label}</span>
+                <span className={`ml-2 text-sm truncate ${step === i + 1 ? 'font-semibold inline' : 'hidden'}`}>{label}</span>
               </button>
               {i < stepLabels.length - 1 && <div className="flex-1 h-px bg-border mx-2 sm:mx-3 min-w-3" />}
             </div>
