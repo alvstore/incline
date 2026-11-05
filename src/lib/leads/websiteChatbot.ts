@@ -94,7 +94,7 @@ function topicAnswer(topic: Topic, plans: string[]): string[] {
       return ['The club is fully air-conditioned, with QSC audio throughout and digital lockers.', ASK_NEXT];
     case 'membership':
       return [
-        plans.length ? `Current membership options include: ${plans.join(', ')}.` : 'We have a range of membership durations.',
+        'Memberships are available as Monthly, Quarterly, Half-Yearly and Annual.',
         'Our team explains what each option includes during your visit. Would you like to plan one?',
       ];
     case 'pt_classes':
