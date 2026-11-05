@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { getFirstTouch, captureFirstTouch } from '@/lib/leads/firstTouch';
 import {
-  INTEREST_CATEGORIES, EMAIL_REQUIRED_COPY, FOLLOW_UPS, ESCALATION_TEL, ESCALATION_PHONE,
+  EMAIL_REQUIRED_COPY, FOLLOW_UPS, ESCALATION_TEL, ESCALATION_PHONE,
   type ConciergeState, type Topic, type BotMessage,
   normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
-  conciergeReply, conciergeTopic, welcomeAfterCapture,
+  conciergeReply, conciergeTopic,
 } from '@/lib/leads/websiteChatbot';
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
