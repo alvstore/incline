@@ -1,4 +1,4 @@
-// v1.1.0 — opt-in browser delivery of in-app notifications for members and trainers.
+// v2.0.0 — one device-push worker: browser (web) + Flutter (fcm) mirror every in-app notification.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import webpush from 'npm:web-push@3.6.7';
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
@@ -9,7 +9,10 @@ function headers(req: Request) {
   const allowed = allowedOrigins.has(origin) || /^https:\/\/id-preview--[a-z0-9-]+\.lovable\.app$/.test(origin);
   return { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowed ? origin : 'https://theincline.in', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', Vary: 'Origin' };
 }
+const FCM_GATEWAY = 'https://connector-gateway.lovable.dev/firebase_messaging';
+const fcmToken = (endpoint: string) => endpoint.startsWith('fcm:') ? endpoint.slice(4) : '';
 const endpointAllowed = (endpoint: string) => {
+  if (endpoint.startsWith('fcm:')) return /^[A-Za-z0-9:_-]{20,4096}$/.test(endpoint.slice(4));
   try {
     const u = new URL(endpoint);
     return u.protocol === 'https:' && !u.username && !u.password && !u.port &&
@@ -95,6 +98,16 @@ Deno.serve(async req => {
           const url = rawUrl.startsWith('/') && !rawUrl.startsWith('//') ? rawUrl : home;
           // Never expose names, prices, attendance, or health data on the lock screen.
           const payload = JSON.stringify({ title: 'Incline', body: 'You have a new update. Open Incline to view it.', url, tag: notice.id });
+          if (sub.kind === 'fcm') {
+            const lovableKey = Deno.env.get('LOVABLE_API_KEY'), connKey = Deno.env.get('FIREBASE_MESSAGING_API_KEY');
+            if (!lovableKey || !connKey) { await finish('suppressed', 'Phone push not connected; notification remains in inbox'); return; }
+            const res = await fetch(`${FCM_GATEWAY}/v1/projects/_/messages:send`, { method: 'POST', headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': connKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: { token: fcmToken(sub.endpoint), notification: { title: 'Incline', body: 'You have a new update. Open Incline to view it.' }, data: { url, notification_id: String(notice.id) }, android: { priority: 'high', notification: { tag: String(notice.id) } } } }) });
+            if (res.ok) { await finish('sent'); sent++; return; }
+            const text = await res.text();
+            if (res.status === 404 || (res.status === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(text))) { await db.from('web_push_subscriptions').delete().eq('id', sub.id); return; }
+            await finish('failed', `Phone push HTTP ${res.status}`); return;
+          }
           for (let attempt = 0; attempt < 3; attempt++) {
             try {
               await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } }, payload, { TTL: 3600, timeout: 8000 });
@@ -117,7 +130,8 @@ Deno.serve(async req => {
     const user = authData.user;
     if (!user) return respond(403, { error: 'Not permitted' });
     if (input.action === 'unsubscribe') {
-      const { error } = await db.from('web_push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', String(input.endpoint || ''));
+      const ep = input.token ? `fcm:${String(input.token)}` : String(input.endpoint || '');
+      const { error } = await db.from('web_push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', ep);
       if (error) throw error;
       return respond(200, { ok: true });
     }
@@ -134,6 +148,15 @@ Deno.serve(async req => {
       if (!sub || !endpointAllowed(sub.endpoint) || !/^[A-Za-z0-9_-]{80,100}$/.test(sub.keys?.p256dh || '') || !/^[A-Za-z0-9_-]{20,30}$/.test(sub.keys?.auth || '')) return respond(400, { error: 'Invalid browser subscription' });
       // A browser can belong to only the account currently signed in on it.
       const { error } = await db.from('web_push_subscriptions').upsert({ user_id: user.id, branch_id: accountBranch, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth_key: sub.keys.auth }, { onConflict: 'endpoint' });
+      if (error) throw error;
+      return respond(200, { ok: true });
+    }
+    if (input.action === 'register_device') {
+      // Flutter: same register path as the browser; token stored as endpoint fcm:<token>.
+      const token = String(input.token || '');
+      if (!/^[A-Za-z0-9:_-]{20,4096}$/.test(token)) return respond(400, { error: 'Invalid device token' });
+      const platform = ['android', 'ios'].includes(input.platform) ? input.platform : 'android';
+      const { error } = await db.from('web_push_subscriptions').upsert({ user_id: user.id, branch_id: accountBranch, endpoint: `fcm:${token}`, kind: 'fcm', platform, p256dh: null, auth_key: null }, { onConflict: 'endpoint' });
       if (error) throw error;
       return respond(200, { ok: true });
     }
