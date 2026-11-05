@@ -15425,32 +15425,38 @@ export type Database = {
       }
       web_push_subscriptions: {
         Row: {
-          auth_key: string
+          auth_key: string | null
           branch_id: string
           created_at: string
           endpoint: string
           id: string
-          p256dh: string
+          kind: string
+          p256dh: string | null
+          platform: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          auth_key: string
+          auth_key?: string | null
           branch_id: string
           created_at?: string
           endpoint: string
           id?: string
-          p256dh: string
+          kind?: string
+          p256dh?: string | null
+          platform?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          auth_key?: string
+          auth_key?: string | null
           branch_id?: string
           created_at?: string
           endpoint?: string
           id?: string
-          p256dh?: string
+          kind?: string
+          p256dh?: string | null
+          platform?: string | null
           updated_at?: string
           user_id?: string
         }
