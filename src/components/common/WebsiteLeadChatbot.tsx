@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { MessageCircle, X, Minus, Send, Loader2, Phone, RotateCcw } from 'lucide-react';
+import { MessageCircle, X, Minus, Send, Loader2, Phone, RotateCcw, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
