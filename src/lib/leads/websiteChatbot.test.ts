@@ -94,3 +94,14 @@ describe('concierge: no loops, understands objections', () => {
   test('members never get tour offers', () => expect(txt(conciergeReply('membership cost', S({ isMember: true })))).not.toMatch(VISIT));
   test('hinglish price', () => expect(conciergeReply('fees kitna hai', S()).topic).toBe('pricing'));
 });
+
+describe('intake: topical answers are choices, not questions', () => {
+  test.each(['i want to join the gym', 'lose weight', '6 months', 'personal training'])('%s is not a direct question', async (q) => {
+    const { isDirectQuestion } = await import('./websiteChatbot');
+    expect(isDirectQuestion(q)).toBe(false);
+  });
+  test.each(['what is the price', 'membership cost?', 'any discount', 'price before visit'])('%s is a direct question', async (q) => {
+    const { isDirectQuestion } = await import('./websiteChatbot');
+    expect(isDirectQuestion(q)).toBe(true);
+  });
+});

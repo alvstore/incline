@@ -247,6 +247,12 @@ export function isQuestionLike(raw: string): boolean {
   return /\?/.test(t) || QUESTION_START.test(t) || isTopicQuestion(t) || RE.visit.test(t) || OBJECTION_RE.test(t);
 }
 
+/** Stricter: an explicit question or money/objection talk (used when the field itself is topical, e.g. "join the gym"). */
+export function isDirectQuestion(raw: string): boolean {
+  const t = raw.trim();
+  return /\?/.test(t) || QUESTION_START.test(t) || RE.pricing.test(t) || RE.discount.test(t) || RE.group.test(t) || OBJECTION_RE.test(t);
+}
+
 /** Pulls a plausible full name out of "my name is Rajat Lekhari" etc.; null if it isn't a name. */
 export function extractName(raw: string): string | null {
   const t = raw.trim().replace(NAME_PREFIX, '').replace(NAME_SUFFIX, '').replace(/[.!,]+$/, '').trim();

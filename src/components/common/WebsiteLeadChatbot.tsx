@@ -10,7 +10,7 @@ import {
   EMAIL_REQUIRED_COPY, ESCALATION_TEL, ESCALATION_PHONE,
   type ConciergeState, type Topic, type BotMessage,
   normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
-  conciergeReply, extractName, extractEmail, extractMobile, isQuestionLike, intakeAside, matchIntent, matchGoal, matchDuration,
+  conciergeReply, extractName, extractEmail, extractMobile, isQuestionLike, isDirectQuestion, intakeAside, matchIntent, matchGoal, matchDuration,
 } from '@/lib/leads/websiteChatbot';
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat' | 'handoff';
@@ -302,18 +302,21 @@ export default function WebsiteLeadChatbot() {
       return setFieldError('Please enter a valid email address, like name@example.com.');
     }
     if (step === 'intent') {
-      const m = !isQuestionLike(v) || /^(membership|personal training|just exploring)$/i.test(v) ? matchIntent(v, INTENTS) : null;
+      const m = !isDirectQuestion(v) ? matchIntent(v, INTENTS) : null;
       if (m) { setDraft(''); return pickIntent(m, v); }
+      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: REASK.intent! }]); }
       return aside(v, REASK.intent!);
     }
     if (step === 'goal') {
-      const m = !isQuestionLike(v) ? matchGoal(v, GOALS) : null;
+      const m = !isDirectQuestion(v) ? matchGoal(v, GOALS) : null;
       if (m) { setDraft(''); return pickGoal(m, v); }
+      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: "Sorry, I didn't catch that. " + REASK.goal! }]); }
       return aside(v, REASK.goal!);
     }
     if (step === 'interest') {
-      const m = !/\?/.test(v) && !/price|cost|fee|kitna|discount/i.test(v) ? matchDuration(v, DURATIONS) : null;
+      const m = !isDirectQuestion(v) ? matchDuration(v, DURATIONS) : null;
       if (m) { setDraft(''); return pickInterest(m, v); }
+      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: "Sorry, I didn't catch that. " + REASK.interest! }]); }
       return aside(v, REASK.interest!);
     }
     if (step === 'chat') {
