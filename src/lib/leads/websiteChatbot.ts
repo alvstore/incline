@@ -170,7 +170,9 @@ export function conciergeTopic(topic: Topic, state: ConciergeState): ConciergeRe
 
 function rawTopic(topic: Topic, state: ConciergeState): ConciergeReply {
   return {
-    messages: topicAnswer(topic, state.plans).map((text) => ({ text })),
+    messages: ((topic === 'pricing' || topic === 'membership') && state.prices?.length
+      ? ['Here are our current membership rates:\n' + state.prices.join('\n'), 'These are our fixed rates, the same for every member. Would you like to plan a visit?']
+      : topicAnswer(topic, state.plans)).map((text) => ({ text })),
     topic,
     state: { ...state, awaitingVisit: topic === 'visit' },
   };
