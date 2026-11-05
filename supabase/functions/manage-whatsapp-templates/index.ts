@@ -619,6 +619,8 @@ serve(async (req) => {
         update_text: "Please note that external outdoor shoes are strictly not allowed inside the Pilates and Yoga studios to maintain hygiene. Kindly use the provided digital lockers before entering.",
         operational_update: "The Steam Room will be closed for maintenance today from 2 PM to 4 PM.",
         message: "The facility will close early at 6:00 PM tomorrow for Diwali.",
+        schedule_occasion: "Holi", schedule_line_1: "Thu 4 Mar 2027: Open until 1:00 PM",
+        schedule_line_2: "Fri 5 Mar 2027: Closed", schedule_line_3: "Sat 6 Mar 2027: Regular hours resume from 6:00 AM",
       };
       
       if (namedVars.length > 0) {
