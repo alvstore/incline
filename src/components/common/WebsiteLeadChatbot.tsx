@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { getFirstTouch, captureFirstTouch } from '@/lib/leads/firstTouch';
 import {
-  EMAIL_REQUIRED_COPY, FOLLOW_UPS, ESCALATION_TEL, ESCALATION_PHONE,
+  EMAIL_REQUIRED_COPY, ESCALATION_TEL, ESCALATION_PHONE,
   type ConciergeState, type Topic, type BotMessage,
   normalizeIndianMobile, isValidEmail, newSubmissionId, firstName,
   conciergeReply, conciergeTopic,
@@ -176,7 +176,7 @@ export default function WebsiteLeadChatbot() {
         setLeadId(data.lead_id ?? null);
         const welcome = [
           { text: `Thanks ${firstName(name)}! I've noted your interest in ${interest}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}.` },
-          { text: 'Ask me anything about our training floor, recovery suites, classes or planning a visit.' },
+          { text: 'What would you like to know? Just type your question below.' },
         ];
         botSay(welcome, 'chat');
         if (data.lead_id) {
@@ -235,7 +235,6 @@ export default function WebsiteLeadChatbot() {
       runConcierge(fallback());
     }
   };
-  const pickTopic = (label: string, topic: Topic) => { userSay(label); void askServer({ topic, label }, () => conciergeTopic(topic, concierge)); };
 
   const submitText = (e: FormEvent) => {
     e.preventDefault();
