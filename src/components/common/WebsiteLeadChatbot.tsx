@@ -13,24 +13,25 @@ import {
   conciergeReply, extractName, extractEmail, extractMobile, isQuestionLike, isDirectQuestion, intakeAside, matchIntent, matchGoal, matchDuration,
 } from '@/lib/leads/websiteChatbot';
 
-type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat' | 'handoff';
+type Step = 'form' | 'saving' | 'chat' | 'handoff';
 /** Registered members/trainers/staff only — leads never see a WhatsApp link. */
 const MEMBER_WHATSAPP = 'https://wa.me/918298293003?text=Menu';
 const INTENTS = ['Membership', 'Personal training', 'Recovery & wellness', 'Group classes & Pilates', 'Just exploring'] as const;
 const DURATIONS = ['Monthly', 'Quarterly', 'Half-Yearly', 'Annual'] as const;
 const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Athletic performance'] as const;
-const STAGES = ['Your details', 'Your interest', 'Concierge'] as const;
-const stageOf = (s: Step) => (s === 'name' || s === 'phone' || s === 'email' ? 0 : s === 'chat' || s === 'handoff' ? 2 : 1);
+const STAGES = ['Your details', 'Saving', 'Concierge'] as const;
+const stageOf = (s: Step) => (s === 'chat' || s === 'handoff' ? 2 : s === 'saving' ? 1 : 0);
+type FormErrors = Partial<Record<'name' | 'phone' | 'email' | 'intent' | 'duration' | 'goal', string>>;
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
 const WELCOME = 'Hi! Welcome to Incline. I can help you explore training, membership and recovery.';
-const FIRST_Q = 'To get started, may I have your full name?';
+const FIRST_Q = 'Share a few quick details below and I will answer anything about plans, prices, training and recovery.';
 const MAX_NOTE = 280;
-const STORE_KEY = 'incline-web-chat-v1';
+const STORE_KEY = 'incline-web-chat-v2';
 type Saved = { step: Step; messages: Msg[]; name: string; email: string; phone: string; intent: string; goal: string; interest: string; leadId: string | null; submissionId: string; concierge: Partial<ConciergeState> };
 function loadSaved(): Saved | null {
-  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; if (!raw) return null; const v = JSON.parse(raw) as Saved & { at?: number }; const ok = ['name','phone','email','intent','interest','goal','chat','handoff'].includes(v?.step) && Array.isArray(v?.messages) && (!v.at || Date.now() - v.at < 7 * 864e5); return ok ? v : null; } catch { return null; }
+  try { const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORE_KEY) : null; if (!raw) return null; const v = JSON.parse(raw) as Saved & { at?: number }; const ok = ['form','chat','handoff'].includes(v?.step) && Array.isArray(v?.messages) && (!v.at || Date.now() - v.at < 7 * 864e5); return ok ? v : null; } catch { return null; }
 }
 
 async function readFnError(err: unknown): Promise<string> {
@@ -45,19 +46,13 @@ async function readFnError(err: unknown): Promise<string> {
 }
 
 const PROMPTS: Partial<Record<Step, { label: string; placeholder: string; type: string; autoComplete: string; inputMode?: 'tel' | 'email' | 'text' }>> = {
-  name: { label: 'Your full name', placeholder: 'Full name', type: 'text', autoComplete: 'name' },
-  email: { label: 'Your email address (required)', placeholder: 'you@example.com', type: 'text', autoComplete: 'email', inputMode: 'email' },
-  phone: { label: 'Your mobile number', placeholder: '98XXXXXXXX', type: 'tel', autoComplete: 'tel', inputMode: 'tel' },
-  intent: { label: 'What are you looking for?', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
-  goal: { label: 'Your main fitness goal', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
-  interest: { label: 'Membership duration', placeholder: 'Type or pick an option above', type: 'text', autoComplete: 'off' },
-  chat: { label: 'Ask a question', placeholder: 'Ask about facilities, membership, visits…', type: 'text', autoComplete: 'off' },
+  chat: { label: 'Ask a question', placeholder: 'Ask about prices, plans, facilities, visits…', type: 'text', autoComplete: 'off' },
 };
 
 export default function WebsiteLeadChatbot() {
   const saved = useRef(loadSaved()).current;
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>(saved?.step === 'saving' ? 'goal' : saved?.step ?? 'name');
+  const [step, setStep] = useState<Step>(saved?.step ?? 'form');
   const [messages, setMessages] = useState<Msg[]>(saved?.messages?.length ? saved.messages : [{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
   const [typing, setTyping] = useState(false);
   const [interest, setInterest] = useState(saved?.interest ?? '');
@@ -67,6 +62,8 @@ export default function WebsiteLeadChatbot() {
   const [intent, setIntent] = useState(saved?.intent ?? '');
   const [goal, setGoal] = useState(saved?.goal ?? '');
   const [draft, setDraft] = useState('');
+  const [duration, setDuration] = useState('');
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [hp, setHp] = useState('');
   const [fieldError, setFieldError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -97,16 +94,19 @@ export default function WebsiteLeadChatbot() {
   const plansQuery = useQuery({
     queryKey: ['website-chatbot-plans'],
     enabled: open,
+    select: undefined,
     staleTime: 10 * 60_000,
     retry: 1,
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('capture-lead', { body: { intake_type: 'website_chatbot', action: 'plans' } });
       if (error) throw error;
-      return (Array.isArray(data?.plans) ? data.plans : []).filter((p: unknown): p is string => typeof p === 'string');
+      const str = (a: unknown) => (Array.isArray(a) ? a : []).filter((p: unknown): p is string => typeof p === 'string');
+      return { plans: str(data?.plans), prices: str(data?.prices) };
     },
   });
-  const plans: string[] = plansQuery.data ?? [];
-  useEffect(() => { setConcierge((c) => ({ ...c, plans })); }, [plans.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plans: string[] = plansQuery.data?.plans ?? [];
+  const prices: string[] = plansQuery.data?.prices ?? [];
+  useEffect(() => { setConcierge((c) => ({ ...c, plans, prices })); }, [plans.join('|'), prices.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [messages, typing, step]);
   useEffect(() => {
@@ -196,8 +196,8 @@ export default function WebsiteLeadChatbot() {
       } else {
         setLeadId(data.lead_id ?? null);
         const welcome = [
-          { text: `Thanks ${firstName(name)}! I've noted your interest in ${interest}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}.` },
-          { text: 'What would you like to know? Just type your question below.' },
+          { text: `Thanks ${firstName(name)}! I've noted your interest in ${interest.toLowerCase()}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}.` },
+          { text: 'Ask me anything, like prices, plan inclusions, recovery, trainers or planning a visit.' },
         ];
         botSay(welcome, 'chat');
         if (data.lead_id) {
@@ -211,24 +211,12 @@ export default function WebsiteLeadChatbot() {
       }
     } catch (err) {
       setSaveError(await readFnError(err));
-      setStep(intent === 'Membership' ? 'interest' : 'goal');
+      setStep('form');
     } finally {
       inFlight.current = false;
     }
   };
 
-  const pickIntent = (v: string, said = v) => {
-    setIntent(v); userSay(said);
-    if (v !== 'Membership') setInterest(v);
-    botSay([{ text: 'Got it. What is your main fitness goal?' }], 'goal');
-  };
-  const pickGoal = (v: string, said = v) => {
-    setGoal(v); userSay(said);
-    if (intent === 'Membership') botSay([{ text: 'Great. Which membership duration are you considering?' }], 'interest');
-  };
-  const pickInterest = (v: string, said = v) => { setInterest(`${v} membership`); userSay(said); };
-  const ready = !!goal && !!interest && !leadId && step !== 'chat' && step !== 'saving' && step !== 'handoff';
-  useEffect(() => { if (ready && !saveError && !inFlight.current) void save(); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runConcierge = (reply: ReturnType<typeof conciergeReply>) => {
     topics.current.add(reply.topic);
@@ -260,65 +248,38 @@ export default function WebsiteLeadChatbot() {
     }
   };
 
-  /** Visitor asked something mid-intake: answer briefly, then re-ask the same field. */
-  const aside = (v: string, reask: string) => {
-    userSay(v); setDraft('');
-    const a = intakeAside(v, concierge);
-    topics.current.add('unknown');
-    setConcierge((c) => ({ ...c, discountAsks: a.state.discountAsks }));
-    botSay([...a.messages, { text: reask }]);
+
+  const submitForm = (e: FormEvent) => {
+    e.preventDefault();
+    const errs: FormErrors = {};
+    const n = name.trim();
+    if (n.length < 2 || !/^[\p{L} .'-]+$/u.test(n)) errs.name = 'Please enter your full name (letters only).';
+    if (!normalizeIndianMobile(phone)) errs.phone = 'Enter a valid 10-digit Indian mobile number.';
+    if (!email.trim()) errs.email = `Email is required. ${EMAIL_REQUIRED_COPY}`;
+    else if (!isValidEmail(email.trim())) errs.email = 'Please enter a valid email, like name@example.com.';
+    if (!intent) errs.intent = 'Please choose what you are looking for.';
+    if (intent === 'Membership' && !duration) errs.duration = 'Please choose a membership duration.';
+    if (!goal) errs.goal = 'Please choose your main goal.';
+    setFormErrors(errs);
+    if (Object.keys(errs).length) {
+      const first = Object.keys(errs)[0];
+      requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus());
+      return;
+    }
+    setName(n); setEmail(email.trim());
+    const chosen = intent === 'Membership' ? `${duration} membership` : intent;
+    setInterest(chosen);
+    userSay(`${n} · ${chosen} · ${goal}`);
+    pendingSave.current = true;
   };
-  const REASK: Partial<Record<Step, string>> = {
-    name: 'To help you properly, may I have your full name first?',
-    phone: `Thanks${name ? `, ${firstName(name)}` : ''}. Could you share your mobile number next?`,
-    email: 'And your email address, please? It is required to register your enquiry.',
-    intent: 'What are you looking for today — membership, personal training, recovery, classes, or just exploring?',
-    goal: 'What is your main fitness goal?',
-    interest: 'Which membership duration are you considering — Monthly, Quarterly, Half-Yearly or Annual?',
-  };
+  const pendingSave = useRef(false);
+  useEffect(() => { if (pendingSave.current && interest) { pendingSave.current = false; void save(); } }, [interest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitText = (e: FormEvent) => {
     e.preventDefault();
     const v = draft.trim();
     setFieldError('');
-    if (!v && step !== 'email') return;
-    if (step === 'name') {
-      const n = extractName(v);
-      if (n) { setName(n); userSay(v); setDraft(''); return botSay([{ text: `Nice to meet you, ${firstName(n)}. What's your mobile number?` }], 'phone'); }
-      if (isQuestionLike(v)) return aside(v, REASK.name!);
-      return setFieldError('Please enter your full name (letters only).');
-    }
-    if (step === 'phone') {
-      const n = extractMobile(v);
-      if (n) { setPhone(n); userSay(v); setDraft(''); return botSay([{ text: 'And your email address?' }, { text: EMAIL_REQUIRED_COPY }], 'email'); }
-      if (isQuestionLike(v)) return aside(v, REASK.phone!);
-      return setFieldError('Enter a valid 10-digit Indian mobile number.');
-    }
-    if (step === 'email') {
-      if (!v) return setFieldError(`Email is required. ${EMAIL_REQUIRED_COPY}`);
-      const em = extractEmail(v);
-      if (em) { setEmail(em); userSay(v); setDraft(''); return botSay([{ text: 'What are you looking for today?' }], 'intent'); }
-      if (isQuestionLike(v) && !v.includes('@')) return aside(v, REASK.email!);
-      return setFieldError('Please enter a valid email address, like name@example.com.');
-    }
-    if (step === 'intent') {
-      const m = !isDirectQuestion(v) ? matchIntent(v, INTENTS) : null;
-      if (m) { setDraft(''); return pickIntent(m, v); }
-      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: REASK.intent! }]); }
-      return aside(v, REASK.intent!);
-    }
-    if (step === 'goal') {
-      const m = !isDirectQuestion(v) ? matchGoal(v, GOALS) : null;
-      if (m) { setDraft(''); return pickGoal(m, v); }
-      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: "Sorry, I didn't catch that. " + REASK.goal! }]); }
-      return aside(v, REASK.goal!);
-    }
-    if (step === 'interest') {
-      const m = !isDirectQuestion(v) ? matchDuration(v, DURATIONS) : null;
-      if (m) { setDraft(''); return pickInterest(m, v); }
-      if (!isQuestionLike(v)) { userSay(v); setDraft(''); return botSay([{ text: "Sorry, I didn't catch that. " + REASK.interest! }]); }
-      return aside(v, REASK.interest!);
-    }
+    if (!v) return;
     if (step === 'chat') {
       userSay(v); setDraft('');
       void askServer({ message: v }, () => conciergeReply(v, concierge));
@@ -326,17 +287,16 @@ export default function WebsiteLeadChatbot() {
   };
 
   const restart = () => {
-    setStep('name'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal('');
+    setStep('form'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal(''); setDuration('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
     setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false, lastTopic: undefined, visitOffers: 0, declinedVisit: false }));
     submissionId.current = newSubmissionId();
-    setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
+    setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]); setFormErrors({});
     try { window.localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
   };
 
   const chip = 'min-h-[44px] cursor-pointer rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
   const prompt = PROMPTS[step];
-  const interestOptions: readonly string[] = DURATIONS;
   const stage = stageOf(step);
 
   return (
@@ -371,7 +331,7 @@ export default function WebsiteLeadChatbot() {
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/40 px-4 py-4" aria-live="polite" aria-relevant="additions">
             {messages.map((m, i) => (
               <div key={i} className={cn('flex', m.from === 'user' ? 'justify-end' : 'justify-start')}>
-                <p className={cn('max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
+                <p className={cn('max-w-[85%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-relaxed',
                   m.from === 'user' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm border border-border bg-card text-foreground')}>
                   <span className="sr-only">{m.from === 'user' ? 'You: ' : 'Incline: '}</span>{m.text}
                   {m.tel && (
@@ -389,45 +349,56 @@ export default function WebsiteLeadChatbot() {
                 </span>
               </div>
             )}
+            {step === 'form' && !typing && (
+              <form onSubmit={submitForm} noValidate aria-label="Your details" className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                {([
+                  ['name', 'Full name', 'text', 'name', name, setName, 'Your full name', undefined],
+                  ['phone', 'Mobile number', 'tel', 'tel', phone, setPhone, '98XXXXXXXX', 'tel'],
+                  ['email', 'Email address', 'email', 'email', email, setEmail, 'you@example.com', 'email'],
+                ] as const).map(([key, label, type, ac, val, set, ph, im]) => (
+                  <div key={key} className="space-y-1">
+                    <label htmlFor={`wcb-${key}`} className="text-xs font-semibold text-foreground">{label} <span className="text-destructive" aria-hidden="true">*</span></label>
+                    <Input id={`wcb-${key}`} data-field={key} {...(key === 'name' ? { 'data-step-focus': true } : {})} value={val} type={type} autoComplete={ac} inputMode={im} placeholder={ph}
+                      maxLength={key === 'email' ? 255 : 100} aria-required="true" aria-invalid={!!formErrors[key]}
+                      aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined}
+                      onChange={(e) => { set(e.target.value); setFormErrors((f) => ({ ...f, [key]: undefined })); }} />
+                    {formErrors[key] && <p id={`wcb-${key}-err`} className="text-xs text-destructive">{formErrors[key]}</p>}
+                  </div>
+                ))}
+                {([
+                  ['intent', 'What are you looking for?', INTENTS, intent, (v: string) => { setIntent(v); if (v !== 'Membership') setDuration(''); }],
+                  ...(intent === 'Membership' ? [['duration', 'Membership duration', DURATIONS, duration, setDuration] as const] : []),
+                  ['goal', 'Your main fitness goal', GOALS, goal, setGoal],
+                ] as const).map(([key, label, opts, val, set]) => (
+                  <fieldset key={key} className="space-y-1.5" aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined}>
+                    <legend className="text-xs font-semibold text-foreground">{label} <span className="text-destructive" aria-hidden="true">*</span></legend>
+                    <div className="flex flex-wrap gap-2">
+                      {opts.map((o, i) => (
+                        <button key={o} type="button" aria-pressed={val === o} {...(i === 0 ? { 'data-field': key } : {})}
+                          onClick={() => { set(o); setFormErrors((f) => ({ ...f, [key]: undefined })); }}
+                          className={cn(chip, 'min-h-[40px] px-3 py-1.5 text-xs', val === o && 'border-primary bg-primary text-primary-foreground hover:bg-primary')}>{o}</button>
+                      ))}
+                    </div>
+                    {formErrors[key] && <p id={`wcb-${key}-err`} className="text-xs text-destructive">{formErrors[key]}</p>}
+                  </fieldset>
+                ))}
+                {saveError && (
+                  <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">{saveError}</p>
+                )}
+                <Button type="submit" className="min-h-[44px] w-full">{saveError ? 'Try again' : 'Start chatting'}</Button>
+                <p className="text-[11px] text-muted-foreground">We use these details only to help with your enquiry.</p>
+              </form>
+            )}
           </div>
 
           <div className="space-y-2 border-t border-border bg-card p-3">
-            {step === 'interest' && !typing && !saveError && !interest && (
-              <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto" role="group" aria-label="What are you interested in?">
-                {plansQuery.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading options" />}
-                {interestOptions.map((v, i) => (
-                  <button key={v} type="button" className={chip} onClick={() => pickInterest(v)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{v}</button>
-                ))}
-              </div>
-            )}
-            {step === 'intent' && !typing && (
-              <div className="flex flex-wrap gap-2" role="group" aria-label="What are you looking for?">
-                {INTENTS.map((t, i) => (
-                  <button key={t} type="button" className={chip} onClick={() => pickIntent(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
-                ))}
-              </div>
-            )}
-            {step === 'goal' && !typing && !saveError && !goal && (
-              <div className="flex flex-wrap gap-2" role="group" aria-label="What is your main fitness goal?">
-                {GOALS.map((t, i) => (
-                  <button key={t} type="button" className={chip} onClick={() => pickGoal(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
-                ))}
-              </div>
-            )}
-            {saveError && (step === 'goal' || step === 'interest') && (
-              <div role="alert" className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
-                <p>{saveError}</p>
-                <Button type="button" size="sm" variant="outline" className="min-h-[44px]" onClick={() => void save()}>Try again</Button>
-              </div>
-            )}
             {prompt && !typing && (
               <form onSubmit={submitText} noValidate className="flex items-start gap-2">
                 <div className="flex-1">
                   <label htmlFor="wcb-input" className="sr-only">{prompt.label}</label>
                   <Input id="wcb-input" data-step-focus value={draft} onChange={(e) => { setDraft(e.target.value); setFieldError(''); }}
                     type={prompt.type} inputMode={prompt.inputMode} autoComplete={prompt.autoComplete} placeholder={prompt.placeholder}
-                    maxLength={step === 'email' ? 255 : step === 'phone' ? 100 : step === 'name' ? 100 : MAX_NOTE}
-                    required={step === 'email' || step === 'name' || step === 'phone'}
+                    maxLength={MAX_NOTE}
                     aria-invalid={!!fieldError} aria-describedby={fieldError ? errId : undefined} />
                   {fieldError && <p id={errId} role="alert" className="mt-1 text-xs text-destructive">{fieldError}</p>}
                 </div>

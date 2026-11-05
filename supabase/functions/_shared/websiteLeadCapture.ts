@@ -92,11 +92,41 @@ export async function activePlanNames(db: Db): Promise<string[]> {
   return Array.from(new Set(names)).slice(0, 12);
 }
 
+/** Kill switch: global settings row key `website_chat_show_prices` with value {enabled:false} hides prices. Default on. */
+export async function webPricesEnabled(db: Db): Promise<boolean> {
+  try {
+    const { data } = await db.from("settings").select("value").is("branch_id", null).eq("key", "website_chat_show_prices").maybeSingle();
+    const v = (data as { value?: unknown } | null)?.value;
+    if (v === false || (v && typeof v === "object" && (v as { enabled?: unknown }).enabled === false)) return false;
+    return true;
+  } catch { return true; }
+}
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+const durLabel = (d: number) => d <= 1 ? "Day pass" : d <= 31 ? "Monthly" : d <= 95 ? "Quarterly" : d <= 190 ? "Half-Yearly" : "Annual";
+
+/** Visitor-facing price lines from live active plans (fixed rates, shown to every visitor alike). */
+export async function publicPriceLines(db: Db): Promise<string[]> {
+  if (!(await webPricesEnabled(db))) return [];
+  const { data } = await db.from("membership_plans").select("name, duration_days, price, discounted_price")
+    .eq("is_active", true).eq("is_visible_to_members", true).order("duration_days", { ascending: true });
+  return (Array.isArray(data) ? data : [])
+    .filter((r: { price?: unknown }) => Number(r.price) > 0)
+    .slice(0, 8)
+    .map((r: { name?: unknown; duration_days?: unknown; price?: unknown; discounted_price?: unknown }) => {
+      const d = Number(r.duration_days) || 0;
+      const amount = Number(r.discounted_price) > 0 ? Number(r.discounted_price) : Number(r.price);
+      const perMonth = d >= 85 ? ` (about ${inr(amount / (d / 30))}/month)` : "";
+      return `• ${durLabel(d)} — ${sanitize(r.name, 60)}: ${inr(amount)}${perMonth}`;
+    });
+}
+
 export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: CaptureDeps): Promise<CaptureResult> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return bad("Invalid request");
   const body = raw as Record<string, unknown>;
   if (body.intake_type === CHATBOT_SOURCE && body.action === "plans") {
-    return { status: 200, body: { success: true, plans: await activePlanNames(deps.db), categories: INTEREST_CATEGORIES } };
+    const [plans, prices] = await Promise.all([activePlanNames(deps.db), publicPriceLines(deps.db)]);
+    return { status: 200, body: { success: true, plans, prices, categories: INTEREST_CATEGORIES } };
   }
   if (body.intake_type === CHATBOT_SOURCE && body.action === "visit_preference") {
     if (deps.rateLimit && !(await deps.rateLimit(meta.ip))) return bad("Too many submissions. Please try again in a few minutes.", 429);
@@ -325,16 +355,8 @@ async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps):
   const message = sanitize(body.message, 300);
   const label = sanitize(body.label, 60);
   if (!topic && !message) return bad("Invalid request");
-  const [k, plans] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db)]);
-  const reply = topic ? webTopicReply(topic, state, k, plans) : webConciergeReply(message, state, k, plans);
-  // Remember what the visitor already told us — reference it instead of re-asking.
-  if (reply.topic === "membership" || reply.topic === "pricing") {
-    const { data: lp } = await deps.db.from("leads").select("plan_interest, fitness_goal").eq("id", p.lead.id).maybeSingle();
-    if (lp?.plan_interest) {
-      const goalTxt = lp.fitness_goal ? ` with a focus on ${String(lp.fitness_goal).toLowerCase()}` : "";
-      reply.messages.splice(1, 0, { text: `You mentioned ${lp.plan_interest}${goalTxt}, so our team will walk you through exactly that option during your visit.` });
-    }
-  }
+  const [k, plans, prices] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db), publicPriceLines(deps.db)]);
+  const reply = topic ? webTopicReply(topic, state, k, plans, prices) : webConciergeReply(message, state, k, plans, prices);
   try {
     await storeTurns(deps.db, p.lead, [
       { from: "user", text: topic ? (label || topic) : message },

@@ -17,6 +17,7 @@ export type WebReply = { messages: WebMsg[]; topic: WebTopic; state: WebState; v
 export type Knowledge = Partial<Record<WebTopic | "escalation", string>>;
 
 const ASK_NEXT = "What would you like to know next?";
+export const DISCOUNT_COPY = "Thanks for asking! Our membership rates are fixed and the same for every member, so we don't offer individual discounts. That keeps things fair and lets us invest in the facilities and service you'll enjoy.";
 const VISIT_ASK = "Would you like to plan a visit?";
 
 const RE = {
@@ -46,8 +47,8 @@ const FALLBACK: Record<WebTopic | "escalation", string> = {
   location: "Incline is at Sector 14, Udaipur, Rajasthan.",
   hours: "Our team will confirm current club timings with you.",
   visit: "We would love to show you around in person.",
-  pricing: "Incline follows a fixed and transparent pricing policy. We do not offer discounts or negotiate membership prices. Our focus is on the facilities, service and overall experience.",
-  discount: "Incline follows a fixed and transparent pricing policy. We do not offer discounts or negotiate membership prices. Our focus is on the facilities, service and overall experience.",
+  pricing: "Our team will happily share current membership rates and what each plan includes.",
+  discount: DISCOUNT_COPY,
   group_pricing: "For group membership enquiries or any further pricing discussion, please call our team directly on 8298293003.",
   escalation: "For group membership enquiries or any further pricing discussion, please call our team directly on 8298293003.",
   member_service: "For renewals, freezes, plan expiry or upgrades, open My Plan in the Member Portal, or ask the front desk and they will sort it for you.",
@@ -79,7 +80,13 @@ function text(k: Knowledge, topic: WebTopic | "escalation"): string {
   return t;
 }
 
-function topicMessages(topic: WebTopic, k: Knowledge, plans: string[]): WebMsg[] {
+const PRICE_NOTE = "These are our fixed rates, the same for every member. Each plan includes the Panatta training floor, air-conditioned club, digital lockers and recovery access as per plan.";
+function priceMessages(prices: string[]): WebMsg[] {
+  return [{ text: "Here are our current membership rates:\n" + prices.join("\n") }, { text: PRICE_NOTE }, { text: VISIT_ASK }];
+}
+
+function topicMessages(topic: WebTopic, k: Knowledge, plans: string[], prices: string[] = []): WebMsg[] {
+  if ((topic === "pricing" || topic === "membership") && prices.length) return priceMessages(prices);
   switch (topic) {
     case "visit":
       return [{ text: text(k, "visit").split(/(?<=\.)\s/)[0] }, { text: 'Which day and time suit you for a visit? (e.g. "Saturday 11am")' }];
@@ -139,16 +146,17 @@ function withOffer(r: WebReply, prev?: WebState): WebReply {
   return { ...r, messages, state: { ...r.state, declinedVisit: declined, visitOffers: offers + (offeredVisit ? 1 : 0), isMember, offeredVisit, awaitingVisit: isMember ? false : r.state.awaitingVisit, lastTopic: r.topic } };
 }
 
-export function webTopicReply(topic: WebTopic, state: WebState, k: Knowledge, plans: string[] = []): WebReply {
-  return withOffer({ messages: topicMessages(topic, k, plans), topic, state: { ...state, awaitingVisit: topic === "visit" } }, state);
+export function webTopicReply(topic: WebTopic, state: WebState, k: Knowledge, plans: string[] = [], prices: string[] = []): WebReply {
+  return withOffer({ messages: topicMessages(topic, k, plans, prices), topic, state: { ...state, awaitingVisit: topic === "visit" } }, state);
 }
 
 /** Deterministic reply to free text. Never invents prices, discounts, timings or outcomes. */
-export function webConciergeReply(raw: string, state: WebState, k: Knowledge, plans: string[] = []): WebReply {
-  return withOffer(rawWebReply(raw, state, k, plans), state);
+export function webConciergeReply(raw: string, state: WebState, k: Knowledge, plans: string[] = [], prices: string[] = []): WebReply {
+  return withOffer(rawWebReply(raw, state, k, plans, prices), state);
 }
 
-function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[]): WebReply {
+function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[], prices: string[]): WebReply {
+  const webTopicReply = (tp: WebTopic, st: WebState, kk: Knowledge, pl: string[]) => withOffer({ messages: topicMessages(tp, kk, pl, prices), topic: tp, state: { ...st, awaitingVisit: tp === "visit" } }, st);
   const t = String(raw ?? "").trim().slice(0, 300);
   const state = { ...prev, offeredVisit: false };
   const isMoney = RE.discount.test(t) || RE.pricing.test(t) || PRICE_ASK_RE.test(t);
@@ -172,9 +180,10 @@ function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[])
   if (RE.discount.test(t)) {
     const asks = (state.discountAsks || 0) + 1;
     const s2 = { ...next, discountAsks: asks };
-    if (asks === 1) return { messages: [{ text: text(k, "discount") }, { text: "Would you like to hear more about the facilities, or plan a visit?" }], topic: "discount", state: s2 };
-    return { messages: [{ text: text(k, "discount") }, { text: text(k, "escalation"), tel: true }], topic: "discount", state: s2 };
+    if (asks === 1) return { messages: [{ text: DISCOUNT_COPY }, { text: "Would you like to hear more about the facilities, or plan a visit?" }], topic: "discount", state: s2 };
+    return { messages: [{ text: "I completely understand wanting the best value. Our rates stay the same for everyone, so every member gets the same fair price." }, { text: text(k, "escalation"), tel: true }], topic: "discount", state: s2 };
   }
+  if (OBJECTION_RE.test(t) && !prev.isMember && prices.length) return webTopicReply("pricing", next, k, plans);
   if (OBJECTION_RE.test(t) && !prev.isMember) {
     return { messages: [{ text: OBJECTION_COPY }, { text: `If you'd rather not visit first, call our team on 8298293003 and they'll explain the options on the phone.`, tel: true }], topic: "pricing", state: next };
   }
