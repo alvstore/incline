@@ -123,6 +123,7 @@
 // 2.1.0: Variant-aware phone matching, member-first dedupe.
 // Shared across meta-webhook (Instagram/Messenger) and whatsapp-webhook.
 
+import { websiteHandoffPrompt } from "./websiteHandoff.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
@@ -1292,6 +1293,11 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
     dynamicSegments.push(renderConversationContextBlock(ctx.conversationContext));
   }
   if (memberCtx.contextPrompt) dynamicSegments.push(memberCtx.contextPrompt);
+  // Website chatbot handoff from a number that doesn't match the saved enquiry.
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
+    const handoffPrompt = websiteHandoffPrompt(ctx.messageContent, !!leadCtx);
+    if (handoffPrompt) dynamicSegments.push(handoffPrompt);
+  }
 
   if (summaryBlock) dynamicSegments.push(summaryBlock.trim());
   if (alreadyCaptured) dynamicSegments.push(alreadyCaptured.trim());
