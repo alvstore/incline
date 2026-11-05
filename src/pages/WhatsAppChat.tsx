@@ -43,7 +43,7 @@ import {
   MessageSquare, Send, Search, Phone, User,
   CheckCheck, Check, Clock, Paperclip, Smile, MoreVertical, Sparkles, Loader2, Plus, AlertTriangle, Bot, UserPlus, Image, FileText,
   Trash2, Ban, Eye, CircleDot, AlertCircle, Instagram, Facebook, Users, PanelRightOpen, PanelRightClose, BookUser, RefreshCw, AtSign,
-  Play, Layers, ExternalLink, MessageCircle, ChevronLeft,
+  Play, Layers, ExternalLink, MessageCircle, ChevronLeft, Globe,
 } from 'lucide-react';
 
 // Platform icon helper
@@ -51,6 +51,7 @@ const PlatformIcon = ({ platform, className = "h-3.5 w-3.5" }: { platform?: stri
   switch (platform) {
     case 'instagram': return <Instagram className={`${className} text-destructive`} />;
     case 'messenger': return <Facebook className={`${className} text-info`} />;
+    case 'web_chat': return <Globe className={`${className} text-primary`} />;
     default: return <MessageSquare className={`${className} text-success`} />;
   }
 };
@@ -212,7 +213,7 @@ function IgCommentMediaCard({ meta, mediaUrl, outbound }: { meta?: MessageMediaM
   );
 }
 
-type ChatFilter = 'all' | 'unread' | 'needs_human' | 'my_chats' | 'whatsapp' | 'instagram' | 'messenger';
+type ChatFilter = 'all' | 'unread' | 'needs_human' | 'my_chats' | 'whatsapp' | 'instagram' | 'messenger' | 'web_chat';
 
 function normalizePhone(phone: string): string {
   return phone.replace(/^\+/, '');
@@ -605,7 +606,7 @@ export default function WhatsAppChatPage() {
           status: isNote ? 'delivered' : 'pending',
           message_type: 'text',
           is_internal_note: isNote,
-          platform: contactPlatform as 'whatsapp' | 'instagram' | 'messenger',
+          platform: contactPlatform as 'whatsapp' | 'instagram' | 'messenger' | 'web_chat',
         })
         .select()
         .single();
@@ -705,12 +706,18 @@ export default function WhatsAppChatPage() {
     if (chatFilter === 'whatsapp') return (c.platform || 'whatsapp') === 'whatsapp';
     if (chatFilter === 'instagram') return c.platform === 'instagram';
     if (chatFilter === 'messenger') return c.platform === 'messenger';
+    if (chatFilter === 'web_chat') return c.platform === 'web_chat';
     return true;
   });
 
   const handleSend = () => {
     if (selectedBranch === 'all') {
       toast.warning('Please select a specific branch from the selector before sending messages');
+      return;
+    }
+    if (selectedContact?.platform === 'web_chat' && !whisperMode) {
+      // Website visitors can't receive replies here — keep notes internal and follow up by phone/email from the lead.
+      toast.info('Website chats are read-only. Add an internal note, or contact the visitor from their lead.');
       return;
     }
     if (newMessage.trim()) sendMessage.mutate(newMessage.trim());
@@ -1033,6 +1040,7 @@ export default function WhatsAppChatPage() {
                   { key: 'whatsapp' as ChatFilter, icon: <MessageSquare className="h-3 w-3" />, label: 'WhatsApp', color: 'text-success', activeBg: 'bg-success/15 text-success dark:text-success ring-1 ring-success/30' },
                   { key: 'instagram' as ChatFilter, icon: <Instagram className="h-3 w-3" />, label: 'Instagram', color: 'text-destructive', activeBg: 'bg-destructive/15 text-destructive dark:text-destructive ring-1 ring-destructive/30' },
                   { key: 'messenger' as ChatFilter, icon: <Facebook className="h-3 w-3" />, label: 'Messenger', color: 'text-info', activeBg: 'bg-info/15 text-info dark:text-info ring-1 ring-info/30' },
+                  { key: 'web_chat' as ChatFilter, icon: <Globe className="h-3 w-3" />, label: 'Web Chat', color: 'text-primary', activeBg: 'bg-primary/15 text-primary ring-1 ring-primary/30' },
                 ].map(tab => (
                   <button
                     key={tab.key}

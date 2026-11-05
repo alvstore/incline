@@ -7,6 +7,8 @@
 // welcome messages in notify-lead-created.
 
 import { normalizePhone, phoneVariants, isValidIndianMobile } from "./phone.ts";
+import { knowledgeFromRows, webConciergeReply, webTopicReply, WEB_TOPICS, type Knowledge, type WebState, type WebTopic } from "./websiteConcierge.ts";
+import { storeTurns, webChatKey } from "./websiteChatStore.ts";
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
@@ -23,7 +25,7 @@ export const CHATBOT_TIMEFRAMES: Record<string, string> = {
 export const INTEREST_CATEGORIES = [
   "Membership", "Personal training", "Group / class training", "Recovery & wellness", "Club visit",
 ] as const;
-export const CHAT_TOPICS = ["training_floor", "membership", "pt_classes", "recovery", "amenities", "visit", "pricing", "discount", "group_pricing", "unknown"] as const;
+export const CHAT_TOPICS = ["training_floor", "membership", "pt_classes", "recovery", "amenities", "assessment", "location", "hours", "visit", "pricing", "discount", "group_pricing", "unknown"] as const;
 
 const MAX_NAME = 100, MAX_EMAIL = 255, MAX_PHONE = 20, MAX_NOTE = 280;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -71,6 +73,8 @@ export type CaptureDeps = {
   notify: (args: { lead_id: string; branch_id: string; suppress_lead_welcome: boolean }) => void;
   /** Returns false when the caller is over the limit. */
   rateLimit?: (ip: string | null) => Promise<boolean>;
+  /** Looser limit for post-capture chat turns. */
+  chatRateLimit?: (ip: string | null) => Promise<boolean>;
   now?: Date;
 };
 export type CaptureMeta = { ip: string | null; userAgent: string | null };
@@ -95,6 +99,11 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
   if (body.intake_type === CHATBOT_SOURCE && body.action === "visit_preference") {
     if (deps.rateLimit && !(await deps.rateLimit(meta.ip))) return bad("Too many submissions. Please try again in a few minutes.", 429);
     return recordVisitPreference(body, deps);
+  }
+  if (body.intake_type === CHATBOT_SOURCE && (body.action === "chat" || body.action === "sync_transcript")) {
+    const limiter = deps.chatRateLimit ?? deps.rateLimit;
+    if (limiter && !(await limiter(meta.ip))) return bad("Too many messages. Please try again in a few minutes.", 429);
+    return body.action === "chat" ? handleChatTurn(body, deps) : handleSyncTranscript(body, deps);
   }
   const isChatbot = body.intake_type === CHATBOT_SOURCE;
 
@@ -276,6 +285,67 @@ async function recordVisitPreference(body: Record<string, unknown>, deps: Captur
     metadata: { submission_id: `${sid}:visit`, visit_preference: visit, topics, intake_type: CHATBOT_SOURCE },
   });
   return { status: 200, body: { success: true, status: "visit_noted" } };
+}
+
+/** Proof that this browser captured the lead: lead_id + original submission_id. */
+async function chatProof(body: Record<string, unknown>, db: Db) {
+  const leadId = typeof body.lead_id === "string" && /^[0-9a-f-]{36}$/i.test(body.lead_id) ? body.lead_id : null;
+  const sid = typeof body.submission_id === "string" && SUBMISSION_RE.test(body.submission_id) ? body.submission_id : null;
+  if (!leadId || !sid) return null;
+  const { data: proof } = await db.from("lead_activities").select("id").eq("lead_id", leadId)
+    .eq("metadata->>submission_id", sid).limit(1).maybeSingle();
+  if (!proof) return null;
+  const { data: lead } = await db.from("leads").select("id, branch_id, full_name").eq("id", leadId).maybeSingle();
+  return lead?.branch_id ? { lead: lead as { id: string; branch_id: string; full_name: string | null }, sid } : null;
+}
+
+async function loadWebKnowledge(db: Db, branchId: string): Promise<Knowledge> {
+  const { data } = await db.from("ai_knowledge").select("content, tags, priority")
+    .eq("is_active", true).eq("status", "active").overlaps("applies_to", ["all", "website_chat"])
+    .or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  return knowledgeFromRows(Array.isArray(data) ? data : []);
+}
+
+/** Concierge turn after capture: answer from shared knowledge, store both sides in the CRM inbox. */
+async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps): Promise<CaptureResult> {
+  const p = await chatProof(body, deps.db);
+  if (!p) return bad("Enquiry not found", 404);
+  const s = (body.state && typeof body.state === "object") ? body.state as Record<string, unknown> : {};
+  const state: WebState = {
+    discountAsks: Math.min(Math.max(Number(s.discountAsks) || 0, 0), 20),
+    awaitingVisit: s.awaitingVisit === true,
+  };
+  const topic = typeof body.topic === "string" && (WEB_TOPICS as readonly string[]).includes(body.topic) ? body.topic as WebTopic : null;
+  const message = sanitize(body.message, 300);
+  const label = sanitize(body.label, 60);
+  if (!topic && !message) return bad("Invalid request");
+  const [k, plans] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db)]);
+  const reply = topic ? webTopicReply(topic, state, k, plans) : webConciergeReply(message, state, k, plans);
+  try {
+    await storeTurns(deps.db, p.lead, [
+      { from: "user", text: topic ? (label || topic) : message },
+      ...reply.messages.map((m) => ({ from: "bot" as const, text: m.text })),
+    ]);
+  } catch { console.error("[web-chat] persist failed"); }
+  if (reply.visitPreference) {
+    await recordVisitPreference({ ...body, visit_preference: reply.visitPreference }, deps);
+  }
+  return { status: 200, body: { success: true, messages: reply.messages, topic: reply.topic, state: reply.state, visit_noted: !!reply.visitPreference } };
+}
+
+/** One-time upload of the pre-capture transcript (questions + answers shown before saving). */
+async function handleSyncTranscript(body: Record<string, unknown>, deps: CaptureDeps): Promise<CaptureResult> {
+  const p = await chatProof(body, deps.db);
+  if (!p) return bad("Enquiry not found", 404);
+  const { data: prior } = await deps.db.from("whatsapp_messages").select("id")
+    .eq("phone_number", webChatKey(p.lead.id)).eq("platform", "web_chat").limit(1).maybeSingle();
+  if (prior) return { status: 200, body: { success: true, status: "already_synced" } };
+  const turns = (Array.isArray(body.messages) ? body.messages : []).slice(0, 40)
+    .map((m) => (m && typeof m === "object") ? m as Record<string, unknown> : {})
+    .filter((m) => m.from === "user" || m.from === "bot")
+    .map((m) => ({ from: m.from as "user" | "bot", text: sanitize(m.text, 600) }));
+  await storeTurns(deps.db, p.lead, turns);
+  return { status: 200, body: { success: true, status: "synced" } };
 }
 
 export async function hashKey(input: string): Promise<string> {
