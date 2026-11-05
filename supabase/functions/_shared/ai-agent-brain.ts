@@ -1075,6 +1075,18 @@ export async function runLeadAgent(state: AgentRunState): Promise<AgentResult> {
   }
 
 
+  // 5b.2 SALES PLAYBOOK (shared with website chat, _shared/salesPricing.ts) — price,
+  // discount, free-days/freeze/group and payment-link turns are answered deterministically
+  // from membership_plans so the LLM never invents prices or offers.
+  if (!memberCtx.isMember && !memberCtx.isStaff) {
+    try {
+      const sales = await runSalesPlaybook(supabase, ctx, memory, leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null);
+      if (sales) return { replyText: sales, leadCaptured: false, leadId: leadCtx?.leadId ?? null, handoffTriggered: false, skipped: false };
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] sales playbook failed (continuing to LLM):`, (e as Error).message);
+    }
+  }
+
   // 5c. AUTO-LEARN: extract structured facts from the user's last message and
   // merge into ai_memory BEFORE building the prompt. This is what stops the
   // bot from re-asking phone / fitness goal / name on every turn and makes it
