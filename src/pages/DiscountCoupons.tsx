@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { AddCouponDrawer } from '@/components/coupons/AddCouponDrawer';
 import { EditCouponDrawer } from '@/components/coupons/EditCouponDrawer';
 import { CouponDetailDrawer } from '@/components/coupons/CouponDetailDrawer';
-import { MessageComposerSheet } from '@/components/campaigns/MessageComposerSheet';
+import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
 
 export default function DiscountCouponsPage() {
   const queryClient = useQueryClient();
@@ -242,7 +242,7 @@ export default function DiscountCouponsPage() {
       <AddCouponDrawer open={addOpen} onOpenChange={setAddOpen} onSuccess={handleRefresh} branches={branches} />
       <EditCouponDrawer open={editOpen} onOpenChange={setEditOpen} onSuccess={handleRefresh} branches={branches} coupon={selectedCoupon} />
       <CouponDetailDrawer open={detailOpen} onOpenChange={setDetailOpen} coupon={selectedCoupon} onShare={() => { setDetailOpen(false); if (selectedCoupon) handleShare(selectedCoupon); }} />
-      <MessageComposerSheet open={broadcastOpen} onOpenChange={setBroadcastOpen} branchId={branchId} initialMessage={broadcastMessage} />
+      {branchId && <CampaignWizard open={broadcastOpen} onOpenChange={setBroadcastOpen} branchId={branchId} initialMessage={broadcastMessage} />}
     </AppLayout>
   );
 }

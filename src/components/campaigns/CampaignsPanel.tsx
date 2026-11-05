@@ -26,7 +26,6 @@ import {
   type Campaign,
 } from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
-import { MessageComposerSheet } from '@/components/campaigns/MessageComposerSheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawer';
 import { CampaignReportDrawer } from '@/components/campaigns/CampaignReportDrawer';
@@ -120,8 +119,7 @@ export function CampaignsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Retry failed'),
   });
 
-  const openCreate = () => setComposerOpen(true);
-  const openAdvanced = () => { setEditingCampaign(null); setWizardOpen(true); };
+  const openCreate = () => { setEditingCampaign(null); setWizardOpen(true); };
   const openEdit = (c: Campaign) => { setEditingCampaign(c); setWizardOpen(true); };
 
   const filteredCampaigns = useMemo(() => {
@@ -146,8 +144,7 @@ export function CampaignsPanel() {
           <p className="text-sm text-muted-foreground">Every message you send to members, staff and leads — with live delivery progress.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={openAdvanced} disabled={!branchId} className="rounded-xl min-h-[44px]">Advanced campaign</Button>
-          <Button onClick={openCreate} disabled={!branchId} className="rounded-xl gap-2 min-h-[44px]"><Plus className="h-4 w-4" /> New message</Button>
+          <Button onClick={openCreate} disabled={!branchId} className="rounded-xl gap-2 min-h-[44px]"><Plus className="h-4 w-4" /> Create campaign</Button>
         </div>
       </div>
 
@@ -208,7 +205,7 @@ export function CampaignsPanel() {
           <Megaphone className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
           <h3 className="text-lg font-semibold text-foreground">{campaigns.length === 0 ? 'No campaigns yet' : 'No campaigns match your filters'}</h3>
           <p className="text-sm text-muted-foreground mt-1">{campaigns.length === 0 ? 'Send your first message to members, staff or leads.' : 'Try a different search or status.'}</p>
-          {campaigns.length === 0 && <Button onClick={openCreate} className="mt-4 rounded-xl gap-2"><Plus className="h-4 w-4" />New message</Button>}
+          {campaigns.length === 0 && <Button onClick={openCreate} className="mt-4 rounded-xl gap-2"><Plus className="h-4 w-4" />Create campaign</Button>}
         </div>
       ) : branchId && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -354,7 +351,6 @@ export function CampaignsPanel() {
         </div>
       )}
 
-      <MessageComposerSheet open={composerOpen} onOpenChange={setComposerOpen} branchId={branchId} />
       {branchId && (
         <CampaignWizard
           open={wizardOpen}
