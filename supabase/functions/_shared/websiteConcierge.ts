@@ -176,7 +176,7 @@ function rawWebReply(raw: string, prev: WebState, k: Knowledge, plans: string[])
     return { messages: [{ text: text(k, "discount") }, { text: text(k, "escalation"), tel: true }], topic: "discount", state: s2 };
   }
   if (OBJECTION_RE.test(t) && !prev.isMember) {
-    return { messages: [{ text: OBJECTION_COPY }, { text: `If you'd rather not visit first, call our team on ${ESCALATION_PHONE} and they'll explain the options on the phone.`, tel: true }], topic: "pricing", state: next };
+    return { messages: [{ text: OBJECTION_COPY }, { text: `If you'd rather not visit first, call our team on 8298293003 and they'll explain the options on the phone.`, tel: true }], topic: "pricing", state: next };
   }
   if (RE.memberService.test(t)) return { messages: [{ text: FALLBACK.member_service }], topic: "member_service", state: next };
   if (RE.pricing.test(t) || PRICE_ASK_RE.test(t)) return webTopicReply("pricing", next, k, plans);
