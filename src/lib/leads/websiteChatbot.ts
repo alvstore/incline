@@ -1,6 +1,6 @@
 // Website Lead Chatbot — pure helpers + deterministic concierge (no public AI endpoint).
 // Mirrors supabase/functions/_shared/websiteLeadCapture.ts allow-lists.
-// Visitors stay inside the website chat: this module never builds WhatsApp links.
+// Visitors stay inside the website chat; the only escalation is a tel: phone link.
 
 export const ESCALATION_PHONE = '8298293003';
 export const ESCALATION_TEL = `tel:${ESCALATION_PHONE}`;
