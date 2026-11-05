@@ -15,7 +15,7 @@ import {
 
 type Step = 'name' | 'phone' | 'email' | 'intent' | 'interest' | 'goal' | 'saving' | 'chat';
 const INTENTS = ['Membership', 'Personal training', 'Recovery (sauna, steam, cold plunge)', 'Pilates / group classes', 'Just looking'] as const;
-const GOALS = ['Fat loss & toning', 'Muscle & strength', 'General fitness', 'Recovery & mobility', 'Sports performance'] as const;
+const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Personal training'] as const;
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
