@@ -21,6 +21,7 @@ const DURATIONS = ['Monthly', 'Quarterly', 'Half-Yearly', 'Annual'] as const;
 const GOALS = ['Fat loss', 'Build muscle', 'General fitness', 'Recovery & wellness', 'Athletic performance'] as const;
 const STAGES = ['Your details', 'Saving', 'Concierge'] as const;
 const stageOf = (s: Step) => (s === 'chat' || s === 'handoff' ? 2 : s === 'saving' ? 1 : 0);
+type FormErrors = Partial<Record<'name' | 'phone' | 'email' | 'intent' | 'duration' | 'goal', string>>;
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean };
 type SaveResult = { status?: string; lead_id?: string; reference?: string };
 
@@ -61,6 +62,8 @@ export default function WebsiteLeadChatbot() {
   const [intent, setIntent] = useState(saved?.intent ?? '');
   const [goal, setGoal] = useState(saved?.goal ?? '');
   const [draft, setDraft] = useState('');
+  const [duration, setDuration] = useState('');
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [hp, setHp] = useState('');
   const [fieldError, setFieldError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -246,6 +249,32 @@ export default function WebsiteLeadChatbot() {
   };
 
 
+  const submitForm = (e: FormEvent) => {
+    e.preventDefault();
+    const errs: FormErrors = {};
+    const n = name.trim();
+    if (n.length < 2 || !/^[\p{L} .'-]+$/u.test(n)) errs.name = 'Please enter your full name (letters only).';
+    if (!normalizeIndianMobile(phone)) errs.phone = 'Enter a valid 10-digit Indian mobile number.';
+    if (!email.trim()) errs.email = `Email is required. ${EMAIL_REQUIRED_COPY}`;
+    else if (!isValidEmail(email.trim())) errs.email = 'Please enter a valid email, like name@example.com.';
+    if (!intent) errs.intent = 'Please choose what you are looking for.';
+    if (intent === 'Membership' && !duration) errs.duration = 'Please choose a membership duration.';
+    if (!goal) errs.goal = 'Please choose your main goal.';
+    setFormErrors(errs);
+    if (Object.keys(errs).length) {
+      const first = Object.keys(errs)[0];
+      requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus());
+      return;
+    }
+    setName(n); setEmail(email.trim());
+    const chosen = intent === 'Membership' ? `${duration} membership` : intent;
+    setInterest(chosen);
+    userSay(`${n} · ${chosen} · ${goal}`);
+    pendingSave.current = true;
+  };
+  const pendingSave = useRef(false);
+  useEffect(() => { if (pendingSave.current && interest) { pendingSave.current = false; void save(); } }, [interest]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const submitText = (e: FormEvent) => {
     e.preventDefault();
     const v = draft.trim();
@@ -258,7 +287,7 @@ export default function WebsiteLeadChatbot() {
   };
 
   const restart = () => {
-    setStep('form'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal('');
+    setStep('form'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal(''); setDuration('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
     setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false, lastTopic: undefined, visitOffers: 0, declinedVisit: false }));
     submissionId.current = newSubmissionId();
@@ -268,7 +297,6 @@ export default function WebsiteLeadChatbot() {
 
   const chip = 'min-h-[44px] cursor-pointer rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
   const prompt = PROMPTS[step];
-  const interestOptions: readonly string[] = DURATIONS;
   const stage = stageOf(step);
 
   return (
@@ -303,7 +331,7 @@ export default function WebsiteLeadChatbot() {
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/40 px-4 py-4" aria-live="polite" aria-relevant="additions">
             {messages.map((m, i) => (
               <div key={i} className={cn('flex', m.from === 'user' ? 'justify-end' : 'justify-start')}>
-                <p className={cn('max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
+                <p className={cn('max-w-[85%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-relaxed',
                   m.from === 'user' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm border border-border bg-card text-foreground')}>
                   <span className="sr-only">{m.from === 'user' ? 'You: ' : 'Incline: '}</span>{m.text}
                   {m.tel && (
@@ -321,45 +349,56 @@ export default function WebsiteLeadChatbot() {
                 </span>
               </div>
             )}
+            {step === 'form' && !typing && (
+              <form onSubmit={submitForm} noValidate aria-label="Your details" className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                {([
+                  ['name', 'Full name', 'text', 'name', name, setName, 'Your full name', undefined],
+                  ['phone', 'Mobile number', 'tel', 'tel', phone, setPhone, '98XXXXXXXX', 'tel'],
+                  ['email', 'Email address', 'email', 'email', email, setEmail, 'you@example.com', 'email'],
+                ] as const).map(([key, label, type, ac, val, set, ph, im]) => (
+                  <div key={key} className="space-y-1">
+                    <label htmlFor={`wcb-${key}`} className="text-xs font-semibold text-foreground">{label} <span className="text-destructive" aria-hidden="true">*</span></label>
+                    <Input id={`wcb-${key}`} data-field={key} {...(key === 'name' ? { 'data-step-focus': true } : {})} value={val} type={type} autoComplete={ac} inputMode={im} placeholder={ph}
+                      maxLength={key === 'email' ? 255 : 100} aria-required="true" aria-invalid={!!formErrors[key]}
+                      aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined}
+                      onChange={(e) => { set(e.target.value); setFormErrors((f) => ({ ...f, [key]: undefined })); }} />
+                    {formErrors[key] && <p id={`wcb-${key}-err`} className="text-xs text-destructive">{formErrors[key]}</p>}
+                  </div>
+                ))}
+                {([
+                  ['intent', 'What are you looking for?', INTENTS, intent, (v: string) => { setIntent(v); if (v !== 'Membership') setDuration(''); }],
+                  ...(intent === 'Membership' ? [['duration', 'Membership duration', DURATIONS, duration, setDuration] as const] : []),
+                  ['goal', 'Your main fitness goal', GOALS, goal, setGoal],
+                ] as const).map(([key, label, opts, val, set]) => (
+                  <fieldset key={key} className="space-y-1.5" aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined}>
+                    <legend className="text-xs font-semibold text-foreground">{label} <span className="text-destructive" aria-hidden="true">*</span></legend>
+                    <div className="flex flex-wrap gap-2">
+                      {opts.map((o, i) => (
+                        <button key={o} type="button" aria-pressed={val === o} {...(i === 0 ? { 'data-field': key } : {})}
+                          onClick={() => { set(o); setFormErrors((f) => ({ ...f, [key]: undefined })); }}
+                          className={cn(chip, 'min-h-[40px] px-3 py-1.5 text-xs', val === o && 'border-primary bg-primary text-primary-foreground hover:bg-primary')}>{o}</button>
+                      ))}
+                    </div>
+                    {formErrors[key] && <p id={`wcb-${key}-err`} className="text-xs text-destructive">{formErrors[key]}</p>}
+                  </fieldset>
+                ))}
+                {saveError && (
+                  <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">{saveError}</p>
+                )}
+                <Button type="submit" className="min-h-[44px] w-full">{saveError ? 'Try again' : 'Start chatting'}</Button>
+                <p className="text-[11px] text-muted-foreground">We use these details only to help with your enquiry.</p>
+              </form>
+            )}
           </div>
 
           <div className="space-y-2 border-t border-border bg-card p-3">
-            {step === 'interest' && !typing && !saveError && !interest && (
-              <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto" role="group" aria-label="What are you interested in?">
-                {plansQuery.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading options" />}
-                {interestOptions.map((v, i) => (
-                  <button key={v} type="button" className={chip} onClick={() => pickInterest(v)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{v}</button>
-                ))}
-              </div>
-            )}
-            {step === 'intent' && !typing && (
-              <div className="flex flex-wrap gap-2" role="group" aria-label="What are you looking for?">
-                {INTENTS.map((t, i) => (
-                  <button key={t} type="button" className={chip} onClick={() => pickIntent(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
-                ))}
-              </div>
-            )}
-            {step === 'goal' && !typing && !saveError && !goal && (
-              <div className="flex flex-wrap gap-2" role="group" aria-label="What is your main fitness goal?">
-                {GOALS.map((t, i) => (
-                  <button key={t} type="button" className={chip} onClick={() => pickGoal(t)} {...(i === 0 ? { 'data-step-focus': true } : {})}>{t}</button>
-                ))}
-              </div>
-            )}
-            {saveError && (step === 'goal' || step === 'interest') && (
-              <div role="alert" className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
-                <p>{saveError}</p>
-                <Button type="button" size="sm" variant="outline" className="min-h-[44px]" onClick={() => void save()}>Try again</Button>
-              </div>
-            )}
             {prompt && !typing && (
               <form onSubmit={submitText} noValidate className="flex items-start gap-2">
                 <div className="flex-1">
                   <label htmlFor="wcb-input" className="sr-only">{prompt.label}</label>
                   <Input id="wcb-input" data-step-focus value={draft} onChange={(e) => { setDraft(e.target.value); setFieldError(''); }}
                     type={prompt.type} inputMode={prompt.inputMode} autoComplete={prompt.autoComplete} placeholder={prompt.placeholder}
-                    maxLength={step === 'email' ? 255 : step === 'phone' ? 100 : step === 'name' ? 100 : MAX_NOTE}
-                    required={step === 'email' || step === 'name' || step === 'phone'}
+                    maxLength={MAX_NOTE}
                     aria-invalid={!!fieldError} aria-describedby={fieldError ? errId : undefined} />
                   {fieldError && <p id={errId} role="alert" className="mt-1 text-xs text-destructive">{fieldError}</p>}
                 </div>
