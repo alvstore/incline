@@ -1,3 +1,4 @@
+// v2.1.0 — Website chat turns answered from shared ai_knowledge and stored in the CRM inbox (web_chat).
 // v2.0.0 — Logic moved to _shared/websiteLeadCapture.ts. Adds Website Chatbot intake
 //          (returns lead reference), honeypot, hashed-IP rate limit, slug-only branch
 //          resolution, WhatsApp-only consent and suppress_lead_welcome for chatbot leads.
@@ -37,6 +38,13 @@ Deno.serve(async (req) => {
           p_key: `capture-lead:${await hashKey(clientIp)}`, p_limit: 8, p_window_seconds: 600,
         });
         return error ? true : data !== false; // fail open: light protection only
+      },
+      chatRateLimit: async (clientIp) => {
+        if (!clientIp) return true;
+        const { data, error } = await supabase.rpc('hit_public_form_rate_limit', {
+          p_key: `web-chat:${await hashKey(clientIp)}`, p_limit: 60, p_window_seconds: 600,
+        });
+        return error ? true : data !== false;
       },
       notify: (args) => {
         fetch(`${supabaseUrl}/functions/v1/notify-lead-created`, {
