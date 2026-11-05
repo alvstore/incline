@@ -265,7 +265,7 @@ export default function WebsiteLeadChatbot() {
   const restart = () => {
     setStep('name'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal('');
     setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
-    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false }));
+    setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false }));
     submissionId.current = newSubmissionId();
     setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]);
   };
