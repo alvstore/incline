@@ -14861,6 +14861,139 @@ export type Database = {
           },
         ]
       }
+      treadmill_live_sessions: {
+        Row: {
+          branch_id: string | null
+          calories_burned: number
+          current_incline_percent: number
+          current_speed_kmh: number
+          distance_meters: number
+          elapsed_seconds: number
+          heart_rate_bpm: number | null
+          mac_address: string
+          member_id: string
+          session_id: string
+          status: string
+          step_count: number | null
+          treadmill_code: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          calories_burned?: number
+          current_incline_percent?: number
+          current_speed_kmh?: number
+          distance_meters?: number
+          elapsed_seconds?: number
+          heart_rate_bpm?: number | null
+          mac_address: string
+          member_id: string
+          session_id: string
+          status?: string
+          step_count?: number | null
+          treadmill_code: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          calories_burned?: number
+          current_incline_percent?: number
+          current_speed_kmh?: number
+          distance_meters?: number
+          elapsed_seconds?: number
+          heart_rate_bpm?: number | null
+          mac_address?: string
+          member_id?: string
+          session_id?: string
+          status?: string
+          step_count?: number | null
+          treadmill_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treadmill_live_sessions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treadmill_workouts: {
+        Row: {
+          avg_heart_rate: number | null
+          avg_incline_percent: number | null
+          avg_speed_kmh: number
+          branch_id: string | null
+          calories_burned: number
+          created_at: string
+          distance_meters: number
+          duration_seconds: number
+          end_time: string
+          id: string
+          mac_address: string
+          max_heart_rate: number | null
+          max_speed_kmh: number | null
+          member_id: string
+          raw_payload: Json | null
+          session_id: string | null
+          start_time: string
+          step_count: number
+          treadmill_code: string
+        }
+        Insert: {
+          avg_heart_rate?: number | null
+          avg_incline_percent?: number | null
+          avg_speed_kmh: number
+          branch_id?: string | null
+          calories_burned: number
+          created_at?: string
+          distance_meters: number
+          duration_seconds: number
+          end_time?: string
+          id?: string
+          mac_address: string
+          max_heart_rate?: number | null
+          max_speed_kmh?: number | null
+          member_id: string
+          raw_payload?: Json | null
+          session_id?: string | null
+          start_time?: string
+          step_count?: number
+          treadmill_code: string
+        }
+        Update: {
+          avg_heart_rate?: number | null
+          avg_incline_percent?: number | null
+          avg_speed_kmh?: number
+          branch_id?: string | null
+          calories_burned?: number
+          created_at?: string
+          distance_meters?: number
+          duration_seconds?: number
+          end_time?: string
+          id?: string
+          mac_address?: string
+          max_heart_rate?: number | null
+          max_speed_kmh?: number | null
+          member_id?: string
+          raw_payload?: Json | null
+          session_id?: string | null
+          start_time?: string
+          step_count?: number
+          treadmill_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treadmill_workouts_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       upgrade_offers: {
         Row: {
           already_paid: number
