@@ -174,6 +174,8 @@ export default function MyProgress() {
           variant="member"
         />
 
+        <TreadmillRunsCard memberId={member.id} />
+
         {/* Cross-link to Workout & Diet (no duplicate content) */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="border-border/50 shadow-sm shadow-primary/5">
