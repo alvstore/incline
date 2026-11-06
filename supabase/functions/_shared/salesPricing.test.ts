@@ -97,7 +97,7 @@ Deno.test("saying no to the link creates nothing", () => {
 Deno.test("link at floor uses the Founder's Pass amount", () => {
   const r = chat(["annual price", "discount", "ok I'll take it", "yes"]);
   assertEquals(r[3]!.createLink?.amount, 25000);
-  assertEquals(r[4]!.createLink?.plan.id, "f");
+  assertEquals(r[3]!.createLink?.plan.id, "f");
 });
 
 Deno.test("links switched off: desk instead of link", () => {
