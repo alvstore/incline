@@ -24,32 +24,46 @@ Deno.test("price question without a plan asks which length, never lists every pr
   assert(!/₹/.test(all(r)));
 });
 
-Deno.test("quotes only the plan asked about, original price first", () => {
+Deno.test("quotes only the plan asked about: original and offer price together", () => {
   const r = salesTurn("annual price?", {}, PLANS)!;
-  assertMatch(all(r), /₹42,900/);
-  assert(!/36,900|25,000|13,900|5,000/.test(all(r)));
-  assertEquals(r.event, "price_quoted");
+  assertMatch(all(r), /₹42,900.*offer price of ₹36,900/);
+  assert(!/25,000|13,900|5,000/.test(all(r)));
+  assertEquals(r.event, "offer_revealed");
 });
 
-Deno.test("annual negotiation: original -> offer -> ₹25,000 floor -> front desk", () => {
-  const [a, b, c, d] = chat(["annual price", "any discount?", "still too expensive", "can you do less"]);
-  assertMatch(all(a), /₹42,900/);
-  assertMatch(all(b), /₹36,900/); assertEquals(b!.event, "offer_revealed");
+Deno.test("annual negotiation: original+offer -> ₹25,000 floor -> humble front desk", () => {
+  const [a, c, d] = chat(["annual price", "any discount?", "can you do less"]);
+  assertMatch(all(a), /₹36,900/);
   assertMatch(all(c), /₹25,000/); assertMatch(all(c), /steam/); assertMatch(all(c), /yoga, Pilates/); assertEquals(c!.event, "floor_offered");
-  assertMatch(all(d), /best price/); assertMatch(all(d), /8298293003/); assert(!/₹/.test(all(d)));
-  assert(!/₹2[0-4],\d{3}/.test([a, b, c, d].map(all).join(" ")), "never below the floor");
+  assertMatch(all(d), /no further discount/); assertMatch(all(d), /visit the club or call our front desk on 8298293003/); assert(!/₹/.test(all(d)));
+  assert(!/₹2[0-4],\d{3}/.test([a, c, d].map(all).join(" ")), "never below the floor");
+});
+
+const LIVE: PlanRow[] = PLANS.filter((p) => p.id !== "a");
+Deno.test("live catalog: annual shows ₹28,900 -> ₹25,000 and refuses further discount", () => {
+  let q: QuoteState = {};
+  const a = salesTurn("Annual", { awaitingDuration: true }, LIVE)!; q = a.quote;
+  assertMatch(all(a), /₹28,900.*₹25,000/); assertMatch(all(a), /already our discounted price/);
+  const b = salesTurn("any more discount?", q, LIVE)!;
+  assertMatch(all(b), /no further discount/); assert(b.messages[0].tel); assert(!/₹/.test(all(b)));
+  const v = salesTurn("Have already visited", a.quote, LIVE)!;
+  assertMatch(all(v), /thank you for visiting.*₹25,000.*payment link/);
+});
+
+Deno.test("first ask for offers shows the offer price, not the desk", () => {
+  const r = salesTurn("any offers on quarterly", {}, PLANS)!;
+  assertMatch(all(r), /₹13,900.*₹12,000/);
 });
 
 Deno.test("no discount after offer on non-annual plans: straight to front desk", () => {
-  const [, b, c] = chat(["quarterly price", "discount please", "more discount"]);
-  assertMatch(all(b), /₹12,000/);
+  const [, c] = chat(["quarterly price", "discount please"]);
   assertMatch(all(c), /8298293003/);
   assert(!/₹/.test(all(c)));
 });
 
 Deno.test("monthly has no offer price, so bargaining goes to the desk", () => {
   const [, b] = chat(["monthly fees", "discount?"]);
-  assertMatch(all(b), /best price.*8298293003/);
+  assertMatch(all(b), /no further discount.*8298293003/);
 });
 
 Deno.test("free days, freeze, group and couple deals go to the front desk", () => {
@@ -68,7 +82,7 @@ Deno.test("add-on prices are never shown to outsiders", () => {
 });
 
 Deno.test("payment link only after an explicit yes, at the current stage price", () => {
-  const [, , interest, yes] = chat(["annual price", "discount", "I want to join", "yes"]);
+  const [, interest, yes] = chat(["annual price", "I want to join", "yes"]);
   assertMatch(all(interest), /₹36,900.*payment link\?/);
   assertEquals(interest!.createLink, undefined);
   assertEquals(yes!.createLink?.amount, 36900);
@@ -81,9 +95,9 @@ Deno.test("saying no to the link creates nothing", () => {
 });
 
 Deno.test("link at floor uses the Founder's Pass amount", () => {
-  const r = chat(["annual price", "discount", "too costly", "ok I'll take it", "yes"]);
-  assertEquals(r[4]!.createLink?.amount, 25000);
-  assertEquals(r[4]!.createLink?.plan.id, "f");
+  const r = chat(["annual price", "discount", "ok I'll take it", "yes"]);
+  assertEquals(r[3]!.createLink?.amount, 25000);
+  assertEquals(r[3]!.createLink?.plan.id, "f");
 });
 
 Deno.test("links switched off: desk instead of link", () => {
