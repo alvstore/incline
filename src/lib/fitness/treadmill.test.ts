@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { formatPace, formatDuration } from './treadmill';
 
 describe('treadmill formatting', () => {
