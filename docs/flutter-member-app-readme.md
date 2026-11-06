@@ -735,6 +735,7 @@ Use the preceding contracts in this guide. Each phase ends with a demo on real A
 - [ ] Web/Flutter plan date boundaries and multi-week/assignment selection agreement before release
 - [ ] PT: package, sessions, trainer; "Request PT" creates front-desk task
 - [ ] Progress: manual measurements through `record_member_measurement`, private photo upload/signing, read-back and ownership tests (§19); scan reports with score dials and scan quota
+- [ ] Cardio: live treadmill session upsert + Realtime, one-time completed-run insert with `session_id` dedupe, history card (§20)
 - [ ] HOWBODY QR link: in-app scanner + App/Universal Links for `/scan-login`, link sheet with cm ⇄ ft/in height (sent as cm), `howbody-bind-user`, poll session → open report (§16)
 - **Exit:** video plays inline/external; PT request appears on desk task list; a real scan links from the app and its report opens
 
