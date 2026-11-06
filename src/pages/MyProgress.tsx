@@ -1,3 +1,4 @@
+import { TreadmillRunsCard } from '@/components/fitness/TreadmillRunsCard';
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
