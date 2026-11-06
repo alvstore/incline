@@ -208,6 +208,7 @@ export function salesTurn(raw: string, q: QuoteState, rows: PlanRow[], opts: { i
     if (!dur) return { messages: [{ text: ASK_DURATION }], quote: { ...q, awaitingDuration: true }, event: null };
     if (!q.stage || q.dur !== dur) {
       const base = quoteOriginal(rows, dur, q);
+      if (base.event === "offer_revealed") return base; // offer price already shown
       if (base.event !== "price_quoted") return base;
       return nextStage(rows, base.quote); // asking for a discount right away reveals the offer
     }
