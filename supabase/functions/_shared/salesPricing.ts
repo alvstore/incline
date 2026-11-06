@@ -1,5 +1,5 @@
 // _shared/salesPricing.ts
-// v1.0.0 — Single pricing playbook for Website Chat and WhatsApp (new enquiries).
+// v1.1.0 — Single pricing playbook for Website Chat and WhatsApp (new enquiries).
 // Rules: quote only the plan asked about; original price first; offer (discounted) price on
 // the first discount/bargain; the annual floor (lowest active annual discounted price, read
 // live) as the last offer; then the front desk. Free days, freeze, group deals or any other
@@ -27,7 +27,8 @@ export type SalesReply = {
 export const DUR_LABEL: Record<Duration, string> = { monthly: "Monthly", quarterly: "Quarterly", half_yearly: "Half-Yearly", annual: "Annual" };
 const DUR_MONTHS: Record<Duration, string> = { monthly: "1 month", quarterly: "3 months", half_yearly: "6 months", annual: "12 months" };
 
-export const DESK_BEST = `This is our best price. For anything further, please call the front desk on ${DESK_PHONE}.`;
+export const DESK_BEST = `I truly understand wanting the best value, and I'm sorry I can't go lower here. This is already our discounted offer price, and no further discount is possible over chat. For that price you get the premium Panatta training floor, a fully air-conditioned club, digital lockers, free steam, plus yoga, Pilates and group classes. If you'd still like to discuss it, you're most welcome to visit the club or call our front desk on ${DESK_PHONE}.`;
+export const RE_VISITED = /\b(already (visited|seen|been|came|come|checked)|have visited|i visited|visited (already|before|the (club|gym))|seen the (club|gym|facility)|been there)\b/i;
 export const DESK_OTHER = `For free days, freezes, group or couple memberships, or any other special arrangement, please contact our front desk on ${DESK_PHONE}.`;
 export const ADDON_OUTSIDER = `Add-on rates for non-members are different. Please call the front desk on ${DESK_PHONE} for the current rate.`;
 export const ASK_DURATION = "Which membership length are you interested in: Monthly, Quarterly, Half-Yearly or Annual?";
@@ -111,6 +112,16 @@ function stagePrice(rows: PlanRow[], q: QuoteState): { plan: PlanRow; amount: nu
 function quoteOriginal(rows: PlanRow[], dur: Duration, q: QuoteState): SalesReply {
   const p = standardPlan(rows, dur);
   if (!p) return { messages: [{ text: `Our team will share the ${DUR_LABEL[dur]} membership rate with you. You can also call the front desk on ${DESK_PHONE}.`, tel: true }], quote: { ...q, dur, awaitingDuration: false }, event: "desk_handoff" };
+  const offer = offerOf(p);
+  if (offer) {
+    return {
+      messages: [
+        { text: `The ${DUR_LABEL[dur]} membership (${DUR_MONTHS[dur]}) is ${inr(p.price)}, and right now it's available at our offer price of ${inr(offer)}.` },
+        { text: `${dur === "annual" ? FLOOR_INCLUDES + " " : ""}This is already our discounted price. Would you like me to send a payment link, or do you have any questions?` },
+      ],
+      quote: { dur, stage: "offer", awaitingDuration: false }, event: "offer_revealed", plan: p, amount: offer,
+    };
+  }
   return {
     messages: [
       { text: `The ${DUR_LABEL[dur]} membership (${DUR_MONTHS[dur]}) is ${inr(p.price)}.` },
@@ -166,6 +177,13 @@ export function salesTurn(raw: string, q: QuoteState, rows: PlanRow[], opts: { i
       return { messages: [{ text: `Please call the front desk on ${DESK_PHONE} and they will complete your membership.`, tel: true }], quote: { ...q, awaitingLinkConfirm: false }, event: "desk_handoff" };
     }
     if (RE_SALES.no.test(t)) return { messages: [{ text: "No problem. What else would you like to know?" }], quote: { ...q, awaitingLinkConfirm: false }, event: null };
+  }
+
+  // Visitor already saw the club — don't push another visit; restate the standing offer.
+  if (RE_VISITED.test(t)) {
+    const sp = q.dur ? stagePrice(rows, q.stage ? q : { ...q, stage: "original" }) : null;
+    if (sp && q.dur) return { messages: [{ text: `Wonderful, thank you for visiting us! So you've already experienced the club. The ${DUR_LABEL[q.dur]} membership is ${inr(sp.amount)} for you. Shall I send the payment link?` }], quote: { ...q, awaitingLinkConfirm: linksEnabled }, event: null, plan: sp.plan, amount: sp.amount };
+    return { messages: [{ text: `Wonderful, thank you for visiting us! ${ASK_DURATION}` }], quote: { ...q, awaitingDuration: true }, event: null };
   }
 
   // Other promises: free days, freeze, group/couple, etc. Never invented.
