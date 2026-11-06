@@ -1,3 +1,4 @@
+import { TreadmillRunsCard } from '@/components/fitness/TreadmillRunsCard';
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
@@ -173,6 +174,8 @@ export default function MyProgress() {
           memberCode={member.member_code}
           variant="member"
         />
+
+        <TreadmillRunsCard memberId={member.id} />
 
         {/* Cross-link to Workout & Diet (no duplicate content) */}
         <div className="grid gap-4 md:grid-cols-2">
