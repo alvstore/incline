@@ -735,6 +735,7 @@ Use the preceding contracts in this guide. Each phase ends with a demo on real A
 - [ ] Web/Flutter plan date boundaries and multi-week/assignment selection agreement before release
 - [ ] PT: package, sessions, trainer; "Request PT" creates front-desk task
 - [ ] Progress: manual measurements through `record_member_measurement`, private photo upload/signing, read-back and ownership tests (§19); scan reports with score dials and scan quota
+- [ ] Cardio: live treadmill session upsert + Realtime, one-time completed-run insert with `session_id` dedupe, history card (§20)
 - [ ] HOWBODY QR link: in-app scanner + App/Universal Links for `/scan-login`, link sheet with cm ⇄ ft/in height (sent as cm), `howbody-bind-user`, poll session → open report (§16)
 - **Exit:** video plays inline/external; PT request appears on desk task list; a real scan links from the app and its report opens
 
@@ -904,8 +905,101 @@ await supabase.rpc('log_mobile_error', params: {
 
 Wire it in `FlutterError.onError` and `PlatformDispatcher.instance.onError`; never let logging failures throw. Pre-login crashes are not accepted — buffer them locally and send after sign-in.
 
-## Treadmill & cardio runs
+## 20. Treadmill & cardio runs (Flutter contract)
 
-- Live session (own member only, Realtime enabled): `upsert` into `treadmill_live_sessions` with `session_id, treadmill_code, mac_address, member_id, status, elapsed_seconds, distance_meters, calories_burned, current_speed_kmh, current_incline_percent, heart_rate_bpm, step_count`. Subscribe with `postgres_changes` filtered by `session_id=eq.<id>`. Delete or set `status='completed'` when finished.
-- Completed run: `insert` into `treadmill_workouts` (`member_id, treadmill_code, mac_address, session_id, start_time, end_time, duration_seconds, distance_meters, calories_burned, avg_speed_kmh, max_speed_kmh, avg_incline_percent, avg_heart_rate, max_heart_rate, step_count, raw_payload`). `branch_id` is set by the server; re-sending the same `session_id` returns a duplicate error (409/23505) — treat as already saved. Runs cannot be edited after saving.
-- Visibility: member sees own; their trainer sees their clients; managers/owners read-only.
+Two tables, two jobs. `treadmill_live_sessions` is the volatile "right now" row for a run in progress (Realtime-enabled, one row per `session_id`, overwritten repeatedly). `treadmill_workouts` is the permanent history (append-only: `SELECT` + `INSERT` only, no update/delete grant, so a saved run can never be edited from the app).
+
+Resolve the member UUID once after sign-in and reuse it; never accept it from UI or storage:
+
+```dart
+final m = await supabase.from('members')
+    .select('id, branch_id')
+    .eq('user_id', supabase.auth.currentUser!.userId)
+    .maybeSingle();
+final myMemberId = m?['id'] as String?; // null => not a member: hide the whole feature
+```
+
+### 20.1 Live session (optional, only if the app drives a treadmill)
+
+Throttle writes to one every 2–5 s. `session_id` is the primary key, so upsert on it. `branch_id` is stamped by a server trigger — do not send it.
+
+```dart
+await supabase.from('treadmill_live_sessions').upsert({
+  'session_id': sessionId,           // app-generated UUID, stable for the whole run
+  'member_id': myMemberId,
+  'treadmill_code': code,            // e.g. TR-03
+  'mac_address': mac,                // scanner/treadmill MAC as reported
+  'status': 'active',                // active | paused | completed
+  'elapsed_seconds': elapsed,
+  'distance_meters': distance,
+  'calories_burned': calories,
+  'current_speed_kmh': speed,        // 0.1 increments
+  'current_incline_percent': incline,
+  'heart_rate_bpm': hr,
+  'step_count': steps,
+}, onConflict: 'session_id');
+```
+
+Realtime (same `session_id` filter, for a second screen/watch companion):
+
+```dart
+final sub = supabase.channel('treadmill:$sessionId')
+    .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'treadmill_live_sessions',
+        filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'session_id', value: sessionId),
+        callback: (p) => render(p.newRecord))
+    .subscribe();
+```
+
+When the run ends, set `status: 'completed'` (or `delete()` the row) so a stale live row never lingers on another screen. RLS restricts every read/write to the signed-in member's own session; a second member must never be able to open or overwrite someone else's `session_id`.
+
+### 20.2 Completed run (mandatory history write)
+
+Insert exactly once per run, after the run is finished, with the same `session_id` used live. `duration_seconds`, `distance_meters`, `calories_burned` and `avg_speed_kmh` are NOT NULL — send real numbers (0 is allowed, a missing field is not). Always send `session_id`; without it the server cannot detect a duplicate.
+
+```dart
+final res = await supabase.from('treadmill_workouts').insert({
+  'member_id': myMemberId,
+  'treadmill_code': code,
+  'mac_address': mac,
+  'session_id': sessionId,           // REQUIRED for duplicate protection
+  'start_time': startIso,            // ISO-8601 UTC
+  'end_time': endIso,
+  'duration_seconds': duration,
+  'distance_meters': distance,
+  'calories_burned': calories,
+  'avg_speed_kmh': avgSpeed,
+  'max_speed_kmh': maxSpeed,
+  'avg_incline_percent': avgIncline,
+  'avg_heart_rate': avgHr,           // null when no HR strap
+  'max_heart_rate': maxHr,
+  'step_count': steps,
+  'raw_payload': rawDeviceJson,      // optional device dump, no personal data
+});
+```
+
+Duplicate `session_id` for the same member returns Postgres `23505` (HTTP 409) — treat it as **already saved**, show success and stop retrying; never re-insert with a new `session_id` to "get around" it, that creates a fake second run. Runs cannot be edited or deleted afterwards, so confirm the numbers before inserting. Queue offline runs locally and flush on reconnect with the same `session_id`.
+
+### 20.3 History read (web parity)
+
+```dart
+final runs = await supabase.from('treadmill_workouts')
+    .select('id, treadmill_code, start_time, duration_seconds, distance_meters, '
+        'calories_burned, avg_incline_percent, avg_heart_rate, max_heart_rate')
+    .eq('member_id', myMemberId)
+    .order('start_time', ascending: false)
+    .limit(10);
+```
+
+Display helpers must match `src/lib/fitness/treadmill.ts`: pace = `duration_seconds / (distance_meters / 1000)` rounded to whole seconds, shown `m:ss /km`, and `—` when distance is 0; duration is `Hh Mm` when ≥ 1 h, else `Mm SSs`. Show the card only when there is at least one run (web hides it while empty).
+
+### 20.4 Boundaries
+
+- A run is **not** attendance, not a PT session and not a class booking — never call gate, PT or booking RPCs from this flow.
+- No price, plan or discount content on this screen.
+- Heart rate is health data: keep it on-device/in-app, never in push payloads, analytics events or error logs.
+- Visibility server-side: member sees own rows; their assigned trainer sees their clients; managers see their branch; owners see all. App-side `.eq('member_id', …)` is defense-in-depth, not the authorization layer.
