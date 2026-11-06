@@ -1,4 +1,4 @@
-// v2.0.0 — one device-push worker: browser (web) + Flutter (fcm) mirror every in-app notification.
+// v2.1.0 — one device-push worker: browser (web) + Flutter (fcm) mirror every in-app notification.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import webpush from 'npm:web-push@3.6.7';
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
@@ -102,7 +102,13 @@ Deno.serve(async req => {
             const lovableKey = Deno.env.get('LOVABLE_API_KEY'), connKey = Deno.env.get('FIREBASE_MESSAGING_API_KEY');
             if (!lovableKey || !connKey) { await finish('suppressed', 'Phone push not connected; notification remains in inbox'); return; }
             const res = await fetch(`${FCM_GATEWAY}/v1/projects/_/messages:send`, { method: 'POST', headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': connKey, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: { token: fcmToken(sub.endpoint), notification: { title: 'Incline', body: 'You have a new update. Open Incline to view it.' }, data: { url, notification_id: String(notice.id) }, android: { priority: 'high', notification: { tag: String(notice.id) } } } }) });
+              body: JSON.stringify({ message: (() => {
+                const title = String(notice.title || 'Incline Alert');
+                const body = String(notice.message || notice.body || 'You have a new update.');
+                return { token: fcmToken(sub.endpoint), notification: { title, body },
+                  android: { priority: 'high', notification: { tag: String(notice.id), channel_id: 'incline_club_alerts', notification_priority: 'PRIORITY_MAX', default_sound: true, default_vibrate_timings: true } },
+                  data: { notification_id: String(notice.id), title, message: body, body, url } };
+              })() }) });
             if (res.ok) { await finish('sent'); sent++; return; }
             const text = await res.text();
             if (res.status === 404 || (res.status === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(text))) { await db.from('web_push_subscriptions').delete().eq('id', sub.id); return; }
