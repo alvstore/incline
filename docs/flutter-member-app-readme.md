@@ -903,3 +903,9 @@ await supabase.rpc('log_mobile_error', params: {
 ```
 
 Wire it in `FlutterError.onError` and `PlatformDispatcher.instance.onError`; never let logging failures throw. Pre-login crashes are not accepted — buffer them locally and send after sign-in.
+
+## Treadmill & cardio runs
+
+- Live session (own member only, Realtime enabled): `upsert` into `treadmill_live_sessions` with `session_id, treadmill_code, mac_address, member_id, status, elapsed_seconds, distance_meters, calories_burned, current_speed_kmh, current_incline_percent, heart_rate_bpm, step_count`. Subscribe with `postgres_changes` filtered by `session_id=eq.<id>`. Delete or set `status='completed'` when finished.
+- Completed run: `insert` into `treadmill_workouts` (`member_id, treadmill_code, mac_address, session_id, start_time, end_time, duration_seconds, distance_meters, calories_burned, avg_speed_kmh, max_speed_kmh, avg_incline_percent, avg_heart_rate, max_heart_rate, step_count, raw_payload`). `branch_id` is set by the server; re-sending the same `session_id` returns a duplicate error (409/23505) — treat as already saved. Runs cannot be edited after saving.
+- Visibility: member sees own; their trainer sees their clients; managers/owners read-only.

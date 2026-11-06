@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
+import { TreadmillRunsCard } from '@/components/fitness/TreadmillRunsCard';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
 import { HealthFlagBadge } from '@/components/trainer/HealthFlagBadge';
 import { ClientBriefSheet, type BriefTarget } from '@/components/trainer/ClientBriefSheet';
@@ -454,7 +455,7 @@ export default function MyClients() {
             </SheetTitle>
           </SheetHeader>
           <div className="mt-6">
-            {progressDrawer.memberId && <MeasurementProgressView memberId={progressDrawer.memberId} />}
+            {progressDrawer.memberId && <div className="space-y-4"><MeasurementProgressView memberId={progressDrawer.memberId} /><TreadmillRunsCard memberId={progressDrawer.memberId} hideWhenEmpty={false} /></div>}
           </div>
         </SheetContent>
       </Sheet>
