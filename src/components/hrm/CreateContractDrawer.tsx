@@ -216,7 +216,8 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           department: employee?.department,
         },
         Number(f.commissionPercentage) || 0,
-      , noticeFor(f.agreementRole)),
+        noticeFor(f.agreementRole),
+      ),
     }));
   }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate, hrNotice, (variables as Record<string, string>).notice_period_days]);
 
