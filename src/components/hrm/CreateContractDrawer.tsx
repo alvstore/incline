@@ -21,6 +21,7 @@ import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { getEmploymentAgreementTemplate, DEFAULT_NOTICE_DAYS, type AgreementRole, type EmployeePrefill } from '@/lib/hrm/employmentAgreementTemplate';
 import { getEmployerProfile } from '@/lib/hrm/getEmployerProfile';
 import { track } from '@/lib/analytics';
+import { WitnessPickerField } from './witnesses/WitnessPickerField';
 
 function detectAgreementRole(employee: any): AgreementRole {
   if (employee?.staff_type === 'trainer') return 'trainer';
@@ -563,7 +564,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             const groupHelp =
               groupRole === 'employee' ? 'Auto-filled from the staff record / profile. Override if HR has corrected info on hand.'
               : groupRole === 'hr' ? 'Probation and notice period for this contract. Defaults to HR Settings.'
-              : 'Optional here — can be filled on the witness signing link.';
+              : 'Pick a saved witness (with signature) or type details. The employee will not be asked for witnesses.';
             return (
               <div key={groupRole} className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
                 <div className="flex items-center gap-2">
@@ -574,6 +575,31 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground -mt-1">{groupHelp}</p>
+                {(groupRole === 'witness_1' || groupRole === 'witness_2') && (() => {
+                  const n = groupRole === 'witness_1' ? 1 : 2;
+                  const other = n === 1 ? 2 : 1;
+                  const vv = variables as Record<string, string>;
+                  return (
+                    <WitnessPickerField
+                      slot={n as 1 | 2}
+                      branchId={employee?.branch_id ?? null}
+                      selectedId={vv[`witness_${n}_id`]}
+                      excludeId={vv[`witness_${other}_id`]}
+                      employeeName={employee?.profile?.full_name || employee?.full_name}
+                      onPick={(w) => setVariables((prev) => {
+                        const next = { ...(prev as Record<string, string>) };
+                        if (w) {
+                          next[`witness_${n}_id`] = w.id;
+                          next[`witness_${n}_name`] = w.full_name;
+                          next[`witness_${n}_phone`] = w.phone ?? '';
+                        } else {
+                          delete next[`witness_${n}_id`];
+                        }
+                        return next as typeof prev;
+                      })}
+                    />
+                  );
+                })()}
                 <div className="grid grid-cols-1 gap-3">
                   {groupVars.map((v) => {
                     const auto = (prefill as any)[v.key];
@@ -600,7 +626,13 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                             type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
                             placeholder={v.placeholder}
                             value={current}
-                            onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                            onChange={(e) => setVariables((prev) => {
+                              const next = { ...(prev as Record<string, string>), [v.key]: e.target.value };
+                              // Typing over a picked witness turns it into a one-off entry.
+                              const m = /^witness_(\d)_/.exec(v.key);
+                              if (m) delete next[`witness_${m[1]}_id`];
+                              return next as typeof prev;
+                            })}
                           />
                         )}
                         {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
