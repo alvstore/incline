@@ -46,4 +46,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - In-App: notifications → `web-push` → all devices; phone push keys: push_provider_secrets.
 - `CampaignWizard` is the sole campaign composer; parallel composers drifted.
 - Renewal cases open each membership cycle via scheduled `detect_renewal_cases` + trigger, independent of messaging.
-- Employment agreement text lives only in `src/lib/hrm/employmentAgreementTemplate.ts` (role-only duties, notice days, code of conduct); the PDF builder re-applies saved notice days/role via `contract-signing/termsFixups.ts`, so drafts and signed PDFs never show another role's duties or a stale notice period.
+- Employment agreement text: only `src/lib/hrm/employmentAgreementTemplate.ts`; PDF re-applies saved notice/role, so old drafts can't drift.
