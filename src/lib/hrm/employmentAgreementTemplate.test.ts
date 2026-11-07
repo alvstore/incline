@@ -1,3 +1,5 @@
+// Run: bun test src/lib/hrm/employmentAgreementTemplate.test.ts
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
 import { describe, it, expect } from 'bun:test';
 import { getEmploymentAgreementTemplate, noticePhrase } from './employmentAgreementTemplate';
 
