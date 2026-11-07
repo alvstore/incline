@@ -40,3 +40,19 @@ export function applyRoleAndNotice(terms: string, role: string, noticeDays: numb
   }
   return out;
 }
+
+export interface LockedWitness { slot: 1 | 2; name: string; phone: string | null; witness_id: string | null }
+
+/** Witness details fixed by HR on the contract (drawer or saved witness list). */
+export function witnessesFromVars(vars: unknown): LockedWitness[] {
+  const v = (vars ?? {}) as Record<string, unknown>;
+  const out: LockedWitness[] = [];
+  for (const n of [1, 2] as const) {
+    const name = String(v[`witness_${n}_name`] ?? "").trim();
+    if (!name) continue;
+    const phone = String(v[`witness_${n}_phone`] ?? "").trim() || null;
+    const id = String(v[`witness_${n}_id`] ?? "").trim() || null;
+    out.push({ slot: n, name, phone, witness_id: id });
+  }
+  return out;
+}
