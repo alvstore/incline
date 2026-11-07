@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
       payment_reminders: 0,
       birthday_wishes: 0,
       membership_expiry: 0,
+      membership_expired_inapp: 0,
       class_reminders: 0,
       pt_reminders: 0,
       benefit_reminders: 0,
