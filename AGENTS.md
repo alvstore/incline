@@ -43,5 +43,6 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - Facility booking channel lives in `benefit_bookings.source` (allow-list shared by the check constraint and `book_facility_slot`); signed-in members may only self-report `app_android`/`app_ios`, everything else from a member is forced to `member_portal`. UI labels/badges come only from `src/lib/bookings/bookingSource.ts` so staff views and filters never drift from the server list.
 - SMS templates are DLT-shaped: brand only as {{brand_name}} (dispatcher defaults it to the customer brand), each placeholder maps positionally to {#var#} via src/lib/templates/dlt.ts, and SMS rows can be switched on only when `smsActivationBlocker` passes (DLT ID + header); `send-sms` re-checks this server-side and maps the template's DLT ID/header into whichever provider is active (branch row before global), because unregistered SMS content is blocked by operators.
 - MSG91/web chatbot/In-App rules: supabase/functions/AGENTS.md.
-- "In-App" is one path (notifications → single `web-push` worker → all devices), because split pipelines drift.
-- `CampaignWizard` is the sole campaign composer (In-App via `src/lib/campaigns/inAppDelivery.ts`), because parallel composers drifted.
+- In-App: notifications → `web-push` → all devices.
+- `CampaignWizard` is the sole campaign composer; parallel composers drifted.
+- Renewal cases open each membership cycle via scheduled `detect_renewal_cases` + trigger, independent of messaging.
