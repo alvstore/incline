@@ -8,6 +8,9 @@
  * | pt_renew_completed  | Server confirmed the renewal purchase |
  * | health_brief_opened | Trainer opened a client health brief  |
  * | health_guidance_generated | AI precautions returned          |
+ * | notification_settings_saved | Notifications Save succeeded (changed_count, section) |
+ * | notification_section_viewed | Notifications section tab changed (section) |
+ * | notification_recipient_toggled | Lead recipient channel saved (channel, enabled) |
  */
 type Props = Record<string, string | number | boolean | null>;
 export function track(event: string, properties?: Props) {
