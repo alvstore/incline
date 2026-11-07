@@ -45,4 +45,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - MSG91/web chatbot/In-App rules: supabase/functions/AGENTS.md.
 - "In-App" is one path (notifications → single `web-push` worker → all devices), because split pipelines drift.
 - `CampaignWizard` is the sole campaign composer (In-App via `src/lib/campaigns/inAppDelivery.ts`), because parallel composers drifted.
-- Renewal cases are opened per membership cycle by the scheduled `detect_renewal_cases` Automation Brain rule plus the `tg_renewal_case_open_cycle` trigger, independent of the (optional) messaging engine, because a manual-only scan silently stopped new cycles.
+- Renewal cases open per membership cycle via scheduled `detect_renewal_cases` + `tg_renewal_case_open_cycle`, independent of messaging.
