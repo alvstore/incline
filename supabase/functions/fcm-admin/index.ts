@@ -15,7 +15,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const caller = await requireCaller(req, corsHeaders, ["owner", "admin"]);
+    const caller = await requireCaller(req, corsHeaders, { roles: ["owner", "admin"], allowInternal: false });
     if (!caller.ok) return caller.response;
     if (caller.internal) return json(403, { error: "Owner or admin sign-in required" });
     const db = caller.admin;
