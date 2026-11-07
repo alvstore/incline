@@ -10,6 +10,7 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/registration
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { track } from '@/lib/analytics';
 import { Loader2 } from 'lucide-react';
 import { WITNESS_BUCKET, useWitnessSignatureUrl, type ContractWitness } from './useContractWitnesses';
 
@@ -88,6 +89,7 @@ export function WitnessSheet({ open, onOpenChange, branchId, witness, onSaved }:
     onSuccess: (w) => {
       qc.invalidateQueries({ queryKey: ['contract-witnesses'] });
       toast.success(witness ? 'Witness updated' : 'Witness saved');
+      if (!witness) track('witness_created', { has_signature: Boolean(w.signature_path) });
       onSaved?.(w);
       onOpenChange(false);
     },

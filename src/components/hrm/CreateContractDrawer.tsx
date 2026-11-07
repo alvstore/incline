@@ -269,6 +269,12 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         },
       );
       track('contract_draft_generated', { role: formData.agreementRole, notice_days: noticeFor(formData.agreementRole) });
+      if (createdContract?.id) {
+        supabase.from('contracts').select('policy_snapshot').eq('id', createdContract.id).maybeSingle().then(({ data }) => {
+          const n = Array.isArray(data?.policy_snapshot) ? data.policy_snapshot.length : 0;
+          track('contract_policies_attached', { role: formData.agreementRole, policy_count: n });
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['employee-contracts'] });
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
       onOpenChange(false);
