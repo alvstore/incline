@@ -7,7 +7,10 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { UserCheck, Users, ShieldCheck } from 'lucide-react';
+import { UserCheck, Users, ShieldCheck, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { track } from '@/lib/analytics';
+import { SettingsCard, GroupLabel, ToggleRow, settingsCardClass } from '@/components/settings/notifications/primitives';
 
 type LeadRulesForm = {
   sms_to_lead: boolean;
@@ -43,11 +46,15 @@ const DEFAULTS: LeadRulesForm = {
 
 export type LeadNotificationCardsHandle = {
   save: () => Promise<void>;
+  isDirty: () => boolean;
 };
+
+type BoolField = { [K in keyof LeadRulesForm]: LeadRulesForm[K] extends boolean ? K : never }[keyof LeadRulesForm];
 
 type Props = {
   /** Set of cards to render. Defaults to both. */
   variant?: 'lead' | 'team' | 'both';
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 /**
@@ -57,7 +64,7 @@ type Props = {
  * Use the returned ref's `save()` to persist (called by the page's Save Preferences).
  */
 export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Props>(
-  function LeadNotificationCards({ variant = 'both' }, ref) {
+  function LeadNotificationCards({ variant = 'both', onDirtyChange }, ref) {
     const { selectedBranch } = useBranchContext();
     const queryClient = useQueryClient();
     const branchId = selectedBranch !== 'all' ? selectedBranch : null;
@@ -83,24 +90,30 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
     });
 
     const [form, setForm] = useState<LeadRulesForm>(DEFAULTS);
+    const [baseline, setBaseline] = useState<LeadRulesForm>(DEFAULTS);
+    const dirty = (Object.keys(form) as (keyof LeadRulesForm)[]).some((k) => form[k] !== baseline[k]);
+    useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
     useEffect(() => {
       if (rules) {
-        setForm({
+        const r = rules as typeof rules & { email_to_lead?: boolean; email_to_admins?: boolean; email_to_managers?: boolean };
+        const next: LeadRulesForm = {
           sms_to_lead: rules.sms_to_lead ?? false,
           whatsapp_to_lead: rules.whatsapp_to_lead ?? false,
-          email_to_lead: (rules as any).email_to_lead ?? false,
+          email_to_lead: r.email_to_lead ?? false,
           sms_to_admins: rules.sms_to_admins ?? false,
           whatsapp_to_admins: rules.whatsapp_to_admins ?? false,
-          email_to_admins: (rules as any).email_to_admins ?? false,
+          email_to_admins: r.email_to_admins ?? false,
           sms_to_managers: rules.sms_to_managers ?? false,
           whatsapp_to_managers: rules.whatsapp_to_managers ?? false,
-          email_to_managers: (rules as any).email_to_managers ?? false,
+          email_to_managers: r.email_to_managers ?? false,
           lead_welcome_sms: rules.lead_welcome_sms || DEFAULTS.lead_welcome_sms,
           lead_welcome_whatsapp: rules.lead_welcome_whatsapp || DEFAULTS.lead_welcome_whatsapp,
           team_alert_sms: rules.team_alert_sms || DEFAULTS.team_alert_sms,
           team_alert_whatsapp: rules.team_alert_whatsapp || DEFAULTS.team_alert_whatsapp,
-        });
+        };
+        setForm(next);
+        setBaseline(next);
       }
     }, [rules]);
 
@@ -119,13 +132,14 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
         const { error } = await supabase.from('lead_notification_rules').insert(payload);
         if (error) throw error;
       }
+      setBaseline(form);
       queryClient.invalidateQueries({ queryKey: ['lead-notification-rules'] });
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useImperativeHandle(ref, () => ({ save }), [form, rules, branchId]);
+    useImperativeHandle(ref, () => ({ save, isDirty: () => dirty }), [form, rules, branchId, dirty]);
 
-    const toggle = (field: keyof LeadRulesForm) => {
+    const toggle = (field: BoolField) => {
       setForm((prev) => ({ ...prev, [field]: !prev[field] }));
     };
 
@@ -134,15 +148,9 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
       return (
         <>
           {Array.from({ length: count }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-48" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[1, 2, 3].map((j) => (
-                  <Skeleton key={j} className="h-10 w-full" />
-                ))}
-              </CardContent>
+            <Card key={i} className={cn(settingsCardClass, 'col-span-12 space-y-3 p-5 lg:col-span-6')}>
+              <Skeleton className="h-6 w-48" />
+              {[1, 2, 3].map((j) => <Skeleton key={j} className="h-10 w-full" />)}
             </Card>
           ))}
         </>
@@ -151,122 +159,49 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
 
     const showLead = variant === 'both' || variant === 'lead';
     const showTeam = variant === 'both' || variant === 'team';
+    const row = (field: BoolField, label: string, hint: string) => (
+      <ToggleRow key={field} label={label} hint={hint} checked={form[field]} onChange={() => toggle(field)} />
+    );
 
     return (
       <>
         {showLead && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <UserCheck className="h-5 w-5 text-primary" />
-                <CardTitle>Lead Alerts</CardTitle>
-              </div>
-              <CardDescription>Notify the lead when they're captured</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Row
-                label="SMS to Lead"
-                desc="Send welcome SMS to captured lead"
-                checked={form.sms_to_lead}
-                onChange={() => toggle('sms_to_lead')}
-              />
-              <Row
-                label="WhatsApp to Lead"
-                desc="Send WhatsApp welcome message to lead"
-                checked={form.whatsapp_to_lead}
-                onChange={() => toggle('whatsapp_to_lead')}
-              />
-              <Row
-                label="Email to Lead"
-                desc="Send a branded welcome email to the lead"
-                checked={form.email_to_lead}
-                onChange={() => toggle('email_to_lead')}
-              />
-            </CardContent>
-          </Card>
+          <SettingsCard
+            className="col-span-12 lg:col-span-6"
+            icon={UserCheck}
+            title="Message the lead"
+            description="Welcome message when a new enquiry is captured"
+          >
+            {row('sms_to_lead', 'SMS', 'Welcome SMS to the lead')}
+            {row('whatsapp_to_lead', 'WhatsApp', 'Welcome WhatsApp message to the lead')}
+            {row('email_to_lead', 'Email', 'Branded welcome email to the lead')}
+          </SettingsCard>
         )}
 
         {showTeam && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                <CardTitle>Team Alerts</CardTitle>
-              </div>
-              <CardDescription>Alert your team when new leads arrive</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Row
-                label="SMS to Admins"
-                desc="Alert owners & admins via SMS"
-                checked={form.sms_to_admins}
-                onChange={() => toggle('sms_to_admins')}
-              />
-              <Row
-                label="WhatsApp to Admins"
-                desc="Alert owners & admins via WhatsApp (approved template)"
-                checked={form.whatsapp_to_admins}
-                onChange={() => toggle('whatsapp_to_admins')}
-              />
-              <Row
-                label="Email to Admins"
-                desc="Alert owners & admins via email"
-                checked={form.email_to_admins}
-                onChange={() => toggle('email_to_admins')}
-              />
-              <Row
-                label="SMS to Managers"
-                desc="Alert branch managers via SMS"
-                checked={form.sms_to_managers}
-                onChange={() => toggle('sms_to_managers')}
-              />
-              <Row
-                label="WhatsApp to Managers"
-                desc="Alert branch managers via WhatsApp (approved template)"
-                checked={form.whatsapp_to_managers}
-                onChange={() => toggle('whatsapp_to_managers')}
-              />
-              <Row
-                label="Email to Managers"
-                desc="Alert branch managers via email"
-                checked={form.email_to_managers}
-                onChange={() => toggle('email_to_managers')}
-              />
-              <p className="rounded-lg bg-success/10 px-3 py-2 text-xs leading-relaxed text-success dark:bg-success/30 dark:text-success">
-                <strong>Delivery:</strong> Team WhatsApp alerts are sent via the approved
-                Meta template <code>internal_new_lead_alert</code>, so they deliver to
-                admins/managers even outside the 24-hour customer-service window. SMS and
-                email use your configured providers.
-              </p>
-            </CardContent>
-          </Card>
+          <SettingsCard
+            className="col-span-12 lg:col-span-6"
+            icon={Users}
+            title="Alert your team"
+            description="Tell owners, admins and managers about new leads"
+          >
+            <GroupLabel>Owners &amp; admins</GroupLabel>
+            {row('sms_to_admins', 'SMS', 'Text message alert')}
+            {row('whatsapp_to_admins', 'WhatsApp', 'Approved template, delivers anytime')}
+            {row('email_to_admins', 'Email', 'Email alert')}
+            <GroupLabel>Branch managers</GroupLabel>
+            {row('sms_to_managers', 'SMS', 'Text message alert')}
+            {row('whatsapp_to_managers', 'WhatsApp', 'Approved template, delivers anytime')}
+            {row('email_to_managers', 'Email', 'Email alert')}
+            <p className="mx-3 mt-3 rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              Team WhatsApp alerts use an approved template, so they arrive even outside the 24-hour chat window.
+            </p>
+          </SettingsCard>
         )}
       </>
     );
   }
 );
-
-function Row({
-  label,
-  desc,
-  checked,
-  onChange,
-}: {
-  label: string;
-  desc: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <div>
-        <Label>{label}</Label>
-        <p className="text-sm text-muted-foreground">{desc}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </div>
-  );
-}
 
 // === Per-admin recipient toggles — full-width card ===
 interface AdminRow {
