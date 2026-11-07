@@ -1,6 +1,5 @@
 import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -221,9 +220,19 @@ function maskPhone(p: string | null): string {
   return `${p.slice(0, p.length - digits.length + 2)}•••${digits.slice(-2)}`;
 }
 
+type Channel = 'whatsapp_enabled' | 'sms_enabled' | 'email_enabled';
+const CHANNELS: { key: Channel; label: string }[] = [
+  { key: 'whatsapp_enabled', label: 'WhatsApp' },
+  { key: 'sms_enabled', label: 'SMS' },
+  { key: 'email_enabled', label: 'Email' },
+];
+
+interface ProfileRow { id: string; full_name: string | null; phone: string | null; email: string | null }
+interface PrefRow { user_id: string; whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean | null }
+
 export function AdminRecipientsCard() {
   const queryClient = useQueryClient();
-  const { data: admins, isLoading } = useQuery({
+  const { data: admins, isLoading, isError, refetch } = useQuery({
     queryKey: ['lead-notification-admin-recipients'],
     queryFn: async (): Promise<AdminRow[]> => {
       const { data: roleRows, error: rErr } = await supabase
@@ -231,139 +240,133 @@ export function AdminRecipientsCard() {
         .select('user_id')
         .in('role', ['owner', 'admin']);
       if (rErr) throw rErr;
-      const ids = Array.from(new Set((roleRows || []).map((r: any) => r.user_id)));
+      const ids = Array.from(new Set((roleRows ?? []).map((r) => r.user_id as string)));
       if (ids.length === 0) return [];
 
-      const [{ data: profiles }, { data: prefs }] = await Promise.all([
+      const [{ data: profiles, error: pErr }, { data: prefs }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, phone, email').in('id', ids),
         supabase
           .from('lead_notification_admin_prefs')
           .select('user_id, whatsapp_enabled, sms_enabled, email_enabled')
           .in('user_id', ids),
       ]);
+      if (pErr) throw pErr;
 
-      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean }>();
-      for (const p of prefs || []) prefMap.set((p as any).user_id, p as any);
+      const prefMap = new Map<string, PrefRow>();
+      for (const p of (prefs ?? []) as PrefRow[]) prefMap.set(p.user_id, p);
 
-      return (profiles || []).map((p: any) => {
-        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true, email_enabled: true };
+      return ((profiles ?? []) as ProfileRow[]).map((p) => {
+        const pref = prefMap.get(p.id);
         return {
           id: p.id,
           full_name: p.full_name,
           phone: p.phone,
           email: p.email ?? null,
-          whatsapp_enabled: pref.whatsapp_enabled,
-          sms_enabled: pref.sms_enabled,
-          email_enabled: pref.email_enabled ?? true,
+          whatsapp_enabled: pref?.whatsapp_enabled ?? true,
+          sms_enabled: pref?.sms_enabled ?? true,
+          email_enabled: pref?.email_enabled ?? true,
         };
       });
     },
   });
 
   const updatePref = useMutation({
-    mutationFn: async (input: {
-      user_id: string;
-      whatsapp_enabled: boolean;
-      sms_enabled: boolean;
-      email_enabled: boolean;
-    }) => {
-      const { error } = await supabase
-        .from('lead_notification_admin_prefs')
-        .upsert(input, { onConflict: 'user_id' });
+    mutationFn: async (input: { row: AdminRow; channel: Channel; value: boolean }) => {
+      const { row, channel, value } = input;
+      const { error } = await supabase.from('lead_notification_admin_prefs').upsert(
+        {
+          user_id: row.id,
+          whatsapp_enabled: row.whatsapp_enabled,
+          sms_enabled: row.sms_enabled,
+          email_enabled: row.email_enabled,
+          [channel]: value,
+        },
+        { onConflict: 'user_id' },
+      );
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lead-notification-admin-recipients'] }),
-    onError: (e: any) => toast.error(e.message || 'Failed to update preference'),
+    onMutate: async ({ row, channel, value }) => {
+      const key = ['lead-notification-admin-recipients'];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<AdminRow[]>(key);
+      queryClient.setQueryData<AdminRow[]>(key, (old) =>
+        (old ?? []).map((a) => (a.id === row.id ? { ...a, [channel]: value } : a)));
+      return { prev };
+    },
+    onSuccess: (_d, { channel, value }) =>
+      track('notification_recipient_toggled', { channel: channel.replace('_enabled', ''), enabled: value }),
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['lead-notification-admin-recipients'], ctx.prev);
+      toast.error('Could not update this recipient. Please try again.');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['lead-notification-admin-recipients'] }),
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <CardTitle>Admin Recipients</CardTitle>
+    <SettingsCard
+      icon={ShieldCheck}
+      title="Lead alert recipients"
+      description="Which owners and admins get lead alerts. The team switches above must also be on."
+      action={
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+          <Zap className="h-3 w-3" aria-hidden="true" /> Saves instantly
+        </span>
+      }
+    >
+      {isLoading ? (
+        <div className="space-y-2 px-3">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
         </div>
-        <CardDescription>
-          Choose which owners/admins receive lead alerts. Master toggles above must also be on.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-2">
-            {[1, 2].map((i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : !admins || admins.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No owners/admins found.</p>
-        ) : (
-          <div className="divide-y">
-            {admins.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <Label className="block">{a.full_name || 'Unnamed'}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {maskPhone(a.phone)}
-                    {a.email ? <span className="ml-2">· {a.email}</span> : null}
-                  </p>
-                </div>
-                <div className="flex items-center gap-5">
-                  <label className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">WhatsApp</span>
-                    <Switch
-                      checked={a.whatsapp_enabled}
-                      onCheckedChange={(v) =>
-                        updatePref.mutate({
-                          user_id: a.id,
-                          whatsapp_enabled: v,
-                          sms_enabled: a.sms_enabled,
-                          email_enabled: a.email_enabled,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">SMS</span>
-                    <Switch
-                      checked={a.sms_enabled}
-                      onCheckedChange={(v) =>
-                        updatePref.mutate({
-                          user_id: a.id,
-                          whatsapp_enabled: a.whatsapp_enabled,
-                          sms_enabled: v,
-                          email_enabled: a.email_enabled,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Email</span>
-                    <Switch
-                      checked={a.email_enabled}
-                      onCheckedChange={(v) =>
-                        updatePref.mutate({
-                          user_id: a.id,
-                          whatsapp_enabled: a.whatsapp_enabled,
-                          sms_enabled: a.sms_enabled,
-                          email_enabled: v,
-                        })
-                      }
-                    />
-                  </label>
-                </div>
+      ) : isError ? (
+        <div className="px-3 py-4 text-sm text-muted-foreground">
+          We couldn't load recipients.{' '}
+          <button type="button" onClick={() => refetch()} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
+            Retry
+          </button>
+        </div>
+      ) : !admins || admins.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+          <Users className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">No owners or admins yet. Add one from Staff to receive lead alerts.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {admins.map((a) => (
+            <li key={a.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{a.full_name || 'Unnamed'}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {maskPhone(a.phone)}
+                  {a.email ? <span> · {a.email}</span> : null}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              <div className="flex flex-wrap gap-2">
+                {CHANNELS.map((c) => (
+                  <label
+                    key={c.key}
+                    className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-secondary"
+                  >
+                    {c.label}
+                    <Switch
+                      aria-label={`${c.label} lead alerts for ${a.full_name || 'this admin'}`}
+                      checked={a[c.key]}
+                      onCheckedChange={(v) => updatePref.mutate({ row: a, channel: c.key, value: v })}
+                    />
+                  </label>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SettingsCard>
   );
 }
 
 // Backwards-compat: any other importer of LeadNotificationSettings still works.
 export function LeadNotificationSettings() {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-12 gap-5">
       <LeadNotificationCards />
     </div>
   );
