@@ -65,7 +65,8 @@ export function allowlistFor(role: FillRole): ContractVariableKey[] {
 }
 
 export function requiredBeforeSign(): ContractVariableKey[] {
-  return CONTRACT_VARIABLES.filter((v) => v.required).map((v) => v.key);
+  // Only the employee's own details block signing; witnesses are set by HR.
+  return CONTRACT_VARIABLES.filter((v) => v.required && v.role === 'employee').map((v) => v.key);
 }
 
 export function missingRequiredKeys(vars: Record<string, unknown> | null | undefined): ContractVariableKey[] {

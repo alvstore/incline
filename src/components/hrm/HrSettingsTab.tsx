@@ -1,3 +1,4 @@
+import { WitnessManagerCard } from './witnesses/WitnessManagerCard';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -317,6 +318,7 @@ export default function HrSettingsTab() {
           {save.isPending ? 'Saving...' : 'Save HR settings'}
         </Button>
       </div>
+      <WitnessManagerCard branchId={branchId} />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// v5.7.0 — Witnesses come only from the contract (drawer/saved witnesses); employees are never asked; PDF prints witness signatures.
 // v5.6.0 — PDF uses the contract's saved notice days and shows only the selected role's duties.
 // v5.5.1 — Signing links use server-configured public origins, never localhost or preview origins.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
@@ -10,7 +11,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
 import { contractPublicOrigin } from './publicUrl.ts';
-import { applyRoleAndNotice } from './termsFixups.ts';
+import { applyRoleAndNotice, witnessesFromVars } from './termsFixups.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,7 +108,6 @@ const FILL_ALLOWLIST: Record<string, string[]> = {
 const REQUIRED_BEFORE_SIGN = [
   "father_or_husband_name", "residential_address",
   "emergency_contact_name", "emergency_contact_phone",
-  "witness_1_name", "witness_2_name",
 ];
 
 function missingRequired(vars: Record<string, unknown> | null | undefined): string[] {
@@ -308,6 +308,7 @@ async function getContractByToken(body: any) {
       contract_variables: cvars,
       prefill,
       missing_required: missingRequired(merged),
+      witnesses: witnessesFromVars(cvars),
       employer,
     },
   });
@@ -467,8 +468,7 @@ async function signContract(req: Request, body: any) {
   const consent = Boolean(body?.consent);
   const signatureImageBase64: string | null = body?.signature_image_base64 ?? null;
   const geolocation = body?.geolocation ?? null;
-  const witness1 = body?.witness_1 ?? null;
-  const witness2 = body?.witness_2 ?? null;
+  // Witnesses are fixed by HR on the contract; anything the signer submits is ignored.
   const termsHashAtSign: string | null = body?.terms_hash ?? null;
 
   if (!token || !signedName || !consent) return json({ error: "Missing required fields for signing" }, 400);
@@ -571,6 +571,11 @@ async function signContract(req: Request, body: any) {
     status: "signed", used_at: now, signer_name: signedName, signer_contact: signerContact || null,
   }).eq("id", requestRow.id);
 
+  const { data: cvRow } = await supabase.from("contracts").select("contract_variables").eq("id", requestRow.contract_id).maybeSingle();
+  const [witness1 = null, witness2 = null] = [1, 2].map((n) => {
+    const w = witnessesFromVars((cvRow as any)?.contract_variables).find((x) => x.slot === n);
+    return w ? { name: w.name, phone: w.phone, witness_id: w.witness_id } : null;
+  });
   await supabase.from("contracts").update({
     signature_status: "signed", signed_at: now, status: "active",
     witness_1: witness1, witness_2: witness2,
@@ -864,8 +869,29 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     newPageIfNeeded(80);
     writeLine("Witnesses", { bold: true, size: 12 });
     spacer(4);
-    for (const [label, value] of witnessRows) writeLine(`${label}: ${value}`);
-    spacer(14);
+    for (const w of witnessesFromVars((contract as any).contract_variables)) {
+      newPageIfNeeded(80);
+      writeLine(`Witness ${w.slot}: ${w.name}${w.phone ? " — " + w.phone : ""}`);
+      if (w.witness_id) {
+        const { data: wr } = await supabase.from("contract_witnesses").select("signature_path, designation").eq("id", w.witness_id).maybeSingle();
+        if ((wr as any)?.designation) writeLine(`Designation: ${(wr as any).designation}`);
+        const sp = (wr as any)?.signature_path as string | undefined;
+        if (sp) {
+          const { data: blob } = await supabase.storage.from("witness-signatures").download(sp);
+          if (blob) {
+            try {
+              const bytes = new Uint8Array(await blob.arrayBuffer());
+              const img = /\.jpe?g$/i.test(sp) ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
+              const scale = Math.min(140 / img.width, 50 / img.height);
+              page.drawImage(img, { x: marginX, y: y - 52, width: img.width * scale, height: img.height * scale });
+              y -= 58;
+            } catch (_) { writeLine("(signature on file)"); }
+          }
+        }
+      }
+      spacer(6);
+    }
+    spacer(10);
     newPageIfNeeded(120);
   } else if (personalRows.length > 0) {
     spacer(4);
@@ -903,7 +929,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   if (employer.governing_jurisdiction) writeLine(`Governing jurisdiction: ${employer.governing_jurisdiction}`);
   if (employer.arbitration_seat) writeLine(`Arbitration seat: ${employer.arbitration_seat}`);
 
-  if (contract.witness_1 || contract.witness_2) {
+  if (witnessRows.length === 0 && (contract.witness_1 || contract.witness_2)) {
     spacer(14);
     writeLine("Witnesses", { bold: true, size: 11 });
     if (contract.witness_1) writeLine(`1. ${(contract.witness_1 as any).name || "-"}  ·  ${(contract.witness_1 as any).phone || "-"}`);

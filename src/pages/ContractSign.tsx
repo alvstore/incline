@@ -32,8 +32,6 @@ export default function ContractSignPage() {
   const [signedName, setSignedName] = useState('');
   const [signerContact, setSignerContact] = useState('');
   const [signatureText, setSignatureText] = useState('');
-  const [witness1, setWitness1] = useState({ name: '', phone: '' });
-  const [witness2, setWitness2] = useState({ name: '', phone: '' });
   const [consent, setConsent] = useState(false);
   const [reachedBottom, setReachedBottom] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
@@ -118,8 +116,6 @@ export default function ContractSignPage() {
           consent,
           signature_image_base64,
           geolocation: geo,
-          witness_1: witness1.name ? witness1 : null,
-          witness_2: witness2.name ? witness2 : null,
         },
       });
       if (error) throw error;
@@ -326,18 +322,17 @@ export default function ContractSignPage() {
                 <p className="text-xs text-muted-foreground">Use mouse, stylus or finger on touch devices.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Witness 1 — Name</Label>
-                  <Input value={witness1.name} onChange={(e) => setWitness1({ ...witness1, name: e.target.value })} />
-                  <Input value={witness1.phone} onChange={(e) => setWitness1({ ...witness1, phone: e.target.value })} placeholder="Phone" />
+              {Array.isArray(contract?.witnesses) && contract.witnesses.length > 0 && (
+                <div className="rounded-md border p-3 bg-muted/30" aria-label="Witnesses">
+                  <p className="text-sm font-medium">Witnessed by</p>
+                  <ul className="mt-1 text-sm text-muted-foreground space-y-0.5">
+                    {contract.witnesses.map((w: { slot: number; name: string; phone: string | null }) => (
+                      <li key={w.slot}>Witness {w.slot}: {w.name}{w.phone ? ` · ${w.phone}` : ''}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-1">Witnesses are added by Incline. You don't need to fill these.</p>
                 </div>
-                <div className="space-y-2">
-                  <Label>Witness 2 — Name</Label>
-                  <Input value={witness2.name} onChange={(e) => setWitness2({ ...witness2, name: e.target.value })} />
-                  <Input value={witness2.phone} onChange={(e) => setWitness2({ ...witness2, phone: e.target.value })} placeholder="Phone" />
-                </div>
-              </div>
+              )}
 
               <div className="flex items-start gap-2 rounded-md border p-3 bg-card">
                 <Checkbox id="consent" checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
