@@ -18,6 +18,7 @@ import { EditTrainerDrawer } from '@/components/trainers/EditTrainerDrawer';
 import { SignedContractViewer } from '@/components/hrm/SignedContractViewer';
 import { PayrollRunPanel } from '@/components/hrm/PayrollRunPanel';
 import HrSettingsTab from '@/components/hrm/HrSettingsTab';
+import { WitnessManagerCard } from '@/components/hrm/witnesses/WitnessManagerCard';
 import PoliciesTab from '@/components/hrm/PoliciesTab';
 import { StaffRowActions } from '@/components/hrm/StaffRowActions';
 import { AttendanceStateBadge } from '@/components/hrm/AttendanceStateBadge';
@@ -881,6 +882,7 @@ export default function HRMPage() {
             <TabsTrigger value="contracts">Contracts</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
             <TabsTrigger value="policies"><BookOpen className="h-3.5 w-3.5 mr-1" />Policies</TabsTrigger>
+            <TabsTrigger value="witnesses"><UserCheck className="h-3.5 w-3.5 mr-1" aria-hidden />Witnesses</TabsTrigger>
             <TabsTrigger value="settings"><SettingsIcon className="h-3.5 w-3.5 mr-1" />HR Settings</TabsTrigger>
           </TabsList>
 
@@ -1353,6 +1355,10 @@ export default function HRMPage() {
           {/* Policies Tab */}
           <TabsContent value="policies" className="mt-4">
             <PoliciesTab />
+          </TabsContent>
+
+          <TabsContent value="witnesses" className="mt-4">
+            <WitnessManagerCard branchId={selectedBranch && selectedBranch !== 'all' ? selectedBranch : null} />
           </TabsContent>
 
           {/* HR Settings Tab */}

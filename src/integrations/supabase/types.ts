@@ -3595,6 +3595,7 @@ export type Database = {
           governing_jurisdiction: string | null
           id: string
           notice_period_days: number | null
+          policy_snapshot: Json | null
           salary: number
           signature_requested_at: string | null
           signature_status: string
@@ -3628,6 +3629,7 @@ export type Database = {
           governing_jurisdiction?: string | null
           id?: string
           notice_period_days?: number | null
+          policy_snapshot?: Json | null
           salary: number
           signature_requested_at?: string | null
           signature_status?: string
@@ -3661,6 +3663,7 @@ export type Database = {
           governing_jurisdiction?: string | null
           id?: string
           notice_period_days?: number | null
+          policy_snapshot?: Json | null
           salary?: number
           signature_requested_at?: string | null
           signature_status?: string
@@ -17370,6 +17373,10 @@ export type Database = {
           p_source?: string
           p_staff_id?: string
         }
+        Returns: Json
+      }
+      build_contract_policy_snapshot: {
+        Args: { _branch: string; _role: string }
         Returns: Json
       }
       bump_dynamic_memory_hit: {
