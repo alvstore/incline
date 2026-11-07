@@ -995,6 +995,13 @@
       "when": 1794065408049,
       "tag": "0141_push_provider_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1794070502066,
+      "tag": "0142_contract_witnesses",
+      "breakpoints": true
     }
   ]
 }

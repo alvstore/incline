@@ -3531,6 +3531,53 @@ export type Database = {
         }
         Relationships: []
       }
+      contract_witnesses: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          designation: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          phone: string | null
+          signature_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          designation?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          phone?: string | null
+          signature_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          designation?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          phone?: string | null
+          signature_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_witnesses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contracts: {
         Row: {
           approved_at: string | null
