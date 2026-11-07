@@ -65,7 +65,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     endDate: '',
     salary: defaultSalary,
     commissionPercentage: 0,
-    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0, __NOTICE__),
+    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0, DEFAULT_NOTICE_DAYS[defaultRole]),
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
@@ -74,6 +74,28 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
   const [commissionLocked, setCommissionLocked] = useState(true);
   const [legalTermsUnlocked, setLegalTermsUnlocked] = useState(false);
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
+  const [hrNotice, setHrNotice] = useState<Partial<Record<AgreementRole, number>>>({});
+  const noticeFor = (role: AgreementRole): number => {
+    const typed = Number((variables as Record<string, string>).notice_period_days);
+    if (Number.isFinite(typed) && typed > 0) return Math.round(typed);
+    return hrNotice[role] || DEFAULT_NOTICE_DAYS[role];
+  };
+
+  // Notice-period defaults come from HR Settings (branch row, then global).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getEmployerProfile(employee?.branch_id ?? null).then((p) => {
+      if (cancelled || !p) return;
+      setHrNotice({
+        staff: p.notice_period_staff_days || undefined,
+        trainer: p.notice_period_trainer_days || undefined,
+        manager: p.notice_period_manager_days || undefined,
+      });
+    }).catch(() => { /* fall back to built-in defaults */ });
+    return () => { cancelled = true; };
+  }, [open, employee?.branch_id]);
+
   const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
   // Detect dual-role + auto-fetch trainer commission + load prefill sources.
@@ -162,7 +184,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }, initialCommission, __NOTICE__),
+      }, initialCommission, DEFAULT_NOTICE_DAYS[role]),
       documentUrl: '',
     });
     setVariables({} as any);
@@ -194,9 +216,9 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           department: employee?.department,
         },
         Number(f.commissionPercentage) || 0,
-      , __NOTICE__),
+      , noticeFor(f.agreementRole)),
     }));
-  }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate]);
+  }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate, hrNotice, (variables as Record<string, string>).notice_period_days]);
 
 
   const createContractMutation = useMutation({
@@ -244,6 +266,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             : undefined,
         },
       );
+      track('contract_draft_generated', { role: formData.agreementRole, notice_days: noticeFor(formData.agreementRole) });
       queryClient.invalidateQueries({ queryKey: ['employee-contracts'] });
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
       onOpenChange(false);
@@ -273,7 +296,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }, role === 'trainer' ? 10 : 0, __NOTICE__),
+      }, role === 'trainer' ? 10 : 0, DEFAULT_NOTICE_DAYS[role]),
       documentUrl: '',
     });
     setLegalTermsUnlocked(false);
@@ -298,6 +321,8 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     for (const [k, v] of Object.entries(variables)) {
       if (v && String(v).trim() !== '') cleanedVariables[k] = String(v).trim();
     }
+    cleanedVariables.notice_period_days = String(noticeFor(formData.agreementRole));
+    cleanedVariables.agreement_role = formData.agreementRole;
 
     createContractMutation.mutate({
       employeeId: isTrainer ? undefined : employee.id,
@@ -373,30 +398,19 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             <Select
               value={formData.agreementRole}
               disabled={!!defaultRoleProp}
-              onValueChange={async (value: AgreementRole) => {
+              onValueChange={(value: AgreementRole) => {
                 const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
-                // Try fetching template from DB first
-                let templateContent: string | null = null;
-                try {
-                  const { data } = await supabase
-                    .from('contract_templates')
-                    .select('content')
-                    .eq('role', value)
-                    .maybeSingle();
-                  templateContent = data?.content || null;
-                } catch { /* fallback to hardcoded */ }
-
                 setFormData({
                   ...formData,
                   agreementRole: value,
                   commissionPercentage: value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage,
-                  terms: templateContent || getEmploymentAgreementTemplate(value, employeeName, formData.salary, formData.startDate, {
+                  terms: getEmploymentAgreementTemplate(value, employeeName, formData.salary, formData.startDate, {
                     employeeCode: employee?.employee_code,
                     email: employee?.profile?.email,
                     phone: employee?.profile?.phone,
                     position: employee?.position,
                     department: employee?.department,
-                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage, __NOTICE__),
+                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage, noticeFor(value)),
                 });
               }}
             >
@@ -435,6 +449,24 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="contract-notice-days">Notice period (days)</Label>
+            <Input
+              id="contract-notice-days"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={180}
+              value={(variables as Record<string, string>).notice_period_days ?? ''}
+              placeholder={String(hrNotice[formData.agreementRole] || DEFAULT_NOTICE_DAYS[formData.agreementRole])}
+              aria-describedby="contract-notice-hint"
+              onChange={(e) => setVariables((v) => ({ ...v, notice_period_days: e.target.value }) as typeof v)}
+            />
+            <p id="contract-notice-hint" className="text-xs text-muted-foreground">
+              Contract will say {noticeFor(formData.agreementRole)} days. Leave empty to use the HR Settings default for this role.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Date *</Label>
@@ -455,7 +487,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                         phone: employee?.profile?.phone,
                         position: employee?.position,
                         department: employee?.department,
-                      }, formData.commissionPercentage, __NOTICE__),
+                      }, formData.commissionPercentage, noticeFor(formData.agreementRole)),
                   });
                 }}
                 required
@@ -620,7 +652,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                           const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
                           setFormData((f) => ({
                             ...f,
-                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage, __NOTICE__),
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage, noticeFor(formData.agreementRole)),
                           }));
                           await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
                           toast.success('Template reset');
