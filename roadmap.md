@@ -1,5 +1,5 @@
 # Trainer contract delivery (7 Nov 2026)
-- [ ] Restore approved contract-template selection and report blocked delivery truthfully; verify tests and signed-in send flow.
+- [x] Restore approved contract-template selection with canonical event + ordered slots; blocked sends no longer appear pending or successful. Three regression tests (17 assertions) and automatic build pass. Signed-in HRM resend verified for Harshwardhan, Govind, Puneet and Gyaneshwar; all four WhatsApp delivery receipts read back as delivered. No contract terms changed; signing itself remains the trainers' action.
 
 # In-App monitoring repair (7 Nov 2026)
 - [x] Preserve full member segments, goals and staff roles; recipient assignments restrict new targeted board posts. Live audience parity: active 198, dues 6, frozen 0, recent-expired 22, inactive 30/60 days 60/31; trainer/manager/staff 7/1/2.
