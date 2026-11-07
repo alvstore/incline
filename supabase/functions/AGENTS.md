@@ -11,3 +11,4 @@
 - Campaign In-App delivery retains full audience filters, uses recipient-scoped board access and atomic leased jobs through `process-inapp-delivery`/Automation Brain; notification-level dedupe survives interrupted dispatch so scheduled and immediate delivery cannot diverge.
 - Contract signing links resolve server-configured public HTTPS origins; request-origin fallback is published-host allowlisted and never local/preview, because signing invitations leave the browser.
 - Contract PDF photos come only from the linked profile's display avatar in this backend's avatars bucket; embed image bytes and retain cached signed artifacts, so arbitrary URL fetches and changing gate identities cannot alter signed copies.
+- Revoked access (members.login_disabled_at, offboarded staff) is checked by `is_recipient_access_revoked` in dispatch-communication and a notifications insert trigger, so lapsed people get nothing on any channel.

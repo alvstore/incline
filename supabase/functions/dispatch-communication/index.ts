@@ -1,3 +1,4 @@
+// dispatch-communication v1.45.0 — suppress all channels for recipients whose access is revoked.
 // dispatch-communication v1.44.0 — default {{brand_name}} = Incline for DLT SMS templates.
 // dispatch-communication v1.43.0 — prefer templates whose VIDEO/IMAGE header matches the attachment; never paste video/image links as "PDF".
 // dispatch-communication v1.42.0 — signed-in staff/trainers may only message known contacts on phone channels.
@@ -979,6 +980,22 @@ Deno.serve(async (req) => {
     // `force` may bypass quiet hours for urgent transactional sends, but it
     // must never bypass consent, opt-out, or channel preference enforcement.
     {
+      // v1.45.0: people whose access was revoked (lapsed member, offboarded
+      // staff) receive nothing on any channel.
+      if (input.member_id || input.user_id) {
+        const { data: revoked } = await supabase.rpc('is_recipient_access_revoked', {
+          p_member_id: input.member_id ?? null, p_user_id: input.user_id ?? null,
+        });
+        if (revoked === true) {
+          const { data: log } = await supabase.from('communication_logs').insert({
+            branch_id: input.branch_id, member_id: input.member_id ?? null, user_id: input.user_id ?? null,
+            type: input.channel, channel: input.channel, category: input.category, recipient: input.recipient,
+            subject: input.payload.subject ?? null, content: input.payload.body, template_id: input.template_id ?? null,
+            dedupe_key: input.dedupe_key, status: 'suppressed', delivery_status: 'suppressed', error_message: 'access_revoked',
+          }).select('id').maybeSingle();
+          return ok({ status: 'suppressed', log_id: log?.id, reason: 'access_revoked' });
+        }
+      }
       const { data: pref } = await supabase.rpc('should_send_communication', {
         p_member_id: input.member_id ?? null,
         p_channel: input.channel,

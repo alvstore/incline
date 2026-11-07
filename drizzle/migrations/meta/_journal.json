@@ -1009,6 +1009,20 @@
       "when": 1794071232695,
       "tag": "0143_contract_policy_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1794081378569,
+      "tag": "0144_revoke_access_stops_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1794081424232,
+      "tag": "0145_wake_login_access_on_change",
+      "breakpoints": true
     }
   ]
 }

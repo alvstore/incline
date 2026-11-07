@@ -73,6 +73,11 @@ export default function AuthPage() {
             </header>
 
             <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-8">
+              {(searchParams.get('reason') === 'offboarded' || searchParams.get('reason') === 'revoked') && (
+                <p role="alert" className="mb-4 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                  Your access has ended. Please contact the front desk.
+                </p>
+              )}
               <div className="auth-form-surface">
                 <LoginForm />
               </div>
