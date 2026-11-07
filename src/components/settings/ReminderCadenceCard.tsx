@@ -144,21 +144,21 @@ export function ReminderCadenceCard() {
   );
 
   return (
-    <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5 transition-shadow duration-200 hover:shadow-xl hover:shadow-primary/10">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+            <span className="rounded-full bg-primary/10 p-2 text-primary">
               <AlarmClock className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <CardTitle>Reminder schedule</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-base font-semibold tracking-tight">Reminder schedule</CardTitle>
+              <CardDescription className="text-xs">
                 When expiry and dues reminders go out, and which channels are tried.
               </CardDescription>
             </div>
           </div>
-          <Badge className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+          <Badge className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted">
             {headerBadge}
           </Badge>
         </div>
@@ -166,7 +166,7 @@ export function ReminderCadenceCard() {
 
       <CardContent className="space-y-5">
         {!effectiveBranchId && (
-          <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+          <p className="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">
             Choose a single branch in the header to set its reminder schedule.
           </p>
         )}
@@ -190,19 +190,19 @@ export function ReminderCadenceCard() {
           REMINDER_TYPES.map(({ key, title, description, Icon }) => {
             const d = draft[key] ?? DEFAULT_DRAFT;
             return (
-              <section key={key} className="rounded-2xl bg-slate-50 p-4 sm:p-5">
+              <section key={key} className="rounded-2xl bg-muted/50 p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                    <span className="rounded-full bg-primary/10 p-2 text-primary">
                       <Icon className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-                      <p className="text-sm text-slate-500">{description}</p>
+                      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+                      <p className="text-sm text-muted-foreground">{description}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label htmlFor={`${key}-enabled`} className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <Label htmlFor={`${key}-enabled`} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {d.is_enabled ? 'On' : 'Off'}
                     </Label>
                     <Switch
@@ -215,7 +215,7 @@ export function ReminderCadenceCard() {
 
                 <div className="mt-4 space-y-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Days before</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Days before</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {DAY_OPTIONS.map((day) => {
                         const active = d.days_before.includes(day);
@@ -232,10 +232,10 @@ export function ReminderCadenceCard() {
                                   : [...d.days_before, day],
                               })
                             }
-                            className={`min-h-[44px] cursor-pointer rounded-xl px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+                            className={`min-h-[44px] cursor-pointer rounded-xl px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
                               active
-                                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-indigo-500/20'
-                                : 'bg-white text-slate-600 shadow-sm hover:bg-slate-100'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'bg-card text-foreground border border-border hover:bg-secondary'
                             }`}
                           >
                             {day === 0 ? 'On the day' : `${day}d`}
@@ -246,7 +246,7 @@ export function ReminderCadenceCard() {
                   </div>
 
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Channels tried, in order
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -276,12 +276,12 @@ export function ReminderCadenceCard() {
                                 ],
                               })
                             }
-                            className={`min-h-[44px] cursor-pointer rounded-xl px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+                            className={`min-h-[44px] cursor-pointer rounded-xl px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
                               isPrimary
-                                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
                                 : isFallback
-                                  ? 'bg-indigo-50 text-indigo-700'
-                                  : 'bg-white text-slate-500 shadow-sm hover:bg-slate-100'
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'bg-card text-muted-foreground border border-border hover:bg-secondary'
                             }`}
                           >
                             {CHANNEL_LABELS[ch]}
@@ -290,19 +290,19 @@ export function ReminderCadenceCard() {
                         );
                       })}
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       Tap to add or remove a backup channel, double-tap to make it the first one tried.
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-white p-3 text-sm text-slate-600 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-card p-3 border border-border text-sm text-muted-foreground shadow-sm">
                     {chainFor(d).map((ch, i) => (
                       <span key={ch} className="flex items-center gap-1.5">
-                        {i > 0 && <ArrowRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />}
-                        <span className="font-medium text-slate-900">{CHANNEL_LABELS[ch]}</span>
+                        {i > 0 && <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
+                        <span className="font-medium text-foreground">{CHANNEL_LABELS[ch]}</span>
                       </span>
                     ))}
-                    <span className="ml-1 text-slate-500">— first one that gets through wins.</span>
+                    <span className="ml-1 text-muted-foreground">— first one that gets through wins.</span>
                   </div>
                 </div>
               </section>
@@ -314,7 +314,7 @@ export function ReminderCadenceCard() {
             <Button
               onClick={() => save.mutate()}
               disabled={save.isPending}
-              className="cursor-pointer rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white focus:ring-2 focus:ring-indigo-500"
+              className="cursor-pointer rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-2 focus:ring-ring"
             >
               {save.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

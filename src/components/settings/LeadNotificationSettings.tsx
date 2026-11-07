@@ -1,13 +1,15 @@
 import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { UserCheck, Users, ShieldCheck } from 'lucide-react';
+import { UserCheck, Users, ShieldCheck, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { track } from '@/lib/analytics';
+import { SettingsCard, GroupLabel, ToggleRow, settingsCardClass } from '@/components/settings/notifications/primitives';
 
 type LeadRulesForm = {
   sms_to_lead: boolean;
@@ -43,11 +45,15 @@ const DEFAULTS: LeadRulesForm = {
 
 export type LeadNotificationCardsHandle = {
   save: () => Promise<void>;
+  isDirty: () => boolean;
 };
+
+type BoolField = { [K in keyof LeadRulesForm]: LeadRulesForm[K] extends boolean ? K : never }[keyof LeadRulesForm];
 
 type Props = {
   /** Set of cards to render. Defaults to both. */
   variant?: 'lead' | 'team' | 'both';
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 /**
@@ -57,7 +63,7 @@ type Props = {
  * Use the returned ref's `save()` to persist (called by the page's Save Preferences).
  */
 export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Props>(
-  function LeadNotificationCards({ variant = 'both' }, ref) {
+  function LeadNotificationCards({ variant = 'both', onDirtyChange }, ref) {
     const { selectedBranch } = useBranchContext();
     const queryClient = useQueryClient();
     const branchId = selectedBranch !== 'all' ? selectedBranch : null;
@@ -83,24 +89,30 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
     });
 
     const [form, setForm] = useState<LeadRulesForm>(DEFAULTS);
+    const [baseline, setBaseline] = useState<LeadRulesForm>(DEFAULTS);
+    const dirty = (Object.keys(form) as (keyof LeadRulesForm)[]).some((k) => form[k] !== baseline[k]);
+    useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
     useEffect(() => {
       if (rules) {
-        setForm({
+        const r = rules as typeof rules & { email_to_lead?: boolean; email_to_admins?: boolean; email_to_managers?: boolean };
+        const next: LeadRulesForm = {
           sms_to_lead: rules.sms_to_lead ?? false,
           whatsapp_to_lead: rules.whatsapp_to_lead ?? false,
-          email_to_lead: (rules as any).email_to_lead ?? false,
+          email_to_lead: r.email_to_lead ?? false,
           sms_to_admins: rules.sms_to_admins ?? false,
           whatsapp_to_admins: rules.whatsapp_to_admins ?? false,
-          email_to_admins: (rules as any).email_to_admins ?? false,
+          email_to_admins: r.email_to_admins ?? false,
           sms_to_managers: rules.sms_to_managers ?? false,
           whatsapp_to_managers: rules.whatsapp_to_managers ?? false,
-          email_to_managers: (rules as any).email_to_managers ?? false,
+          email_to_managers: r.email_to_managers ?? false,
           lead_welcome_sms: rules.lead_welcome_sms || DEFAULTS.lead_welcome_sms,
           lead_welcome_whatsapp: rules.lead_welcome_whatsapp || DEFAULTS.lead_welcome_whatsapp,
           team_alert_sms: rules.team_alert_sms || DEFAULTS.team_alert_sms,
           team_alert_whatsapp: rules.team_alert_whatsapp || DEFAULTS.team_alert_whatsapp,
-        });
+        };
+        setForm(next);
+        setBaseline(next);
       }
     }, [rules]);
 
@@ -119,13 +131,14 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
         const { error } = await supabase.from('lead_notification_rules').insert(payload);
         if (error) throw error;
       }
+      setBaseline(form);
       queryClient.invalidateQueries({ queryKey: ['lead-notification-rules'] });
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useImperativeHandle(ref, () => ({ save }), [form, rules, branchId]);
+    useImperativeHandle(ref, () => ({ save, isDirty: () => dirty }), [form, rules, branchId, dirty]);
 
-    const toggle = (field: keyof LeadRulesForm) => {
+    const toggle = (field: BoolField) => {
       setForm((prev) => ({ ...prev, [field]: !prev[field] }));
     };
 
@@ -134,15 +147,9 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
       return (
         <>
           {Array.from({ length: count }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-48" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[1, 2, 3].map((j) => (
-                  <Skeleton key={j} className="h-10 w-full" />
-                ))}
-              </CardContent>
+            <Card key={i} className={cn(settingsCardClass, 'col-span-12 space-y-3 p-5 lg:col-span-6')}>
+              <Skeleton className="h-6 w-48" />
+              {[1, 2, 3].map((j) => <Skeleton key={j} className="h-10 w-full" />)}
             </Card>
           ))}
         </>
@@ -151,122 +158,49 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
 
     const showLead = variant === 'both' || variant === 'lead';
     const showTeam = variant === 'both' || variant === 'team';
+    const row = (field: BoolField, label: string, hint: string) => (
+      <ToggleRow key={field} label={label} hint={hint} checked={form[field]} onChange={() => toggle(field)} />
+    );
 
     return (
       <>
         {showLead && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <UserCheck className="h-5 w-5 text-primary" />
-                <CardTitle>Lead Alerts</CardTitle>
-              </div>
-              <CardDescription>Notify the lead when they're captured</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Row
-                label="SMS to Lead"
-                desc="Send welcome SMS to captured lead"
-                checked={form.sms_to_lead}
-                onChange={() => toggle('sms_to_lead')}
-              />
-              <Row
-                label="WhatsApp to Lead"
-                desc="Send WhatsApp welcome message to lead"
-                checked={form.whatsapp_to_lead}
-                onChange={() => toggle('whatsapp_to_lead')}
-              />
-              <Row
-                label="Email to Lead"
-                desc="Send a branded welcome email to the lead"
-                checked={form.email_to_lead}
-                onChange={() => toggle('email_to_lead')}
-              />
-            </CardContent>
-          </Card>
+          <SettingsCard
+            className="col-span-12 lg:col-span-6"
+            icon={UserCheck}
+            title="Message the lead"
+            description="Welcome message when a new enquiry is captured"
+          >
+            {row('sms_to_lead', 'SMS', 'Welcome SMS to the lead')}
+            {row('whatsapp_to_lead', 'WhatsApp', 'Welcome WhatsApp message to the lead')}
+            {row('email_to_lead', 'Email', 'Branded welcome email to the lead')}
+          </SettingsCard>
         )}
 
         {showTeam && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                <CardTitle>Team Alerts</CardTitle>
-              </div>
-              <CardDescription>Alert your team when new leads arrive</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Row
-                label="SMS to Admins"
-                desc="Alert owners & admins via SMS"
-                checked={form.sms_to_admins}
-                onChange={() => toggle('sms_to_admins')}
-              />
-              <Row
-                label="WhatsApp to Admins"
-                desc="Alert owners & admins via WhatsApp (approved template)"
-                checked={form.whatsapp_to_admins}
-                onChange={() => toggle('whatsapp_to_admins')}
-              />
-              <Row
-                label="Email to Admins"
-                desc="Alert owners & admins via email"
-                checked={form.email_to_admins}
-                onChange={() => toggle('email_to_admins')}
-              />
-              <Row
-                label="SMS to Managers"
-                desc="Alert branch managers via SMS"
-                checked={form.sms_to_managers}
-                onChange={() => toggle('sms_to_managers')}
-              />
-              <Row
-                label="WhatsApp to Managers"
-                desc="Alert branch managers via WhatsApp (approved template)"
-                checked={form.whatsapp_to_managers}
-                onChange={() => toggle('whatsapp_to_managers')}
-              />
-              <Row
-                label="Email to Managers"
-                desc="Alert branch managers via email"
-                checked={form.email_to_managers}
-                onChange={() => toggle('email_to_managers')}
-              />
-              <p className="rounded-lg bg-success/10 px-3 py-2 text-xs leading-relaxed text-success dark:bg-success/30 dark:text-success">
-                <strong>Delivery:</strong> Team WhatsApp alerts are sent via the approved
-                Meta template <code>internal_new_lead_alert</code>, so they deliver to
-                admins/managers even outside the 24-hour customer-service window. SMS and
-                email use your configured providers.
-              </p>
-            </CardContent>
-          </Card>
+          <SettingsCard
+            className="col-span-12 lg:col-span-6"
+            icon={Users}
+            title="Alert your team"
+            description="Tell owners, admins and managers about new leads"
+          >
+            <GroupLabel>Owners &amp; admins</GroupLabel>
+            {row('sms_to_admins', 'SMS', 'Text message alert')}
+            {row('whatsapp_to_admins', 'WhatsApp', 'Approved template, delivers anytime')}
+            {row('email_to_admins', 'Email', 'Email alert')}
+            <GroupLabel>Branch managers</GroupLabel>
+            {row('sms_to_managers', 'SMS', 'Text message alert')}
+            {row('whatsapp_to_managers', 'WhatsApp', 'Approved template, delivers anytime')}
+            {row('email_to_managers', 'Email', 'Email alert')}
+            <p className="mx-3 mt-3 rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              Team WhatsApp alerts use an approved template, so they arrive even outside the 24-hour chat window.
+            </p>
+          </SettingsCard>
         )}
       </>
     );
   }
 );
-
-function Row({
-  label,
-  desc,
-  checked,
-  onChange,
-}: {
-  label: string;
-  desc: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <div>
-        <Label>{label}</Label>
-        <p className="text-sm text-muted-foreground">{desc}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </div>
-  );
-}
 
 // === Per-admin recipient toggles — full-width card ===
 interface AdminRow {
@@ -286,9 +220,19 @@ function maskPhone(p: string | null): string {
   return `${p.slice(0, p.length - digits.length + 2)}•••${digits.slice(-2)}`;
 }
 
+type Channel = 'whatsapp_enabled' | 'sms_enabled' | 'email_enabled';
+const CHANNELS: { key: Channel; label: string }[] = [
+  { key: 'whatsapp_enabled', label: 'WhatsApp' },
+  { key: 'sms_enabled', label: 'SMS' },
+  { key: 'email_enabled', label: 'Email' },
+];
+
+interface ProfileRow { id: string; full_name: string | null; phone: string | null; email: string | null }
+interface PrefRow { user_id: string; whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean | null }
+
 export function AdminRecipientsCard() {
   const queryClient = useQueryClient();
-  const { data: admins, isLoading } = useQuery({
+  const { data: admins, isLoading, isError, refetch } = useQuery({
     queryKey: ['lead-notification-admin-recipients'],
     queryFn: async (): Promise<AdminRow[]> => {
       const { data: roleRows, error: rErr } = await supabase
@@ -296,139 +240,133 @@ export function AdminRecipientsCard() {
         .select('user_id')
         .in('role', ['owner', 'admin']);
       if (rErr) throw rErr;
-      const ids = Array.from(new Set((roleRows || []).map((r: any) => r.user_id)));
+      const ids = Array.from(new Set((roleRows ?? []).map((r) => r.user_id as string)));
       if (ids.length === 0) return [];
 
-      const [{ data: profiles }, { data: prefs }] = await Promise.all([
+      const [{ data: profiles, error: pErr }, { data: prefs }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, phone, email').in('id', ids),
         supabase
           .from('lead_notification_admin_prefs')
           .select('user_id, whatsapp_enabled, sms_enabled, email_enabled')
           .in('user_id', ids),
       ]);
+      if (pErr) throw pErr;
 
-      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean }>();
-      for (const p of prefs || []) prefMap.set((p as any).user_id, p as any);
+      const prefMap = new Map<string, PrefRow>();
+      for (const p of (prefs ?? []) as PrefRow[]) prefMap.set(p.user_id, p);
 
-      return (profiles || []).map((p: any) => {
-        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true, email_enabled: true };
+      return ((profiles ?? []) as ProfileRow[]).map((p) => {
+        const pref = prefMap.get(p.id);
         return {
           id: p.id,
           full_name: p.full_name,
           phone: p.phone,
           email: p.email ?? null,
-          whatsapp_enabled: pref.whatsapp_enabled,
-          sms_enabled: pref.sms_enabled,
-          email_enabled: pref.email_enabled ?? true,
+          whatsapp_enabled: pref?.whatsapp_enabled ?? true,
+          sms_enabled: pref?.sms_enabled ?? true,
+          email_enabled: pref?.email_enabled ?? true,
         };
       });
     },
   });
 
   const updatePref = useMutation({
-    mutationFn: async (input: {
-      user_id: string;
-      whatsapp_enabled: boolean;
-      sms_enabled: boolean;
-      email_enabled: boolean;
-    }) => {
-      const { error } = await supabase
-        .from('lead_notification_admin_prefs')
-        .upsert(input, { onConflict: 'user_id' });
+    mutationFn: async (input: { row: AdminRow; channel: Channel; value: boolean }) => {
+      const { row, channel, value } = input;
+      const payload = {
+        user_id: row.id,
+        whatsapp_enabled: channel === 'whatsapp_enabled' ? value : row.whatsapp_enabled,
+        sms_enabled: channel === 'sms_enabled' ? value : row.sms_enabled,
+        email_enabled: channel === 'email_enabled' ? value : row.email_enabled,
+      };
+      const { error } = await supabase.from('lead_notification_admin_prefs').upsert(
+        payload,
+        { onConflict: 'user_id' },
+      );
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lead-notification-admin-recipients'] }),
-    onError: (e: any) => toast.error(e.message || 'Failed to update preference'),
+    onMutate: async ({ row, channel, value }) => {
+      const key = ['lead-notification-admin-recipients'];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<AdminRow[]>(key);
+      queryClient.setQueryData<AdminRow[]>(key, (old) =>
+        (old ?? []).map((a) => (a.id === row.id ? { ...a, [channel]: value } : a)));
+      return { prev };
+    },
+    onSuccess: (_d, { channel, value }) =>
+      track('notification_recipient_toggled', { channel: channel.replace('_enabled', ''), enabled: value }),
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['lead-notification-admin-recipients'], ctx.prev);
+      toast.error('Could not update this recipient. Please try again.');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['lead-notification-admin-recipients'] }),
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <CardTitle>Admin Recipients</CardTitle>
+    <SettingsCard
+      icon={ShieldCheck}
+      title="Lead alert recipients"
+      description="Which owners and admins get lead alerts. The team switches above must also be on."
+      action={
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+          <Zap className="h-3 w-3" aria-hidden="true" /> Saves instantly
+        </span>
+      }
+    >
+      {isLoading ? (
+        <div className="space-y-2 px-3">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
         </div>
-        <CardDescription>
-          Choose which owners/admins receive lead alerts. Master toggles above must also be on.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-2">
-            {[1, 2].map((i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : !admins || admins.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No owners/admins found.</p>
-        ) : (
-          <div className="divide-y">
-            {admins.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <Label className="block">{a.full_name || 'Unnamed'}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {maskPhone(a.phone)}
-                    {a.email ? <span className="ml-2">· {a.email}</span> : null}
-                  </p>
-                </div>
-                <div className="flex items-center gap-5">
-                  <label className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">WhatsApp</span>
-                    <Switch
-                      checked={a.whatsapp_enabled}
-                      onCheckedChange={(v) =>
-                        updatePref.mutate({
-                          user_id: a.id,
-                          whatsapp_enabled: v,
-                          sms_enabled: a.sms_enabled,
-                          email_enabled: a.email_enabled,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">SMS</span>
-                    <Switch
-                      checked={a.sms_enabled}
-                      onCheckedChange={(v) =>
-                        updatePref.mutate({
-                          user_id: a.id,
-                          whatsapp_enabled: a.whatsapp_enabled,
-                          sms_enabled: v,
-                          email_enabled: a.email_enabled,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Email</span>
-                    <Switch
-                      checked={a.email_enabled}
-                      onCheckedChange={(v) =>
-                        updatePref.mutate({
-                          user_id: a.id,
-                          whatsapp_enabled: a.whatsapp_enabled,
-                          sms_enabled: a.sms_enabled,
-                          email_enabled: v,
-                        })
-                      }
-                    />
-                  </label>
-                </div>
+      ) : isError ? (
+        <div className="px-3 py-4 text-sm text-muted-foreground">
+          We couldn't load recipients.{' '}
+          <button type="button" onClick={() => refetch()} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
+            Retry
+          </button>
+        </div>
+      ) : !admins || admins.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+          <Users className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">No owners or admins yet. Add one from Staff to receive lead alerts.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {admins.map((a) => (
+            <li key={a.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{a.full_name || 'Unnamed'}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {maskPhone(a.phone)}
+                  {a.email ? <span> · {a.email}</span> : null}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              <div className="flex flex-wrap gap-2">
+                {CHANNELS.map((c) => (
+                  <label
+                    key={c.key}
+                    className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-secondary"
+                  >
+                    {c.label}
+                    <Switch
+                      aria-label={`${c.label} lead alerts for ${a.full_name || 'this admin'}`}
+                      checked={a[c.key]}
+                      onCheckedChange={(v) => updatePref.mutate({ row: a, channel: c.key, value: v })}
+                    />
+                  </label>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SettingsCard>
   );
 }
 
 // Backwards-compat: any other importer of LeadNotificationSettings still works.
 export function LeadNotificationSettings() {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-12 gap-5">
       <LeadNotificationCards />
     </div>
   );
