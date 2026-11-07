@@ -27,6 +27,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { exportToCSV } from '@/lib/csvExport';
 import { ZONE_OPTIONS, zoneLabel } from './lockersConstants';
+import { LockerRoomSummary, type LockerRoom } from '@/components/lockers/LockerRoomSummary';
+import { ArrangeRoomsSheet } from '@/components/lockers/ArrangeRoomsSheet';
+import { LockerDetailSheet, type LockerDetail } from '@/components/lockers/LockerDetailSheet';
+import { useSearchParams } from 'react-router-dom';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Shuffle, Wrench as WrenchIcon, CheckCircle2 } from 'lucide-react';
 
 const createLockerSchema = z.object({
   locker_number: z.string().min(1, 'Locker number required'),
@@ -50,7 +56,9 @@ export default function LockersPage() {
   const [selectedLocker, setSelectedLocker] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterZone, setFilterZone] = useState<string>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [arrangeOpen, setArrangeOpen] = useState(false);
+  const [detail, setDetail] = useState<LockerDetail | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -115,7 +123,7 @@ export default function LockersPage() {
       notes: data.notes || null,
     });
     setIsCreateOpen(false);
-    form.reset();
+    form.reset({ locker_number: '', size: 'medium', area: '', gender_zone: activeRoom, notes: '' });
   };
 
 
@@ -157,16 +165,53 @@ export default function LockersPage() {
 
   const occupancyRate = stats.total > 0 ? Math.round((stats.assigned / stats.total) * 100) : 0;
 
-  const filteredLockers = lockers.data?.filter((l: any) => {
+  const roomOf = (l: any): LockerRoom => (l.gender_zone || 'common') as LockerRoom;
+  const roomStats = (room: LockerRoom) => {
+    const list = (lockers.data || []).filter((l: any) => roomOf(l) === room);
+    return {
+      total: list.length,
+      available: list.filter((l: any) => l.status === 'available').length,
+      assigned: list.filter((l: any) => l.status === 'assigned').length,
+      maintenance: list.filter((l: any) => l.status === 'maintenance').length,
+    };
+  };
+  const rooms = (['male', 'female', 'common'] as LockerRoom[])
+    .map((value) => ({ value, label: zoneLabel(value), stats: roomStats(value) }))
+    .filter((r) => r.value !== 'common' || r.stats.total > 0);
+  const roomParam = searchParams.get('room') as LockerRoom | null;
+  const activeRoom: LockerRoom = roomParam && rooms.some((r) => r.value === roomParam)
+    ? roomParam
+    : (rooms.find((r) => r.stats.total > 0)?.value ?? 'male');
+  const selectRoom = (room: LockerRoom) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('room', room);
+    setSearchParams(next, { replace: true });
+  };
+
+  const sortLockers = (a: any, b: any) => a.locker_number.localeCompare(b.locker_number, undefined, { numeric: true });
+  const filteredLockers = (lockers.data?.filter((l: any) => {
+    if (roomOf(l) !== activeRoom) return false;
     if (filterStatus !== 'all' && l.status !== filterStatus) return false;
-    if (filterZone !== 'all' && (l.gender_zone || 'common') !== filterZone) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const area = getLockerArea(l);
-      return l.locker_number.toLowerCase().includes(q) || (area && area.toLowerCase().includes(q));
+      const a = l.locker_assignments?.find((x: any) => x.is_active);
+      const m = a ? memberProfiles[a.member_id] : null;
+      return l.locker_number.toLowerCase().includes(q) || (area && area.toLowerCase().includes(q))
+        || (m?.full_name || '').toLowerCase().includes(q) || (m?.member_code || '').toLowerCase().includes(q);
     }
     return true;
-  }) || [];
+  }) || []).sort(sortLockers);
+  const canManage = !roles?.some((r: any) => ['staff'].includes(typeof r === 'string' ? r : r?.role));
+  const initials = (n?: string) => (n || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const openDetail = (locker: any) => {
+    const a = locker.locker_assignments?.find((x: any) => x.is_active);
+    setDetail({
+      id: locker.id, locker_number: locker.locker_number, size: locker.size, status: locker.status,
+      gender_zone: locker.gender_zone, area: getLockerArea(locker),
+      member: a ? memberProfiles[a.member_id] || null : null, assignmentId: a?.id || null,
+    });
+  };
 
 
   const openAssignDialog = (locker: any) => {
@@ -263,7 +308,11 @@ export default function LockersPage() {
                 <Package className="w-4 h-4" />
                 Bulk Create
               </Button>
-              <Button onClick={() => setIsCreateOpen(true)} className="gap-2 rounded-xl shadow-lg shadow-primary/20">
+              <Button variant="outline" onClick={() => setArrangeOpen(true)} className="gap-2 rounded-xl">
+                <Shuffle className="w-4 h-4" />
+                Arrange rooms
+              </Button>
+              <Button onClick={() => { form.setValue('gender_zone', activeRoom); setIsCreateOpen(true); }} className="gap-2 rounded-xl shadow-lg shadow-primary/20">
                 <Plus className="w-4 h-4" />
                 Add Locker
               </Button>
@@ -320,30 +369,23 @@ export default function LockersPage() {
           </Card>
         </div>
 
+        <LockerRoomSummary rooms={rooms} active={activeRoom} onSelect={selectRoom} />
+
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1">
             <div className="relative max-w-xs flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search lockers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 rounded-xl" />
+              <Input placeholder="Search locker or member..." aria-label="Search lockers" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 rounded-xl" />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-36 rounded-xl"><SelectValue placeholder="Filter" /></SelectTrigger>
+              <SelectTrigger className="w-36 rounded-xl" aria-label="Filter by status"><SelectValue placeholder="Filter" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="available">Available</SelectItem>
                 <SelectItem value="assigned">Assigned</SelectItem>
                 <SelectItem value="maintenance">Maintenance</SelectItem>
                 <SelectItem value="reserved">Reserved</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterZone} onValueChange={setFilterZone}>
-              <SelectTrigger className="w-40 rounded-xl" aria-label="Filter by zone"><SelectValue placeholder="Zone" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Zones</SelectItem>
-                {ZONE_OPTIONS.map((z) => (
-                  <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>
-                ))}
               </SelectContent>
             </Select>
           </div>
@@ -365,60 +407,56 @@ export default function LockersPage() {
             <Card className="border-border/50 shadow-lg rounded-2xl">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Locker Map</CardTitle>
+                  <CardTitle className="text-lg">Locker Map · {zoneLabel(activeRoom)}</CardTitle>
                   <p className="text-sm text-muted-foreground">{filteredLockers.length} lockers</p>
                 </div>
               </CardHeader>
               <CardContent>
                 {viewMode === 'grid' ? (
                   <>
-                    <div className="grid gap-3 grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-                      {filteredLockers.map((locker) => {
-                        const activeAssignment = locker.locker_assignments?.find(a => a.is_active);
-                        const area = getLockerArea(locker);
-
+                    {lockers.isLoading ? (
+                      <div className="grid gap-3 grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
+                        {Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+                      </div>
+                    ) : lockers.isError ? (
+                      <div className="text-center py-12 space-y-3">
+                        <p className="text-muted-foreground">Lockers could not be loaded.</p>
+                        <Button variant="outline" onClick={() => lockers.refetch()}>Try again</Button>
+                      </div>
+                    ) : (
+                    <ul className="grid gap-3 grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10" aria-label={`${zoneLabel(activeRoom)} lockers`}>
+                      {filteredLockers.map((locker: any) => {
+                        const activeAssignment = locker.locker_assignments?.find((a: any) => a.is_active);
                         const memberInfo = activeAssignment ? memberProfiles[activeAssignment.member_id] : null;
+                        const StatusIcon = locker.status === 'available' ? CheckCircle2 : locker.status === 'maintenance' ? WrenchIcon : locker.status === 'assigned' ? User : Key;
+                        const label = `Locker ${locker.locker_number}, ${zoneLabel(locker.gender_zone)}, ${locker.status}${memberInfo?.full_name ? `, assigned to ${memberInfo.full_name}` : ''}`;
                         return (
-                          <div
-                            key={locker.id}
-                            onClick={() => openAssignDialog(locker)}
-                            className={`relative p-3 rounded-xl border-2 text-center transition-all duration-200 ${locker.status === 'available' ? 'cursor-pointer hover:scale-105 hover:shadow-md' : 'cursor-default'} ${getStatusColor(locker.status)}`}
-                            title={memberInfo ? `${memberInfo.full_name} (${memberInfo.member_code})` : area ? `Area: ${area}` : 'Click to assign'}
-                          >
-                            <div className="font-bold text-sm">{locker.locker_number}</div>
-                            <div className="text-[10px] opacity-70 capitalize">{locker.size || 'M'}</div>
-                            {area && (
-                              <div className="text-[10px] mt-0.5 flex items-center justify-center gap-0.5 opacity-60">
-                                <MapPin className="h-2 w-2" />
-                                {area.length > 6 ? area.slice(0, 6) + '…' : area}
-                              </div>
-                            )}
-                            {activeAssignment && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 p-0 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReleaseClick(
-                                    activeAssignment.id,
-                                    locker.id,
-                                    memberInfo?.full_name || 'Unknown',
-                                    locker.locker_number
-                                  );
-                                }}
-                              >
-                                ×
-                              </Button>
-                            )}
-                          </div>
+                          <li key={locker.id}>
+                            <button
+                              type="button"
+                              onClick={() => openDetail(locker)}
+                              aria-label={label}
+                              title={memberInfo ? `${memberInfo.full_name} (${memberInfo.member_code})` : label}
+                              className={`w-full min-h-20 p-2 rounded-xl border-2 text-center flex flex-col items-center justify-center gap-1 transition-colors duration-150 hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer ${getStatusColor(locker.status)}`}
+                            >
+                              <span className="font-bold text-sm tabular-nums">{locker.locker_number}</span>
+                              <span className="flex items-center gap-1 text-[11px] font-medium">
+                                <StatusIcon className="h-3 w-3" aria-hidden />
+                                {memberInfo ? initials(memberInfo.full_name) : <span className="capitalize">{locker.status === 'available' ? 'Free' : locker.status}</span>}
+                              </span>
+                            </button>
+                          </li>
                         );
                       })}
-                    </div>
+                    </ul>
+                    )}
                     {filteredLockers.length === 0 && (
                       <div className="text-center text-muted-foreground py-12">
                         <Lock className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                        <p>No lockers found</p>
+                        <p>{searchQuery || filterStatus !== 'all' ? 'No lockers match these filters' : `No lockers in ${zoneLabel(activeRoom)} yet`}</p>
+                        {canManage && !searchQuery && filterStatus === 'all' && (
+                          <Button variant="outline" className="mt-4 gap-2" onClick={() => setArrangeOpen(true)}><Shuffle className="h-4 w-4" />Arrange rooms</Button>
+                        )}
                       </div>
                     )}
                     <div className="flex flex-wrap gap-4 mt-6 text-sm">
@@ -647,6 +685,15 @@ export default function LockersPage() {
           </SheetContent>
         </Sheet>
 
+        <ArrangeRoomsSheet open={arrangeOpen} onOpenChange={setArrangeOpen} branchId={branchId || ''} lockers={(lockers.data || []) as any[]} />
+        <LockerDetailSheet
+          locker={detail}
+          branchId={branchId || ''}
+          canManage={canManage}
+          onOpenChange={(o) => { if (!o) setDetail(null); }}
+          onAssign={() => { const l = lockers.data?.find((x: any) => x.id === detail?.id); setDetail(null); if (l) openAssignDialog(l); }}
+          onRelease={() => { if (detail?.assignmentId) handleReleaseClick(detail.assignmentId, detail.id, detail.member?.full_name || 'Unknown', detail.locker_number); setDetail(null); }}
+        />
         <AssignLockerDrawer open={isAssignOpen} onOpenChange={setIsAssignOpen} locker={selectedLocker} branchId={branchId || ''} />
         <BulkCreateLockersDrawer open={isBulkCreateOpen} onOpenChange={setIsBulkCreateOpen} branchId={branchId || ''} />
         {branchId && <LockerPricingSheet open={pricingOpen} onOpenChange={setPricingOpen} branchId={branchId} />}
