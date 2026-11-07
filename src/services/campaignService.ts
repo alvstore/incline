@@ -188,67 +188,16 @@ export async function resolveAudienceMemberIds(
   branchId: string,
   filter: AudienceFilter
 ): Promise<{ memberIds: string[]; sample: Array<{ id: string; name: string }> }> {
-  let memberIds: string[] = [];
-
-  // Segment filter — single source of truth is the DB resolver so the wizard
-  // count, the send list and recurring runs can never disagree.
-  const segment = (filter.member_status || filter.status || 'all') as MemberSegmentStatus;
-  if (segment !== 'all') {
-    const { data, error } = await supabase.rpc('resolve_campaign_audience_v2' as any, {
-      p_branch_id: branchId,
-      p_filter: { audience_kind: 'members', member_status: segment } as any,
-      p_window_hours: 24,
-    });
-    if (error) throw error;
-    memberIds = [
-      ...new Set(
-        ((data as any[]) || [])
-          .filter((r) => r.source_type === 'member' && r.source_ref_id)
-          .map((r) => r.source_ref_id as string),
-      ),
-    ];
-  } else {
-    const { data } = await supabase
-      .from('members')
-      .select('id')
-      .eq('branch_id', branchId);
-    memberIds = (data || []).map((m: any) => m.id);
-  }
-
-  if (memberIds.length === 0) return { memberIds: [], sample: [] };
-
-  // Goal filter
-  if (filter.goal) {
-    const { data } = await supabase
-      .from('members')
-      .select('id, fitness_goals')
-      .in('id', memberIds);
-    memberIds = (data || [])
-      .filter((m: any) => (m.fitness_goals || '').toLowerCase().includes(filter.goal!.toLowerCase()))
-      .map((m: any) => m.id);
-  }
-
-  // Last attendance window
-  if (filter.last_attendance_before || filter.last_attendance_after) {
-    const { data } = await supabase
-      .from('member_attendance')
-      .select('member_id, check_in')
-      .in('member_id', memberIds)
-      .order('check_in', { ascending: false });
-
-    const lastByMember = new Map<string, string>();
-    for (const row of data || []) {
-      const r: any = row;
-      if (!lastByMember.has(r.member_id)) lastByMember.set(r.member_id, r.check_in);
-    }
-
-    memberIds = memberIds.filter((id) => {
-      const last = lastByMember.get(id);
-      if (filter.last_attendance_before && (!last || new Date(last) >= new Date(filter.last_attendance_before))) return false;
-      if (filter.last_attendance_after && (!last || new Date(last) <= new Date(filter.last_attendance_after))) return false;
-      return true;
-    });
-  }
+  const { data, error } = await supabase.rpc('resolve_campaign_audience_v2', {
+    p_branch_id: branchId,
+    p_filter: { ...filter, audience_kind: 'members' } as import('@/integrations/supabase/types').Json,
+    p_window_hours: 24,
+  });
+  if (error) throw error;
+  const memberIds = [...new Set((data || [])
+    .filter((r) => r.source_type === 'member' && r.source_ref_id)
+    .map((r) => r.source_ref_id))];
+  if (!memberIds.length) return { memberIds: [], sample: [] };
 
   // Sample for preview
   const { data: sampleData } = await supabase

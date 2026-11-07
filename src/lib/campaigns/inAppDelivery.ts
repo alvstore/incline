@@ -1,46 +1,36 @@
 // One In-App path: announcement board row + one bell notification per person
 // (the web-push worker mirrors each bell row to browser + phone app devices).
 import { supabase } from '@/integrations/supabase/client';
-import { dispatchCommunication } from '@/services/preferencesService';
-import { inAppAudienceKey, type AudiencePreset } from './composer';
+import type { AudienceFilter } from '@/services/campaignService';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface InAppAttachment { url: string; filename: string; kind: 'image' | 'document' | 'video' }
 
-export async function fetchInAppUserIds(branchId: string, preset: AudiencePreset): Promise<string[]> {
-  const key = inAppAudienceKey(preset);
-  if (!key) return [];
-  const { data, error } = await supabase.rpc('inapp_audience_user_ids', { p_branch_id: branchId, p_audience: key });
+export async function fetchInAppUserIds(branchId: string, filter: AudienceFilter): Promise<string[]> {
+  const { data, error } = await supabase.rpc('inapp_campaign_user_ids', { p_branch_id: branchId, p_filter: filter as Json });
   if (error) throw error;
   return (data || []).map((r: { user_id: string }) => r.user_id);
 }
 
 export async function deliverInApp(opts: {
   branchId: string;
-  preset: AudiencePreset;
+  filter: AudienceFilter;
   title: string;
   message: string;
   attachment?: InAppAttachment | null;
   scheduledIso?: string | null;
+  requestId: string;
 }): Promise<string> {
-  const { branchId, preset, title, message, attachment, scheduledIso } = opts;
-  const { data: ann, error } = await supabase.from('announcements').insert({
-    title: title.trim(), content: message.trim(), branch_id: branchId,
-    target_audience: preset === 'staff' ? 'staff' : preset === 'members_and_staff' ? 'members_and_staff' : 'members',
-    is_active: true, publish_at: scheduledIso ?? new Date().toISOString(),
-    attachment_url: attachment?.url ?? null, attachment_kind: attachment?.kind ?? null, attachment_filename: attachment?.filename ?? null,
-  }).select('id').single();
+  const { branchId, filter, title, message, attachment, scheduledIso, requestId } = opts;
+  const { data: id, error } = await supabase.rpc('create_inapp_announcement', {
+    p_branch_id: branchId, p_filter: filter as Json, p_title: title.trim(), p_message: message.trim(),
+    p_publish_at: scheduledIso ?? undefined, p_attachment: attachment ? { ...attachment } : undefined,
+    p_request_id: requestId,
+  });
   if (error) throw error;
-  if (scheduledIso) return 'In-App: scheduled on the board';
-
-  const users = await fetchInAppUserIds(branchId, preset);
-  let ok = 0;
-  for (let i = 0; i < users.length; i += 10) {
-    const res = await Promise.allSettled(users.slice(i, i + 10).map((uid) => dispatchCommunication({
-      branch_id: branchId, channel: 'in_app', category: 'announcement', recipient: uid, user_id: uid,
-      payload: { subject: title.trim(), body: message.trim().slice(0, 500) },
-      dedupe_key: `announcement:${ann.id}:${uid}:in_app`,
-    })));
-    ok += res.filter((r) => r.status === 'fulfilled').length;
-  }
-  return `In-App: ${ok} people`;
+  if (!id) throw new Error('Announcement could not be saved');
+  if (scheduledIso) return 'In-App: board post and device alerts scheduled';
+  // The durable job remains pending even if this wake-up fails; Automation Brain retries it.
+  await supabase.functions.invoke('process-inapp-delivery', { body: { announcement_id: id } });
+  return 'In-App: saved and queued for the selected audience';
 }

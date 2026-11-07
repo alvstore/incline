@@ -953,6 +953,27 @@
       "when": 1793990216813,
       "tag": "0135_treadmill_cardio",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1794030237819,
+      "tag": "0136_targeted_inapp_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794030342897,
+      "tag": "0137_inapp_notification_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1794030529256,
+      "tag": "0138_gate_inapp_automation_work",
+      "breakpoints": true
     }
   ]
 }

@@ -2049,7 +2049,7 @@ Deno.serve(async (req) => {
           break;
         }
         case 'in_app': {
-          // In-app notifications go through notifications table; dedupe handled there too.
+          // The notification key survives retry-log cleanup and provider interruptions.
           // Schema: user_id, branch_id, title, message, type, category, is_read, action_url, metadata.
           // Resolve user_id: explicit user_id wins; otherwise the recipient is used
           // when the caller passed a UUID (common for member/staff in-app sends).
@@ -2064,6 +2064,7 @@ Deno.serve(async (req) => {
             message: input.payload.body,
             type: 'info',
             category: input.category,
+            dispatch_dedupe_key: input.dedupe_key,
             metadata: { source: 'dispatch-communication', channel: 'in_app', category: input.category },
           }).select('id').single();
           if (r.error && r.error.code !== '23505') throw new Error(r.error.message);

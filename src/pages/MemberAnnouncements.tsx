@@ -41,8 +41,9 @@ export default function MemberAnnouncements() {
         return [];
       }
       return (data || []).filter((a: any) => {
-        const branchOk = !a.branch_id || a.branch_id === actor!.branch_id;
-        const audienceOk = !a.target_audience || ['all', 'members'].includes(a.target_audience);
+        const branchOk = !a.branch_id || a.branch_id === actor?.branch_id;
+        // Targeted posts are already recipient-authorized by RLS, including team accounts.
+        const audienceOk = a.targeted_delivery || !a.target_audience || ['all', 'members', 'members_and_staff'].includes(a.target_audience);
         const publishOk = !a.publish_at || a.publish_at <= nowIso;
         const expireOk = !a.expire_at || a.expire_at > nowIso;
         return branchOk && audienceOk && publishOk && expireOk;

@@ -1,4 +1,4 @@
-// automation-brain v2.6.0 — Allow bounded workers 90s, including response body; never retry an abort.
+// automation-brain v2.7.0 — In-App delivery runs only with indexed due/stalled work.
 // automation-brain v2.3.0 — Auth gate also accepts ANON apikey + x-system-call header
 //                            (pg_cron.job.command can't safely embed SERVICE_KEY; the
 //                            system-call header + service-role headers are both honored).
@@ -160,6 +160,14 @@ async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?:
 
 // ---------- Process one rule ----------
 async function processRule(rule: any) {
+  if (rule.key === 'process_inapp_delivery') {
+    const { data: pending, error } = await admin.rpc('inapp_delivery_work_pending');
+    if (error) throw error;
+    if (!pending) {
+      await admin.from('automation_rules').update({ next_run_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() }).eq('id', rule.id);
+      return { rule: rule.key, status: 'success', dispatched: 0 };
+    }
+  }
   const startedAt = new Date();
   const { data: runRow } = await admin
     .from("automation_runs")

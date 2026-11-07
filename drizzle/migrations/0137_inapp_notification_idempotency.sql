@@ -1,0 +1,6 @@
+ALTER TABLE public.notifications ADD COLUMN dispatch_dedupe_key text;
+CREATE UNIQUE INDEX notifications_dispatch_dedupe_key_unique ON public.notifications(dispatch_dedupe_key) WHERE dispatch_dedupe_key IS NOT NULL;
+CREATE OR REPLACE FUNCTION public.wake_inapp_automation_rule() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN UPDATE public.automation_rules SET next_run_at=least(next_run_at,NEW.next_attempt_at) WHERE key='process_inapp_delivery' AND is_active; RETURN NEW; END $$;
+REVOKE ALL ON FUNCTION public.wake_inapp_automation_rule() FROM PUBLIC,anon,authenticated; GRANT EXECUTE ON FUNCTION public.wake_inapp_automation_rule() TO service_role;
+CREATE TRIGGER wake_inapp_automation AFTER INSERT ON public.inapp_delivery_jobs FOR EACH ROW EXECUTE FUNCTION public.wake_inapp_automation_rule();
+COMMENT ON COLUMN public.announcements.targeted_delivery IS 'Only new campaign In-App posts have durable recipient assignments; legacy posts remain board-only and are never backfilled into alerts';

@@ -947,6 +947,7 @@ export type Database = {
           priority: number | null
           publish_at: string | null
           target_audience: string | null
+          targeted_delivery: boolean
           title: string
         }
         Insert: {
@@ -967,6 +968,7 @@ export type Database = {
           priority?: number | null
           publish_at?: string | null
           target_audience?: string | null
+          targeted_delivery?: boolean
           title: string
         }
         Update: {
@@ -987,6 +989,7 @@ export type Database = {
           priority?: number | null
           publish_at?: string | null
           target_audience?: string | null
+          targeted_delivery?: boolean
           title?: string
         }
         Relationships: [
@@ -6773,6 +6776,106 @@ export type Database = {
           },
         ]
       }
+      inapp_delivery_jobs: {
+        Row: {
+          announcement_id: string
+          branch_id: string
+          claim_token: string | null
+          created_at: string
+          last_error: string | null
+          lease_until: string | null
+          materialized_at: string | null
+          next_attempt_at: string
+          status: string
+        }
+        Insert: {
+          announcement_id: string
+          branch_id: string
+          claim_token?: string | null
+          created_at?: string
+          last_error?: string | null
+          lease_until?: string | null
+          materialized_at?: string | null
+          next_attempt_at?: string
+          status?: string
+        }
+        Update: {
+          announcement_id?: string
+          branch_id?: string
+          claim_token?: string | null
+          created_at?: string
+          last_error?: string | null
+          lease_until?: string | null
+          materialized_at?: string | null
+          next_attempt_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inapp_delivery_jobs_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: true
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inapp_delivery_jobs_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inapp_delivery_recipients: {
+        Row: {
+          announcement_id: string
+          attempts: number
+          created_at: string
+          last_error: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          attempts?: number
+          created_at?: string
+          last_error?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          attempts?: number
+          created_at?: string
+          last_error?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inapp_delivery_recipients_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inapp_delivery_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "online_users_v"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "inapp_delivery_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       income_categories: {
         Row: {
           created_at: string
@@ -10141,6 +10244,7 @@ export type Database = {
           branch_id: string | null
           category: string | null
           created_at: string | null
+          dispatch_dedupe_key: string | null
           id: string
           is_read: boolean | null
           message: string
@@ -10154,6 +10258,7 @@ export type Database = {
           branch_id?: string | null
           category?: string | null
           created_at?: string | null
+          dispatch_dedupe_key?: string | null
           id?: string
           is_read?: boolean | null
           message: string
@@ -10167,6 +10272,7 @@ export type Database = {
           branch_id?: string | null
           category?: string | null
           created_at?: string | null
+          dispatch_dedupe_key?: string | null
           id?: string
           is_read?: boolean | null
           message?: string
@@ -17208,6 +17314,10 @@ export type Database = {
         Returns: number
       }
       calculate_upgrade_cost: { Args: { p_member_id: string }; Returns: Json }
+      campaign_member_matches_filter: {
+        Args: { p_filter: Json; p_member_id: string }
+        Returns: boolean
+      }
       campaign_recipient_rank: { Args: { _status: string }; Returns: number }
       can_access_biometric_photo: {
         Args: { _path: string; _user_id: string }
@@ -17372,6 +17482,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_inapp_delivery: {
+        Args: { p_announcement_id?: string }
+        Returns: Json
       }
       claim_meta_ai_reply: {
         Args: {
@@ -17576,6 +17690,18 @@ export type Database = {
           branch_id: string
           request_id: string
         }[]
+      }
+      create_inapp_announcement: {
+        Args: {
+          p_attachment?: Json
+          p_branch_id: string
+          p_filter: Json
+          p_message: string
+          p_publish_at?: string
+          p_request_id?: string
+          p_title: string
+        }
+        Returns: string
       }
       create_manual_invoice:
         | {
@@ -17792,6 +17918,14 @@ export type Database = {
       extract_member_id_from_storage_path: {
         Args: { _path: string }
         Returns: string
+      }
+      finish_inapp_delivery: {
+        Args: {
+          p_announcement_id: string
+          p_claim_token: string
+          p_results: Json
+        }
+        Returns: undefined
       }
       forbid: { Args: { p_action: string }; Returns: string }
       force_mips_reconcile: { Args: { _member_id: string }; Returns: Json }
@@ -18326,6 +18460,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      inapp_campaign_user_ids: {
+        Args: { p_branch_id: string; p_filter: Json }
+        Returns: {
+          user_id: string
+        }[]
+      }
+      inapp_delivery_work_pending: { Args: never; Returns: boolean }
       internal_fn_token: { Args: never; Returns: string }
       is_bot_paused: {
         Args: { p_branch_id: string; p_phone: string }
@@ -20222,6 +20363,10 @@ export type Database = {
       validate_coupon: {
         Args: { p_branch_id: string; p_code: string; p_subtotal: number }
         Returns: Json
+      }
+      validate_inapp_audience_filter: {
+        Args: { p_filter: Json }
+        Returns: undefined
       }
       validate_member_checkin: {
         Args: { _branch_id: string; _member_id: string }

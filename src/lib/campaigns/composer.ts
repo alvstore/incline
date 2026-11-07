@@ -93,3 +93,9 @@ export function filterToInAppPreset(f: AudienceFilter): AudiencePreset | null {
   if (status === 'expired') return 'expired';
   return 'active';
 }
+
+/** Preserve every filter; this is an eligibility check, never a lossy preset conversion. */
+export function inAppAudienceFilter(filter: AudienceFilter): AudienceFilter | null {
+  const kind = filter.audience_kind ?? 'members';
+  return ['members', 'members_and_staff', 'staff'].includes(kind) ? filter : null;
+}
