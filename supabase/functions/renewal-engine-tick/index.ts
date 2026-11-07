@@ -12,7 +12,7 @@
 // - all sending routed through dispatch-communication (never a send-* fn)
 // - stage dedupe enforced in DB (renewal_case_events unique index)
 // - circuit breaker: pauses the engine after repeated dispatch failures
-import { renewalInAppDedupeKey } from "../send-reminders/expiryAlerts.ts";
+const renewalInAppDedupeKey = (caseId: string, stageKey: string) => `renewal_case:${caseId}:${stageKey}:in_app`;
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 
