@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { getNavMode, subscribeNavMode, type NavMode } from '@/lib/navPreferences';
 import { useAuth } from '@/contexts/AuthContext';
-import { Building2, Plug, Bell, Shield, Settings as SettingsIcon, Gift, Sparkles, MessageSquare, Receipt, FileBox, Palette, Bot, IndianRupee, Database, ScanLine, Zap, UserCircle } from 'lucide-react';
+import { Building2, Plug, Bell, Shield, Settings as SettingsIcon, Gift, Sparkles, MessageSquare, Receipt, Palette, Bot, IndianRupee, Database, ScanLine, Zap, UserCircle } from 'lucide-react';
 import { AutomationsControlRoom } from '@/components/settings/AutomationsControlRoom';
 import { HowbodySettings } from '@/components/settings/HowbodySettings';
 import { BackupRestore } from '@/components/settings/BackupRestore';
