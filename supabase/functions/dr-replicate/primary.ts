@@ -13,7 +13,23 @@ const SESSION =
 export function connectPrimary(): Sql {
   const url = Deno.env.get("SUPABASE_DB_URL");
   if (!url) throw new Error("SUPABASE_DB_URL not available");
-  return postgres(url, { max: 2, prepare: false, idle_timeout: 20, connect_timeout: 15 });
+  return postgres(directDbUrl(url), { max: 2, prepare: false, idle_timeout: 20, connect_timeout: 15 });
+}
+
+/**
+ * The injected URL may point at the connection pooler, whose auth query now fails
+ * ("permission denied for schema pgbouncer"). Rewrite pooler URLs to the direct host.
+ */
+export function directDbUrl(raw: string): string {
+  const u = new URL(raw);
+  if (!u.hostname.includes("pooler.supabase.com")) return raw;
+  const user = decodeURIComponent(u.username);
+  const m = user.match(/^([^.]+)\.([a-z0-9]+)$/);
+  if (!m) return raw;
+  u.username = m[1];
+  u.hostname = `db.${m[2]}.supabase.co`;
+  u.port = "5432";
+  return u.toString();
 }
 
 /** Read from the primary inside a READ ONLY transaction (the mirror never writes data here). */
