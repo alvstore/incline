@@ -177,6 +177,7 @@ export async function createContract(contract: {
       commission_percentage: contract.commissionPercentage || 0,
       terms: contract.terms,
       contract_variables: contract.contractVariables ?? {},
+      notice_period_days: Number(contract.contractVariables?.notice_period_days) || undefined,
       document_url: contract.documentUrl || null,
       status: 'draft',
     })
