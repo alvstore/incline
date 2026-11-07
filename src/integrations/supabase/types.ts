@@ -18592,6 +18592,10 @@ export type Database = {
       is_in_quiet_hours: { Args: { p_member_id: string }; Returns: boolean }
       is_own_member: { Args: { p_member_id: string }; Returns: boolean }
       is_pure_trainer: { Args: { _user_id: string }; Returns: boolean }
+      is_recipient_access_revoked: {
+        Args: { p_member_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_service_request: { Args: never; Returns: boolean }
       is_staff_offboarded: { Args: { _user_id: string }; Returns: boolean }
       is_staff_or_system: { Args: never; Returns: boolean }
@@ -18892,6 +18896,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      member_login_access_pending: { Args: never; Returns: boolean }
       member_matches_segment: {
         Args: { p_member_id: string; p_status: string }
         Returns: boolean
