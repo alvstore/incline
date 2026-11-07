@@ -178,10 +178,9 @@ ${ptCommissionBlock}
 
 ## 6. LEAVE & ABSENTEEISM
 
-* Leaves must be pre-approved
-* Any unapproved leave shall result in full salary deduction (pro-rata basis)
-* Excess leaves beyond allowed limits shall be unpaid
-* Continuous absence of 3 days without notice may be treated as abandonment
+* Leave entitlement, holidays and attendance rules are governed by the Leave & Attendance Policy (Annexure B), subject to the Rajasthan Shops and Commercial Establishments Act, 1958
+* Unapproved leave is unpaid on a pro-rata basis
+* Continuous absence of 3 days without notice may be treated as abandonment, after a written notice to report back
 
 ---
 
@@ -195,10 +194,9 @@ ${ptCommissionBlock}
 
 ## 8. TERMINATION BY EMPLOYER
 
-* Employer reserves absolute right to terminate employment at any time, with or without reason
-* Termination may be:
-  * Immediate, or
-  * With notice/pay (at Employer's discretion)
+* Employer may end employment by giving the notice in Clause 7 or salary in lieu of it
+* Termination for misconduct follows Clause 12, with a written charge and a fair opportunity to explain
+* Earned wages, unused paid leave encashment as per policy, and gratuity (where 5 years' continuous service is completed under the Code on Social Security, 2020) are paid in the final settlement
 
 ---
 
@@ -278,6 +276,15 @@ Only deductions permitted under the Code on Wages, 2019 shall be made, after wri
 
 ---
 
+## 14A. COMPANY POLICIES, WELFARE & GRIEVANCES
+
+* Company policies in the Policy Library (Annexure B) form part of this Agreement at the versions attached; later versions are shared for separate acknowledgement
+* Statutory benefits apply where eligible: maternity benefit (Maternity Benefit Act, 1961 / Code on Social Security, 2020), gratuity, PF/ESI
+* Complaints of sexual harassment go to the Internal Committee under the POSH Act, 2013; other grievances may be raised in writing to the Proprietor and will be answered within 15 working days, without retaliation
+* Wages are paid by the 7th of the following month (Code on Wages, 2019)
+
+---
+
 ## 15. NO COMPETITION DURING EMPLOYMENT
 
 Employee shall not:
@@ -320,7 +327,6 @@ Employee confirms:
 * Salary Breakdown
 * Commission Structure
 * Incentive Plans
-* Leave Policy Details
 
 ---`;
 }
