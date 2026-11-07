@@ -1,3 +1,7 @@
+# In-App monitoring repair (7 Nov 2026)
+- [ ] Preserve selected member segments, goals and staff roles across In-App preview, notifications and board visibility; awaiting approval of the repair plan.
+- [ ] Deliver scheduled In-App bell/browser/Flutter alerts through the existing notification dispatcher with durable, deduplicated retry handling; awaiting approval of the repair plan.
+
 # Salary payment flow (4 Nov 2026)
 - [x] Restore branch visibility of historical paid runs and commission detail without changing payouts; prefer recorded-payments run over newer duplicate drafts.
 - [x] Align calculate, preview, save and bank/cash remittance with atomic expense recording; enforce UTR, payment date, idempotency and duplicate monthly salary guards.
