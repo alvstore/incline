@@ -2,7 +2,7 @@
 
 ## Implementation guides
 
-- [Flutter member app — complete guide and roadmap](flutter-member-app-readme.md): member authorization, general/PT daily plans, shared PDF constraints, manual progress, HOWBODY, bookings, referrals and native release gates.
+- [Flutter app (member + staff roles) — complete guide and roadmap](flutter-member-app-readme.md): role router/shells for owner, admin, manager, staff, trainer and member, member authorization, general/PT daily plans, shared PDF constraints, manual progress, HOWBODY, bookings, referrals and native release gates.
 - [Communication dispatcher](communication-dispatcher.md): canonical outbound delivery architecture.
 - [Browser notifications](browser-notifications.md): web push and privacy boundaries.
 - [Production readiness](production-readiness.md): operational checks and known dependencies.
