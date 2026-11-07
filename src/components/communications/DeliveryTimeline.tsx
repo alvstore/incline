@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CheckCircle2, Clock, Send, Eye, MessageSquareReply, XCircle, AlertTriangle, Info, Hourglass } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { normalizeDeliveryStatus } from '@/lib/comms/deliveryStatus';
 
 interface Event {
   id: string;
@@ -14,7 +15,7 @@ interface Event {
 }
 
 const stageOrder = ['queued', 'sent', 'delivered', 'read', 'replied'] as const;
-type Stage = (typeof stageOrder)[number] | 'failed' | 'bounced';
+type Stage = (typeof stageOrder)[number] | 'failed' | 'bounced' | 'suppressed';
 
 const stageMeta: Record<Stage, { icon: any; dotBg: string; dotRing: string; text: string; label: string }> = {
   queued:    { icon: Clock,              dotBg: 'bg-warning',   dotRing: 'ring-warning/40',   text: 'text-warning',   label: 'Queued' },
@@ -24,6 +25,7 @@ const stageMeta: Record<Stage, { icon: any; dotBg: string; dotRing: string; text
   replied:   { icon: MessageSquareReply, dotBg: 'bg-primary',  dotRing: 'ring-primary/40',  text: 'text-primary',  label: 'Replied' },
   failed:    { icon: XCircle,            dotBg: 'bg-destructive',    dotRing: 'ring-destructive/40',    text: 'text-destructive',    label: 'Failed' },
   bounced:   { icon: AlertTriangle,      dotBg: 'bg-destructive',    dotRing: 'ring-destructive/40',    text: 'text-destructive',    label: 'Bounced' },
+  suppressed: { icon: XCircle, dotBg: 'bg-destructive', dotRing: 'ring-destructive/40', text: 'text-destructive', label: 'Blocked' },
 };
 
 // Friendly explanations for the most common Meta WhatsApp error codes so
@@ -52,13 +54,8 @@ function resolveLogStage(
   logStatus?: string | null,
   logDeliveryStatus?: string | null,
 ): Stage | 'pending' {
-  const s = (logStatus || '').toLowerCase();
-  const d = (logDeliveryStatus || '').toLowerCase();
-  if (s === 'failed' || s === 'bounced') return s as Stage;
-  if (d === 'failed' || d === 'bounced') return d as Stage;
-  if (d === 'replied' || d === 'read' || d === 'delivered') return d as Stage;
-  if (s === 'sent') return 'sent';
-  if (d && (stageOrder as readonly string[]).includes(d) && d !== 'queued') return d as Stage;
+  const status = normalizeDeliveryStatus({ status: logStatus, delivery_status: logDeliveryStatus });
+  if (['failed', 'bounced', 'suppressed', 'sent', 'delivered', 'read', 'replied'].includes(status)) return status as Stage;
   return 'pending';
 }
 
@@ -76,7 +73,7 @@ function synthesizeFromLog(
   ];
   if (stage === 'pending') return out;
   const sentTs = logSentAt || logCreatedAt;
-  if (stage === 'failed' || stage === 'bounced') {
+  if (stage === 'failed' || stage === 'bounced' || stage === 'suppressed') {
     out.push({ id: `syn-${stage}`, new_status: stage, previous_status: 'queued', provider: null, error_message: logErrorMessage || null, created_at: sentTs });
     return out;
   }
@@ -192,7 +189,7 @@ export function DeliveryTimeline({
   }
 
   const reachedStages = new Set(effectiveEvents.map((e) => e.new_status));
-  const failureEvent = effectiveEvents.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');
+  const failureEvent = effectiveEvents.find((e) => ['failed', 'bounced', 'suppressed'].includes(e.new_status));
   const hasFailure = !!failureEvent;
 
   // Channel capability: SMS has no "read" / "replied" receipt — drop those
@@ -205,7 +202,7 @@ export function DeliveryTimeline({
   //  • happy path → channel-appropriate stages
   //  • failure   → reached stages + failed pill at the end
   const visibleStages: Stage[] = hasFailure
-    ? ([...channelStageOrder.filter((s) => reachedStages.has(s)), failureEvent!.new_status as Stage])
+    ? ([...channelStageOrder.filter((s) => reachedStages.has(s)), failureEvent?.new_status as Stage])
     : ([...channelStageOrder] as Stage[]);
 
   // Latest reached stage = drives the "active" pulse
@@ -253,7 +250,7 @@ export function DeliveryTimeline({
             const event = effectiveEvents.find((e) => e.new_status === stage);
             const Icon = meta.icon;
             const isActive = stage === activeStage;
-            const isFailureStage = stage === 'failed' || stage === 'bounced';
+            const isFailureStage = stage === 'failed' || stage === 'bounced' || stage === 'suppressed';
             return (
               <div key={stage} className="flex flex-col items-center min-w-0 flex-1" aria-label={meta.label}>
                 <div
