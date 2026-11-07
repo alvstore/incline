@@ -974,6 +974,13 @@
       "when": 1794030529256,
       "tag": "0138_gate_inapp_automation_work",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1794033988367,
+      "tag": "0139_fix_pos_receipts_and_reconcile_rules",
+      "breakpoints": true
     }
   ]
 }
