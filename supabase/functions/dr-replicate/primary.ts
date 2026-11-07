@@ -16,3 +16,23 @@ export function connectPrimary(): Sql {
   return postgres(url, { max: 2, prepare: false, idle_timeout: 20, connect_timeout: 15 });
 }
 
+/**
+ * Run a read-only query against the primary with the pinned session settings,
+ * returning the first column of the first row as text (null when no row/value).
+ * Multi-statement via simple protocol so SESSION applies to the same connection.
+ */
+export async function readOne(sql: Sql, query: string): Promise<string | null> {
+  const results = await sql.unsafe(SESSION + "; " + query, [], { prepare: false }).simple();
+  const last = Array.isArray(results) ? results[results.length - 1] : results;
+  const row = Array.isArray(last) ? last[0] : last;
+  if (!row || typeof row !== "object") return null;
+  const value = Object.values(row as Record<string, unknown>)[0];
+  return value == null ? null : String(value);
+}
+
+/** readOne + JSON.parse — for queries that return a single json/jsonb text payload. */
+export async function readJson<T>(sql: Sql, query: string): Promise<T> {
+  const text = await readOne(sql, query);
+  return (text ? JSON.parse(text) : null) as T;
+}
+
