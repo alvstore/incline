@@ -273,14 +273,14 @@ export function AdminRecipientsCard() {
   const updatePref = useMutation({
     mutationFn: async (input: { row: AdminRow; channel: Channel; value: boolean }) => {
       const { row, channel, value } = input;
+      const payload = {
+        user_id: row.id,
+        whatsapp_enabled: channel === 'whatsapp_enabled' ? value : row.whatsapp_enabled,
+        sms_enabled: channel === 'sms_enabled' ? value : row.sms_enabled,
+        email_enabled: channel === 'email_enabled' ? value : row.email_enabled,
+      };
       const { error } = await supabase.from('lead_notification_admin_prefs').upsert(
-        {
-          user_id: row.id,
-          whatsapp_enabled: row.whatsapp_enabled,
-          sms_enabled: row.sms_enabled,
-          email_enabled: row.email_enabled,
-          [channel]: value,
-        },
+        payload,
         { onConflict: 'user_id' },
       );
       if (error) throw error;
