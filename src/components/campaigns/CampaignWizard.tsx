@@ -36,7 +36,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ShieldCheck, Bell } from 'lucide-react';
-import { filterToInAppPreset } from '@/lib/campaigns/composer';
+import { inAppAudienceFilter } from '@/lib/campaigns/composer';
 import { deliverInApp, fetchInAppUserIds } from '@/lib/campaigns/inAppDelivery';
 
 interface Props {
@@ -223,6 +223,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   const [selectedChannels, setSelectedChannels] = useState<CampaignChannel[]>(['whatsapp']);
   // In-App rides alongside campaign channels: board post + bell + browser/phone push.
   const [inAppOn, setInAppOn] = useState(false);
+  const [inAppRequestId, setInAppRequestId] = useState(() => crypto.randomUUID());
   const [channelDrafts, setChannelDrafts] = useState<Record<string, ChannelDraft>>({});
   // Multiple classes can go out in one announcement (e.g. morning + evening
   // Yoga). The first picked class drives the event fields; every picked class
@@ -1177,11 +1178,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   };
 
   /** Drafts for every selected channel, with the live editor state folded in. */
-  const inAppPreset = filterToInAppPreset(filter);
+  const inAppFilter = inAppAudienceFilter(filter);
   const inAppCount = useQuery({
-    queryKey: ['wizard-inapp-count', branchId, inAppPreset],
-    enabled: open && inAppOn && !!branchId && !!inAppPreset,
-    queryFn: () => fetchInAppUserIds(branchId, inAppPreset!),
+    queryKey: ['wizard-inapp-count', branchId, inAppFilter],
+    enabled: open && inAppOn && !!branchId && !!inAppFilter,
+    queryFn: () => inAppFilter ? fetchInAppUserIds(branchId, inAppFilter) : Promise.resolve([]),
+    retry: false,
   });
   const inAppOnly = inAppOn && selectedChannels.length === 0;
 
@@ -1203,7 +1205,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
     if (selectedChannels.length === 0 && !inAppOn) { toast.error('Pick at least one channel'); return; }
-    if (inAppOn && !inAppPreset) { toast.error('In-App works only for members and staff — leads have no app account'); return; }
+    if (inAppOn && !inAppFilter) { toast.error('In-App works only for members and staff — leads have no app account'); return; }
+    if (inAppOn && (inAppCount.isFetching || inAppCount.isError || !inAppCount.data)) { toast.error('Wait for the In-App audience to load, or retry the audience check'); return; }
+    if (inAppOn && inAppCount.data?.length === 0) { toast.error('No app accounts match the selected audience'); return; }
     if (inAppOn && trigger === 'automated') { toast.error('In-App cannot repeat automatically — use Send now or Schedule'); return; }
     if (inAppOnly && !message.trim()) { toast.error('IN-APP: message is empty'); return; }
     if (!inAppOnly && totalCount === 0) { toast.error('Audience is empty'); return; }
@@ -1336,13 +1340,14 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
         }
       }
 
-      if (inAppOn && inAppPreset) {
+      if (inAppOn && inAppFilter) {
         try {
           const note = await deliverInApp({
-            branchId, preset: inAppPreset, title: name.trim(), message: inAppText,
+            branchId, filter: inAppFilter, title: name.trim(), message: inAppText, requestId: inAppRequestId,
             attachment, scheduledIso: trigger === 'scheduled' ? new Date(scheduledAt).toISOString() : null,
           });
           toast.success(note);
+          setInAppRequestId(crypto.randomUUID());
           created += 1;
           qc.invalidateQueries({ queryKey: ['announcements'] });
         } catch (err: any) {
@@ -1556,11 +1561,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                 })}
               </div>
               {inAppOn && (
-                <div className={`mt-2 rounded-xl p-2.5 text-[11px] border ${inAppPreset ? 'bg-primary/5 border-primary/20 text-muted-foreground' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
-                  {inAppPreset ? (
+                <div className={`mt-2 rounded-xl p-2.5 text-[11px] border ${inAppFilter ? 'bg-primary/5 border-primary/20 text-muted-foreground' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
+                  {inAppCount.isError ? <span>Audience check failed. <Button variant="link" size="sm" onClick={() => inAppCount.refetch()}>Retry</Button></span> : inAppFilter ? (
                     <>
                       <span className="font-semibold text-foreground">In-App:</span>{' '}
-                      {inAppCount.isLoading ? 'counting app users…' : `${inAppCount.data?.length ?? 0} people with the app`} get a bell notification, browser and phone pop-up, plus an announcement-board post titled with the campaign name.{' '}
+                      {inAppCount.isLoading ? 'counting app users…' : `${inAppCount.data?.length ?? 0} matching app accounts`} receive the board post and bell, browser and phone alerts when due.{' '}
                       {inAppOnly ? 'You are writing the In-App message below.' : 'It uses the text of your WhatsApp/SMS/Email message.'}
                     </>
                   ) : 'In-App works only for members and staff — leads, contacts and imported lists have no app account. Change the audience or switch In-App off.'}
@@ -2278,7 +2283,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                 <div><span className="text-muted-foreground">Type:</span> <span className="font-medium capitalize">{campaignType.replace('_', ' ')}</span></div>
                 <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{name || '—'}</span></div>
                 <div><span className="text-muted-foreground">Channels:</span> <span className="font-medium">{[...(inAppOn ? ['IN-APP'] : []), ...selectedChannels.map((c) => c.toUpperCase())].join(' + ')}</span>{selectedChannels.length > 1 ? <span className="text-muted-foreground text-xs"> · one campaign per channel</span> : null}</div>
-                {inAppOn && <div><span className="text-muted-foreground">App users:</span> <span className="font-medium">{inAppPreset ? (inAppCount.data?.length ?? '…') : 'not available for this audience'}</span></div>}
+                {inAppOn && <div><span className="text-muted-foreground">App users:</span> <span className="font-medium">{inAppCount.isError ? 'Audience check failed' : inAppFilter ? (inAppCount.data?.length ?? '…') : 'not available for this audience'}</span></div>}
                 <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{totalCount}{coldCount > 0 ? ` · ${coldCount} cold` : ''}</span></div>
                 {requiresTemplate && (
                   <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-success' : 'text-warning'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>

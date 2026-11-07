@@ -156,6 +156,8 @@ export default function AnnouncementsPage() {
                               <Badge variant="outline" className="rounded-full text-xs">
                                 {announcement.target_audience || 'All'}
                               </Badge>
+                              {!announcement.targeted_delivery && !announcement.dispatched_at && <Badge variant="outline">Board only · no device alerts</Badge>}
+                              {announcement.targeted_delivery && <Badge variant="outline">{announcement.dispatched_at ? 'Alerts processed' : 'Alerts queued'}</Badge>}
                               <span className="text-xs text-muted-foreground">
                                 {formatDistanceToNow(new Date(announcement.created_at), { addSuffix: true })}
                               </span>
