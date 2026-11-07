@@ -1,6 +1,7 @@
 # In-App monitoring repair (7 Nov 2026)
-- [ ] Preserve selected member segments, goals and staff roles across In-App preview, notifications and board visibility; awaiting approval of the repair plan.
-- [ ] Deliver scheduled In-App bell/browser/Flutter alerts through the existing notification dispatcher with durable, deduplicated retry handling; awaiting approval of the repair plan.
+- [x] Preserve full member segments, goals and staff roles; recipient assignments restrict new targeted board posts. Live audience parity: active 198, dues 6, frozen 0, recent-expired 22, inactive 30/60 days 60/31; trainer/manager/staff 7/1/2.
+- [x] Add atomic durable jobs, scoped recipients, notification-level dedupe and due/stalled-work gate in Automation Brain; worker and dispatcher deployed. Legacy board posts are not backfilled or sent.
+- [x] 16 composer + 8 mocked worker tests pass; Deno check and automatic build OK. Signed-in In-App-only scheduled save tested with intercepted persistence; deployed worker denies anonymous and untargeted requests. No real announcement or member notification created. Physical phone delivery and concurrent/live database claim recovery were not exercised; validation used provider mocks and live read-only audience checks.
 
 # Salary payment flow (4 Nov 2026)
 - [x] Restore branch visibility of historical paid runs and commission detail without changing payouts; prefer recorded-payments run over newer duplicate drafts.

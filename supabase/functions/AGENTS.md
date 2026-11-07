@@ -8,3 +8,4 @@
 - Chat pricing (website + WhatsApp leads) runs only through `_shared/salesPricing.ts` (stage ladder, live plan list, leak guard, one live link per lead+plan+amount in `sales_payment_links`, audit in `sales_quote_events`); the LLM never states amounts, so prices cannot be invented.
 
 - In-App delivery: a `notifications` row (via dispatchCommunication) fans out through `web-push` to every device in `web_push_subscriptions` (kind web|fcm; Flutter registers with `register_device`).
+- Campaign In-App delivery retains full audience filters, uses recipient-scoped board access and atomic leased jobs through `process-inapp-delivery`/Automation Brain; notification-level dedupe survives interrupted dispatch so scheduled and immediate delivery cannot diverge.
