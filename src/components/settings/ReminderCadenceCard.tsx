@@ -148,7 +148,7 @@ export function ReminderCadenceCard() {
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+            <span className="rounded-full bg-primary/10 p-2 text-primary">
               <AlarmClock className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
@@ -193,7 +193,7 @@ export function ReminderCadenceCard() {
               <section key={key} className="rounded-2xl bg-muted/50 p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+                    <span className="rounded-full bg-primary/10 p-2 text-primary">
                       <Icon className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div>
