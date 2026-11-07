@@ -1,4 +1,4 @@
-# Incline App (Flutter) — Complete Implementation Guide (Member + Staff roles)
+# Incline App (Flutter) — Member App — Complete Implementation Guide
 
 Native iOS + Android member app for **Incline – Rise.Reflect.Repeat.** It talks to the **same backend** as the web member dashboard (`/member-dashboard`). There is no separate server: every rule (prices, booking windows, dues, gate access, approvals) is enforced by the database and backend functions. The app only displays data and calls approved actions.
 
@@ -75,10 +75,6 @@ lib/
     requests/     freeze/other approval requests, feedback
     notifications/ in-app inbox, announcements, push opt-in
     profile/      profile, display photo, preferences, account deletion
-    trainer/      staff shell: PT today, clients, plans, own payout (§21–22)
-    staff/        front-desk shell: search, check-in, payments, bookings, tasks
-    manager/      branch dashboard, approvals, renewals, staff attendance
-    admin/        branch switcher, cross-branch summary (read-only)
   shared/         widgets (cards, badges, skeletons, empty/error states)
 test/             unit (rules), widget, golden; integration_test/ for flows
 ```
@@ -92,7 +88,7 @@ One feature = `data/` (repository calling Supabase), `domain/` (models, pure rul
 - Login identifier: email **or** Indian mobile. Normalise phone to `+91XXXXXXXXXX` (strip leading 0), resolve via backend function `resolve-login-identifier`, then `signInWithPassword`.
 - Password reset: email link deep-links to `incline://auth/reset` (also allow `https://theincline.in/reset-password` universal link).
 - **`must_set_password`** on the profile forces the set-password screen before anything else; clear it only through the same flow the web uses.
-- Role gate: after login read `user_roles` and route to the matching shell — see **§21 Role router & shells**. One app serves members and staff.
+- Role gate: after login read `user_roles`. Only the member role may continue; any staff/trainer/manager/admin/owner account sees "Please use the Incline Team app" and is signed out. Team features live in `flutter-team-app-readme.md`.
 - Branch: members have one home branch (`get_user_branch`). Do not offer branch switching.
 - Biometric unlock only unlocks the locally stored session; it never replaces server auth.
 
@@ -1010,98 +1006,3 @@ Display helpers must match `src/lib/fitness/treadmill.ts`: pace = `duration_seco
 
 
 ---
-
-## 21. Role router & shells (Owner/Admin · Manager · Staff · Trainer · Member)
-
-One login, one app. After sign-in (and the `must_set_password` gate) load the **app context** once, then redirect to a shell. Mirrors web `getHomePath` (`src/lib/roleRedirect.ts`).
-
-```dart
-enum AppRole { owner, admin, manager, staff, trainer, member }
-
-class AppContext {
-  final Set<AppRole> roles;
-  final String? homeBranchId;      // get_user_branch(auth.uid())
-  final List<String> branchIds;    // manager: managed_branch_ids; owner/admin: all branches
-  final Set<Capability> caps;
-}
-
-// Read: select role, branch_id from user_roles where user_id = auth.uid()
-String homeFor(Set<AppRole> r) {
-  if (r.isEmpty) return '/not-set-up';            // "Account not set up — contact front desk"
-  if (r.contains(AppRole.member)) return '/m';     // member is exclusive
-  final admin = r.contains(AppRole.owner) || r.contains(AppRole.admin) || r.contains(AppRole.manager);
-  if (r.contains(AppRole.trainer) && !admin) return '/t';
-  if (r.contains(AppRole.staff) && !admin) return '/s';
-  if (r.contains(AppRole.manager) && !r.contains(AppRole.owner) && !r.contains(AppRole.admin)) return '/mgr';
-  return '/admin';
-}
-```
-
-go_router: one top-level `redirect` — no session → `/login`; `must_set_password` → `/set-password`; path prefix not allowed for the user's shell → `homeFor(roles)`. Refresh the context on auth change and app resume.
-
-### 21.1 Capabilities (mirror `src/lib/auth/permissions.ts`)
-
-| Capability | Roles |
-|---|---|
-| view_financials | owner, admin, manager |
-| record_payment | owner, admin, manager, staff |
-| approve_discount, cancel_membership, cancel_invoice, freeze_membership, credit_member, delete_task, manage_class_schedule, manage_devices | owner, admin, manager |
-| manage_renewals | owner, admin, manager, staff |
-| cross_branch_view, manage_settings, manage_staff, manage_automations, view_reconciliation | owner, admin |
-| book_facility | all roles |
-
-Use the table only to **hide** buttons. The server is the real gate (`has_capability(uid, cap)` + RLS + RPC guards). Every RPC can still return `42501`/`success:false` → show "You don't have permission for this" and log via `log_error_event`; never retry.
-
-### 21.2 Branch rules
-- Trainer/staff/manager: locked to their branch (`get_user_branch`); no switcher.
-- Owner/admin: branch switcher + "All branches" summary. On change call `rpc('set_active_branch', {p_branch_id})` **then** refetch. Still pass `branch_id` filters (defense-in-depth).
-
-### 21.3 Notification taps
-Same single push path (§8). Route `data.url` through the router; if the target is outside the user's shell, open their home and the inbox item.
-
-### 21.4 Feature flags (staff modules)
-Keys in `settings` (branch row first, then global), **default OFF**, fail closed (hide module):
-`flutter_trainer_app_enabled`, `flutter_staff_desk_enabled`, `flutter_staff_payments_enabled`, `flutter_manager_app_enabled`, `flutter_admin_app_enabled`. A role whose module flag is off sees "Use the web dashboard for now".
-
----
-
-## 22. Per-role data-access map (verified functions only)
-
-All writes go through existing server functions — no multi-step client writes. Anything not listed is **web-only for now**.
-
-### Trainer (`/t`)
-- Today / clients: `member_pt_packages` + `pt_sessions` filtered by own trainer id (RLS restricts to own clients).
-- Log PT attendance (fallback when auto-attendance missed): `rpc('log_pt_session', {p_member_pt_package_id, p_trainer_id, p_status, p_notes, p_session_id, p_session_date})`. Auto-attendance (`pt_auto_attendance_log`) is read-only.
-- Plans: read `fitness_plan_templates` / `member_fitness_plans` (§14); assigning stays web-only in S1.
-- Client progress: `member_measurements`, `treadmill_workouts` (§20).
-- Classes: `classes` where trainer = self. Own payout: read-only, no financials of others.
-
-### Staff / front desk (`/s`)
-- Member search/profile: `members` (branch-scoped), memberships, invoices (no totals dashboards).
-- Attendance today: `member_attendance` (consolidate per member per IST day).
-- Payments: `rpc('record_payment', {p_branch_id, p_invoice_id, p_member_id, p_amount, p_payment_method, p_payment_date, p_transaction_id, p_notes, p_received_by, p_income_category_id})` — gated by `record_payment` + `flutter_staff_payments_enabled`. Send a stable idempotent `p_transaction_id` per attempt.
-- Store: `rpc('create_pos_sale_audited', {..., p_idempotency_key})`.
-- Bookings: `rpc('book_facility_slot', {p_slot_id, p_member_id, p_membership_id, p_source:'staff', p_staff_id, p_force:false})`, `rpc('book_class', {_class_id, _member_id})`.
-- Leads/tasks: `leads`, `tasks` (branch-scoped). Freeze/discount requests are filed as approvals for the manager.
-- Renewals: `rpc('renewal_center_queue', {_branch_id, _queue, _search, _limit, _offset})`.
-
-### Manager (`/mgr`)
-Everything staff has, plus: approvals inbox (`approval_requests`), `rpc('freeze_membership', {p_membership_id, p_freeze_days, p_reason})`, branch revenue/dues (analytics RPCs, `view_financials`), staff attendance (read).
-
-### Owner/Admin (`/admin`)
-Manager screens + branch switcher + cross-branch summary, read-only system health. **Web-only:** settings, payroll, devices, automations, campaigns, HR contracts, standby copy.
-
-### Don'ts
-- Never take `member_id`/`branch_id`/role from local storage as authority.
-- Never show prices to non-members; never show heart-rate/health data in push or logs.
-- No Dialog forms on tablet layouts — use bottom/side sheets.
-
----
-
-## 23. Staff app roadmap (after member Phase 1)
-- **S0** Role router, shells, app context, flags, permission-denied handling.
-- **S1** Trainer: today, clients, log PT session, client progress.
-- **S2** Front desk: search, attendance, bookings, tasks, renewals queue; payments behind flag.
-- **S3** Manager: approvals, freeze, branch dashboard.
-- **S4** Owner/Admin: branch switcher, cross-branch read-only summary.
-- **S5** Hardening: role-matrix integration tests (each role hits each route), offline, release.

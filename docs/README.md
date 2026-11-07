@@ -2,7 +2,8 @@
 
 ## Implementation guides
 
-- [Flutter app (member + staff roles) — complete guide and roadmap](flutter-member-app-readme.md): role router/shells for owner, admin, manager, staff, trainer and member, member authorization, general/PT daily plans, shared PDF constraints, manual progress, HOWBODY, bookings, referrals and native release gates.
+- [Flutter Member app — complete guide and roadmap](flutter-member-app-readme.md): member-only app (refuses team accounts), general/PT daily plans, PDFs, progress, HOWBODY, bookings, referrals and release gates.
+- [Flutter Team app — staff/trainer/manager/owner guide and roadmap](flutter-team-app-readme.md): separate role-based app, feature map from the web, verified server functions, release switches, phases T0–T6.
 - [Communication dispatcher](communication-dispatcher.md): canonical outbound delivery architecture.
 - [Browser notifications](browser-notifications.md): web push and privacy boundaries.
 - [Production readiness](production-readiness.md): operational checks and known dependencies.
@@ -13,4 +14,4 @@
 - [Legacy project notes](archive/legacy-notes/index.md): preserved physical notes from earlier work. These are historical records, not current policy; current engineering rules live in root/nested `AGENTS.md` and current guides above. Legacy `mem://` links reference the agent memory system, not files in this archive.
 - [MIPS API reference](../.lovable/mips-api-reference.md): existing internal integration reference; retained in its original location to preserve links.
 
-All Flutter contracts and its implementation roadmap stay in **one guide**. Root `README.md` is the project entry point; root `roadmap.md` tracks ongoing work. Served assets/model attribution stay with their assets, and managed plan history stays in `.lovable/`.
+Flutter has **two guides**, one per app (member, team). Root `README.md` is the project entry point; root `roadmap.md` tracks ongoing work. Served assets/model attribution stay with their assets, and managed plan history stays in `.lovable/`.
