@@ -265,9 +265,9 @@ export default function LockersPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-accent to-accent/60 text-accent-foreground">
@@ -278,7 +278,7 @@ export default function LockersPage() {
             <p className="text-muted-foreground mt-1">Manage locker assignments, rentals, and availability</p>
           </div>
           {!roles?.some((r: any) => ['staff'].includes(typeof r === 'string' ? r : r?.role)) && (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
                 const rows = (lockers.data || []).map((l: any) => {
                   const assignment = l.locker_assignments?.find((a: any) => a.is_active);
@@ -321,7 +321,7 @@ export default function LockersPage() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl">
             <CardContent className="pt-6 pb-5">
               <div className="flex items-center justify-between">
@@ -372,9 +372,9 @@ export default function LockersPage() {
         <LockerRoomSummary rooms={rooms} active={activeRoom} onSelect={selectRoom} />
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 flex-1">
-            <div className="relative max-w-xs flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+            <div className="relative min-w-[12rem] max-w-xs flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search locker or member..." aria-label="Search lockers" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 rounded-xl" />
             </div>
