@@ -220,7 +220,7 @@ export function NotificationSettings() {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="hidden grid-cols-12 gap-4 sm:grid">
         <StatTile icon={AlarmClock} label="Reminders" value="Schedule" active={section === 'reminders'} onClick={() => changeSection('reminders')} />
         <StatTile icon={Mail} label="Member messages" value={`${countOn(preferences, EMAIL_ROWS)}/${EMAIL_ROWS.length} on`} active={section === 'members'} onClick={() => changeSection('members')} />
         <StatTile icon={Users} label="Team alerts" value={`${countOn(preferences, teamRows)}/${teamRows.length} on`} active={section === 'team'} onClick={() => changeSection('team')} />
@@ -241,7 +241,7 @@ export function NotificationSettings() {
         </TabsContent>
 
         <TabsContent value="members" className="mt-5">
-          <div className="grid grid-cols-12 gap-5">
+          <div className="grid grid-cols-12 items-start gap-5">
             <SettingsCard
               className="col-span-12 lg:col-span-8"
               icon={Mail}
@@ -281,7 +281,7 @@ export function NotificationSettings() {
 
         {/* forceMount keeps unsaved lead edits when switching sections */}
         <TabsContent value="leads" forceMount className="mt-5 space-y-5 data-[state=inactive]:hidden">
-          <div className="grid grid-cols-12 gap-5">
+          <div className="grid grid-cols-12 items-start gap-5">
             <LeadNotificationCards ref={leadCardsRef} onDirtyChange={setLeadDirty} />
           </div>
           <AdminRecipientsCard />
