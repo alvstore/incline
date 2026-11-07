@@ -1,3 +1,4 @@
+// v5.6.0 — PDF uses the contract's saved notice days and shows only the selected role's duties.
 // v5.5.1 — Signing links use server-configured public origins, never localhost or preview origins.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
@@ -9,6 +10,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
 import { contractPublicOrigin } from './publicUrl.ts';
+import { applyRoleAndNotice } from './termsFixups.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -805,7 +807,10 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   const commissionReplacement = Number.isFinite(commissionPct) && commissionPct > 0
     ? `Commission %: ${commissionPct}%`
     : `Commission %: [to be agreed in Annexure A]`;
-  const termsSanitised = termsRaw
+  const vars = ((contract as any).contract_variables ?? {}) as Record<string, string>;
+  const noticeDays = Number(vars.notice_period_days) || Number((contract as any).notice_period_days) || 0;
+  const agreementRole = String(vars.agreement_role || (contract.terms as any)?.compliance_meta?.agreement_role || "");
+  const termsSanitised = applyRoleAndNotice(termsRaw, agreementRole, noticeDays)
     .replace(/##\s*SIGNATURES[\s\S]*?(?=\n##\s|\n---\s*\n##\s|\n---\s*$|$)/i, "")
     .replace(/##\s*WITNESSES[\s\S]*?(?=\n##\s|\n---\s*\n##\s|\n---\s*$|$)/i, "")
     // Backfill the legacy hardcoded "Commission %: _______%" placeholder with the

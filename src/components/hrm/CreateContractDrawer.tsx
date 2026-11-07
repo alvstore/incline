@@ -18,22 +18,9 @@ import { CONTRACT_VARIABLES, type ContractVariableKey, type FillRole } from '@/l
 import { resolveContractPrefill, prefillToVariables, type ContractPrefillMap } from '@/lib/hrm/contractPrefill';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 import { fetchGovernmentId } from '@/lib/profiles/governmentId';
-
-type AgreementRole = 'trainer' | 'staff' | 'manager';
-
-type EmployeePrefill = {
-  employeeCode?: string;
-  email?: string;
-  phone?: string;
-  position?: string;
-  department?: string;
-};
-
-function formatExecutionDate(dateValue: string): string {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return dateValue;
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-}
+import { getEmploymentAgreementTemplate, DEFAULT_NOTICE_DAYS, type AgreementRole, type EmployeePrefill } from '@/lib/hrm/employmentAgreementTemplate';
+import { getEmployerProfile } from '@/lib/hrm/getEmployerProfile';
+import { track } from '@/lib/analytics';
 
 function detectAgreementRole(employee: any): AgreementRole {
   if (employee?.staff_type === 'trainer') return 'trainer';
@@ -45,268 +32,6 @@ function detectAgreementRole(employee: any): AgreementRole {
   }
 
   return 'staff';
-}
-
-function getEmploymentAgreementTemplate(
-  role: AgreementRole,
-  employeeName: string,
-  salary: number,
-  startDate: string,
-  prefill?: EmployeePrefill,
-  commissionPercentage: number = 0,
-) {
-  const trainerChecked = role === 'trainer' ? 'x' : ' ';
-  const staffChecked = role === 'staff' ? 'x' : ' ';
-  const managerChecked = role === 'manager' ? 'x' : ' ';
-  const isTrainer = role === 'trainer';
-  const fixedSalary = Number.isFinite(salary) && salary > 0 ? Math.round(salary).toLocaleString('en-IN') : '________';
-  const commissionLine = Number.isFinite(commissionPercentage) && commissionPercentage > 0
-    ? `${commissionPercentage}%`
-    : '[to be agreed in Annexure A]';
-  const ptCommissionBlock = isTrainer
-    ? `\n### PERSONAL TRAINING (PT) COMMISSION - APPLICABLE TO TRAINERS\n\n* Commission shall be paid on Personal Training revenue (pre-GST amount only)\n* Commission %: ${commissionLine}\n* Paid only after full payment is received from client\n`
-    : '';
-  const executionDate = formatExecutionDate(startDate);
-  const companyAddress = 'Udaipur, Rajasthan';
-  const employeeCode = prefill?.employeeCode;
-  const email = prefill?.email;
-  const phone = prefill?.phone;
-  const position = prefill?.position || (role === 'trainer' ? 'Trainer' : role === 'manager' ? 'Manager' : 'Staff');
-  const department = prefill?.department || (role === 'trainer' ? 'Training' : role === 'manager' ? 'Management' : 'Operations');
-
-  // Build the "AND" (employee) block conditionally — missing fields show a
-  // clear "[Pending — to be filled by employee]" marker instead of underscores
-  // so the document never looks like a stamp-paper template with blanks.
-  const PENDING = '[Pending — to be filled by employee before signing]';
-  const employeeLines: string[] = [];
-  employeeLines.push(`Mr./Ms. ${employeeName && !employeeName.startsWith('___') ? employeeName : PENDING}`);
-  if (employeeCode) employeeLines.push(`Employee Code: ${employeeCode}`);
-  if (email)        employeeLines.push(`Email: ${email}`);
-  if (phone)        employeeLines.push(`Phone: ${phone}`);
-  employeeLines.push(`Position: ${position}`);
-  employeeLines.push(`Department: ${department}`);
-  // S/o / D/o + Residing at come from the Contract Fill page (contract_variables).
-  // The PDF builder renders them in the "Personal Details (provided by employee)"
-  // section appended below — point to it cleanly without the "Filled details" stub
-  // or any underscore placeholders.
-  employeeLines.push(`Personal details (parentage, residential address, emergency contact, ID) — provided by the Employee via the secure fill link and listed in the "Personal Details" section of this Agreement.`);
-  employeeLines.push(`(hereinafter referred to as the "Employee")`);
-
-  return `# EMPLOYMENT AGREEMENT
-
-This Employment Agreement ("Agreement") is executed on ${executionDate} at Udaipur, Rajasthan.
-
-## BETWEEN
-
-Incline (Proprietorship Firm)
-Owned and operated by Ms. Yogita Lekhari,
-Having its principal place of business at: ${companyAddress}
-(hereinafter referred to as the "Employer" or "Company")
-
-## AND
-
-${employeeLines.join('\n')}
-
----
-
-## 1. APPOINTMENT
-
-The Employee is hereby appointed as:
-
-[${trainerChecked}] Fitness Trainer
-[${staffChecked}] Sales Executive
-[${managerChecked}] Manager
-
-The Employee agrees to faithfully perform duties assigned by the Employer.
-
----
-
-## 2. COMMENCEMENT & NATURE OF EMPLOYMENT
-
-* Employment start date: ${startDate || '**/**/20__'}
-* This is a private employment contract governed by mutually agreed terms.
-* This does not create permanent employment unless specified.
-
----
-
-## 3. JOB RESPONSIBILITIES
-
-### A. FITNESS TRAINER
-
-* Conduct personal training sessions
-* Maintain client progress records
-* Ensure safety and hygiene
-* Promote personal training packages
-
-### B. SALES STAFF
-
-* Handle walk-ins, conversions, and follow-ups
-* Achieve monthly sales targets
-* Maintain CRM / lead data confidentiality
-
-### C. MANAGER
-
-* Oversee operations, staff, and revenue
-* Ensure discipline and service quality
-* Report directly to Proprietor
-
----
-
-## 4. WORKING HOURS
-
-* As per shift assigned by Employer
-* Employer reserves full right to change shifts and weekly offs
-
----
-
-## 5. SALARY & COMPENSATION
-
-* Fixed Salary: Rs. ${fixedSalary} per month
-* Payment cycle: Monthly
-${ptCommissionBlock}
-
----
-
-## 6. LEAVE & ABSENTEEISM
-
-* Leaves must be pre-approved
-* Any unapproved leave shall result in full salary deduction (pro-rata basis)
-* Excess leaves beyond allowed limits shall be unpaid
-* Continuous absence of 3 days without notice may be treated as abandonment
-
----
-
-## 7. NOTICE PERIOD (EMPLOYEE EXIT)
-
-* Employee must serve 90 (ninety) days mandatory notice period
-* Failure will result in:
-  * Salary deduction equivalent to notice period
-  * Additional recovery for business loss (if applicable)
-
----
-
-## 8. TERMINATION BY EMPLOYER
-
-* Employer reserves absolute right to terminate employment at any time, with or without reason
-* Termination may be:
-  * Immediate, or
-  * With notice/pay (at Employer's discretion)
-
----
-
-## 9. CONFIDENTIALITY
-
-Employee shall not disclose:
-
-* Client database
-* Pricing, offers, or strategy
-* Business operations or internal matters
-
-This clause survives termination.
-
----
-
-## 10. NON-SOLICITATION (CRITICAL CLAUSE)
-
-Employee agrees that during employment and for 12 months after leaving, they shall not:
-
-* Contact or solicit any client of Incline
-* Offer training/services to existing or past clients of Incline
-* Induce any staff to leave
-
----
-
-## 11. PENALTY CLAUSE (CLIENT POACHING & BREACH)
-
-In case of breach of Clause 9 or 10:
-
-* Employee shall be liable to pay:
-  * Rs. 50,000 minimum penalty, OR
-  * 3x value of client business lost, whichever is higher
-* Employer reserves right to initiate legal recovery
-
----
-
-## 12. MISCONDUCT
-
-Immediate termination without notice in case of:
-
-* Misbehavior with clients
-* Theft, fraud, or dishonesty
-* Sleeping on duty / negligence
-* Harassment or indiscipline
-* Unauthorized absence
-* Working with competitors
-
----
-
-## 13. DEDUCTIONS & RECOVERY
-
-Employer has right to deduct from salary/final settlement:
-
-* Notice period shortfall
-* Client loss or damages
-* Uniform / equipment cost
-* Any financial loss caused
-
----
-
-## 14. PF / ESI COMPLIANCE
-
-* As per current salary structure (Rs. 10,000-Rs. 15,000 range):
-  * PF applicability may not be mandatory unless opted
-  * ESI applicability depends on eligibility thresholds
-* If Employee becomes eligible under law:
-  * PF/ESI shall be deducted as per statutory norms
-  * Employer shall comply accordingly
-
----
-
-## 15. NO COMPETITION DURING EMPLOYMENT
-
-Employee shall not:
-
-* Work in any other gym/fitness center
-* Run personal training business independently
-  Without written permission
-
----
-
-## 16. GOVERNING LAW & JURISDICTION
-
-* This Agreement is governed by laws of India
-* Jurisdiction: Courts of Udaipur, Rajasthan
-
----
-
-## 17. FINAL SETTLEMENT CONDITION
-
-* Full & final settlement will be processed only after:
-  * Clearance of dues
-  * Return of company property
-  * Completion of notice obligations
-
----
-
-## 18. ACCEPTANCE
-
-Employee confirms:
-
-* They have read and understood all terms
-* They agree voluntarily without coercion
-
----
-
-## ANNEXURE A (ROLE-SPECIFIC DETAILS)
-
-(To be attached separately if needed)
-
-* Salary Breakdown
-* Commission Structure
-* Incentive Plans
-* Leave Policy Details
-
----`;
 }
 
 interface CreateContractDrawerProps {
@@ -340,7 +65,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     endDate: '',
     salary: defaultSalary,
     commissionPercentage: 0,
-    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0),
+    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0, DEFAULT_NOTICE_DAYS[defaultRole]),
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
@@ -349,6 +74,28 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
   const [commissionLocked, setCommissionLocked] = useState(true);
   const [legalTermsUnlocked, setLegalTermsUnlocked] = useState(false);
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
+  const [hrNotice, setHrNotice] = useState<Partial<Record<AgreementRole, number>>>({});
+  const noticeFor = (role: AgreementRole): number => {
+    const typed = Number((variables as Record<string, string>).notice_period_days);
+    if (Number.isFinite(typed) && typed > 0) return Math.round(typed);
+    return hrNotice[role] || DEFAULT_NOTICE_DAYS[role];
+  };
+
+  // Notice-period defaults come from HR Settings (branch row, then global).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getEmployerProfile(employee?.branch_id ?? null).then((p) => {
+      if (cancelled || !p) return;
+      setHrNotice({
+        staff: p.notice_period_staff_days || undefined,
+        trainer: p.notice_period_trainer_days || undefined,
+        manager: p.notice_period_manager_days || undefined,
+      });
+    }).catch(() => { /* fall back to built-in defaults */ });
+    return () => { cancelled = true; };
+  }, [open, employee?.branch_id]);
+
   const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
   // Detect dual-role + auto-fetch trainer commission + load prefill sources.
@@ -437,7 +184,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }, initialCommission),
+      }, initialCommission, DEFAULT_NOTICE_DAYS[role]),
       documentUrl: '',
     });
     setVariables({} as any);
@@ -469,9 +216,10 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           department: employee?.department,
         },
         Number(f.commissionPercentage) || 0,
+        noticeFor(f.agreementRole),
       ),
     }));
-  }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate]);
+  }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate, hrNotice, (variables as Record<string, string>).notice_period_days]);
 
 
   const createContractMutation = useMutation({
@@ -519,6 +267,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             : undefined,
         },
       );
+      track('contract_draft_generated', { role: formData.agreementRole, notice_days: noticeFor(formData.agreementRole) });
       queryClient.invalidateQueries({ queryKey: ['employee-contracts'] });
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
       onOpenChange(false);
@@ -548,7 +297,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }, role === 'trainer' ? 10 : 0),
+      }, role === 'trainer' ? 10 : 0, DEFAULT_NOTICE_DAYS[role]),
       documentUrl: '',
     });
     setLegalTermsUnlocked(false);
@@ -573,6 +322,8 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     for (const [k, v] of Object.entries(variables)) {
       if (v && String(v).trim() !== '') cleanedVariables[k] = String(v).trim();
     }
+    cleanedVariables.notice_period_days = String(noticeFor(formData.agreementRole));
+    cleanedVariables.agreement_role = formData.agreementRole;
 
     createContractMutation.mutate({
       employeeId: isTrainer ? undefined : employee.id,
@@ -648,30 +399,19 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             <Select
               value={formData.agreementRole}
               disabled={!!defaultRoleProp}
-              onValueChange={async (value: AgreementRole) => {
+              onValueChange={(value: AgreementRole) => {
                 const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
-                // Try fetching template from DB first
-                let templateContent: string | null = null;
-                try {
-                  const { data } = await supabase
-                    .from('contract_templates')
-                    .select('content')
-                    .eq('role', value)
-                    .maybeSingle();
-                  templateContent = data?.content || null;
-                } catch { /* fallback to hardcoded */ }
-
                 setFormData({
                   ...formData,
                   agreementRole: value,
                   commissionPercentage: value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage,
-                  terms: templateContent || getEmploymentAgreementTemplate(value, employeeName, formData.salary, formData.startDate, {
+                  terms: getEmploymentAgreementTemplate(value, employeeName, formData.salary, formData.startDate, {
                     employeeCode: employee?.employee_code,
                     email: employee?.profile?.email,
                     phone: employee?.profile?.phone,
                     position: employee?.position,
                     department: employee?.department,
-                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage),
+                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage, noticeFor(value)),
                 });
               }}
             >
@@ -710,6 +450,24 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="contract-notice-days">Notice period (days)</Label>
+            <Input
+              id="contract-notice-days"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={180}
+              value={(variables as Record<string, string>).notice_period_days ?? ''}
+              placeholder={String(hrNotice[formData.agreementRole] || DEFAULT_NOTICE_DAYS[formData.agreementRole])}
+              aria-describedby="contract-notice-hint"
+              onChange={(e) => setVariables((v) => ({ ...v, notice_period_days: e.target.value }) as typeof v)}
+            />
+            <p id="contract-notice-hint" className="text-xs text-muted-foreground">
+              Contract will say {noticeFor(formData.agreementRole)} days. Leave empty to use the HR Settings default for this role.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Date *</Label>
@@ -730,7 +488,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                         phone: employee?.profile?.phone,
                         position: employee?.position,
                         department: employee?.department,
-                      }, formData.commissionPercentage),
+                      }, formData.commissionPercentage, noticeFor(formData.agreementRole)),
                   });
                 }}
                 required
@@ -895,7 +653,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                           const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
                           setFormData((f) => ({
                             ...f,
-                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage),
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage, noticeFor(formData.agreementRole)),
                           }));
                           await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
                           toast.success('Template reset');
