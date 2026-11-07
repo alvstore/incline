@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { getNavMode, subscribeNavMode, type NavMode } from '@/lib/navPreferences';
 import { useAuth } from '@/contexts/AuthContext';
-import { Building2, Plug, Bell, Shield, Settings as SettingsIcon, Gift, Sparkles, MessageSquare, Receipt, FileBox, Palette, Bot, IndianRupee, Database, ScanLine, Zap, UserCircle } from 'lucide-react';
+import { Building2, Plug, Bell, Shield, Settings as SettingsIcon, Gift, Sparkles, MessageSquare, Receipt, Palette, Bot, IndianRupee, Database, ScanLine, Zap, UserCircle } from 'lucide-react';
 import { AutomationsControlRoom } from '@/components/settings/AutomationsControlRoom';
 import { HowbodySettings } from '@/components/settings/HowbodySettings';
 import { BackupRestore } from '@/components/settings/BackupRestore';
@@ -18,7 +18,6 @@ import { ReferralSettings } from '@/components/settings/ReferralSettings';
 import { BenefitSettingsComponent } from '@/components/settings/BenefitSettingsComponent';
 import { CommunicationTemplatesHub } from '@/components/settings/CommunicationTemplatesHub';
 import { FinanceCategoryManager } from '@/components/settings/FinanceCategoryManager';
-import { PlanBenefitTemplates } from '@/components/settings/PlanBenefitTemplates';
 import { ThemePicker } from '@/components/settings/ThemePicker';
 import { AIAgentControlCenter } from '@/components/settings/AIAgentControlCenter';
 import { TaxGstSettings } from '@/components/settings/TaxGstSettings';
@@ -35,7 +34,6 @@ const SETTINGS_MENU = [
   { value: 'integrations', label: 'Integrations', icon: Plug },
   { value: 'notifications', label: 'Notifications', icon: Bell },
   { value: 'organization', label: 'Organization', icon: SettingsIcon },
-  { value: 'plan-templates', label: 'Plan & Benefit Templates', icon: FileBox },
   { value: 'referrals', label: 'Referrals', icon: Gift },
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'tax-gst', label: 'Tax & GST', icon: IndianRupee },
@@ -51,7 +49,6 @@ const SETTINGS_CONTENT: Record<string, React.ReactNode> = {
   benefits: <BenefitSettingsComponent />,
   referrals: <ReferralSettings />,
   templates: <CommunicationTemplatesHub />,
-  'plan-templates': <PlanBenefitTemplates />,
   'finance-categories': <FinanceCategoryManager />,
   'tax-gst': <TaxGstSettings />,
   integrations: <IntegrationSettings />,
