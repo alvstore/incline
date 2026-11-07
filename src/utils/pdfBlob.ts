@@ -1482,6 +1482,7 @@ export function buildPayslipPdf(data: PayslipPdfInput, brand: BrandContext): Blo
 export interface ContractPdfInput {
   contract_number?: string | null;
   employee_name: string;
+  profile_photo?: string;
   employee_code?: string | null;
   position?: string | null;
   department?: string | null;
@@ -1502,6 +1503,12 @@ export function buildContractPdf(data: ContractPdfInput, brand: BrandContext): B
   });
 
   let y = 58;
+  if (data.profile_photo) {
+    const photo = doc.getImageProperties(data.profile_photo);
+    const scale = 22 / Math.max(photo.width, photo.height);
+    doc.addImage(data.profile_photo, 'PNG', 14, y, photo.width * scale, photo.height * scale);
+    y += 28;
+  }
   doc.setFontSize(10);
   setColor(doc, BRAND.text);
   doc.setFont('helvetica', 'bold');
