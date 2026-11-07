@@ -12,6 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
 import { contractPublicOrigin } from './publicUrl.ts';
 import { applyRoleAndNotice, witnessesFromVars } from './termsFixups.ts';
+import { acknowledgementRows, annexureMarkdown, parseSnapshot } from './policyAnnex.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -571,7 +572,9 @@ async function signContract(req: Request, body: any) {
     status: "signed", used_at: now, signer_name: signedName, signer_contact: signerContact || null,
   }).eq("id", requestRow.id);
 
-  const { data: cvRow } = await supabase.from("contracts").select("contract_variables").eq("id", requestRow.contract_id).maybeSingle();
+  const { data: cvRow } = await supabase.from("contracts")
+    .select("contract_variables, policy_snapshot, employee_id, trainer_id, employees(user_id), trainers(user_id)")
+    .eq("id", requestRow.contract_id).maybeSingle();
   const [witness1 = null, witness2 = null] = [1, 2].map((n) => {
     const w = witnessesFromVars((cvRow as any)?.contract_variables).find((x) => x.slot === n);
     return w ? { name: w.name, phone: w.phone, witness_id: w.witness_id } : null;
@@ -580,6 +583,21 @@ async function signContract(req: Request, body: any) {
     signature_status: "signed", signed_at: now, status: "active",
     witness_1: witness1, witness_2: witness2,
   }).eq("id", requestRow.contract_id);
+
+  // Signing the agreement acknowledges every Annexure B policy at its attached version.
+  let policiesAcknowledged = 0;
+  try {
+    const signerUserId = (cvRow as any)?.employees?.user_id || (cvRow as any)?.trainers?.user_id || null;
+    const policies = parseSnapshot((cvRow as any)?.policy_snapshot);
+    if (signerUserId && policies.length) {
+      const rows = acknowledgementRows(policies, {
+        userId: signerUserId, employeeId: (cvRow as any)?.employee_id ?? null, trainerId: (cvRow as any)?.trainer_id ?? null,
+        branchId: requestRow.branch_id ?? null, signedName, signatureImagePath, ip: ipAddress, userAgent, geolocation,
+      });
+      const { error: ackErr } = await supabase.from("policy_acknowledgements").insert(rows);
+      if (ackErr) console.error("policy ack insert failed", ackErr.message); else policiesAcknowledged = rows.length;
+    }
+  } catch (e) { console.error("policy ack failed", e); }
 
   await supabase.from("audit_logs").insert({
     action: "CONTRACT_SIGNED",
@@ -591,7 +609,7 @@ async function signContract(req: Request, body: any) {
       signer_name: signedName, signer_contact: signerContact || null,
       signed_at: now, signature_image_path: signatureImagePath,
       geolocation, witness_1: witness1, witness_2: witness2,
-      otp_verified: true,
+      otp_verified: true, policies_acknowledged: policiesAcknowledged,
     },
   });
 
@@ -633,7 +651,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
       salary, base_salary, commission_percentage, terms,
       signature_status, signed_at, witness_1, witness_2, contract_variables,
       governing_jurisdiction, arbitration_seat, notice_period_days,
-      branch_id,
+      branch_id, policy_snapshot,
       employees(user_id, employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
       trainers(user_id)
     `)
@@ -827,7 +845,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     .replace(/^.*see\s+"?Filled details"?\s+section below.*$/gim, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/(\n---\s*){2,}/g, "\n---\n")
-    .trim();
+    .trim() + annexureMarkdown(parseSnapshot((contract as any).policy_snapshot));
 
   for (const ln of termsSanitised.split("\n")) {
     const trimmed = ln.replace(/^#+\s*/, "");
