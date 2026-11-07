@@ -70,10 +70,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       shadToast({ title: 'Welcome back!', description: 'Successfully signed in.' });
       onSuccess?.();
     } catch (error) {
-      form.setError('root', { message: error instanceof Error ? error.message : 'Unable to sign in. Please try again.' });
+      const raw = error instanceof Error ? error.message : '';
+      const message = /banned/i.test(raw)
+        ? 'Your access has ended. Please contact the front desk.'
+        : raw || 'Unable to sign in. Please try again.';
+      form.setError('root', { message });
       shadToast({
         title: 'Sign in failed',
-        description: error instanceof Error ? error.message : 'Invalid credentials',
+        description: message,
         variant: 'destructive',
       });
     } finally {
