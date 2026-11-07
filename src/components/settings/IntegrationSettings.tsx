@@ -238,11 +238,18 @@ export function IntegrationSettings() {
           <TabsTrigger value="leads" className="gap-1.5"><Send className="h-3.5 w-3.5" />Lead Capture</TabsTrigger>
           <TabsTrigger value="google" className="gap-1.5"><Globe className="h-3.5 w-3.5" />Google</TabsTrigger>
           <TabsTrigger value="voice" className="gap-1.5"><PhoneCall className="h-3.5 w-3.5" />Voice AI</TabsTrigger>
+          {isOwnerAdmin && <TabsTrigger value="push" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" />Push (Firebase)</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="voice" className="space-y-4">
           <SarvamVoiceCard />
         </TabsContent>
+
+        {isOwnerAdmin && (
+          <TabsContent value="push" className="space-y-4">
+            <FirebasePushCard />
+          </TabsContent>
+        )}
 
         <TabsContent value="payment" className="space-y-4">
           <Card>
