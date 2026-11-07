@@ -988,6 +988,13 @@
       "when": 1794043211399,
       "tag": "0140_renewal_cycle_automation",
       "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1794065408049,
+      "tag": "0141_push_provider_settings",
+      "breakpoints": true
     }
   ]
 }
