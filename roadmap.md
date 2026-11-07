@@ -1,4 +1,5 @@
 # Trainer contract delivery (7 Nov 2026)
+- [ ] Correct dynamic public link resolution; replace the four localhost invitations and verify public URLs plus delivery receipts.
 - [x] Restore approved contract-template selection with canonical event + ordered slots; blocked sends no longer appear pending or successful. Three regression tests (17 assertions) and automatic build pass. Signed-in HRM resend verified for Harshwardhan, Govind, Puneet and Gyaneshwar; all four WhatsApp delivery receipts read back as delivered. No contract terms changed; signing itself remains the trainers' action.
 
 # In-App monitoring repair (7 Nov 2026)
