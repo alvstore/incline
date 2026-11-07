@@ -24,6 +24,9 @@ import {
   Instagram, Facebook, Search, Radio, PhoneCall, Smartphone, Users, History,
 } from 'lucide-react';
 import SarvamVoiceCard from './SarvamVoiceCard';
+import FirebasePushCard from './FirebasePushCard';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import GoogleBusinessDrawer from './GoogleBusinessDrawer';
 import GoogleListingCard from './GoogleListingCard';
 import { RcsHub } from './rcs/RcsHub';
@@ -103,6 +106,8 @@ const WHATSAPP_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/whatsapp-webhook`;
 
 export function IntegrationSettings() {
   const { selectedBranch, branchFilter } = useBranchContext();
+  const { roles } = useAuth();
+  const isOwnerAdmin = can.manageSettings(roles);
   const [configSheet, setConfigSheet] = useState<{
     open: boolean;
     type: IntegrationType;
