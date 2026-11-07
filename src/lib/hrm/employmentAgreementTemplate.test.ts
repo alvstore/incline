@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { getEmploymentAgreementTemplate, noticePhrase } from './employmentAgreementTemplate';
 
 const trainer = getEmploymentAgreementTemplate('trainer', 'Test Trainer', 20000, '2026-11-07', {}, 10, 60);
