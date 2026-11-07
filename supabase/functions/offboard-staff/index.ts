@@ -188,8 +188,10 @@ Deno.serve(async (req) => {
         steps.push({ step: "revoke_sessions", ok: false, detail: e?.message });
       }
 
-      const shouldBan = ban_auth !== false
-        && remainingRoles.length === 0;
+      // Offboarding always blocks sign-in unless the person keeps another
+      // role (e.g. they are also a member).
+      void ban_auth;
+      const shouldBan = remainingRoles.length === 0;
       if (shouldBan) {
         try {
           // ban_duration "876000h" ≈ 100 years; or use 'none' to unban via restore

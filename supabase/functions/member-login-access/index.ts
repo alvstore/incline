@@ -1,3 +1,4 @@
+// v1.1.0 — auto sweep also ends sessions and writes audit rows; scheduled every 5 min.
 // v1.0.0 — Member app-login access: manual disable/enable (staff) + automatic
 // revoke/restore sweep (Automation Brain, service role). No messages are sent.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -38,6 +39,11 @@ async function sweep(admin: Admin) {
             login_disabled_reason: "Membership expired or inactive", login_disabled_by: null }
         : { login_disabled_at: null, login_disabled_source: null, login_disabled_reason: null, login_disabled_by: null },
       ).eq("id", c.member_id);
+      if (revoke) await admin.auth.admin.signOut(c.user_id, "global").catch(() => null);
+      await admin.from("audit_logs").insert({
+        action: revoke ? "member_login_disabled" : "member_login_enabled", table_name: "members", record_id: c.member_id,
+        user_id: null, new_data: { source: "auto", reason: revoke ? "Membership expired past grace or inactive" : "Membership active again" },
+      }).then(() => null, () => null);
       revoke ? revoked++ : restored++;
     } catch (e) {
       failed++;
