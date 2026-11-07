@@ -1,3 +1,4 @@
+// v1.6.0 — every sent renewal message also creates a matching in-app alert (bell, browser, phone).
 // v1.5.0 — a call that can't be linked to its case (branch moved / no provider id yet) is a handled skip.
 // v1.4.0 — independent, bounded voice retry queue; successful calls only are linked.
 // v1.3.0 — busy line, cooldown and calling window are expected outcomes, not logged as errors.
@@ -11,6 +12,7 @@
 // - all sending routed through dispatch-communication (never a send-* fn)
 // - stage dedupe enforced in DB (renewal_case_events unique index)
 // - circuit breaker: pauses the engine after repeated dispatch failures
+const renewalInAppDedupeKey = (caseId: string, stageKey: string) => `renewal_case:${caseId}:${stageKey}:in_app`;
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 
@@ -160,6 +162,35 @@ Deno.serve(async (req) => {
           _payload: { days_to_expiry: c.days_to_expiry },
         });
 
+        if (status === "sent" || status === "queued" || status === "delivered") {
+          // Mirror to In-App; failure here never changes the case outcome.
+          try {
+            const { data: m } = await admin.from("members").select("user_id").eq("id", c.member_id).maybeSingle();
+            if (m?.user_id) {
+              await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+                body: JSON.stringify({
+                  branch_id: c.branch_id,
+                  channel: "in_app",
+                  category: "membership_reminder",
+                  recipient: m.user_id,
+                  user_id: m.user_id,
+                  member_id: c.member_id,
+                  payload: {
+                    subject: c.days_to_expiry >= 0 ? "Your membership is expiring" : "Renew your membership",
+                    body: message,
+                    action_url: "/my-membership",
+                  },
+                  dedupe_key: renewalInAppDedupeKey(c.case_id, c.stage_key),
+                  ttl_seconds: 30 * 24 * 60 * 60,
+                }),
+              });
+            }
+          } catch (e) {
+            console.warn("[renewal-engine-tick] in-app mirror failed", e instanceof Error ? e.message : String(e));
+          }
+        }
         if (status === "sent" || status === "queued") sent++;
         else if (status === "skipped" || status === "suppressed") skipped++;
         else { failed++; lastError = detail; }

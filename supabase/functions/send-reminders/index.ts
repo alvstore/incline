@@ -1,3 +1,4 @@
+// v2.7.0 — in-app "membership expired" (end date) and grace-period alerts; overdue title.
 // send-reminders v2.6.0 — membership expiry reminders use the shared dispatcher and approved UTILITY templates; skips branches handed over to the Renewal Engine.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
@@ -6,6 +7,7 @@ import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // call, and only counts the reminder as `sent` when the provider confirms.
 // In-app notifications are still created in addition to outbound delivery.
 
+import { expiryAlertKind, expiryAlertDedupeKey, istDate } from "./expiryAlerts.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -78,6 +80,7 @@ Deno.serve(async (req) => {
       payment_reminders: 0,
       birthday_wishes: 0,
       membership_expiry: 0,
+      membership_expired_inapp: 0,
       class_reminders: 0,
       pt_reminders: 0,
       benefit_reminders: 0,
@@ -465,7 +468,7 @@ Deno.serve(async (req) => {
 
 
       notifications.push({
-        user_id: member.user_id, branch_id: reminder.branch_id, title: "Payment Reminder",
+        user_id: member.user_id, branch_id: reminder.branch_id, title: isOverdue ? "Payment overdue" : "Payment Reminder",
         message: `Hi ${name}, ₹${pendingAmt.toFixed(0)} ${reminderCopy} on invoice ${invoice?.invoice_number || ""}.`,
         type: "warning", category: "payment", action_url: "/my-invoices",
       });
@@ -683,6 +686,33 @@ Deno.serve(async (req) => {
           if (delivery.status === "sent") results.membership_expiry++;
           else if (delivery.status === "failed") failures.membership_expiry++;
         }
+      }
+
+      // In-app only: expired today + one mid-grace renewal nudge (opens My Membership).
+      const { data: endedMemberships } = await adminClient
+        .from("memberships")
+        .select("id, end_date, branch_id, members:member_id (user_id), membership_plans:plan_id (name)")
+        .eq("branch_id", branch.id)
+        .in("status", ["active", "expired"])
+        .in("end_date", [istDate(now), istDate(now, -3)]);
+      for (const ms of endedMemberships || []) {
+        const userId = (ms.members as any)?.user_id;
+        const kind = expiryAlertKind(String(ms.end_date), now);
+        if (!userId || !kind) continue;
+        const key = expiryAlertDedupeKey(ms.id, kind);
+        const { count } = await adminClient.from("notifications").select("id", { count: "exact", head: true }).eq("dispatch_dedupe_key", key);
+        if ((count || 0) > 0) continue;
+        const planName = (ms.membership_plans as any)?.name || "Your membership";
+        notifications.push({
+          user_id: userId, branch_id: ms.branch_id,
+          title: kind === "day" ? "Membership expired today" : "Your membership has ended",
+          message: kind === "day"
+            ? `${planName} ends today. Renew now to keep your access uninterrupted.`
+            : `${planName} has ended. Renew to restore your club access.`,
+          type: "warning", category: "membership", action_url: "/my-membership",
+          dispatch_dedupe_key: key,
+        });
+        results.membership_expired_inapp = (results.membership_expired_inapp || 0) + 1;
       }
     }
 
