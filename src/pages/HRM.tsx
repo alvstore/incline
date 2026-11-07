@@ -46,6 +46,8 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { buildPayslipPdf, buildContractPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
 import { copyToClipboard } from '@/lib/utils/clipboard';
+import { contractDeliveryInput, contractDeliveryError } from '@/lib/hrm/contractDelivery';
+import { dispatchCommunication } from '@/lib/comms/dispatch';
 
 const MONTH_VALUE_RE = /^\d{4}-\d{2}$/;
 
@@ -560,27 +562,21 @@ export default function HRMPage() {
           toast.error('No phone on file for this employee — link copied to clipboard instead.');
           await copyToClipboard(link);
         } else {
-          const dispatch = await supabase.functions.invoke('dispatch-communication', {
-            body: {
-              branch_id: contract.branch_id || null,
-              channel: 'whatsapp',
-              category: 'transactional',
-              recipient,
-              event: 'contract_fill_link',
-              payload: {
-                body: message,
-                variables: { name: employeeName, link, employer_name: employerName },
-              },
-              dedupe_key: `contract_fill_link:${contract.id}:${role}:${Date.now()}`,
-              force: true,
-            },
-          });
-          const dispatchErrMsg: string | null =
-            (dispatch.error as any)?.message
-            || (dispatch.data as any)?.error
-            || null;
+          if (!contract.branch_id) throw new Error('The contract must belong to a branch before it can be sent.');
+          const dispatch = await dispatchCommunication(contractDeliveryInput({
+            branchId: contract.branch_id,
+            contractId: contract.id,
+            role,
+            recipient,
+            name: employeeName,
+            employerName,
+            link,
+            message,
+            attemptId: String(Date.now()),
+          }));
+          const dispatchErrMsg = contractDeliveryError(dispatch);
           if (dispatchErrMsg) {
-            const outside24h = /outside\s+24h|customer-?service\s+window|approved\s+(WhatsApp\s+)?template/i.test(dispatchErrMsg);
+            const outside24h = /outside\s+24h|customer-?service\s+window|approved\s+(WhatsApp\s+)?template|no_template_for_closed_session/i.test(dispatchErrMsg);
             toast.error(outside24h ? 'Outside the 24h window — no approved template yet.' : 'WhatsApp send failed.', {
               description: outside24h
                 ? 'Send via WhatsApp Desktop instead (free), or submit a template in Settings → Communication Templates → AI Studio.'
@@ -592,7 +588,9 @@ export default function HRMPage() {
               },
             });
           } else {
-            toast.success(`${label} sent to ${recipient} on WhatsApp`);
+            toast.success(dispatch.status === 'queued'
+              ? `${label} queued for WhatsApp delivery`
+              : `${label} sent to ${recipient} on WhatsApp`);
           }
         }
       } else if (!options.returnLink) {

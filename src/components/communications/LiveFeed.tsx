@@ -18,6 +18,7 @@ import { DeliveryTimeline } from './DeliveryTimeline';
 import { KpiStrip, type KpiCounts } from './KpiStrip';
 import { formatPhoneDisplay, phoneVariants } from '@/lib/contacts/phone';
 import { parseCommError, isPacingError } from '@/lib/comms/metaErrorLabels';
+import { normalizeDeliveryStatus as normalizeStatus, deliveryStopped } from '@/lib/comms/deliveryStatus';
 
 type ChannelKey = 'all' | 'whatsapp' | 'sms' | 'email' | 'in_app';
 
@@ -43,6 +44,7 @@ const statusBadge = (s: string, errorMessage?: string | null) => {
     replied: { cls: 'bg-primary/10 text-primary dark:text-primary border-primary/30', icon: MessageSquareReply, label: 'Replied' },
     failed: { cls: 'bg-destructive/10 text-destructive dark:text-destructive border-destructive/30', icon: XCircle, label: 'Failed' },
     bounced: { cls: 'bg-destructive/10 text-destructive dark:text-destructive border-destructive/30', icon: XCircle, label: 'Bounced' },
+    suppressed: { cls: 'bg-destructive/10 text-destructive border-destructive/30', icon: ShieldAlert, label: 'Blocked' },
     pending: { cls: 'bg-warning/10 text-warning dark:text-warning border-warning/30', icon: Clock, label: 'Pending' },
     queued: { cls: 'bg-warning/10 text-warning dark:text-warning border-warning/30', icon: Clock, label: 'Queued' },
   };
@@ -53,22 +55,6 @@ const statusBadge = (s: string, errorMessage?: string | null) => {
       <Icon className="h-3 w-3" />{m.label}
     </Badge>
   );
-};
-
-const normalizeStatus = (log: any): string => {
-  const status = (log.status || '').toLowerCase();
-  const delivery = (log.delivery_status || '').toLowerCase();
-  // Honour terminal statuses first — they are written by the dispatcher
-  if (status === 'failed' || status === 'bounced') return status;
-  if (delivery === 'failed' || delivery === 'bounced') return delivery;
-  // Honour delivery progressions (delivered/read/replied) when they exist
-  if (['delivered', 'read', 'replied'].includes(delivery)) return delivery;
-  // status='sent' wins over a stale delivery_status='scheduled'
-  if (status === 'sent') return 'sent';
-  // Otherwise fall back to whatever non-scheduled delivery info we have
-  if (delivery && delivery !== 'scheduled') return delivery;
-  if (status) return status;
-  return 'pending';
 };
 
 const PAGE_SIZE_KEY = 'comm-live-feed-page-size';
@@ -293,7 +279,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       else if (s === 'delivered') c.delivered++;
       else if (s === 'read') c.read++;
       else if (s === 'replied') c.replied++;
-      else if (s === 'failed' || s === 'bounced') c.failed++;
+      else if (deliveryStopped(s)) c.failed++;
       else c.pending++;
     }
     // Sent should be cumulative of all that left the queue
@@ -316,7 +302,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       const s = normalizeStatus(l);
       if (statusFilter !== 'total') {
         if (statusFilter === 'sent' && !['sent', 'delivered', 'read', 'replied'].includes(s)) return false;
-        if (statusFilter === 'failed' && !['failed', 'bounced'].includes(s)) return false;
+        if (statusFilter === 'failed' && !deliveryStopped(s)) return false;
         if (!['sent', 'failed'].includes(statusFilter) && s !== statusFilter) return false;
       }
       if (search) {
@@ -403,20 +389,21 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
 
   const groupRollup = (g: Group) => {
     const ss = g.logs.map(normalizeStatus);
-    const failed = ss.filter((s) => s === 'failed' || s === 'bounced').length;
+    const failed = ss.filter(deliveryStopped).length;
     const pending = ss.filter((s) => s === 'pending' || s === 'queued').length;
     let primary = 'pending';
     if (ss.includes('replied')) primary = 'replied';
     else if (ss.includes('read')) primary = 'read';
     else if (ss.includes('delivered')) primary = 'delivered';
     else if (ss.includes('sent')) primary = 'sent';
-    else if (failed && failed === ss.length) primary = 'failed';
+    else if (failed && failed === ss.length) primary = ss.every((s) => s === 'suppressed') ? 'suppressed' : 'failed';
     return { primary, failed, pending, total: ss.length };
   };
 
   const channelStatus = (chLogs: any[]): string => {
     const ss = chLogs.map(normalizeStatus);
-    if (ss.some((s) => s === 'failed' || s === 'bounced')) return 'failed';
+    if (ss.every((s) => s === 'suppressed')) return 'suppressed';
+    if (ss.some(deliveryStopped)) return 'failed';
     if (ss.includes('replied')) return 'replied';
     if (ss.includes('read')) return 'read';
     if (ss.includes('delivered')) return 'delivered';
@@ -430,6 +417,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
     read: 'bg-primary',
     replied: 'bg-primary',
     failed: 'bg-destructive',
+    suppressed: 'bg-destructive',
     pending: 'bg-warning',
   };
 

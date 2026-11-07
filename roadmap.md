@@ -1,3 +1,6 @@
+# Trainer contract delivery (7 Nov 2026)
+- [ ] Restore approved contract-template selection and report blocked delivery truthfully; verify tests and signed-in send flow.
+
 # In-App monitoring repair (7 Nov 2026)
 - [x] Preserve full member segments, goals and staff roles; recipient assignments restrict new targeted board posts. Live audience parity: active 198, dues 6, frozen 0, recent-expired 22, inactive 30/60 days 60/31; trainer/manager/staff 7/1/2.
 - [x] Add atomic durable jobs, scoped recipients, notification-level dedupe and due/stalled-work gate in Automation Brain; worker and dispatcher deployed. Legacy board posts are not backfilled or sent.
