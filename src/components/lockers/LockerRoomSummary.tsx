@@ -29,7 +29,6 @@ export function LockerRoomSummary({ rooms, active, onSelect }: Props) {
         return (
           <Card
             key={value}
-            asChild={false}
             className={cn(
               'rounded-2xl border p-0 transition-colors duration-150',
               selected ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:bg-secondary',
