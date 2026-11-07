@@ -12266,6 +12266,63 @@ export type Database = {
           },
         ]
       }
+      push_provider_secrets: {
+        Row: {
+          id: boolean
+          private_key: string
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          private_key: string
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          private_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      push_provider_settings: {
+        Row: {
+          client_email: string | null
+          enabled: boolean
+          id: boolean
+          key_uploaded_at: string | null
+          last_test_at: string | null
+          last_test_error: string | null
+          last_test_ok: boolean | null
+          project_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_email?: string | null
+          enabled?: boolean
+          id?: boolean
+          key_uploaded_at?: string | null
+          last_test_at?: string | null
+          last_test_error?: string | null
+          last_test_ok?: boolean | null
+          project_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_email?: string | null
+          enabled?: boolean
+          id?: boolean
+          key_uploaded_at?: string | null
+          last_test_at?: string | null
+          last_test_error?: string | null
+          last_test_ok?: boolean | null
+          project_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       rcs_inbound_events: {
         Row: {
           branch_id: string | null

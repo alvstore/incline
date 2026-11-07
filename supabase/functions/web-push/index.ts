@@ -1,5 +1,6 @@
-// v2.1.0 — one device-push worker: browser (web) + Flutter (fcm) mirror every in-app notification.
+// v2.2.0 — one device-push worker: browser (web) + Flutter (fcm). Phone push uses direct Firebase settings; connector is fallback.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
+import { classifyFcmError, loadFcmConfig, sendFcm } from '../_shared/fcm.ts';
 import webpush from 'npm:web-push@3.6.7';
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -58,6 +59,7 @@ Deno.serve(async req => {
       if (error) throw error;
       let sent = 0;
       const rows = jobs || [];
+      const fcmConfig = rows.length ? await loadFcmConfig(db) : null;
       for (let offset = 0; offset < rows.length; offset += 5) {
         await Promise.all(rows.slice(offset, offset + 5).map(async job => {
           const [{ data: sub }, { data: notice }] = await Promise.all([
@@ -99,6 +101,25 @@ Deno.serve(async req => {
           // Never expose names, prices, attendance, or health data on the lock screen.
           const payload = JSON.stringify({ title: 'Incline', body: 'You have a new update. Open Incline to view it.', url, tag: notice.id });
           if (sub.kind === 'fcm') {
+            const title = String(notice.title || 'Incline Alert');
+            const body = String(notice.message || notice.body || 'You have a new update.');
+            const fcmMessage = { token: fcmToken(sub.endpoint), notification: { title, body },
+              android: { priority: 'high', notification: { tag: String(notice.id), channel_id: 'incline_club_alerts', notification_priority: 'PRIORITY_MAX', default_sound: true, default_vibrate_timings: true } },
+              data: { notification_id: String(notice.id), title, message: body, body, url } };
+            if (fcmConfig) {
+              // Direct Firebase (configured in Settings → Integrations); connector is fallback only.
+              if (!fcmConfig.enabled) { await finish('suppressed', 'Phone push disabled; notification remains in inbox'); return; }
+              try {
+                const r = await sendFcm(fcmConfig.sa, fcmMessage);
+                if (r.ok) { await finish('sent'); sent++; return; }
+                const kind = classifyFcmError(r.status, r.body);
+                if (kind === 'stale') { await db.from('web_push_subscriptions').delete().eq('id', sub.id); return; }
+                if (kind === 'retry' && (job.attempts ?? 0) < 3) {
+                  await db.from('web_push_deliveries').update({ status: 'pending', last_error: `Phone push HTTP ${r.status}`, next_attempt_at: new Date(Date.now() + 300000).toISOString() }).eq('id', job.id); return;
+                }
+                await finish('failed', `Phone push HTTP ${r.status}`); return;
+              } catch { await finish('failed', 'Phone push sign-in failed'); return; }
+            }
             const lovableKey = Deno.env.get('LOVABLE_API_KEY'), connKey = Deno.env.get('FIREBASE_MESSAGING_API_KEY');
             if (!lovableKey || !connKey) { await finish('suppressed', 'Phone push not connected; notification remains in inbox'); return; }
             const res = await fetch(`${FCM_GATEWAY}/v1/projects/_/messages:send`, { method: 'POST', headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': connKey, 'Content-Type': 'application/json' },
