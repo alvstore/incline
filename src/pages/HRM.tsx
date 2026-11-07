@@ -177,7 +177,7 @@ export default function HRMPage() {
       if (userIds.length > 0) {
         const { data: pr } = await supabase
           .from('profiles')
-          .select('id, full_name, email, phone')
+          .select('id, full_name, email, phone, avatar_url')
           .in('id', userIds);
         profiles = pr || [];
       }
@@ -193,6 +193,7 @@ export default function HRMPage() {
           ...c,
           trainerProfile,
           _resolvedName: profile?.full_name || null,
+          _resolvedAvatar: profile?.avatar_url || null,
           _resolvedCode: c.employees?.employee_code || (isTrainer ? 'Trainer' : null),
           _resolvedEmail: profile?.email || null,
           _resolvedPhone: profile?.phone || null,
@@ -410,7 +411,7 @@ export default function HRMPage() {
     );
   };
 
-  const openContractPdf = (contract: any) => {
+  const openContractPdf = async (contract: any) => {
     const employeeName = contract._resolvedName || 'Employee';
     const employeeCode = contract._resolvedCode || '-';
     const termsRaw = contract.terms;
@@ -420,9 +421,29 @@ export default function HRMPage() {
           ? (typeof (termsRaw as any).conditions === 'string' ? (termsRaw as any).conditions : JSON.stringify(termsRaw, null, 2))
           : '');
 
+    let profilePhoto: string | undefined;
+    if (contract._resolvedAvatar) {
+      try {
+        const response = await fetch(contract._resolvedAvatar);
+        if (response.ok) {
+          const bitmap = await createImageBitmap(await response.blob());
+          const canvas = document.createElement('canvas');
+          const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+          canvas.width = Math.round(bitmap.width * scale);
+          canvas.height = Math.round(bitmap.height * scale);
+          const context = canvas.getContext('2d');
+          if (context) {
+            context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            profilePhoto = canvas.toDataURL('image/png');
+          }
+          bitmap.close();
+        }
+      } catch { /* Missing photos retain the text-only fallback. */ }
+    }
     const blob = buildContractPdf({
       contract_number: contract.contract_number || contract.id,
       employee_name: employeeName,
+      profile_photo: profilePhoto,
       employee_code: employeeCode,
       position: contract._resolvedPosition || undefined,
       department: contract._resolvedDepartment || undefined,
@@ -475,7 +496,7 @@ export default function HRMPage() {
     } catch (e: any) {
       // Fallback to client-side draft so the user is never stuck.
       toast.error(e?.message || 'Server PDF failed — using local fallback', { id: t });
-      openContractPdf(contract);
+      await openContractPdf(contract);
     }
   };
 
@@ -1137,6 +1158,7 @@ export default function HRMPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
+                              <AvatarImage src={contract._resolvedAvatar || undefined} alt={`${contract._resolvedName || 'Employee'} profile photo`} className="object-cover" />
                               <AvatarFallback className="bg-accent/10 text-accent text-xs">
                                 {getInitials(contract._resolvedName)}
                               </AvatarFallback>

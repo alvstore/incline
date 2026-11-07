@@ -1,3 +1,4 @@
+// v5.8.0 — Contract PDFs embed the linked trainer/employee display profile photo; existing signed copies remain unchanged.
 // v5.7.0 — Witnesses come only from the contract (drawer/saved witnesses); employees are never asked; PDF prints witness signatures.
 // v5.6.0 — PDF uses the contract's saved notice days and shows only the selected role's duties.
 // v5.5.1 — Signing links use server-configured public origins, never localhost or preview origins.
@@ -13,6 +14,7 @@ import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-l
 import { contractPublicOrigin } from './publicUrl.ts';
 import { applyRoleAndNotice, witnessesFromVars } from './termsFixups.ts';
 import { acknowledgementRows, annexureMarkdown, parseSnapshot } from './policyAnnex.ts';
+import { profilePhotoPath, photoDimensions } from './profilePhoto.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -671,6 +673,29 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  // Resolve display photos from the linked account, not biometric/gate identities.
+  const employee = Array.isArray(contract.employees) ? contract.employees[0] : contract.employees;
+  const trainer = Array.isArray(contract.trainers) ? contract.trainers[0] : contract.trainers;
+  const photoUserId = employee?.user_id || trainer?.user_id;
+  let profileImage: Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null;
+  if (photoUserId) {
+    const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', photoUserId).maybeSingle();
+    const photoPath = profilePhotoPath(profile?.avatar_url, SUPABASE_URL);
+    if (photoPath) {
+      try {
+        const { data: photo, error } = await supabase.storage.from('avatars').download(photoPath);
+        if (error) throw error;
+        if (photo && photo.size <= 5 * 1024 * 1024) {
+          const bytes = new Uint8Array(await photo.arrayBuffer());
+          profileImage = bytes[0] === 0xff && bytes[1] === 0xd8
+            ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
+        }
+      } catch (error) {
+        await logEdgeError('contract_profile_photo', 'Could not embed contract profile photo', { contract_id: contractId, reason: error instanceof Error ? error.message : 'Photo unavailable' });
+      }
+    }
+  }
+
   // Brand: download org logo (branch override → global) once and embed it.
   // Matches the staff-roster PDF brand language (indigo header, slate metadata).
   let logoImage: any = null;
@@ -819,6 +844,14 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   y -= 20;
   writeLine("EMPLOYMENT AGREEMENT", { bold: true, size: 16, color: rgb(0.18, 0.16, 0.42) });
   spacer(8);
+  if (profileImage) {
+    const dimensions = photoDimensions(profileImage.width, profileImage.height);
+    newPageIfNeeded(80);
+    page.drawImage(profileImage, { x: marginX, y: y - dimensions.height, ...dimensions });
+    page.drawText(win(employeeName || 'Employee'), { x: marginX + 80, y: y - 18, size: 11, font: fontBold, color: SLATE_900 });
+    page.drawText(win(employeeCode || ''), { x: marginX + 80, y: y - 34, size: 9, font, color: SLATE_500 });
+    y -= 80;
+  }
 
   const termsRaw = typeof contract.terms === "string"
     ? contract.terms

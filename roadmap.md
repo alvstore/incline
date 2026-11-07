@@ -1,3 +1,6 @@
+# Contract profile photos (7 Nov 2026)
+- [ ] Show linked display photos in Contracts and generated PDFs; verify signed-in preview and PDF layout without changing signed copies.
+
 # Trainer contract delivery (7 Nov 2026)
 - [x] Deployed dynamic public HTTPS link resolution with local/preview rejection; seven tests pass (28 assertions). Replaced all four localhost invitations through signed-in HRM, asserting the public origin before dispatch. Stored messages use https://theincline.in; all four delivered, Govind also read. Public signing route returns HTTP 200; automatic build OK. Contract signing itself remains the trainers' action.
 - [x] Restore approved contract-template selection with canonical event + ordered slots; blocked sends no longer appear pending or successful. Three regression tests (17 assertions) and automatic build pass. Signed-in HRM resend verified for Harshwardhan, Govind, Puneet and Gyaneshwar; all four WhatsApp delivery receipts read back as delivered. No contract terms changed; signing itself remains the trainers' action.
