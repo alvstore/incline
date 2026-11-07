@@ -960,6 +960,13 @@
       "when": 1794030237819,
       "tag": "0136_targeted_inapp_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794030342897,
+      "tag": "0137_inapp_notification_idempotency",
+      "breakpoints": true
     }
   ]
 }

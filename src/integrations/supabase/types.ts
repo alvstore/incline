@@ -10244,6 +10244,7 @@ export type Database = {
           branch_id: string | null
           category: string | null
           created_at: string | null
+          dispatch_dedupe_key: string | null
           id: string
           is_read: boolean | null
           message: string
@@ -10257,6 +10258,7 @@ export type Database = {
           branch_id?: string | null
           category?: string | null
           created_at?: string | null
+          dispatch_dedupe_key?: string | null
           id?: string
           is_read?: boolean | null
           message: string
@@ -10270,6 +10272,7 @@ export type Database = {
           branch_id?: string | null
           category?: string | null
           created_at?: string | null
+          dispatch_dedupe_key?: string | null
           id?: string
           is_read?: boolean | null
           message?: string
