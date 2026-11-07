@@ -1,5 +1,5 @@
 # Contract profile photos (7 Nov 2026)
-- [ ] Show linked display photos in Contracts and generated PDFs; verify signed-in preview and PDF layout without changing signed copies.
+- [x] Linked display photos added to Contracts and server/local PDFs; all five trainer photos loaded in signed-in preview, a real draft PDF embedded the correct photo, eight tests passed and build OK. PDF skill visual review of all seven pages found no new clipping or overlap; cached signed copies unchanged.
 
 # Trainer contract delivery (7 Nov 2026)
 - [x] Deployed dynamic public HTTPS link resolution with local/preview rejection; seven tests pass (28 assertions). Replaced all four localhost invitations through signed-in HRM, asserting the public origin before dispatch. Stored messages use https://theincline.in; all four delivered, Govind also read. Public signing route returns HTTP 200; automatic build OK. Contract signing itself remains the trainers' action.
