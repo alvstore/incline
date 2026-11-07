@@ -967,6 +967,13 @@
       "when": 1794030342897,
       "tag": "0137_inapp_notification_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1794030529256,
+      "tag": "0138_gate_inapp_automation_work",
+      "breakpoints": true
     }
   ]
 }

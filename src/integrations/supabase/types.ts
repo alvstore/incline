@@ -20364,6 +20364,10 @@ export type Database = {
         Args: { p_branch_id: string; p_code: string; p_subtotal: number }
         Returns: Json
       }
+      validate_inapp_audience_filter: {
+        Args: { p_filter: Json }
+        Returns: undefined
+      }
       validate_member_checkin: {
         Args: { _branch_id: string; _member_id: string }
         Returns: Json
