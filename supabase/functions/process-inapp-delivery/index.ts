@@ -3,7 +3,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { requireCaller } from '../_shared/requireCaller.ts';
 import { captureEdgeError } from '../_shared/capture-edge-error.ts';
-import { deliverBatch, type DeliveryBatch } from './delivery.ts';
+import { processDeliveryQueue, type DeliveryBatch } from './delivery.ts';
 
 const schema = z.object({ announcement_id: z.string().uuid().optional() }).strict();
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -31,24 +31,24 @@ Deno.serve(async (req) => {
         return json({ error: 'forbidden', message: 'Announcement not available' }, 403);
       }
     }
-    const started = Date.now();
-    let processed = 0;
-    for (let i = 0; i < 10 && Date.now() - started < 45000; i++) {
-      const { data, error } = await caller.admin.rpc('claim_inapp_delivery', { p_announcement_id: id ?? null });
-      if (error) throw error;
-      if (!data) break;
-      const batch = data as DeliveryBatch;
-      const results = await deliverBatch(batch, async (input) => {
+    const processed = await processDeliveryQueue({
+      claim: async () => {
+        const { data, error } = await caller.admin.rpc('claim_inapp_delivery', { p_announcement_id: id ?? null });
+        if (error) throw error;
+        return data as DeliveryBatch | null;
+      },
+      dispatch: async (input) => {
         const { data: result, error: dispatchError } = await caller.admin.functions.invoke('dispatch-communication', { body: input });
         if (dispatchError) throw dispatchError;
         return result;
-      });
-      const finished = await caller.admin.rpc('finish_inapp_delivery', {
-        p_announcement_id: batch.announcement_id, p_claim_token: batch.claim_token, p_results: results,
-      });
-      if (finished.error) throw finished.error;
-      processed += results.length;
-    }
+      },
+      finish: async (batch, results) => {
+        const finished = await caller.admin.rpc('finish_inapp_delivery', {
+          p_announcement_id: batch.announcement_id, p_claim_token: batch.claim_token, p_results: results,
+        });
+        if (finished.error) throw finished.error;
+      },
+    });
     return json({ accepted: true, processed });
   } catch (error) {
     await captureEdgeError('process-inapp-delivery', error);
