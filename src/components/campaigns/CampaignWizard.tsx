@@ -1523,7 +1523,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                 ] as const).map((c) => {
                   const selected = selectedChannels.includes(c.id as CampaignChannel);
                   const active = channel === c.id;
-                  const canRemove = selected && selectedChannels.length > 1;
+                  const canRemove = selected && (selectedChannels.length > 1 || inAppOn);
                   return (
                     <div key={c.id} className="relative">
                       <button
