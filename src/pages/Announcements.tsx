@@ -17,11 +17,16 @@ import { LiveFeed } from '@/components/communications/LiveFeed';
 import { RetryQueuePanel } from '@/components/communications/RetryQueuePanel';
 import { CampaignsPanel } from '@/components/campaigns/CampaignsPanel';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { RetentionCampaignManager } from '@/components/settings/RetentionCampaignManager';
+import { HeartHandshake } from 'lucide-react';
 
 export default function AnnouncementsPage() {
   const queryClient = useQueryClient();
   const { effectiveBranchId: defaultBranchId = '' } = useBranchContext();
   const [showBroadcastDrawer, setShowBroadcastDrawer] = useState(false);
+  const { roles } = useAuth();
+  const canRetention = roles.some((r) => ['owner', 'admin', 'manager'].includes(r.role));
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'live';
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -96,6 +101,11 @@ export default function AnnouncementsPage() {
             <TabsTrigger value="instagram" className="rounded-lg gap-2 data-[state=active]:shadow-md">
               <Instagram className="h-3.5 w-3.5 text-destructive" />IG Comment-to-DM
             </TabsTrigger>
+            {canRetention && (
+              <TabsTrigger value="retention" className="rounded-lg gap-2 data-[state=active]:shadow-md">
+                <HeartHandshake className="h-3.5 w-3.5" />Retention
+              </TabsTrigger>
+            )}
             <TabsTrigger value="retry" className="rounded-lg gap-2 data-[state=active]:shadow-md">
               <AlertCircle className="h-3.5 w-3.5" />Retry Queue
             </TabsTrigger>
@@ -189,6 +199,12 @@ export default function AnnouncementsPage() {
           </TabsContent>
 
 
+
+          {canRetention && (
+            <TabsContent value="retention" className="mt-0 animate-fade-in">
+              <RetentionCampaignManager />
+            </TabsContent>
+          )}
 
           <TabsContent value="retry" className="mt-0 animate-fade-in">
             <RetryQueuePanel />

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { getNavMode, subscribeNavMode, type NavMode } from '@/lib/navPreferences';
 import { useAuth } from '@/contexts/AuthContext';
-import { Building2, Plug, Bell, Shield, Globe, Settings as SettingsIcon, Gift, Sparkles, MessageSquare, Receipt, FileBox, Palette, Megaphone, Bot, IndianRupee, Database, ScanLine, Zap, UserCircle } from 'lucide-react';
+import { Building2, Plug, Bell, Shield, Settings as SettingsIcon, Gift, Sparkles, MessageSquare, Receipt, FileBox, Palette, Bot, IndianRupee, Database, ScanLine, Zap, UserCircle } from 'lucide-react';
 import { AutomationsControlRoom } from '@/components/settings/AutomationsControlRoom';
 import { HowbodySettings } from '@/components/settings/HowbodySettings';
 import { BackupRestore } from '@/components/settings/BackupRestore';
@@ -14,14 +14,12 @@ import { BranchSettings } from '@/components/settings/BranchSettings';
 import { IntegrationSettings } from '@/components/settings/IntegrationSettings';
 import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { SecuritySettings } from '@/components/settings/SecuritySettings';
-import { WebsiteSettings } from '@/components/settings/WebsiteSettings';
 import { ReferralSettings } from '@/components/settings/ReferralSettings';
 import { BenefitSettingsComponent } from '@/components/settings/BenefitSettingsComponent';
 import { CommunicationTemplatesHub } from '@/components/settings/CommunicationTemplatesHub';
 import { FinanceCategoryManager } from '@/components/settings/FinanceCategoryManager';
 import { PlanBenefitTemplates } from '@/components/settings/PlanBenefitTemplates';
 import { ThemePicker } from '@/components/settings/ThemePicker';
-import { RetentionCampaignManager } from '@/components/settings/RetentionCampaignManager';
 import { AIAgentControlCenter } from '@/components/settings/AIAgentControlCenter';
 import { TaxGstSettings } from '@/components/settings/TaxGstSettings';
 
@@ -35,7 +33,6 @@ const SETTINGS_MENU = [
   { value: 'branches', label: 'Branches', icon: Building2 },
   { value: 'finance-categories', label: 'Finance Categories', icon: Receipt },
   { value: 'integrations', label: 'Integrations', icon: Plug },
-  { value: 'retention', label: 'Marketing & Retention', icon: Megaphone },
   { value: 'notifications', label: 'Notifications', icon: Bell },
   { value: 'organization', label: 'Organization', icon: SettingsIcon },
   { value: 'plan-templates', label: 'Plan & Benefit Templates', icon: FileBox },
@@ -43,7 +40,6 @@ const SETTINGS_MENU = [
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'tax-gst', label: 'Tax & GST', icon: IndianRupee },
   { value: 'templates', label: 'Communication Templates', icon: MessageSquare },
-  { value: 'website', label: 'Website', icon: Globe },
 ];
 
 const SETTINGS_CONTENT: Record<string, React.ReactNode> = {
@@ -58,11 +54,9 @@ const SETTINGS_CONTENT: Record<string, React.ReactNode> = {
   'plan-templates': <PlanBenefitTemplates />,
   'finance-categories': <FinanceCategoryManager />,
   'tax-gst': <TaxGstSettings />,
-  retention: <RetentionCampaignManager />,
   integrations: <IntegrationSettings />,
   notifications: <NotificationSettings />,
   security: <SecuritySettings />,
-  website: <WebsiteSettings />,
   backup: <BackupRestore />,
   howbody: <HowbodySettings />,
 };
@@ -89,6 +83,7 @@ export default function SettingsPage() {
 
   const defaultTab = isAdminLike ? 'organization' : 'appearance';
   const requestedTab = searchParams.get('tab') || defaultTab;
+  if (requestedTab === 'retention') return <Navigate to="/announcements?tab=retention" replace />;
   // Out-of-scope tabs for non-admin → bounce to default
   const activeTab = visibleMenu.some((m) => m.value === requestedTab) ? requestedTab : defaultTab;
 

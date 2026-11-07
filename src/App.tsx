@@ -320,7 +320,7 @@ function RoutedContent() {
           {/* Redirects for old routes */}
           <Route path="/admin/users" element={<Navigate to="/settings?tab=users" replace />} />
           <Route path="/branches" element={<Navigate to="/settings?tab=branches" replace />} />
-          <Route path="/website-cms" element={<Navigate to="/settings?tab=website" replace />} />
+          <Route path="/website-cms" element={<Navigate to="/settings" replace />} />
           <Route path="/integrations" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><IntegrationsPage /></ProtectedRoute>} />
           <Route path="/integrations/webhooks" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><IntegrationWebhooksPage /></ProtectedRoute>} />
 
