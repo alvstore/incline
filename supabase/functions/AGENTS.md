@@ -9,3 +9,4 @@
 
 - In-App delivery: a `notifications` row (via dispatchCommunication) fans out through `web-push` to every device in `web_push_subscriptions` (kind web|fcm; Flutter registers with `register_device`).
 - Campaign In-App delivery retains full audience filters, uses recipient-scoped board access and atomic leased jobs through `process-inapp-delivery`/Automation Brain; notification-level dedupe survives interrupted dispatch so scheduled and immediate delivery cannot diverge.
+- Contract signing links resolve server-configured public HTTPS origins; request-origin fallback is published-host allowlisted and never local/preview, because signing invitations leave the browser.

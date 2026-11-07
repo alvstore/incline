@@ -1,4 +1,4 @@
-// v5.5.0 — PDF sanitiser also backfills Commission % from contracts.commission_percentage and strips the legacy "see Filled details section below" stub line on page 1.
+// v5.5.1 — Signing links use server-configured public origins, never localhost or preview origins.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
@@ -8,6 +8,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
+import { contractPublicOrigin } from './publicUrl.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -233,8 +234,7 @@ async function createSignLink(req: Request, body: any) {
     new_data: { request_id: requestRow.id, role, expires_at: expiresAt },
   });
 
-  const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? req.headers.get("origin") ?? "http://localhost:5173";
-  const base = appUrl.replace(/\/$/, "");
+  const base = contractPublicOrigin(Deno.env.get("PUBLIC_APP_URL"), req.headers.get("origin"));
   // Employee link defaults to the fill page (which forwards to sign once complete);
   // witness/HR links only need the fill page.
   const path = role === "employee" ? "contract-fill" : "contract-fill";
