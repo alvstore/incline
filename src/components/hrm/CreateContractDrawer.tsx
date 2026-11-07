@@ -18,16 +18,9 @@ import { CONTRACT_VARIABLES, type ContractVariableKey, type FillRole } from '@/l
 import { resolveContractPrefill, prefillToVariables, type ContractPrefillMap } from '@/lib/hrm/contractPrefill';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 import { fetchGovernmentId } from '@/lib/profiles/governmentId';
-
-type AgreementRole = 'trainer' | 'staff' | 'manager';
-
-type EmployeePrefill = {
-  employeeCode?: string;
-  email?: string;
-  phone?: string;
-  position?: string;
-  department?: string;
-};
+import { getEmploymentAgreementTemplate, DEFAULT_NOTICE_DAYS, type AgreementRole, type EmployeePrefill } from '@/lib/hrm/employmentAgreementTemplate';
+import { getEmployerProfile } from '@/lib/hrm/getEmployerProfile';
+import { track } from '@/lib/analytics';
 
 function detectAgreementRole(employee: any): AgreementRole {
   if (employee?.staff_type === 'trainer') return 'trainer';
@@ -72,7 +65,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     endDate: '',
     salary: defaultSalary,
     commissionPercentage: 0,
-    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0),
+    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0, __NOTICE__),
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
@@ -169,7 +162,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }, initialCommission),
+      }, initialCommission, __NOTICE__),
       documentUrl: '',
     });
     setVariables({} as any);
@@ -201,7 +194,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           department: employee?.department,
         },
         Number(f.commissionPercentage) || 0,
-      ),
+      , __NOTICE__),
     }));
   }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate]);
 
@@ -280,7 +273,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }, role === 'trainer' ? 10 : 0),
+      }, role === 'trainer' ? 10 : 0, __NOTICE__),
       documentUrl: '',
     });
     setLegalTermsUnlocked(false);
@@ -403,7 +396,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                     phone: employee?.profile?.phone,
                     position: employee?.position,
                     department: employee?.department,
-                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage),
+                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage, __NOTICE__),
                 });
               }}
             >
@@ -462,7 +455,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                         phone: employee?.profile?.phone,
                         position: employee?.position,
                         department: employee?.department,
-                      }, formData.commissionPercentage),
+                      }, formData.commissionPercentage, __NOTICE__),
                   });
                 }}
                 required
@@ -627,7 +620,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                           const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
                           setFormData((f) => ({
                             ...f,
-                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage),
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage, __NOTICE__),
                           }));
                           await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
                           toast.success('Template reset');
