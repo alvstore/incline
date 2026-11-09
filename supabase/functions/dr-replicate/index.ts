@@ -26,11 +26,23 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const DR_URL = (Deno.env.get("DR_URL") ?? "https://api.joinincline.in").replace(/\/+$/, "");
+// Standby details come from Settings → Disaster Recovery (private.dr_config); the old
+// function secrets remain only as a fallback. Resolved per request in loadStandbyConfig().
+let DR_URL = (Deno.env.get("DR_URL") ?? "https://api.joinincline.in").replace(/\/+$/, "");
+let DR_KEY: string | undefined = Deno.env.get("DR_SERVICE_ROLE_KEY");
+let DR_DB: string | undefined = Deno.env.get("DR_DB_URL");
+
+async function loadStandbyConfig(primary: ReturnType<typeof connectPrimary>): Promise<void> {
+  const raw = await readOne(primary, `SELECT json_build_object('u', standby_url, 'k', standby_service_key, 'd', standby_db_url)::text FROM private.dr_config WHERE id = true`);
+  const c = raw ? (JSON.parse(raw) as { u?: string; k?: string; d?: string }) : {};
+  if (c.u) DR_URL = c.u.replace(/\/+$/, "");
+  if (c.k) DR_KEY = c.k;
+  if (c.d) DR_DB = c.d;
+}
 
 /** Install the two standby helpers over the direct DB port (function code only, no data). */
 async function bootstrapStandby(): Promise<void> {
-  const raw = Deno.env.get("DR_DB_URL");
+  const raw = DR_DB;
   if (!raw) throw new Error("DR_DB_URL not configured");
   const u = new URL(raw);
   if (u.hostname !== new URL(DR_URL).hostname) throw new Error("refusing: DR_DB_URL is not the standby host");
@@ -45,7 +57,7 @@ async function bootstrapStandby(): Promise<void> {
   let lastErr: unknown;
   // Preferred: the standby's admin query endpoint over HTTPS (service key), which needs no
   // pooler login at all and keeps traffic encrypted.
-  const drKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
+  const drKey = DR_KEY;
   if (drKey) {
     try {
       const r = await fetch(`${DR_URL}/pg/query`, {
@@ -107,14 +119,31 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as { mode?: string; budgetMs?: number; wait?: boolean; kind?: string };
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const primaryUrl = Deno.env.get("SUPABASE_URL")!;
-    const drKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
-    if (!drKey) throw new Error("DR_SERVICE_ROLE_KEY not configured");
-    if (new URL(DR_URL).hostname === new URL(primaryUrl).hostname) throw new Error("refusing: standby URL points at the live project");
+    await loadStandbyConfig(primary);
 
     const token = await readOne(primary, "SELECT token FROM private.dr_config WHERE id = true");
     const secret = req.headers.get("x-dr-secret") ?? "";
-    const isService = (req.headers.get("authorization") ?? "") === `Bearer ${serviceKey}`;
+    const authHeader = req.headers.get("authorization") ?? "";
+    const isService = authHeader === `Bearer ${serviceKey}`;
+
+    // Owner "Test connection" from the Disaster Recovery settings (user sign-in, capability-checked).
+    if (body.mode === "test" && !isService && authHeader.startsWith("Bearer ")) {
+      const userRes = await fetch(`${primaryUrl}/auth/v1/user`, {
+        headers: { Authorization: authHeader, apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? serviceKey },
+      });
+      const user = userRes.ok ? ((await userRes.json()) as { id?: string }) : null;
+      if (!user?.id) return json({ error: "Unauthorized" }, 401);
+      const [cap] = await primary`select public.has_capability(${user.id}::uuid, 'manage_standby_copy') as ok`;
+      if (!cap?.ok) return json({ error: "Only the owner can test the standby server" }, 403);
+      const result = await testStandby(primaryUrl);
+      await primary`update private.dr_config set last_test = ${primary.json(result)} where id = true`;
+      return json({ ok: true, result });
+    }
+
     if (!isService && !(token && secret.length >= 32 && secret === token)) return json({ error: "Unauthorized" }, 401);
+    const drKey = DR_KEY;
+    if (!drKey) throw new Error("Standby secret key is not set — add it in Settings → Disaster Recovery");
+    if (new URL(DR_URL).hostname === new URL(primaryUrl).hostname) throw new Error("refusing: standby URL points at the live project");
 
     const standby = new Standby(DR_URL, drKey);
     const mode = body.mode ?? "tick";
