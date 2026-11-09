@@ -1,0 +1,2 @@
+ALTER TABLE public.reminder_configurations ADD COLUMN IF NOT EXISTS settings jsonb;
+COMMENT ON COLUMN public.reminder_configurations.settings IS 'Per-type extras, e.g. pt_expiry audiences/channels/low_sessions threshold';

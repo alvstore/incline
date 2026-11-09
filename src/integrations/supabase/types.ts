@@ -12846,6 +12846,7 @@ export type Database = {
           id: string
           is_enabled: boolean
           reminder_type: string
+          settings: Json | null
           template_text: string | null
           updated_at: string
         }
@@ -12858,6 +12859,7 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           reminder_type: string
+          settings?: Json | null
           template_text?: string | null
           updated_at?: string
         }
@@ -12870,6 +12872,7 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           reminder_type?: string
+          settings?: Json | null
           template_text?: string | null
           updated_at?: string
         }
