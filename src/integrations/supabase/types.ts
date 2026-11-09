@@ -17022,6 +17022,15 @@ export type Database = {
       }
     }
     Functions: {
+      _audit_person_name: {
+        Args: {
+          p_employee?: string
+          p_member?: string
+          p_trainer?: string
+          p_user: string
+        }
+        Returns: string
+      }
       _can_view_member_health: {
         Args: { p_member: string; p_user: string }
         Returns: boolean
