@@ -6,6 +6,7 @@ import {
   type LeadNotificationCardsHandle,
 } from '@/components/settings/LeadNotificationSettings';
 import { ReminderCadenceCard } from '@/components/settings/ReminderCadenceCard';
+import { PtExpiryReminderCard } from '@/components/settings/PtExpiryReminderCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -238,6 +239,7 @@ export function NotificationSettings() {
 
         <TabsContent value="reminders" className="mt-5">
           <ReminderCadenceCard />
+          <PtExpiryReminderCard />
         </TabsContent>
 
         <TabsContent value="members" className="mt-5">
