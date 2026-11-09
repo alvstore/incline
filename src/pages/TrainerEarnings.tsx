@@ -174,7 +174,7 @@ export default function TrainerEarnings() {
           <Kpi className="lg:col-span-3" label="Sessions delivered" value={String(sessionCount)} hint="Not paid per session" icon={Dumbbell} loading={sessions.isLoading} />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-12">
+        <div className="grid gap-4 lg:grid-cols-12 [&>*]:min-w-0">
           {/* Commission table */}
           <Card className="rounded-xl border border-border lg:col-span-8">
             <CardHeader>
