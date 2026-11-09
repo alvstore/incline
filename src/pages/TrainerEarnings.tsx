@@ -9,7 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { buildPayslipPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
-import { fetchPayrollSettings } from '@/services/hrmService';
+import { slipStage, type OfficialSlip } from '@/lib/trainers/payslip';
+import { track } from '@/lib/analytics';
 import { installmentState, summarize, type EarningsInstallment, type InstallmentState } from '@/lib/trainers/earnings';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
@@ -39,27 +40,18 @@ export default function TrainerEarnings() {
   const monthStartDate = format(startOfMonth(monthDate), 'yyyy-MM-dd');
   const monthKey = format(monthDate, 'yyyy-MM');
 
-  const { data: hrSettings } = useQuery({
-    queryKey: ['hr-settings', trainer?.branch_id],
-    queryFn: () => fetchPayrollSettings(trainer?.branch_id),
-    enabled: !!trainer,
-  });
-
-  const { data: officialPayroll } = useQuery({
-    queryKey: ['official-payroll', user?.id, monthKey],
+  // Single source of truth: the slip management prepared/paid. No client-side salary maths.
+  const slipQuery = useQuery({
+    queryKey: ['my-payslip', user?.id, monthKey],
     enabled: !!user?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payroll_items')
-        .select('*, payroll_runs!inner(period_start, period_end, status)')
-        .eq('user_id', user!.id)
-        .gte('payroll_runs.period_start', monthStart.split('T')[0])
-        .lte('payroll_runs.period_end', monthEnd.split('T')[0])
-        .maybeSingle();
-      if (error) return null;
-      return data;
+    queryFn: async (): Promise<OfficialSlip | null> => {
+      const { data, error } = await supabase.rpc('my_payslip_for_month', { p_month: monthStartDate });
+      if (error) throw error;
+      return (data as unknown as OfficialSlip) ?? null;
     },
   });
+  const officialPayroll = slipQuery.data ?? null;
+  const stage = slipStage(officialPayroll);
 
   const summary = useQuery({
     queryKey: ['trainer-earnings-summary', trainer?.id, monthStartDate],
@@ -99,16 +91,6 @@ export default function TrainerEarnings() {
     },
   });
 
-  const { data: attendanceDays = [] } = useQuery({
-    queryKey: ['trainer-attendance', user?.id, selectedMonth],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const { data } = await supabase.from('staff_attendance').select('shift_date').eq('user_id', user!.id)
-        .gte('shift_date', monthStart.split('T')[0]).lte('shift_date', monthEnd.split('T')[0]);
-      return Array.from(new Set((data ?? []).map(a => a.shift_date)));
-    },
-  });
-
   const { data: brand } = useBrandContext(trainer?.branch_id || null);
 
   const rows = summary.data?.installments ?? [];
@@ -116,18 +98,14 @@ export default function TrainerEarnings() {
   const monthRows = rows.filter(r => installmentState(r, monthStartDate) !== 'upcoming');
   const upcomingRows = rows.filter(r => installmentState(r, monthStartDate) === 'upcoming');
 
-  const baseSalary = Number(trainer?.fixed_salary || 0);
   const totalDaysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-  const daysPresent = attendanceDays.length;
-  const proRatedBase = Math.round((baseSalary / totalDaysInMonth) * daysPresent);
-  const pf = hrSettings?.pf_enabled ? Math.round(proRatedBase * (hrSettings.pf_employee_pct / 100)) : 0;
-  const esi = hrSettings?.esi_enabled ? Math.round((proRatedBase + totals.payable) * (hrSettings.esi_employee_pct / 100)) : 0;
-  const estimatedNet = proRatedBase + totals.payable + totals.paid - pf - esi;
-  const isOfficial = officialPayroll?.status === 'paid';
+  const att = (officialPayroll?.calc_attendance ?? {}) as Record<string, number>;
+  const daysPresent = Number(att.payable_days ?? att.present ?? 0);
+  const isOfficial = stage === 'paid';
 
   const handleDownloadOfficialPayslip = () => {
     if (!officialPayroll || !brand || !trainer) return;
-    const att = (officialPayroll.calc_attendance ?? {}) as Record<string, number>;
+    track('trainer_payslip_downloaded', { month: monthKey, stage });
     const blob = buildPayslipPdf({
       employee_name: profile?.full_name || 'Trainer',
       employee_code: trainer.trainer_code || trainer.id.slice(0, 8),
@@ -135,7 +113,7 @@ export default function TrainerEarnings() {
       period_label: format(monthDate, 'MMMM yyyy'),
       period_start: monthStart.split('T')[0],
       period_end: monthEnd.split('T')[0],
-      attendance: { present: Number(att.present || daysPresent), payable_days: Number(att.payable_days || daysPresent), total_days: totalDaysInMonth, monthly_salary: Number(officialPayroll.calc_base || baseSalary) },
+      attendance: { present: Number(att.present || daysPresent), payable_days: Number(att.payable_days || daysPresent), total_days: totalDaysInMonth, monthly_salary: Number(officialPayroll.calc_base || 0) },
       earnings: { base: Number(officialPayroll.final_base || 0), pt_commission: Number(officialPayroll.final_pt_commission || 0) + Number(officialPayroll.final_bonus || 0), ot: Number(officialPayroll.final_ot || 0), bonus: 0 },
       deductions: { deductions: Number(officialPayroll.final_deductions || 0), advance: Number(officialPayroll.final_advance || 0), penalty: Number(officialPayroll.final_penalty || 0) },
       gross: Number(officialPayroll.final_gross || 0),
