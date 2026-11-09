@@ -44,8 +44,13 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
     certifications: [] as string[],
     government_id_type: '',
     government_id: '',
+    bank_name: '',
+    bank_account: '',
+    bank_ifsc: '',
     is_active: true,
   });
+  const bankAccountInvalid = !!formData.bank_account && !/^\d{6,24}$/.test(formData.bank_account);
+  const bankIfscInvalid = !!formData.bank_ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.bank_ifsc);
   const [profileData, setProfileData] = useState({
     full_name: '',
     phone: '',
@@ -97,6 +102,9 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
         certifications: fresh.certifications || [],
         government_id_type: (fresh as any).government_id_type || fresh.profile?.government_id_type || '',
         government_id: fresh.government_id || (fresh as any).government_id_number || fresh.profile?.government_id_number || '',
+        bank_name: (fresh as { bank_name?: string | null }).bank_name || '',
+        bank_account: (fresh as { bank_account?: string | null }).bank_account || '',
+        bank_ifsc: (fresh as { bank_ifsc?: string | null }).bank_ifsc || '',
         is_active: fresh.is_active ?? true,
       });
       setProfileData({
@@ -145,6 +153,10 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!trainer?.id) return;
+    if (bankAccountInvalid || bankIfscInvalid) {
+      toast.error('Check bank details: account number must be 6–24 digits and IFSC like HDFC0001234.');
+      return;
+    }
 
     try {
       await updateTrainer.mutateAsync({
@@ -160,6 +172,9 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
           certifications: formData.certifications,
           government_id_type: formData.government_id_type || null,
           government_id_number: formData.government_id || null,
+          bank_name: formData.bank_name.trim() || null,
+          bank_account: formData.bank_account.trim() || null,
+          bank_ifsc: formData.bank_ifsc.trim() || null,
           is_active: formData.is_active,
         },
       });
@@ -465,6 +480,28 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
               />
             </div>
           </div>
+
+          {/* Salary bank account */}
+          <fieldset className="space-y-3 rounded-xl border border-border p-4">
+            <legend className="px-1 text-sm font-semibold">Salary bank account</legend>
+            <p className="text-xs text-muted-foreground">Used to pre-fill salary payments in Payroll.</p>
+            <div className="space-y-2">
+              <Label htmlFor="trainer-bank-name">Bank name</Label>
+              <Input id="trainer-bank-name" value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })} placeholder="e.g. HDFC Bank" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="trainer-bank-account">Account number</Label>
+                <Input id="trainer-bank-account" inputMode="numeric" autoComplete="off" value={formData.bank_account} aria-invalid={bankAccountInvalid} aria-describedby={bankAccountInvalid ? 'trainer-bank-account-err' : undefined} onChange={(e) => setFormData({ ...formData, bank_account: e.target.value.replace(/\D/g, '') })} />
+                {bankAccountInvalid && <p id="trainer-bank-account-err" className="text-xs text-destructive">Enter 6–24 digits.</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="trainer-bank-ifsc">IFSC</Label>
+                <Input id="trainer-bank-ifsc" autoComplete="off" value={formData.bank_ifsc} aria-invalid={bankIfscInvalid} aria-describedby={bankIfscInvalid ? 'trainer-bank-ifsc-err' : undefined} onChange={(e) => setFormData({ ...formData, bank_ifsc: e.target.value.toUpperCase().trim() })} placeholder="HDFC0001234" />
+                {bankIfscInvalid && <p id="trainer-bank-ifsc-err" className="text-xs text-destructive">Format: 4 letters, 0, then 6 letters/numbers.</p>}
+              </div>
+            </div>
+          </fieldset>
 
           {/* Hardware & Biometrics */}
           <StaffBiometricsTab

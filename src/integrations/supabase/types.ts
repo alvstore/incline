@@ -19130,6 +19130,18 @@ export type Database = {
         }
         Returns: string
       }
+      payroll_future_commissions: {
+        Args: { p_item_id: string }
+        Returns: {
+          amount: number
+          installment_id: string
+          member_code: string
+          member_name: string
+          package_name: string
+          payout_month: string
+          sale_date: string
+        }[]
+      }
       payroll_item_pt_breakdown: {
         Args: { p_item_id: string }
         Returns: {
@@ -19176,6 +19188,14 @@ export type Database = {
       payroll_process_items: {
         Args: { p_item_ids: string[] }
         Returns: undefined
+      }
+      payroll_pull_forward_installments: {
+        Args: {
+          p_installment_ids: string[]
+          p_item_id: string
+          p_reason: string
+        }
+        Returns: number
       }
       payroll_recalculate_item: {
         Args: { p_item_id: string; p_reason?: string }
