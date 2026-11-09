@@ -404,7 +404,7 @@ export default function AuditLogsPage() {
                                   className={`ml-2 block w-[calc(100%-0.5rem)] text-left border ${accent} rounded-xl mb-2 cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isNew ? 'ring-2 ring-success/60' : ''}`}
                                   onClick={() => toggleRow(log.id)}
                                 >
-                                  <div className={`flex items-start justify-between ${padY} gap-3`}>
+                                  <div className={`flex flex-col sm:flex-row sm:items-start sm:justify-between ${padY} gap-2 sm:gap-3`}>
                                     <div className="flex items-start gap-3 flex-1 min-w-0">
                                       <div className="relative shrink-0">
                                         <Avatar className={density === 'compact' ? 'h-7 w-7' : 'h-9 w-9'}>
@@ -436,7 +436,7 @@ export default function AuditLogsPage() {
                                         </div>
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-2 shrink-0 pl-12 sm:pl-0">
                                       {route && (
                                         <Link
                                           to={route}
