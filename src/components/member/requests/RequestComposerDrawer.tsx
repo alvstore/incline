@@ -216,6 +216,16 @@ export function RequestComposerDrawer({
 
       if (kind === 'diet' || kind === 'workout') {
         const title = `${kind === 'diet' ? 'Diet' : 'Workout'} plan request from ${memberName}`;
+        const { count: openCount } = await supabase
+          .from('tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('linked_entity_type', 'member')
+          .eq('linked_entity_id', member.id)
+          .ilike('title', `${kind === 'diet' ? 'Diet' : 'Workout'} plan request%`)
+          .in('status', ['pending', 'in_progress']);
+        if ((openCount ?? 0) > 0) {
+          throw new Error(`You already have an open ${kind} plan request. Your trainer will send it soon.`);
+        }
         const assignees: string[] = [];
         if (member.assigned_trainer_id) {
           const { data: t } = await (supabase as any)
