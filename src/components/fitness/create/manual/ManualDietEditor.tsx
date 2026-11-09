@@ -764,7 +764,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <Input
                       type="time"
-                      className="h-9 w-28"
+                      className="h-9 w-full sm:w-28"
                       value={slot.time}
                       onChange={(e) => updateSlot(sIdx, { time: e.target.value })}
                       aria-label="Meal time"
