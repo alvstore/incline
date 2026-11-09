@@ -9,7 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { buildPayslipPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
-import { fetchPayrollSettings } from '@/services/hrmService';
+import { slipStage, type OfficialSlip } from '@/lib/trainers/payslip';
+import { track } from '@/lib/analytics';
 import { installmentState, summarize, type EarningsInstallment, type InstallmentState } from '@/lib/trainers/earnings';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
@@ -26,6 +27,13 @@ const STATE_UI: Record<InstallmentState, { label: string; cls: string; icon: typ
   upcoming: { label: 'Upcoming', cls: 'bg-muted text-muted-foreground border border-border', icon: CalendarClock },
 };
 
+const STAGE_UI = {
+  paid: { label: 'Paid', hint: 'Paid by management', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' },
+  approved: { label: 'Approved', hint: 'Approved, payment pending', cls: 'bg-primary/10 text-primary border border-primary/20' },
+  draft: { label: 'Draft', hint: 'Being prepared by management — may still change', cls: 'bg-muted text-muted-foreground border border-border' },
+  none: { label: '', hint: 'From the payroll prepared by management', cls: '' },
+} as const;
+
 interface Summary { installments: EarningsInstallment[]; trend: { month: string; paid: number; pending: number }[] }
 
 export default function TrainerEarnings() {
@@ -39,27 +47,20 @@ export default function TrainerEarnings() {
   const monthStartDate = format(startOfMonth(monthDate), 'yyyy-MM-dd');
   const monthKey = format(monthDate, 'yyyy-MM');
 
-  const { data: hrSettings } = useQuery({
-    queryKey: ['hr-settings', trainer?.branch_id],
-    queryFn: () => fetchPayrollSettings(trainer?.branch_id),
-    enabled: !!trainer,
-  });
-
-  const { data: officialPayroll } = useQuery({
-    queryKey: ['official-payroll', user?.id, monthKey],
+  // Single source of truth: the slip management prepared/paid. No client-side salary maths.
+  const slipQuery = useQuery({
+    queryKey: ['my-payslip', user?.id, monthKey],
     enabled: !!user?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payroll_items')
-        .select('*, payroll_runs!inner(period_start, period_end, status)')
-        .eq('user_id', user!.id)
-        .gte('payroll_runs.period_start', monthStart.split('T')[0])
-        .lte('payroll_runs.period_end', monthEnd.split('T')[0])
-        .maybeSingle();
-      if (error) return null;
-      return data;
+    queryFn: async (): Promise<OfficialSlip | null> => {
+      const { data, error } = await supabase.rpc('my_payslip_for_month', { p_month: monthStartDate });
+      if (error) throw error;
+      const slip = (data as unknown as OfficialSlip) ?? null;
+      track('trainer_payslip_viewed', { month: monthKey, stage: slipStage(slip) });
+      return slip;
     },
   });
+  const officialPayroll = slipQuery.data ?? null;
+  const stage = slipStage(officialPayroll);
 
   const summary = useQuery({
     queryKey: ['trainer-earnings-summary', trainer?.id, monthStartDate],
@@ -99,16 +100,6 @@ export default function TrainerEarnings() {
     },
   });
 
-  const { data: attendanceDays = [] } = useQuery({
-    queryKey: ['trainer-attendance', user?.id, selectedMonth],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const { data } = await supabase.from('staff_attendance').select('shift_date').eq('user_id', user!.id)
-        .gte('shift_date', monthStart.split('T')[0]).lte('shift_date', monthEnd.split('T')[0]);
-      return Array.from(new Set((data ?? []).map(a => a.shift_date)));
-    },
-  });
-
   const { data: brand } = useBrandContext(trainer?.branch_id || null);
 
   const rows = summary.data?.installments ?? [];
@@ -116,18 +107,14 @@ export default function TrainerEarnings() {
   const monthRows = rows.filter(r => installmentState(r, monthStartDate) !== 'upcoming');
   const upcomingRows = rows.filter(r => installmentState(r, monthStartDate) === 'upcoming');
 
-  const baseSalary = Number(trainer?.fixed_salary || 0);
   const totalDaysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-  const daysPresent = attendanceDays.length;
-  const proRatedBase = Math.round((baseSalary / totalDaysInMonth) * daysPresent);
-  const pf = hrSettings?.pf_enabled ? Math.round(proRatedBase * (hrSettings.pf_employee_pct / 100)) : 0;
-  const esi = hrSettings?.esi_enabled ? Math.round((proRatedBase + totals.payable) * (hrSettings.esi_employee_pct / 100)) : 0;
-  const estimatedNet = proRatedBase + totals.payable + totals.paid - pf - esi;
-  const isOfficial = officialPayroll?.status === 'paid';
+  const att = (officialPayroll?.calc_attendance ?? {}) as Record<string, number>;
+  const daysPresent = Number(att.payable_days ?? att.present ?? 0);
+  const isOfficial = stage === 'paid';
 
   const handleDownloadOfficialPayslip = () => {
     if (!officialPayroll || !brand || !trainer) return;
-    const att = (officialPayroll.calc_attendance ?? {}) as Record<string, number>;
+    track('trainer_payslip_downloaded', { month: monthKey, stage });
     const blob = buildPayslipPdf({
       employee_name: profile?.full_name || 'Trainer',
       employee_code: trainer.trainer_code || trainer.id.slice(0, 8),
@@ -135,7 +122,7 @@ export default function TrainerEarnings() {
       period_label: format(monthDate, 'MMMM yyyy'),
       period_start: monthStart.split('T')[0],
       period_end: monthEnd.split('T')[0],
-      attendance: { present: Number(att.present || daysPresent), payable_days: Number(att.payable_days || daysPresent), total_days: totalDaysInMonth, monthly_salary: Number(officialPayroll.calc_base || baseSalary) },
+      attendance: { present: Number(att.present || daysPresent), payable_days: Number(att.payable_days || daysPresent), total_days: totalDaysInMonth, monthly_salary: Number(officialPayroll.calc_base || 0) },
       earnings: { base: Number(officialPayroll.final_base || 0), pt_commission: Number(officialPayroll.final_pt_commission || 0) + Number(officialPayroll.final_bonus || 0), ot: Number(officialPayroll.final_ot || 0), bonus: 0 },
       deductions: { deductions: Number(officialPayroll.final_deductions || 0), advance: Number(officialPayroll.final_advance || 0), penalty: Number(officialPayroll.final_penalty || 0) },
       gross: Number(officialPayroll.final_gross || 0),
@@ -164,15 +151,15 @@ export default function TrainerEarnings() {
 
   return (
     <AppLayout>
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">My earnings</h1>
-            <p className="text-sm text-muted-foreground">PT commission instalments and salary for {format(monthDate, 'MMMM yyyy')}</p>
+            <p className="text-sm text-muted-foreground">Salary and PT commission for {format(monthDate, 'MMMM yyyy')}</p>
           </div>
-          <div className="flex gap-2" role="group" aria-label="Choose month">
+          <div className="grid grid-cols-3 gap-2 sm:flex" role="group" aria-label="Choose month">
             {[0, 1, 2].map(o => (
-              <Button key={o} size="sm" className="min-h-11" variant={selectedMonth === o ? 'default' : 'outline'} aria-pressed={selectedMonth === o} onClick={() => setSelectedMonth(o)}>
+              <Button key={o} size="sm" className="min-h-11 px-2 sm:px-3" variant={selectedMonth === o ? 'default' : 'outline'} aria-pressed={selectedMonth === o} onClick={() => setSelectedMonth(o)}>
                 {format(subMonths(new Date(), o), 'MMM yyyy')}
               </Button>
             ))}
@@ -180,14 +167,14 @@ export default function TrainerEarnings() {
         </header>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-12">
           <Kpi className="lg:col-span-3" label="Payable this month" value={inr(totals.payable + totals.paid)} hint={totals.paid > 0 ? `${inr(totals.paid)} already paid` : 'PT commission'} icon={Wallet} loading={summary.isLoading} />
           <Kpi className="lg:col-span-3" label="On hold" value={inr(totals.onHold)} hint="Released once the member clears dues" icon={Lock} loading={summary.isLoading} />
           <Kpi className="lg:col-span-3" label="Upcoming instalments" value={inr(totals.upcoming)} hint="Future months" icon={CalendarClock} loading={summary.isLoading} />
           <Kpi className="lg:col-span-3" label="Sessions delivered" value={String(sessionCount)} hint="Not paid per session" icon={Dumbbell} loading={sessions.isLoading} />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-12">
+        <div className="grid gap-4 lg:grid-cols-12 [&>*]:min-w-0">
           {/* Commission table */}
           <Card className="rounded-xl border border-border lg:col-span-8">
             <CardHeader>
@@ -208,7 +195,31 @@ export default function TrainerEarnings() {
                   <p className="text-sm text-muted-foreground">No PT commission for this month yet.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <ul className="divide-y divide-border sm:hidden" aria-label={`PT commission instalments for ${format(monthDate, 'MMMM yyyy')}`}>
+                  {monthRows.map(r => {
+                    const st = installmentState(r, monthStartDate);
+                    const s = STATE_UI[st];
+                    const Icon = s.icon;
+                    return (
+                      <li key={r.installment_id} className="space-y-1 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-foreground">{r.member_name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{r.package_name ?? 'PT package'} · {r.installment_index} of {r.installment_count}</p>
+                          </div>
+                          <p className="shrink-0 font-semibold tabular-nums text-foreground">{inr(r.amount)}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>{r.sale_amount != null ? `Sale ${inr(r.sale_amount)}` : ''}{r.share_pct != null ? ` · ${r.share_pct}%` : ''}</span>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${s.cls}`}><Icon className="h-3 w-3" aria-hidden />{s.label}</span>
+                        </div>
+                        {st === 'on_hold' && <p className="text-xs text-muted-foreground">{(r.invoice_balance ?? 0) > 0 ? `Member owes ${inr(r.invoice_balance!)}` : r.blocked_reason ?? 'Awaiting payment'}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="hidden overflow-x-auto sm:block">
                   <table className="w-full text-sm">
                     <caption className="sr-only">PT commission instalments for {format(monthDate, 'MMMM yyyy')}</caption>
                     <thead className="sticky top-0 z-10 bg-card">
@@ -256,6 +267,7 @@ export default function TrainerEarnings() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
               {upcomingRows.length > 0 && (
                 <p className="mt-4 text-xs text-muted-foreground">
@@ -266,24 +278,38 @@ export default function TrainerEarnings() {
           </Card>
 
           {/* Salary card */}
-          <Card className="rounded-xl border border-border lg:col-span-4">
+          <Card className="order-first rounded-xl border border-border lg:order-none lg:col-span-4">
             <CardHeader>
-              <CardTitle className="text-base">{isOfficial ? 'Official net pay' : 'Estimated net pay'}</CardTitle>
-              <CardDescription>{isOfficial ? 'Processed by management' : 'Estimate until payroll is approved'}</CardDescription>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base">Salary slip</CardTitle>
+                {stage !== 'none' && (
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_UI[stage].cls}`}>
+                    {stage === 'paid' ? <CheckCircle className="h-3 w-3" aria-hidden /> : <Clock className="h-3 w-3" aria-hidden />}{STAGE_UI[stage].label}
+                  </span>
+                )}
+              </div>
+              <CardDescription>{STAGE_UI[stage].hint}{stage === 'paid' && officialPayroll?.payment_date ? ` on ${format(new Date(officialPayroll.payment_date), 'dd MMM yyyy')}` : ''}{stage === 'paid' && officialPayroll?.payment_method ? ` · ${officialPayroll.payment_method.replace('_', ' ')}` : ''}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-3xl font-bold tabular-nums text-foreground">{inr(isOfficial ? Number(officialPayroll.final_net) : estimatedNet)}</p>
-              <dl className="space-y-2 text-sm">
-                <Row k={`Base (${daysPresent}/${totalDaysInMonth} days)`} v={inr(isOfficial ? Number(officialPayroll.final_base) : proRatedBase)} />
-                <Row k="PT commission" v={inr(isOfficial ? Number(officialPayroll.final_pt_commission) : totals.payable + totals.paid)} />
-                {(isOfficial ? Number(officialPayroll.final_deductions) : pf + esi) > 0 && (
-                  <Row k="Statutory deductions" v={`−${inr(isOfficial ? Number(officialPayroll.final_deductions) : pf + esi)}`} />
-                )}
-              </dl>
-              {isOfficial ? (
-                <Button className="min-h-11 w-full" onClick={handleDownloadOfficialPayslip}><Download className="mr-2 h-4 w-4" />Download payslip</Button>
+              {slipQuery.isLoading ? <Skeleton className="h-24 w-full" /> : slipQuery.isError ? (
+                <div className="space-y-2"><p className="text-sm text-destructive">Could not load your salary slip.</p><Button variant="outline" className="min-h-11" onClick={() => slipQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Try again</Button></div>
+              ) : !officialPayroll ? (
+                <p className="flex items-center gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground"><Clock className="h-4 w-4 shrink-0" aria-hidden />Payroll for {format(monthDate, 'MMMM')} has not been prepared yet.</p>
               ) : (
-                <p className="flex items-center gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground"><Clock className="h-4 w-4 shrink-0" aria-hidden />Your payslip appears here once payroll is processed.</p>
+                <>
+                  <p className="text-3xl font-bold tabular-nums text-foreground">{inr(Number(officialPayroll.final_net))}</p>
+                  <dl className="space-y-2 text-sm">
+                    <Row k={daysPresent ? `Base (${daysPresent}/${totalDaysInMonth} days)` : 'Base salary'} v={inr(Number(officialPayroll.final_base))} />
+                    <Row k="PT commission" v={inr(Number(officialPayroll.final_pt_commission) + Number(officialPayroll.final_bonus || 0))} />
+                    {Number(officialPayroll.final_ot) > 0 && <Row k="Overtime" v={inr(Number(officialPayroll.final_ot))} />}
+                    {Number(officialPayroll.final_deductions) + Number(officialPayroll.final_advance) + Number(officialPayroll.final_penalty) > 0 && (
+                      <Row k="Deductions" v={`−${inr(Number(officialPayroll.final_deductions) + Number(officialPayroll.final_advance) + Number(officialPayroll.final_penalty))}`} />
+                    )}
+                  </dl>
+                  <Button className="min-h-11 w-full" variant={isOfficial ? 'default' : 'outline'} onClick={handleDownloadOfficialPayslip}>
+                    <Download className="mr-2 h-4 w-4" />{isOfficial ? 'Download payslip' : 'Download draft slip'}
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>
@@ -294,7 +320,7 @@ export default function TrainerEarnings() {
               <CardTitle className="text-base">Commission trend</CardTitle>
               <CardDescription>Paid and still-to-pay PT commission, last 6 months</CardDescription>
             </CardHeader>
-            <CardContent className="h-64">
+            <CardContent className="h-48 sm:h-64">
               {summary.isLoading ? <Skeleton className="h-full w-full" /> : trendData.every(t => !t.paid && !t.pending) ? (
                 <p className="py-16 text-center text-sm text-muted-foreground">No commission history yet.</p>
               ) : (

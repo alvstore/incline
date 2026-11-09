@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PayrollItemDetailsDrawer } from './PayrollItemDetailsDrawer';
+import { DraftSlipsCard } from './DraftSlipsCard';
 import { attendanceValues, preferredPayrollRun, type PayrollItem } from '@/lib/hrm/payroll';
 import { can } from '@/lib/auth/permissions';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -91,7 +92,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       const { data, error } = await supabase
         .from('payroll_items')
         .select('*')
-        .eq('run_id', activeRunId);
+        .eq('run_id', activeRunId)
+        .neq('status', 'cancelled');
       if (error) throw error;
       const userIds = [...new Set((data || []).map(d => d.user_id))];
       const { data: profiles, error: profileError } = await supabase.from('profiles').select('id, full_name, email, avatar_url').in('id', userIds);
@@ -228,6 +230,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
 
 
   return (
+    <>
+    {isAdmin && <DraftSlipsCard branchId={branchId} currentMonth={periodStart.slice(0, 7)} />}
     <Card className="rounded-2xl">
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -427,5 +431,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       </Sheet>
 
     </Card>
+    </>
   );
 }
