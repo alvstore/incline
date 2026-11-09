@@ -198,36 +198,6 @@ export default function AuditLogsPage() {
     toast.success('Exported to CSV');
   };
 
-  const renderDataDiff = (oldData: any, newData: any) => {
-    if (!oldData && !newData) return <p className="text-sm text-muted-foreground">No data changes recorded</p>;
-    const allKeys = new Set([...Object.keys(oldData || {}), ...Object.keys(newData || {})]);
-    const changes: { key: string; old: any; new: any }[] = [];
-    allKeys.forEach(key => {
-      const oldVal = oldData?.[key];
-      const newVal = newData?.[key];
-      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) changes.push({ key, old: oldVal, new: newVal });
-    });
-    if (changes.length === 0) return <p className="text-sm text-muted-foreground">No field changes detected</p>;
-    return (
-      <div className="space-y-1.5">
-        {changes.map(({ key, old, new: newVal }) => (
-          <div key={key} className="flex items-start gap-2 text-sm">
-            <span className="font-medium text-foreground min-w-[120px] shrink-0">{key}</span>
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="px-2 py-0.5 rounded bg-destructive/10 text-destructive font-mono text-xs truncate max-w-[200px]">
-                {old !== undefined ? JSON.stringify(old) : '—'}
-              </span>
-              <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="px-2 py-0.5 rounded bg-success/10 text-success font-mono text-xs truncate max-w-[200px]">
-                {newVal !== undefined ? JSON.stringify(newVal) : '—'}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   // Group logs by date
   const groupedLogs: { label: string; date: string; logs: any[] }[] = [];
   const dateMap = new Map<string, any[]>();
