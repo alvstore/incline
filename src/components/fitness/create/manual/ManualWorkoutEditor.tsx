@@ -172,19 +172,19 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
               <Label className="text-xs">Exercise *</Label>
               <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
             </div>
-            <div className="col-span-3 sm:col-span-2">
+            <div className="col-span-6 sm:col-span-2">
               <Label className="text-xs">Sets</Label>
               <Input type="number" min={1} value={ex.sets} onChange={(e) => onUpdate(exIdx, 'sets', parseInt(e.target.value) || 1)} />
             </div>
-            <div className="col-span-3 sm:col-span-2">
+            <div className="col-span-6 sm:col-span-2">
               <Label className="text-xs">Reps</Label>
               <Input value={ex.reps} onChange={(e) => onUpdate(exIdx, 'reps', e.target.value)} placeholder="8-10" />
             </div>
-            <div className="col-span-3 sm:col-span-2">
+            <div className="col-span-6 sm:col-span-2">
               <Label className="text-xs">Rest (s)</Label>
               <Input type="number" min={0} value={ex.rest_seconds} onChange={(e) => onUpdate(exIdx, 'rest_seconds', parseInt(e.target.value) || 0)} />
             </div>
-            <div className="col-span-3 sm:col-span-1">
+            <div className="col-span-6 sm:col-span-1">
               <Label className="text-xs">Weight</Label>
               <Input value={ex.weight} onChange={(e) => onUpdate(exIdx, 'weight', e.target.value)} placeholder="60kg" />
             </div>
@@ -559,7 +559,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
   const active = days[activeIdx];
 
   return (
-    <div className="grid gap-5 lg:grid-cols-12">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 [&>*]:min-w-0">
       {/* Left: plan details + day rail */}
       <div className="space-y-4 lg:col-span-3">
         {validationError && (

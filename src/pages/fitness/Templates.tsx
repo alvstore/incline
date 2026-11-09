@@ -480,7 +480,7 @@ export default function FitnessTemplatesPage() {
 
         {/* Templates */}
         {templatesLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="rounded-2xl bg-card p-5 shadow-lg shadow-muted/30 space-y-3">
                 <Skeleton className="h-5 w-2/3" />
@@ -519,7 +519,7 @@ export default function FitnessTemplatesPage() {
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
                   <Lock className="h-3.5 w-3.5" /> Starter Plans
                 </h3>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
                   {systemTemplates.map(renderTemplateCard)}
                 </div>
               </div>
@@ -530,7 +530,7 @@ export default function FitnessTemplatesPage() {
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                   Your Saved Templates
                 </h3>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
                   {userTemplates.map(renderTemplateCard)}
                 </div>
               </div>
