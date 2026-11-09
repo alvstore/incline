@@ -1,0 +1,1 @@
+ALTER VIEW public.v_template_with_meta_status SET (security_invoker = true);

@@ -1051,6 +1051,13 @@
       "when": 1794224141891,
       "tag": "0149_dr_standby_config_audit_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1794232153873,
+      "tag": "0150_template_view_security_invoker",
+      "breakpoints": true
     }
   ]
 }
