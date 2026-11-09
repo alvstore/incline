@@ -11,6 +11,8 @@
  * | notification_settings_saved | Notifications Save succeeded (changed_count, section) |
  * | notification_section_viewed | Notifications section tab changed (section) |
  * | notification_recipient_toggled | Lead recipient channel saved (channel, enabled) |
+ * | ai_insights_refreshed | Dashboard AI insights returned (manual, reused) |
+ * | ai_insights_viewed  | Fresh saved insights shown (has_forecast) |
  */
 type Props = Record<string, string | number | boolean | null>;
 export function track(event: string, properties?: Props) {
