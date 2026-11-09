@@ -20,6 +20,7 @@ import { getMenuForRole } from '@/config/menu';
 import { groupMenuIntoModules, findActiveModuleId } from '@/config/navModules';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { MemberMobileNav } from '@/components/member/MemberMobileNav';
+import { TrainerMobileNav } from '@/components/trainer/TrainerMobileNav';
 import { MobileBranchBar } from './MobileBranchBar';
 
 interface AppLayoutProps {
@@ -33,6 +34,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Persistent bottom nav for members on every page (drawer navigation included).
   const showMemberMobileNav = roles.some((r) => r.role === 'member') &&
     !roles.some((r) => ['owner', 'admin', 'manager', 'staff', 'trainer'].includes(r.role));
+  const showTrainerMobileNav = roles.some((r) => r.role === 'trainer') &&
+    !roles.some((r) => ['owner', 'admin', 'manager', 'staff'].includes(r.role));
+  const showDock = showMemberMobileNav || showTrainerMobileNav;
 
   // Live presence heartbeat (mounted once globally)
   usePresenceHeartbeat();
@@ -181,7 +185,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
 
     return (
-      <main className={`flex-1 overflow-auto overflow-x-hidden p-6 ${showMemberMobileNav ? 'pb-28 lg:pb-6' : ''}`}>
+      <main className={`flex-1 overflow-auto overflow-x-hidden p-6 ${showDock ? 'pb-28 lg:pb-6' : ''}`}>
         {children}
       </main>
     );
@@ -225,7 +229,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Full-width content (no sidebar) */}
         <div className="flex flex-1 flex-col min-w-0">
           {renderContent()}
-          {showMemberMobileNav && <MemberMobileNav />}
+          {showMemberMobileNav && <MemberMobileNav />}{showTrainerMobileNav && <TrainerMobileNav />}
         </div>
 
         <SessionTimeoutWarning />
@@ -260,7 +264,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Full-width content (no sidebar) */}
         <div className="flex flex-1 flex-col min-w-0">
           {renderContent()}
-          {showMemberMobileNav && <MemberMobileNav />}
+          {showMemberMobileNav && <MemberMobileNav />}{showTrainerMobileNav && <TrainerMobileNav />}
         </div>
 
         <SessionTimeoutWarning />
@@ -289,7 +293,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <MobileBranchBar />
 
         {renderContent()}
-        {showMemberMobileNav && <MemberMobileNav />}
+        {showMemberMobileNav && <MemberMobileNav />}{showTrainerMobileNav && <TrainerMobileNav />}
       </div>
 
       <SessionTimeoutWarning />
