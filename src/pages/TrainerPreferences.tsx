@@ -101,7 +101,7 @@ export default function TrainerPreferences() {
               <CardDescription>Only coaching alerts — no admin or lead noise.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {trainerBranch && <BrowserNotifications branchId={trainerBranch} />}
+              {trainerBranch && <BrowserNotifications branchId={trainerBranch} variant="settings" />}
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)
               ) : (

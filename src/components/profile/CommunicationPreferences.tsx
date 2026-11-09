@@ -78,7 +78,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
 
   return (
     <div className="space-y-4">
-    <BrowserNotifications branchId={branchId} />
+    <BrowserNotifications branchId={branchId} variant="settings" />
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">

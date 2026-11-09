@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 
 const DISMISS_KEY = 'incline_push_prompt_dismissed';
 
-export function BrowserNotifications({ branchId }: { branchId: string }) {
+export function BrowserNotifications({ branchId, variant = 'prompt' }: { branchId: string; variant?: 'prompt' | 'settings' }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +30,8 @@ export function BrowserNotifications({ branchId }: { branchId: string }) {
   });
   // Once enabled on this device, collapse to a compact chip so it doesn't use dashboard space.
   if (support === 'supported' && enabled && !error) {
+    // Dashboards only nudge people who haven't opted in; settings pages keep the off switch.
+    if (variant === 'prompt') return null;
     return (
       <div className="flex flex-wrap items-center gap-2" aria-live="polite">
         <span className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm text-foreground">
