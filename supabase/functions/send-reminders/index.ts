@@ -822,7 +822,7 @@ Deno.serve(async (req) => {
         const recipient = channel === "email" ? a.email : a.phone;
         if (!recipient) return;
         const { error } = await adminClient.functions.invoke("dispatch-communication", {
-          body: { branch_id: a.branchId, channel, category: "class_notification", recipient, member_id: a.memberId ?? undefined, user_id: a.userId ?? undefined,
+          body: { branch_id: a.branchId, channel, category: "transactional", recipient, member_id: a.memberId ?? undefined, user_id: a.userId ?? undefined,
             payload: { subject: a.title, body: a.body, variables: a.vars, use_branded_template: channel === "email" },
             dedupe_key: a.key, ttl_seconds: 30 * 86400 },
         });
