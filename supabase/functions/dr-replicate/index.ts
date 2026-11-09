@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v2.0.0 — 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
+// v2.0.1 — 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
@@ -35,12 +35,47 @@ async function bootstrapStandby(): Promise<void> {
   const u = new URL(raw);
   if (u.hostname !== new URL(DR_URL).hostname) throw new Error("refusing: DR_DB_URL is not the standby host");
   u.searchParams.delete("sslmode");
-  const sql = postgres(u.toString(), { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
-  try {
-    await sql.unsafe(BOOTSTRAP_SQL);
-  } finally {
-    await sql.end();
+  u.searchParams.delete("pgbouncer");
+  // DDL must go to Postgres itself, never the pooler: the standby's pooler (6543) runs an
+  // auth query that its database refuses ("permission denied for schema pgbouncer").
+  // Try the direct port first; fall back to the configured URL only if direct is unreachable.
+  const direct = new URL(u.toString());
+  direct.port = "5432";
+  const candidates = [...new Set([direct.toString(), u.toString()])];
+  let lastErr: unknown;
+  // Preferred: the standby's admin query endpoint over HTTPS (service key), which needs no
+  // pooler login at all and keeps traffic encrypted.
+  const drKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
+  if (drKey) {
+    try {
+      const r = await fetch(`${DR_URL}/pg/query`, {
+        method: "POST",
+        headers: { apikey: drKey, Authorization: `Bearer ${drKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: BOOTSTRAP_SQL }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const text = await r.text();
+      if (r.ok) return;
+      lastErr = new Error(`standby admin endpoint ${r.status}: ${text.slice(0, 300)}`);
+      console.error("dr-replicate bootstrap via https failed", r.status, text.slice(0, 300));
+    } catch (e) {
+      lastErr = e;
+      console.error("dr-replicate bootstrap via https failed", (e as Error).message);
+    }
   }
+  for (const url of candidates) {
+    const sql = postgres(url, { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+    try {
+      await sql.unsafe(BOOTSTRAP_SQL);
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.error("dr-replicate bootstrap attempt failed", new URL(url).port, (e as Error).message);
+    } finally {
+      await sql.end({ timeout: 5 }).catch(() => {});
+    }
+  }
+  throw lastErr;
 }
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;

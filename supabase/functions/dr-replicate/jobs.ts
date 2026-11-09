@@ -16,7 +16,13 @@ export const JOBS_SQL = `SELECT coalesce(json_agg(json_build_object('id', jobid,
 
 const jobName = (j: Job) => j.name ?? `primary-job-${j.id}`;
 
+async function standbyHas(standby: Standby, rel: string): Promise<boolean> {
+  return (await standby.one(`SELECT (to_regclass(${lit(rel)}) IS NOT NULL)::text`)) === "true";
+}
+
+/** Standby jobs; empty when the scheduler extension is not installed there (nothing can run). */
 export async function standbyJobs(standby: Standby): Promise<Job[]> {
+  if (!(await standbyHas(standby, "cron.job"))) return [];
   return JSON.parse((await standby.one(JOBS_SQL)) ?? "[]") as Job[];
 }
 
@@ -44,10 +50,14 @@ export function planJobs(primary: Job[], standby: Job[]): JobPlan {
   return plan;
 }
 
-export interface JobStats { primaryJobs: number; scheduled: number; removed: number; activeOnStandby: number; queuesCreated: number }
+export interface JobStats { primaryJobs: number; scheduled: number; removed: number; activeOnStandby: number; queuesCreated: number; schedulerMissing?: boolean }
 
 export async function mirrorJobs(primary: Sql, standby: Standby): Promise<JobStats> {
   const p = await readJson<Job[]>(primary, JOBS_SQL);
+  if (!(await standbyHas(standby, "cron.job"))) {
+    // Scheduler missing on the standby: nothing can run there; job definitions are skipped.
+    return { primaryJobs: p.length, scheduled: 0, removed: 0, activeOnStandby: 0, queuesCreated: 0, schedulerMissing: true };
+  }
   const plan = planJobs(p, await standbyJobs(standby));
   for (let i = 0; i < plan.schedule.length; i += 25) await standby.run(plan.schedule.slice(i, i + 25));
   for (let i = 0; i < plan.unschedule.length; i += 25) await standby.run(plan.unschedule.slice(i, i + 25));
@@ -57,6 +67,9 @@ export async function mirrorJobs(primary: Sql, standby: Standby): Promise<JobSta
   // pgmq queues (definitions only — queued messages are transient work items).
   const qSql = `SELECT coalesce(json_agg(json_build_object('n', queue_name, 'u', is_unlogged) ORDER BY queue_name), '[]'::json)::text FROM pgmq.meta`;
   const pq = await readJson<Array<{ n: string; u: boolean }>>(primary, qSql);
+  if (!(await standbyHas(standby, "pgmq.meta"))) {
+    return { primaryJobs: p.length, scheduled: plan.schedule.length, removed: plan.unschedule.length, activeOnStandby: after.filter((j) => j.active).length, queuesCreated: 0 };
+  }
   const sq = new Set((JSON.parse((await standby.one(qSql)) ?? "[]") as Array<{ n: string }>).map((q) => q.n));
   const missing = pq.filter((q) => !sq.has(q.n));
   if (missing.length) {
