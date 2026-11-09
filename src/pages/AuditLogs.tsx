@@ -380,7 +380,7 @@ export default function AuditLogsPage() {
                         const human = sentence(log);
                         const actorDisplay = human.actor;
                         const isOnline = log.user_id && onlineIds.has(log.user_id);
-                        const initials = (actorDisplay || '?').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+                        const initials = (actorDisplay || '?').replace(/[^\p{L} ]/gu, '').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
                         const changedCount = log.action === 'UPDATE' ? getChangedFieldsCount(log.old_data, log.new_data) : 0;
                         const target = log.target_name || (log.record_id ? log.record_id.substring(0, 8) : '—');
                         const route = deepLinkFor(log.table_name, log.record_id);
