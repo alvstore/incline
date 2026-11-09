@@ -527,7 +527,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
   if (loadState === 'loading') {
     return (
-      <div className="grid gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 [&>*]:min-w-0">
         <div className="space-y-4 lg:col-span-3">
           <Skeleton className="h-72 rounded-2xl" />
           <Skeleton className="h-40 rounded-2xl" />
@@ -545,7 +545,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-12">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 [&>*]:min-w-0">
       {/* Left: plan details, targets, day rail */}
       <div className="space-y-4 lg:col-span-3" ref={detailsRef}>
         {validationError && (

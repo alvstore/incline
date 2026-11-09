@@ -559,7 +559,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
   const active = days[activeIdx];
 
   return (
-    <div className="grid gap-5 lg:grid-cols-12">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 [&>*]:min-w-0">
       {/* Left: plan details + day rail */}
       <div className="space-y-4 lg:col-span-3">
         {validationError && (
