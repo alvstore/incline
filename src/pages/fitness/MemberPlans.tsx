@@ -208,14 +208,15 @@ export default function FitnessMemberPlansPage() {
     return (
       <div
         key={a.id}
-        className="flex items-center gap-3 rounded-xl border border-border/50 bg-background hover:bg-muted/30 transition p-3"
+        className="flex flex-col gap-3 rounded-xl border border-border/50 bg-background p-3 transition hover:bg-muted/30 sm:flex-row sm:items-center"
       >
-        <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${accent}`}>
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${accent}`}>
           <Icon className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium truncate">{a.plan_name}</p>
+          <div className="flex items-start justify-between gap-2 sm:justify-start">
+            <p className="text-sm font-medium break-words">{a.plan_name}</p>
             {renderStatusChip(a)}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
@@ -223,7 +224,7 @@ export default function FitnessMemberPlansPage() {
             {a.template_name && (
               <>
                 <span className="text-muted-foreground/40">·</span>
-                <Badge variant="outline" className="text-[10px] py-0 h-4">
+                <Badge variant="outline" className="h-auto max-w-full whitespace-normal py-0 text-[10px]">
                   {a.template_name}
                 </Badge>
               </>
@@ -241,8 +242,9 @@ export default function FitnessMemberPlansPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setViewing(a)}>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5 border-t border-border/50 pt-2 sm:border-0 sm:pt-0 [&>*:first-child]:flex-1 sm:[&>*:first-child]:flex-none">
+          <Button size="sm" variant="outline" className="gap-1.5 h-9 sm:h-8" onClick={() => setViewing(a)}>
             <Eye className="h-3.5 w-3.5" /> View
           </Button>
           <SendPlanPdfMenu
@@ -266,7 +268,7 @@ export default function FitnessMemberPlansPage() {
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+              <Button size="sm" variant="ghost" className="h-9 w-9 p-0" aria-label="More plan actions">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -313,17 +315,17 @@ export default function FitnessMemberPlansPage() {
               Plans grouped by member — switch tabs for Workout or Diet only
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="relative min-w-0 flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search member, plan, trainer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 w-64"
+                className="w-full pl-9 sm:w-64"
               />
             </div>
-            <Button onClick={() => navigate("/fitness/templates")} variant="outline" className="gap-1.5">
+            <Button onClick={() => navigate("/fitness/templates")} variant="outline" className="shrink-0 gap-1.5">
               <Library className="h-4 w-4" /> Templates
             </Button>
           </div>
@@ -335,7 +337,7 @@ export default function FitnessMemberPlansPage() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
+              className={`min-h-9 text-xs px-3 py-1.5 rounded-full border transition ${
                 statusFilter === s
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background hover:bg-muted border-border"
@@ -430,7 +432,7 @@ export default function FitnessMemberPlansPage() {
                         </button>
 
                         {isOpen && (
-                          <div className="pl-7 space-y-2">
+                          <div className="space-y-2 sm:pl-7">
                             {showWorkout && (
                               <div className="space-y-2">
                                 {tab === "all" && (
