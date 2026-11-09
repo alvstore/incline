@@ -65,6 +65,7 @@ export default function AuditLogsPage() {
           setTimeout(() => setNewRowIds(prev => { const n = new Set(prev); n.delete(id); return n; }), 4000);
         }
         queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+        queryClient.invalidateQueries({ queryKey: ['audit-log-stats'] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };

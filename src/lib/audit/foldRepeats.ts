@@ -5,7 +5,7 @@ export interface FoldableAuditRow extends AuditRowLike {
   created_at: string;
   record_id?: string | null;
   branch_id?: string | null;
-  ip_address?: unknown;
+  ip_address?: string | null;
 }
 
 export interface AuditEventGroup<T extends FoldableAuditRow> {
