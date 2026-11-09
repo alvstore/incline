@@ -9,13 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useTrainerData } from '@/hooks/useMemberData';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
   Calendar, Clock, Users, Dumbbell, TrendingUp,
-  CheckCircle, AlertCircle, User, Wallet, Sun, Moon, Play, Square, Loader2,
+  CheckCircle, AlertCircle, User, Wallet, Sun, Moon, Loader2,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -133,7 +132,7 @@ export default function TrainerDashboard() {
           <aside className="space-y-5 lg:col-span-4">
             <ClientRail ptClients={ptClients as any[]} generalClients={generalClients as any[]} briefs={briefsQ.data} loading={briefsQ.isLoading} />
             <VisitsSummaryCard />
-            <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
+            <DutyStatusCard userId={trainer.user_id} />
             <BrowserNotifications branchId={trainer.branch_id ?? ''} />
           </aside>
         </div>
@@ -172,7 +171,7 @@ export default function TrainerDashboard() {
               </div>
             </section>
             <BrowserNotifications branchId={trainer.branch_id ?? ''} />
-            <DutyStatusCard userId={trainer.user_id} branchId={trainer.branch_id ?? null} />
+            <DutyStatusCard userId={trainer.user_id} />
           </div>
           <div className="lg:col-span-4">
             <TrainerEarningsKpi data={earningsQ.data} isLoading={earningsQ.isLoading} isError={earningsQ.isError} onRetry={() => earningsQ.refetch()} />
@@ -264,42 +263,9 @@ function QuickActionLink({ to, icon: Icon, label, hint, tone }: { to: string; ic
 
 
 
-type ShiftBlock = { kind: 'morning' | 'evening' | 'night'; start: string; end: string };
-
-function parseTime(t: string | null | undefined): { h: number; m: number } | null {
-  if (!t) return null;
-  const [h, m] = t.split(':').map(Number);
-  return { h, m };
-}
-function minutesNow(d = new Date()) { return d.getHours() * 60 + d.getMinutes(); }
-function timeToMin(t: string | null | undefined) {
-  const p = parseTime(t); return p ? p.h * 60 + p.m : null;
-}
 function fmt(t: string | null | undefined) { return t ? t.slice(0, 5) : '—'; }
 
-function pickCurrentBlock(shift: any): ShiftBlock['kind'] {
-  const now = minutesNow();
-  const ms = timeToMin(shift?.morning_start);
-  const me = timeToMin(shift?.morning_end);
-  const es = timeToMin(shift?.evening_start);
-  const ee = timeToMin(shift?.evening_end);
-
-  if (ms != null && me != null && me < ms) {
-    if (now >= ms || now <= me + 60) return 'night';
-  }
-  if (ms != null && me != null && now >= ms - 120 && now <= me + 60) return 'morning';
-  if (es != null && ee != null && now >= es - 120 && now <= ee + 60) return 'evening';
-  if (ms != null && es != null) {
-    return Math.abs(now - ms) < Math.abs(now - es) ? 'morning' : 'evening';
-  }
-  if (ms != null) return 'morning';
-  if (es != null) return 'evening';
-  return 'morning';
-}
-
-function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: string | null }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
+function DutyStatusCard({ userId }: { userId: string }) {
   const weekday = new Date().getDay();
   const todayDate = format(new Date(), 'yyyy-MM-dd');
 
@@ -363,29 +329,6 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   }, []);
 
 
-  const punch = useMutation({
-    mutationFn: async (shiftType: string) => {
-      // Always pass the branch explicitly — server-side fallback resolves it
-      // from the trainer/employee record when omitted.
-      const { data, error } = await supabase.rpc('punch_duty', {
-        p_shift_type: shiftType,
-        p_branch_id: branchId ?? undefined,
-      } as never);
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      toast({ title: 'Duty updated' });
-      qc.invalidateQueries({ queryKey: ['my-attendance', userId, todayDate] });
-    },
-    onError: (e: any) =>
-      toast({
-        title: 'Punch failed',
-        description: e?.message || 'Could not record your punch. Please try again.',
-        variant: 'destructive',
-      }),
-  });
-
 
   if (shiftLoading || punchLoading) {
     return (
@@ -402,11 +345,6 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
   const hasEvening = !!shift?.evening_start && !!shift?.evening_end;
 
   const openPunch = (punches || []).find((p: any) => !p.check_out);
-  const suggested: ShiftBlock['kind'] = openPunch
-    ? (openPunch.shift_type as ShiftBlock['kind'])
-    : (isOff ? 'morning' : pickCurrentBlock(shift));
-
-  const onPunch = () => punch.mutate(suggested);
   const elapsedMin = openPunch
     ? Math.max(0, Math.round((Date.now() - new Date(openPunch.check_in).getTime()) / 60000))
     : 0;
@@ -490,40 +428,6 @@ function DutyStatusCard({ userId, branchId }: { userId: string; branchId?: strin
           </div>
         )}
 
-
-        {/* Attendance is captured at the MIPS turnstile. Manual punching is a
-            fallback only, and only when no scan was seen at all. */}
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          {openPunch ? (
-            <Button
-              size="lg"
-              disabled={punch.isPending}
-              onClick={onPunch}
-              className="rounded-xl bg-destructive px-8 text-destructive-foreground shadow-md transition-all hover:bg-destructive/90 active:scale-95"
-            >
-              {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4 fill-current" />}
-              Clock out
-            </Button>
-          ) : !seenRecently ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={punch.isPending || isOff}
-              onClick={onPunch}
-              className="rounded-xl text-muted-foreground hover:text-foreground"
-            >
-              {punch.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
-              Punch in manually
-            </Button>
-          ) : null}
-          {openPunch && isMipsPunch && (
-            <p className="self-center text-sm italic text-muted-foreground">Check-out normally happens at the turnstile</p>
-          )}
-        </div>
-
-        <p className="text-[10px] text-muted-foreground">
-          Attendance is synchronized from the biometric MIPS turnstile. Manual punch is only a fallback.
-        </p>
 
       </CardContent>
     </Card>
