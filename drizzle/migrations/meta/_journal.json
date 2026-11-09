@@ -1044,6 +1044,13 @@
       "when": 1794224112409,
       "tag": "0148_dr_standby_server_config",
       "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1794224141891,
+      "tag": "0149_dr_standby_config_audit_fix",
+      "breakpoints": true
     }
   ]
 }
