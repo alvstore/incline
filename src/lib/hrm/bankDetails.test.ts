@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
+import { describe, it, expect } from 'bun:test';
 import { maskAccount, isValidIfsc, isValidAccount } from './bankDetails';
 
 describe('bank details', () => {
