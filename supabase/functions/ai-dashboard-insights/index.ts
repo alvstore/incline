@@ -4,6 +4,8 @@ import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from '../_shared/capture-edge-error.ts'
 import { generateOnce } from '../_shared/ai-runtime.ts'
 import { projectMonth, type ForecastStats } from '../_shared/salesForecast.ts'
+import { authenticateCronRequest } from '../_shared/cron-auth.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,9 +99,13 @@ async function buildForBranch(admin: Admin, branchId: string | null, userId: str
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const caller = await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager'] });
+    const body = await req.clone().json().catch(() => ({}));
+    // Daily managed schedule: authenticated by the scheduler secret, not a user session.
+    const isCron = body?.all_branches === true && authenticateCronRequest(req) === null;
+    const caller = isCron
+      ? { ok: true as const, internal: true, userId: null, roles: [], admin: createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!) }
+      : await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager'] });
     if (!caller.ok) return caller.response;
-    const body = await req.json().catch(() => ({}));
     const branchId: string | null = typeof body?.branch_id === 'string' && UUID.test(body.branch_id) ? body.branch_id : null;
     const force = body?.force === true;
     const admin = caller.admin;
