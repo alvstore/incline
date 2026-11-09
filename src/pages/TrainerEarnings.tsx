@@ -27,6 +27,13 @@ const STATE_UI: Record<InstallmentState, { label: string; cls: string; icon: typ
   upcoming: { label: 'Upcoming', cls: 'bg-muted text-muted-foreground border border-border', icon: CalendarClock },
 };
 
+const STAGE_UI = {
+  paid: { label: 'Paid', hint: 'Paid by management', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' },
+  approved: { label: 'Approved', hint: 'Approved, payment pending', cls: 'bg-primary/10 text-primary border border-primary/20' },
+  draft: { label: 'Draft', hint: 'Being prepared by management — may still change', cls: 'bg-muted text-muted-foreground border border-border' },
+  none: { label: '', hint: 'From the payroll prepared by management', cls: '' },
+} as const;
+
 interface Summary { installments: EarningsInstallment[]; trend: { month: string; paid: number; pending: number }[] }
 
 export default function TrainerEarnings() {
@@ -271,24 +278,38 @@ export default function TrainerEarnings() {
           </Card>
 
           {/* Salary card */}
-          <Card className="rounded-xl border border-border lg:col-span-4">
+          <Card className="order-first rounded-xl border border-border lg:order-none lg:col-span-4">
             <CardHeader>
-              <CardTitle className="text-base">{isOfficial ? 'Official net pay' : 'Estimated net pay'}</CardTitle>
-              <CardDescription>{isOfficial ? 'Processed by management' : 'Estimate until payroll is approved'}</CardDescription>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base">Salary slip</CardTitle>
+                {stage !== 'none' && (
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_UI[stage].cls}`}>
+                    {stage === 'paid' ? <CheckCircle className="h-3 w-3" aria-hidden /> : <Clock className="h-3 w-3" aria-hidden />}{STAGE_UI[stage].label}
+                  </span>
+                )}
+              </div>
+              <CardDescription>{STAGE_UI[stage].hint}{stage === 'paid' && officialPayroll?.payment_date ? ` on ${format(new Date(officialPayroll.payment_date), 'dd MMM yyyy')}` : ''}{stage === 'paid' && officialPayroll?.payment_method ? ` · ${officialPayroll.payment_method.replace('_', ' ')}` : ''}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-3xl font-bold tabular-nums text-foreground">{inr(isOfficial ? Number(officialPayroll.final_net) : estimatedNet)}</p>
-              <dl className="space-y-2 text-sm">
-                <Row k={`Base (${daysPresent}/${totalDaysInMonth} days)`} v={inr(isOfficial ? Number(officialPayroll.final_base) : proRatedBase)} />
-                <Row k="PT commission" v={inr(isOfficial ? Number(officialPayroll.final_pt_commission) : totals.payable + totals.paid)} />
-                {(isOfficial ? Number(officialPayroll.final_deductions) : pf + esi) > 0 && (
-                  <Row k="Statutory deductions" v={`−${inr(isOfficial ? Number(officialPayroll.final_deductions) : pf + esi)}`} />
-                )}
-              </dl>
-              {isOfficial ? (
-                <Button className="min-h-11 w-full" onClick={handleDownloadOfficialPayslip}><Download className="mr-2 h-4 w-4" />Download payslip</Button>
+              {slipQuery.isLoading ? <Skeleton className="h-24 w-full" /> : slipQuery.isError ? (
+                <div className="space-y-2"><p className="text-sm text-destructive">Could not load your salary slip.</p><Button variant="outline" className="min-h-11" onClick={() => slipQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Try again</Button></div>
+              ) : !officialPayroll ? (
+                <p className="flex items-center gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground"><Clock className="h-4 w-4 shrink-0" aria-hidden />Payroll for {format(monthDate, 'MMMM')} has not been prepared yet.</p>
               ) : (
-                <p className="flex items-center gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground"><Clock className="h-4 w-4 shrink-0" aria-hidden />Your payslip appears here once payroll is processed.</p>
+                <>
+                  <p className="text-3xl font-bold tabular-nums text-foreground">{inr(Number(officialPayroll.final_net))}</p>
+                  <dl className="space-y-2 text-sm">
+                    <Row k={daysPresent ? `Base (${daysPresent}/${totalDaysInMonth} days)` : 'Base salary'} v={inr(Number(officialPayroll.final_base))} />
+                    <Row k="PT commission" v={inr(Number(officialPayroll.final_pt_commission) + Number(officialPayroll.final_bonus || 0))} />
+                    {Number(officialPayroll.final_ot) > 0 && <Row k="Overtime" v={inr(Number(officialPayroll.final_ot))} />}
+                    {Number(officialPayroll.final_deductions) + Number(officialPayroll.final_advance) + Number(officialPayroll.final_penalty) > 0 && (
+                      <Row k="Deductions" v={`−${inr(Number(officialPayroll.final_deductions) + Number(officialPayroll.final_advance) + Number(officialPayroll.final_penalty))}`} />
+                    )}
+                  </dl>
+                  <Button className="min-h-11 w-full" variant={isOfficial ? 'default' : 'outline'} onClick={handleDownloadOfficialPayslip}>
+                    <Download className="mr-2 h-4 w-4" />{isOfficial ? 'Download payslip' : 'Download draft slip'}
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>
@@ -299,7 +320,7 @@ export default function TrainerEarnings() {
               <CardTitle className="text-base">Commission trend</CardTitle>
               <CardDescription>Paid and still-to-pay PT commission, last 6 months</CardDescription>
             </CardHeader>
-            <CardContent className="h-64">
+            <CardContent className="h-48 sm:h-64">
               {summary.isLoading ? <Skeleton className="h-full w-full" /> : trendData.every(t => !t.paid && !t.pending) ? (
                 <p className="py-16 text-center text-sm text-muted-foreground">No commission history yet.</p>
               ) : (
