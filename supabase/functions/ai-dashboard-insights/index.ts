@@ -112,9 +112,12 @@ Deno.serve(async (req) => {
 
     if (caller.internal && body?.all_branches === true) {
       const { data: branches } = await admin.from('branches').select('id').eq('is_active', true);
+      // user_id references a real account; attribute scheduled rows to the first owner.
+      const { data: owner } = await admin.from('user_roles').select('user_id').eq('role', 'owner').limit(1).maybeSingle();
+      const sysUser = owner?.user_id ?? SYSTEM_USER;
       const results: Array<{ branch_id: string; ok: boolean; error?: string }> = [];
       for (const b of branches ?? []) {
-        try { await buildForBranch(admin, b.id, SYSTEM_USER); results.push({ branch_id: b.id, ok: true }); }
+        try { await buildForBranch(admin, b.id, sysUser); results.push({ branch_id: b.id, ok: true }); }
         catch (e) { await captureEdgeError('ai-dashboard-insights', e); results.push({ branch_id: b.id, ok: false, error: String((e as Error).message) }); }
       }
       return json({ success: true, results });
