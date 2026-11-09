@@ -1079,6 +1079,13 @@
       "when": 1794245443800,
       "tag": "0153_audit_human_readable_targets",
       "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1794249319371,
+      "tag": "0154_payroll_single_slip_per_month",
+      "breakpoints": true
     }
   ]
 }

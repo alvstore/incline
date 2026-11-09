@@ -19017,6 +19017,7 @@ export type Database = {
         }
         Returns: number
       }
+      my_payslip_for_month: { Args: { p_month: string }; Returns: Json }
       normalize_exercise_name: { Args: { p: string }; Returns: string }
       normalize_phone_in: { Args: { p: string }; Returns: string }
       notification_recipients: {
