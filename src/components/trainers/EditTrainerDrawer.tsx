@@ -154,7 +154,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
     e.preventDefault();
     if (!trainer?.id) return;
     if (bankAccountInvalid || bankIfscInvalid) {
-      toast({ title: 'Check bank details', description: 'Account number must be 6–24 digits and IFSC like HDFC0001234.', variant: 'destructive' });
+      toast.error('Check bank details: account number must be 6–24 digits and IFSC like HDFC0001234.');
       return;
     }
 

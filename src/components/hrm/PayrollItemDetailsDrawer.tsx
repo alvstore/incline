@@ -9,7 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Download, RefreshCw, FileText } from 'lucide-react';
+import { Loader2, Download, RefreshCw, FileText, Pencil, PlusCircle, Landmark } from 'lucide-react';
+import { maskAccount } from '@/lib/hrm/bankDetails';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { downloadSalarySlip } from '@/lib/hrm/salarySlip';
 import { toast } from 'sonner';
@@ -43,6 +44,18 @@ export function PayrollItemDetailsDrawer({open,onOpenChange,item,periodStart,per
   const canEdit=canManageHrRow(roles,item?.user_id,user?.id) && !paid && !processed;
   const canProcess=can.manageStaff(roles) && roles.some(r=>r.role==='owner' || r.role==='admin');
   const canSaveBank=canProcess && !paid && !processed;
+  const [bankEditing,setBankEditing]=useState(false);
+  const [futureSel,setFutureSel]=useState<string[]>([]);
+  const [futureReason,setFutureReason]=useState('');
+  const {data:future=[],isLoading:futureLoading}=useQuery({
+    queryKey:['payroll-future-commissions',item?.id],enabled:open && !!item && !paid && !processed,
+    queryFn:async()=>{if(!item)return [];const {data,error}=await supabase.rpc('payroll_future_commissions',{p_item_id:item.id});if(error)throw error;return (data || []).map(r=>({...r,amount:Number(r.amount)}));},
+  });
+  const pullForward=useMutation({
+    mutationFn:async()=>{if(!item)return;const {error}=await supabase.rpc('payroll_pull_forward_installments',{p_item_id:item.id,p_installment_ids:futureSel,p_reason:futureReason.trim()});if(error)throw error;},
+    onSuccess:()=>{toast.success('Commission added to this salary');setFutureSel([]);setFutureReason('');['payroll-future-commissions','payroll-pt','payroll-audit','payroll-items'].forEach(k=>qc.invalidateQueries({queryKey:[k]}));},
+    onError:(e:Error)=>toast.error(e.message),
+  });
   const {data:pt=[],isLoading:ptLoading,isError:ptError,refetch:retryPt}=useQuery({
     queryKey:['pt_settlements',item?.id],enabled:open && !!item,
     queryFn:async()=>{if(!item)return [];const {data,error}=await supabase.rpc('payroll_item_pt_breakdown',{p_item_id:item.id});if(error)throw error;return (data || []).filter(r=>item.status==='paid' ? r.settled : item.status==='processed' ? item.prepared_installment_ids?.includes(r.installment_id) : true).map(r=>({...r,amount:Number(r.amount)})) as PtRow[];},
