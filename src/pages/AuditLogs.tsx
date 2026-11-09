@@ -428,7 +428,8 @@ export default function AuditLogsPage() {
                               </div>
 
                               <CollapsibleTrigger asChild>
-                                <button type="button" aria-expanded={expandedRows.has(log.id)}
+                                <div role="button" tabIndex={0} aria-expanded={expandedRows.has(log.id)}
+                                  onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggleRow(log.id); } }}
                                   aria-label={`${sentenceText(log)}, ${formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}. ${expandedRows.has(log.id) ? 'Hide' : 'Show'} details`}
                                   className={`ml-2 block w-[calc(100%-0.5rem)] text-left border ${accent} rounded-xl mb-2 cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isNew ? 'ring-2 ring-success/60' : ''}`}
                                   onClick={() => toggleRow(log.id)}
@@ -472,6 +473,7 @@ export default function AuditLogsPage() {
                                           onClick={(e) => e.stopPropagation()}
                                           className="text-xs text-primary hover:underline inline-flex items-center gap-1"
                                           title="Open record"
+                                          aria-label={`Open ${human.target || 'record'}`}
                                         >
                                           Open <ExternalLink className="h-3 w-3" />
                                         </Link>
@@ -482,7 +484,7 @@ export default function AuditLogsPage() {
                                       {expandedRows.has(log.id) ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                     </div>
                                   </div>
-                                </button>
+                                </div>
                               </CollapsibleTrigger>
                               <CollapsibleContent>
                                 <div className="ml-2 mb-2 border border-t-0 rounded-b-lg -mt-2 px-4 pb-4 pt-3 bg-muted/30">
@@ -491,15 +493,15 @@ export default function AuditLogsPage() {
                                       <h4 className="font-medium text-sm mb-2">Details</h4>
                                       <dl className="space-y-1.5 text-sm">
                                         <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">Table</dt>
-                                          <dd>{formatTableName(log.table_name)}</dd>
+                                          <dt className="text-muted-foreground">Area</dt>
+                                          <dd>{CATEGORY_LABEL[categoryOf(log.table_name)]} · {formatTableName(log.table_name)}</dd>
                                         </div>
                                         <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">Record ID</dt>
+                                          <dt className="text-muted-foreground">Record</dt>
                                           <dd className="font-mono flex items-center gap-1 text-xs">
                                             {log.record_id?.substring(0, 8) || '—'}
                                             {log.record_id && (
-                                              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); copyToClipboard(log.record_id); }}>
+                                              <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Copy record reference" onClick={(e) => { e.stopPropagation(); copyToClipboard(log.record_id); }}>
                                                 <Copy className="h-3 w-3" />
                                               </Button>
                                             )}
@@ -511,7 +513,7 @@ export default function AuditLogsPage() {
                                         </div>
                                         <div className="flex justify-between">
                                           <dt className="text-muted-foreground">Time</dt>
-                                          <dd>{format(new Date(log.created_at), 'PPpp')}</dd>
+                                          <dd>{new Date(log.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST</dd>
                                         </div>
                                         {log.ip_address && (
                                           <div className="flex justify-between">
@@ -523,18 +525,9 @@ export default function AuditLogsPage() {
                                     </div>
                                     <div>
                                       <h4 className="font-medium text-sm mb-2">
-                                        {log.action === 'UPDATE' ? 'Changes' : log.action === 'INSERT' ? 'New Data' : 'Deleted Data'}
+                                        {log.action === 'UPDATE' ? 'What changed' : log.action === 'INSERT' ? 'Details recorded' : log.action === 'DELETE' ? 'What was removed' : 'Event details'}
                                       </h4>
-                                      {log.action === 'UPDATE' ? renderDataDiff(log.old_data, log.new_data)
-                                        : log.action === 'INSERT' ? (
-                                          <pre className="text-xs font-mono bg-muted/50 p-2 rounded max-h-48 overflow-auto whitespace-pre-wrap">
-                                            {JSON.stringify(log.new_data, null, 2)}
-                                          </pre>
-                                        ) : (
-                                          <pre className="text-xs font-mono bg-muted/50 p-2 rounded max-h-48 overflow-auto whitespace-pre-wrap">
-                                            {JSON.stringify(log.old_data, null, 2)}
-                                          </pre>
-                                        )}
+                                      <AuditChangeList row={log} />
                                     </div>
                                   </div>
                                 </div>
