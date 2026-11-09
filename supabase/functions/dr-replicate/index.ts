@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v2.0.1 — 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
+// v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
@@ -106,6 +106,50 @@ async function wakeSelf(primaryUrl: string, token: string): Promise<void> {
     // The hourly watchdog restarts a stalled copy.
     console.error("dr-replicate wake failed", (e as Error).message);
   }
+}
+
+type Check = { ok: boolean; detail: string; ms?: number };
+/** Read-only reachability checks against the saved standby (no data written). */
+async function testStandby(primaryUrl: string) {
+  const timed = async (fn: () => Promise<string>): Promise<Check> => {
+    const t = Date.now();
+    try { return { ok: true, detail: await fn(), ms: Date.now() - t }; }
+    catch (e) { return { ok: false, detail: (e as Error).message.slice(0, 200), ms: Date.now() - t }; }
+  };
+  const key = DR_KEY;
+  const h = key ? { apikey: key, Authorization: `Bearer ${key}` } : {};
+  const sameAsLive = (() => { try { return new URL(DR_URL).hostname === new URL(primaryUrl).hostname; } catch { return true; } })();
+  const checks: Record<string, Check> = {
+    address: sameAsLive ? { ok: false, detail: "This is the live server, not a standby" } : { ok: true, detail: DR_URL },
+    secretKey: key ? { ok: true, detail: "Saved" } : { ok: false, detail: "Not saved" },
+    api: await timed(async () => {
+      const r = await fetch(`${DR_URL}/rest/v1/`, { headers: h, signal: AbortSignal.timeout(15_000) });
+      await r.body?.cancel().catch(() => {});
+      if (r.status === 401 || r.status === 403) throw new Error("Secret key was refused");
+      if (!r.ok) throw new Error(`Replied ${r.status}`);
+      return "Records service reachable";
+    }),
+    auth: await timed(async () => {
+      const r = await fetch(`${DR_URL}/auth/v1/health`, { headers: h, signal: AbortSignal.timeout(15_000) });
+      await r.body?.cancel().catch(() => {});
+      if (!r.ok) throw new Error(`Replied ${r.status}`);
+      return "Sign-in service reachable";
+    }),
+    storage: await timed(async () => {
+      const r = await fetch(`${DR_URL}/storage/v1/bucket`, { headers: h, signal: AbortSignal.timeout(15_000) });
+      const t = await r.text();
+      if (!r.ok) throw new Error(`Replied ${r.status}`);
+      const n = (() => { try { return (JSON.parse(t) as unknown[]).length; } catch { return 0; } })();
+      return `File storage reachable · ${n} folders`;
+    }),
+    helpers: await timed(async () => {
+      if (!key) throw new Error("Needs the secret key");
+      const ready = await new Standby(DR_URL, key).helpersReady();
+      return ready ? "Copy helpers installed" : "Copy helpers missing — the next copy installs them";
+    }),
+  };
+  const ok = Object.values(checks).every((c) => c.ok);
+  return { ok, checkedAt: new Date().toISOString(), standbyUrl: DR_URL, checks };
 }
 
 const STATUS_SQL = `SELECT coalesce((SELECT to_jsonb(x) FROM (SELECT id, kind, trigger, status, step, report, ticks, created_at,
