@@ -437,6 +437,7 @@ export type Database = {
           branch_id: string | null
           created_at: string
           expires_at: string
+          forecast: Json | null
           generated_at: string
           id: string
           insights: Json
@@ -446,6 +447,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           expires_at?: string
+          forecast?: Json | null
           generated_at?: string
           id?: string
           insights: Json
@@ -455,6 +457,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           expires_at?: string
+          forecast?: Json | null
           generated_at?: string
           id?: string
           insights?: Json
@@ -17930,6 +17933,7 @@ export type Database = {
       current_active_branch: { Args: never; Returns: string }
       current_branch: { Args: never; Returns: string }
       daily_reconcile_member_access: { Args: never; Returns: undefined }
+      dashboard_sales_forecast: { Args: { p_branch: string }; Returns: Json }
       decide_booking_reschedule: {
         Args: { p_approve: boolean; p_notes?: string; p_request_id: string }
         Returns: Json
