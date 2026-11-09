@@ -47,3 +47,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - `CampaignWizard` is the sole campaign composer; parallel composers drifted.
 - Renewal cases open each membership cycle via scheduled `detect_renewal_cases` + trigger, independent of messaging.
 - Agreement text: `employmentAgreementTemplate.ts`; policies only via frozen `policy_snapshot`; witnesses from contract vars, never signer.
+- Dashboard AI insights are generated and saved only by the `ai-dashboard-insights` function (6h reuse, daily managed schedule); forecast numbers come from `dashboard_sales_forecast` + `_shared/salesForecast.ts`, so the browser never writes or computes insights.
