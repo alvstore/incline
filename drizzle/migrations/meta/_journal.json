@@ -1030,6 +1030,13 @@
       "when": 1794220720590,
       "tag": "0146_members_scheduled_before_pending_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1794220929661,
+      "tag": "0147_fix_wake_login_access_trigger",
+      "breakpoints": true
     }
   ]
 }
