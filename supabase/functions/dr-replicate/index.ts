@@ -117,7 +117,7 @@ async function testStandby(primaryUrl: string) {
     catch (e) { return { ok: false, detail: (e as Error).message.slice(0, 200), ms: Date.now() - t }; }
   };
   const key = DR_KEY;
-  const h = key ? { apikey: key, Authorization: `Bearer ${key}` } : {};
+  const h: Record<string, string> = key ? { apikey: key, Authorization: `Bearer ${key}` } : {};
   const sameAsLive = (() => { try { return new URL(DR_URL).hostname === new URL(primaryUrl).hostname; } catch { return true; } })();
   const checks: Record<string, Check> = {
     address: sameAsLive ? { ok: false, detail: "This is the live server, not a standby" } : { ok: true, detail: DR_URL },
