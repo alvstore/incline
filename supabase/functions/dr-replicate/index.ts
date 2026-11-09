@@ -43,6 +43,26 @@ async function bootstrapStandby(): Promise<void> {
   direct.port = "5432";
   const candidates = [...new Set([direct.toString(), u.toString()])];
   let lastErr: unknown;
+  // Preferred: the standby's admin query endpoint over HTTPS (service key), which needs no
+  // pooler login at all and keeps traffic encrypted.
+  const drKey = Deno.env.get("DR_SERVICE_ROLE_KEY");
+  if (drKey) {
+    try {
+      const r = await fetch(`${DR_URL}/pg/query`, {
+        method: "POST",
+        headers: { apikey: drKey, Authorization: `Bearer ${drKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ query: BOOTSTRAP_SQL }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const text = await r.text();
+      if (r.ok) return;
+      lastErr = new Error(`standby admin endpoint ${r.status}: ${text.slice(0, 300)}`);
+      console.error("dr-replicate bootstrap via https failed", r.status, text.slice(0, 300));
+    } catch (e) {
+      lastErr = e;
+      console.error("dr-replicate bootstrap via https failed", (e as Error).message);
+    }
+  }
   for (const url of candidates) {
     const sql = postgres(url, { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
     try {
