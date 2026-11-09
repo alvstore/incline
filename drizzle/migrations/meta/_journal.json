@@ -1107,6 +1107,13 @@
       "when": 1794252730062,
       "tag": "0157_payroll_item_level_guard_and_discard",
       "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1794253672018,
+      "tag": "0158_class_booking_atomic_invoice",
+      "breakpoints": true
     }
   ]
 }

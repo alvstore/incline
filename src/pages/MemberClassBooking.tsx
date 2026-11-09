@@ -22,6 +22,7 @@ import { format, addDays, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { istDateKey, istTimeKey } from '@/lib/classes/schedule';
+import { bookingOutcome, type BookingOutcome } from '@/lib/classes/bookingOutcome';
 
 type FilterType = 'all' | 'recovery' | 'classes' | 'pt';
 
@@ -368,15 +369,30 @@ export default function MemberClassBooking() {
 
   // ─── Mutations ───
   const bookClass = useMutation({
-    mutationFn: async (classId: string) => {
-      const { data, error } = await supabase.rpc('book_class', { _class_id: classId, _member_id: member!.id });
-      if (error) throw error;
-      const result = data as { success?: boolean; error?: string };
-      if (!result.success) throw new Error(result.error || 'Booking failed');
-      return data;
+    mutationFn: async (classId: string): Promise<BookingOutcome> => {
+      let outcome: BookingOutcome;
+      try {
+        const { data, error } = await supabase.rpc('book_class', { _class_id: classId, _member_id: member!.id });
+        outcome = bookingOutcome(data, error ?? undefined);
+      } catch (e) {
+        outcome = bookingOutcome(null, e);
+      }
+      if (outcome.kind === 'unknown') {
+        // Result uncertain: check the real booking before allowing another tap (button stays locked meanwhile).
+        toast.info("We couldn't confirm your booking. Checking…");
+        const { data: row } = await supabase.from('class_bookings').select('id,status')
+          .eq('class_id', classId).eq('member_id', member!.id).maybeSingle();
+        outcome = row && (row.status === 'booked' || row.status === 'attended')
+          ? { kind: 'booked' }
+          : { kind: 'failed', message: 'Your booking did not go through. Please try again.' };
+      }
+      if (outcome.kind === 'failed') throw new Error(outcome.message);
+      return outcome;
     },
-    onSuccess: () => {
-      toast.success('Class booked!');
+    onSuccess: (outcome) => {
+      if (outcome.kind === 'already_booked') toast.info("You're already booked for this class.");
+      else if (outcome.kind === 'booked' && outcome.invoiceId) toast.success('Class booked. Invoice created — pay from My Invoices.', { action: { label: 'Pay now', onClick: () => { window.location.href = '/my-invoices'; } } });
+      else toast.success('Class booked!');
       queryClient.invalidateQueries({ queryKey: ['agenda-classes'] });
       queryClient.invalidateQueries({ queryKey: ['my-class-bookings-agenda'] });
     },
@@ -867,7 +883,7 @@ export default function MemberClassBooking() {
                               key={`${item.type}-${item.id}`}
                               item={item}
                               activeMembership={activeMembership}
-                              onBookClass={(id) => bookClass.mutate(id)}
+                              onBookClass={(id) => { if (!bookClass.isPending) bookClass.mutate(id); }}
                               onCancelClass={(id) => cancelClassBooking.mutate(id)}
                               onBookSlot={(id) => bookSlot.mutate(id)}
                               onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
