@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PayrollItemDetailsDrawer } from './PayrollItemDetailsDrawer';
+import { DraftSlipsCard } from './DraftSlipsCard';
 import { attendanceValues, preferredPayrollRun, type PayrollItem } from '@/lib/hrm/payroll';
 import { can } from '@/lib/auth/permissions';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -430,5 +431,6 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       </Sheet>
 
     </Card>
+    </>
   );
 }
