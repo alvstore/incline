@@ -42,6 +42,7 @@ export function BrowserNotifications({ branchId, variant = 'prompt' }: { branchI
     );
   }
   if (dismissed && !enabled) return null;
+  if (variant === 'prompt' && support === 'supported' && isLoading) return null;
   return (
     <Card className="relative min-w-0 rounded-2xl border-border bg-card">
       <button type="button" aria-label="Hide notifications prompt" onClick={() => { localStorage.setItem(DISMISS_KEY, '1'); setDismissed(true); }} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
