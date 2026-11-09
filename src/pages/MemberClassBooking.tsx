@@ -883,7 +883,7 @@ export default function MemberClassBooking() {
                               key={`${item.type}-${item.id}`}
                               item={item}
                               activeMembership={activeMembership}
-                              onBookClass={(id) => bookClass.mutate(id)}
+                              onBookClass={(id) => { if (!bookClass.isPending) bookClass.mutate(id); }}
                               onCancelClass={(id) => cancelClassBooking.mutate(id)}
                               onBookSlot={(id) => bookSlot.mutate(id)}
                               onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
