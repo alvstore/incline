@@ -61,6 +61,8 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'pt_session_booked', label: 'PT Session Booked', category: 'booking', description: 'Personal training session scheduled', channels: ALL },
   { event: 'pt_session_reminder', label: 'PT Session Reminder', category: 'booking', description: 'Reminder before a PT session', channels: ALL },
   { event: 'pt_session_logged', label: 'PT Session Logged (Receipt)', category: 'booking', description: 'Trainer marked a PT session done — sends a WhatsApp receipt with sessions left or plan expiry', channels: ALL },
+  { event: 'pt_package_expiring', label: 'PT Package Expiring', category: 'booking', description: 'Utility alert to member, trainer and manager before a PT package ends. Vars: {{member_name}} {{package_name}} {{trainer_name}} {{expiry_date}} {{sessions_left}}.', channels: ALL },
+  { event: 'pt_package_low_sessions', label: 'PT Package Low Sessions', category: 'booking', description: 'Utility alert when a session-based PT package is almost used up. Vars: {{member_name}} {{package_name}} {{trainer_name}} {{sessions_left}}.', channels: ALL },
   { event: 'benefit_consumed', label: 'Benefit Consumed', category: 'booking', description: 'A benefit/session was used', channels: ALL },
   { event: 'benefit_low_balance', label: 'Benefit Low Balance', category: 'booking', description: 'Few benefit sessions remaining', channels: ALL },
 

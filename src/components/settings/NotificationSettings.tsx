@@ -238,8 +238,8 @@ export function NotificationSettings() {
         </TabsList>
 
         <TabsContent value="reminders" className="mt-5">
-          <ReminderCadenceCard />
-          <PtExpiryReminderCard />
+          <div className="space-y-5"><ReminderCadenceCard />
+          <PtExpiryReminderCard /></div>
         </TabsContent>
 
         <TabsContent value="members" className="mt-5">
