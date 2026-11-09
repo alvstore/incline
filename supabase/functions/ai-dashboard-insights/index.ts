@@ -1,201 +1,141 @@
-// v2.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='dashboard_insight').
+// v3.0.0 — Server-persisted insights + sales forecast (renewals, PT, trainers, projection).
+// Modes: signed-in owner/admin/manager for one branch, or internal (x-internal-token) all_branches for the daily job.
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { captureEdgeError } from '../_shared/capture-edge-error.ts'
 import { generateOnce } from '../_shared/ai-runtime.ts'
+import { projectMonth, type ForecastStats } from '../_shared/salesForecast.ts'
+import { authenticateCronRequest } from '../_shared/cron-auth.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+const SYSTEM_USER = '00000000-0000-0000-0000-000000000000';
+const FRESH_MS = 6 * 3600_000;
+const DEBOUNCE_MS = 2 * 60_000;
+const UUID = /^[0-9a-f-]{36}$/i;
+
+// deno-lint-ignore no-explicit-any
+type Admin = any;
+
+async function latest(admin: Admin, branchId: string | null) {
+  let q = admin.from('ai_dashboard_insights').select('insights, forecast, generated_at, branch_id').order('generated_at', { ascending: false }).limit(1);
+  q = branchId ? q.eq('branch_id', branchId) : q.is('branch_id', null);
+  const { data } = await q;
+  return data?.[0] ?? null;
+}
+
+async function buildForBranch(admin: Admin, branchId: string | null, userId: string) {
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+  const bq = (q: Admin) => (branchId ? q.eq('branch_id', branchId) : q);
+  const today = new Date().toISOString().slice(0, 10);
+  const next7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+  const [{ data: stats, error: fErr }, active, todayAtt, expiring, overdue, leads, frozen] = await Promise.all([
+    admin.rpc('dashboard_sales_forecast', { p_branch: branchId }),
+    bq(admin.from('members').select('id', { count: 'exact', head: true }).eq('status', 'active')),
+    bq(admin.from('member_attendance').select('id', { count: 'exact', head: true }).gte('check_in', today)),
+    bq(admin.from('memberships').select('id', { count: 'exact', head: true }).eq('status', 'active').gte('end_date', today).lte('end_date', next7)),
+    bq(admin.from('invoices').select('total_amount, amount_paid', { count: 'exact' }).eq('status', 'overdue')),
+    bq(admin.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())),
+    bq(admin.from('memberships').select('id', { count: 'exact', head: true }).eq('status', 'frozen')),
+  ]);
+  if (fErr) throw new Error(`forecast_failed: ${fErr.message}`);
+  const s = stats as ForecastStats & Record<string, any>;
+  const projection = projectMonth(s);
+  const overdueAmt = (overdue.data ?? []).reduce((a: number, i: any) => a + ((i.total_amount || 0) - (i.amount_paid || 0)), 0);
+  const trainers = (s.trainers ?? []) as Array<{ name: string; pt_revenue: number; active_clients: number; sessions_done: number }>;
+
+  const ctx = `Gym metrics (IST ${s.as_of}, day ${s.days_elapsed}/${s.days_in_month}):
+- Active members: ${active.count ?? 0}; frozen: ${frozen.count ?? 0}; check-ins today: ${todayAtt.count ?? 0}
+- Collected this month: ${inr(s.collected_mtd)} (last month total ${inr(s.collected_last_month)}); daily pace ${inr(projection.daily_pace)}
+- Renewals: this month ${s.renewal.this_month_renewed}/${s.renewal.this_month_due} renewed, last month ${s.renewal.last_month_renewed}/${s.renewal.last_month_due}; ${s.renewal.remaining_due} still due this month; blended ratio ${(projection.renewal_ratio * 100).toFixed(0)}%
+- Expiring in 7 days: ${expiring.count ?? 0}; overdue invoices: ${overdue.count ?? 0} (${inr(overdueAmt)}); new leads (30d): ${leads.count ?? 0}
+- PT packages: ${s.pt.sold_mtd} sold this month (${inr(s.pt.value_mtd)}) vs ${s.pt.sold_last} last month (${inr(s.pt.value_last)}); ${s.pt.expiring_7d} PT packages expire within 7 days
+- Top trainers: ${trainers.map((t) => `${t.name} ${inr(t.pt_revenue)} PT, ${t.active_clients} clients, ${t.sessions_done} sessions`).join('; ') || 'none'}
+- Projected month sales: low ${inr(projection.low)}, likely ${inr(projection.likely)}, high ${inr(projection.high)} (expected renewals ${inr(projection.expected_renewals)})`;
+
+  const r = await generateOnce({
+    purpose: 'dashboard_insight',
+    userMessage: ctx,
+    systemOverride: 'Use provide_insights. Return 4-5 insights (short title, 1-2 sentence description with specific numbers, severity info|warning|success|critical) and 3-5 concrete sales ideas to hit or beat the likely projection (renewal follow-ups, PT upsell, trainer coaching). Use only the numbers given; never invent prices. Use no emojis.',
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'provide_insights',
+        description: 'Business insights and sales ideas',
+        parameters: {
+          type: 'object',
+          properties: {
+            insights: { type: 'array', items: { type: 'object', properties: {
+              title: { type: 'string' }, description: { type: 'string' },
+              severity: { type: 'string', enum: ['info', 'warning', 'success', 'critical'] },
+            }, required: ['title', 'description', 'severity'], additionalProperties: false } },
+            ideas: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['insights', 'ideas'],
+          additionalProperties: false,
+        },
+      },
+    }],
+    toolChoice: { type: 'function', function: { name: 'provide_insights' } },
+  });
+
+  const insights = r.toolCallArgs?.insights ?? [];
+  const ideas: string[] = r.toolCallArgs?.ideas ?? [];
+  if (!insights.length) throw new Error('ai_empty_response');
+  const forecast = { ...s, projection, ideas };
+  const generated_at = new Date().toISOString();
+  const { error: insErr } = await admin.from('ai_dashboard_insights').insert({
+    user_id: userId, branch_id: branchId, insights, forecast, generated_at,
+    expires_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+  });
+  if (insErr) throw new Error(`persist_failed: ${insErr.message}`);
+  return { insights, forecast, generated_at, branch_id: branchId };
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    // Provider/key resolved per active provider config in ai-runtime → ai-dispatcher.
+    const body = await req.clone().json().catch(() => ({}));
+    // Daily managed schedule: authenticated by the scheduler secret, not a user session.
+    const isCron = body?.all_branches === true && authenticateCronRequest(req) === null;
+    const caller = isCron
+      ? { ok: true as const, internal: true, userId: null, roles: [], admin: createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!) }
+      : await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager'] });
+    if (!caller.ok) return caller.response;
+    const branchId: string | null = typeof body?.branch_id === 'string' && UUID.test(body.branch_id) ? body.branch_id : null;
+    const force = body?.force === true;
+    const admin = caller.admin;
 
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    // ---- Authentication: require a valid signed-in user ----
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const supabaseAuth = createClient(
-      supabaseUrl,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData } = await supabaseAuth.auth.getClaims(token);
-    const userId = claimsData?.claims?.sub;
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (caller.internal && body?.all_branches === true) {
+      const { data: branches } = await admin.from('branches').select('id').eq('is_active', true);
+      // user_id references a real account; attribute scheduled rows to the first owner.
+      const { data: owner } = await admin.from('user_roles').select('user_id').eq('role', 'owner').limit(1).maybeSingle();
+      const sysUser = owner?.user_id ?? SYSTEM_USER;
+      const results: Array<{ branch_id: string; ok: boolean; error?: string }> = [];
+      for (const b of branches ?? []) {
+        try { await buildForBranch(admin, b.id, sysUser); results.push({ branch_id: b.id, ok: true }); }
+        catch (e) { await captureEdgeError('ai-dashboard-insights', e); results.push({ branch_id: b.id, ok: false, error: String((e as Error).message) }); }
+      }
+      return json({ success: true, results });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // ---- Authorization: only owner / admin / manager can see financial KPIs ----
-    const { data: roleRows } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .in('role', ['owner', 'admin', 'manager'])
-      .limit(1);
-    if (!roleRows || roleRows.length === 0) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const { branch_id } = await req.json();
-    {
-      const caller = await requireCaller(req, corsHeaders, { roles: ['owner', 'admin', 'manager'] });
-      if (!caller.ok) return caller.response;
+    if (!caller.internal) {
       const isGlobal = caller.roles.includes('owner') || caller.roles.includes('admin');
-      if (!isGlobal && (!branch_id || !(await canActOnBranch(caller, branch_id)))) {
-        return new Response(JSON.stringify({ error: 'Forbidden for this branch' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
+      if (!isGlobal && (!branchId || !(await canActOnBranch(caller, branchId)))) return json({ error: 'Forbidden for this branch' }, 403);
     }
 
-    // Gather metrics
-    const today = new Date().toISOString().split('T')[0];
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-    const lastMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString();
-    const lastMonthEnd = new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString();
+    const prev = await latest(admin, branchId);
+    const age = prev ? Date.now() - new Date(prev.generated_at).getTime() : Infinity;
+    if (prev && (age < DEBOUNCE_MS || (!force && age < FRESH_MS))) return json({ ...prev, reused: true });
 
-    const buildQuery = (table: string, select: string, filters?: Record<string, unknown>) => {
-      let q = supabase.from(table).select(select, { count: 'exact' });
-      if (branch_id) q = q.eq('branch_id', branch_id);
-      if (filters) {
-        Object.entries(filters).forEach(([k, v]) => {
-          if (typeof v === 'string' && v.startsWith('gte:')) q = q.gte(k, v.slice(4));
-          else if (typeof v === 'string' && v.startsWith('lte:')) q = q.lte(k, v.slice(4));
-          else q = q.eq(k, v as string);
-        });
-      }
-      return q;
-    };
-
-    // Active members
-    const { count: activeMembers } = await buildQuery('members', 'id', { status: 'active' });
-    const { count: totalMembers } = await buildQuery('members', 'id');
-
-    // This month revenue
-    let revenueQ = supabase.from('payments').select('amount').gte('payment_date', monthStart);
-    if (branch_id) revenueQ = revenueQ.eq('branch_id', branch_id);
-    const { data: thisMonthPayments } = await revenueQ;
-    const thisMonthRevenue = thisMonthPayments?.reduce((s, p) => s + p.amount, 0) || 0;
-
-    // Last month revenue
-    let lastRevenueQ = supabase.from('payments').select('amount').gte('payment_date', lastMonthStart).lte('payment_date', lastMonthEnd);
-    if (branch_id) lastRevenueQ = lastRevenueQ.eq('branch_id', branch_id);
-    const { data: lastMonthPayments } = await lastRevenueQ;
-    const lastMonthRevenue = lastMonthPayments?.reduce((s, p) => s + p.amount, 0) || 0;
-
-    // Today's attendance
-    let attQ = supabase.from('member_attendance').select('id', { count: 'exact' }).gte('check_in', today);
-    if (branch_id) attQ = attQ.eq('branch_id', branch_id);
-    const { count: todayAttendance } = await attQ;
-
-    // Expiring memberships (7 days)
-    const next7 = new Date(Date.now() + 7 * 86400000).toISOString();
-    let expQ = supabase.from('memberships').select('id', { count: 'exact' }).eq('status', 'active').gte('end_date', today).lte('end_date', next7);
-    if (branch_id) expQ = expQ.eq('branch_id', branch_id);
-    const { count: expiringCount } = await expQ;
-
-    // Overdue invoices
-    let overdueQ = supabase.from('invoices').select('id, total_amount, amount_paid', { count: 'exact' }).eq('status', 'overdue');
-    if (branch_id) overdueQ = overdueQ.eq('branch_id', branch_id);
-    const { data: overdueInvoices, count: overdueCount } = await overdueQ;
-    const overdueAmount = overdueInvoices?.reduce((s, i) => s + ((i.total_amount || 0) - (i.amount_paid || 0)), 0) || 0;
-
-    // New leads this month
-    let leadsQ = supabase.from('leads').select('id', { count: 'exact' }).gte('created_at', monthStart);
-    if (branch_id) leadsQ = leadsQ.eq('branch_id', branch_id);
-    const { count: newLeads } = await leadsQ;
-
-    // Frozen memberships
-    let frozenQ = supabase.from('memberships').select('id', { count: 'exact' }).eq('status', 'frozen');
-    if (branch_id) frozenQ = frozenQ.eq('branch_id', branch_id);
-    const { count: frozenCount } = await frozenQ;
-
-    const revenueChange = lastMonthRevenue > 0 
-      ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1) 
-      : 'N/A';
-
-    const metricsContext = `
-Gym Dashboard Metrics (as of ${today}):
-- Total Members: ${totalMembers || 0}
-- Active Members: ${activeMembers || 0}
-- Frozen Memberships: ${frozenCount || 0}
-- Today's Check-ins: ${todayAttendance || 0}
-- This Month Revenue: ₹${thisMonthRevenue.toLocaleString()}
-- Last Month Revenue: ₹${lastMonthRevenue.toLocaleString()}
-- Revenue Change: ${revenueChange}%
-- Memberships Expiring in 7 Days: ${expiringCount || 0}
-- Overdue Invoices: ${overdueCount || 0} (₹${overdueAmount.toLocaleString()})
-- New Leads This Month: ${newLeads || 0}
-`;
-
-    const r = await generateOnce({
-      purpose: 'dashboard_insight',
-      userMessage: metricsContext,
-      systemOverride: 'Format: produce 4-5 brief insights via the provide_insights tool. Each insight: emoji icon + 3-6 word title + 1-2 sentence actionable description + severity (info|warning|success|critical). Be specific with numbers.',
-      tools: [{
-        type: 'function',
-        function: {
-          name: 'provide_insights',
-          description: 'Return actionable business insights based on gym metrics',
-          parameters: {
-            type: 'object',
-            properties: {
-              insights: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    icon: { type: 'string' },
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    severity: { type: 'string', enum: ['info', 'warning', 'success', 'critical'] }
-                  },
-                  required: ['icon', 'title', 'description', 'severity'],
-                  additionalProperties: false
-                }
-              }
-            },
-            required: ['insights'],
-            additionalProperties: false
-          }
-        }
-      }],
-      toolChoice: { type: 'function', function: { name: 'provide_insights' } }
-    });
-
-    const insights = r.toolCallArgs?.insights ?? [
-      { icon: '📊', title: 'Analysis Complete', description: 'Unable to parse detailed insights.', severity: 'info' }
-    ];
-
-    return new Response(
-      JSON.stringify({ insights, metrics: { totalMembers, activeMembers, thisMonthRevenue, lastMonthRevenue, revenueChange, todayAttendance, expiringCount, overdueCount, overdueAmount, newLeads, frozenCount } }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    const out = await buildForBranch(admin, branchId, caller.userId ?? SYSTEM_USER);
+    return json({ ...out, reused: false });
   } catch (error) {
-    console.error('AI insights error:', error);
     await captureEdgeError('ai-dashboard-insights', error);
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: errMsg }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });

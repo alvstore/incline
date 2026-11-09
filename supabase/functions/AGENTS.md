@@ -12,3 +12,4 @@
 - Contract signing links resolve server-configured public HTTPS origins; request-origin fallback is published-host allowlisted and never local/preview, because signing invitations leave the browser.
 - Contract PDF photos come only from the linked profile's display avatar in this backend's avatars bucket; embed image bytes and retain cached signed artifacts, so arbitrary URL fetches and changing gate identities cannot alter signed copies.
 - Revoked access (members.login_disabled_at, offboarded staff) is checked by `is_recipient_access_revoked` in dispatch-communication and a notifications insert trigger, so lapsed people get nothing on any channel.
+- Dashboard AI insights are generated and saved only by the `ai-dashboard-insights` function (6h reuse, daily managed schedule); forecast numbers come from `dashboard_sales_forecast` + `_shared/salesForecast.ts`, so the browser never writes or computes insights.
