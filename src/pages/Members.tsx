@@ -359,8 +359,8 @@ export default function MembersPage() {
         counts.active += 1;
         const daysLeft = differenceInDays(new Date(active.end_date), today);
         if (daysLeft >= 0 && daysLeft <= 7) counts.expiringSoon += 1;
-      } else if (m.lifecycle_state === 'pending_plan') counts.pendingPlan += 1;
-      else if (scheduled) counts.scheduled += 1;
+      } else if (scheduled) counts.scheduled += 1;
+      else if (m.lifecycle_state === 'pending_plan') counts.pendingPlan += 1;
       else if (frozen) counts.frozen += 1;
       else counts.inactive += 1;
     }
