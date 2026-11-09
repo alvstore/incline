@@ -1,14 +1,14 @@
 import { openMobileMenu } from '@/components/layout/AppSidebar';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, Home, Menu, Settings, Users, Wallet } from 'lucide-react';
+import { Dumbbell, Home, ListChecks, Menu, Users, Wallet } from 'lucide-react';
 import { track } from '@/lib/analytics';
 
 const items = [
   { label: 'Home', href: '/trainer-dashboard', icon: Home },
   { label: 'Clients', href: '/my-clients', icon: Users },
-  { label: 'Schedule', href: '/schedule-session', icon: Calendar },
+  { label: 'Plans', href: '/fitness/member-plans', icon: Dumbbell },
+  { label: 'Tasks', href: '/tasks', icon: ListChecks },
   { label: 'Earnings', href: '/trainer-earnings', icon: Wallet },
-  { label: 'Profile', href: '/trainer-preferences', icon: Settings },
 ];
 
 /** Bottom dock for trainer-only accounts on phones/tablets (mirrors MemberMobileNav). */
