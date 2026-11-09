@@ -1370,6 +1370,7 @@ export default function HRMPage() {
                 const [y, m] = payrollMonth.split('-').map(Number);
                 return payrollPeriod(payrollMonth).end;
               })()}
+              onOpenMonth={(m) => { setPayrollMonth(m); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             />
           </TabsContent>
 

@@ -43,9 +43,10 @@ interface Props {
   branchId?: string | null;
   periodStart: string; // yyyy-MM-dd
   periodEnd: string;   // yyyy-MM-dd
+  onOpenMonth?: (month: string) => void;
 }
 
-export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
+export function PayrollRunPanel({ branchId, periodStart, periodEnd, onOpenMonth }: Props) {
   const qc = useQueryClient();
   const { hasAnyRole, roles } = useAuth();
   const isAdmin = hasAnyRole(['admin', 'owner', 'manager']);
@@ -231,7 +232,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
 
   return (
     <>
-    {isAdmin && <DraftSlipsCard branchId={branchId} currentMonth={periodStart.slice(0, 7)} />}
+    {isAdmin && <DraftSlipsCard branchId={branchId} currentMonth={periodStart.slice(0, 7)} onOpenMonth={onOpenMonth} />}
     <Card className="rounded-2xl">
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>

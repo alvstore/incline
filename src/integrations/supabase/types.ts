@@ -19130,6 +19130,10 @@ export type Database = {
         }
         Returns: string
       }
+      payroll_discard_slips: {
+        Args: { p_item_ids: string[]; p_reason: string }
+        Returns: number
+      }
       payroll_future_commissions: {
         Args: { p_item_id: string }
         Returns: {
