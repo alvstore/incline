@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
+import { describe, expect, it } from 'bun:test';
 import { slipStage, type OfficialSlip } from './payslip';
 
 const base = { id: 'x', status: 'draft', run_status: 'calculated', final_net: 15600 } as OfficialSlip;
