@@ -1,3 +1,4 @@
+// v2.8.0 — PT package expiry / low-session reminders for member, trainer and manager (utility).
 // v2.7.0 — in-app "membership expired" (end date) and grace-period alerts; overdue title.
 // send-reminders v2.6.0 — membership expiry reminders use the shared dispatcher and approved UTILITY templates; skips branches handed over to the Renewal Engine.
 import { DEFAULT_PT_SETTINGS, hasSuccessor, normalizePtSettings, ptDedupeKey, ptReminderMark, type PtAudience, type PtChannel, type PtPkg } from "./ptExpiry.ts";
@@ -821,7 +822,7 @@ Deno.serve(async (req) => {
         const recipient = channel === "email" ? a.email : a.phone;
         if (!recipient) return;
         const { error } = await adminClient.functions.invoke("dispatch-communication", {
-          body: { branch_id: a.branchId, channel, category: "utility", recipient, member_id: a.memberId ?? undefined, user_id: a.userId ?? undefined,
+          body: { branch_id: a.branchId, channel, category: "class_notification", recipient, member_id: a.memberId ?? undefined, user_id: a.userId ?? undefined,
             payload: { subject: a.title, body: a.body, variables: a.vars, use_branded_template: channel === "email" },
             dedupe_key: a.key, ttl_seconds: 30 * 86400 },
         });
