@@ -1,5 +1,7 @@
+// v2.8.0 — PT package expiry / low-session reminders for member, trainer and manager (utility).
 // v2.7.0 — in-app "membership expired" (end date) and grace-period alerts; overdue title.
 // send-reminders v2.6.0 — membership expiry reminders use the shared dispatcher and approved UTILITY templates; skips branches handed over to the Renewal Engine.
+import { DEFAULT_PT_SETTINGS, hasSuccessor, normalizePtSettings, ptDedupeKey, ptReminderMark, type PtAudience, type PtChannel, type PtPkg } from "./ptExpiry.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
@@ -83,6 +85,7 @@ Deno.serve(async (req) => {
       membership_expired_inapp: 0,
       class_reminders: 0,
       pt_reminders: 0,
+      pt_expiry: 0,
       benefit_reminders: 0,
       inactive_member_alerts: 0,
       task_reminders: 0,
@@ -791,6 +794,85 @@ Deno.serve(async (req) => {
 
       if (delivery.status === "sent") results.pt_reminders++;
       else if (delivery.status === "failed") failures.pt_reminders++;
+    }
+
+    // ── 5b. PT package expiry / low-session reminders (member + trainer + manager) ──
+    try {
+      const todayIst = new Date(now.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
+      const { data: ptPkgs } = await adminClient
+        .from("member_pt_packages")
+        .select("id, member_id, branch_id, trainer_id, status, expiry_date, sessions_total, sessions_remaining, pt_packages:package_id (name), members:member_id (user_id, member_code, profiles:user_id (full_name, phone, email))")
+        .in("status", ["active", "pending_payment"]);
+      const all = (ptPkgs || []) as any[];
+      const trainerIds = [...new Set(all.map((p) => p.trainer_id).filter(Boolean))];
+      const { data: trainerRows } = trainerIds.length
+        ? await adminClient.from("trainers").select("id, user_id, profiles:user_id (full_name, phone, email)").in("id", trainerIds)
+        : { data: [] as any[] };
+      const trainerMap = new Map((trainerRows || []).map((t: any) => [t.id, t]));
+      const managerSummary = new Map<string, string[]>();
+
+      const sendPt = async (channel: PtChannel, a: { branchId: string; memberId?: string | null; userId?: string | null; phone?: string | null; email?: string | null; title: string; body: string; actionUrl: string; key: string; vars: Record<string, string> }) => {
+        if (channel === "notification") {
+          if (!a.userId) return;
+          const { count } = await adminClient.from("notifications").select("id", { count: "exact", head: true }).eq("dispatch_dedupe_key", a.key);
+          if ((count || 0) > 0) return;
+          notifications.push({ user_id: a.userId, branch_id: a.branchId, title: a.title, message: a.body, type: "warning", category: "pt_session", action_url: a.actionUrl, dispatch_dedupe_key: a.key });
+          return;
+        }
+        const recipient = channel === "email" ? a.email : a.phone;
+        if (!recipient) return;
+        const { error } = await adminClient.functions.invoke("dispatch-communication", {
+          body: { branch_id: a.branchId, channel, category: "transactional", recipient, member_id: a.memberId ?? undefined, user_id: a.userId ?? undefined,
+            payload: { subject: a.title, body: a.body, variables: a.vars, use_branded_template: channel === "email" },
+            dedupe_key: a.key, ttl_seconds: 30 * 86400 },
+        });
+        if (error) failures.pt_reminders++;
+      };
+
+      for (const pkg of all) {
+        const cfg = getConfig(pkg.branch_id, "pt_expiry");
+        if (cfg && cfg.is_enabled === false) continue;
+        const settings = cfg ? normalizePtSettings(cfg.settings) : DEFAULT_PT_SETTINGS;
+        const mark = ptReminderMark(pkg as PtPkg, todayIst, cfg?.days_before ?? [7, 3, 1], settings.low_sessions);
+        if (!mark || hasSuccessor(pkg as PtPkg, all as PtPkg[])) continue;
+        const member = pkg.members; const trainer = trainerMap.get(pkg.trainer_id) as any;
+        const memberName = member?.profiles?.full_name || "Member";
+        const trainerName = trainer?.profiles?.full_name || "your trainer";
+        const packageName = pkg.pt_packages?.name || "PT package";
+        const dateLabel = new Date(pkg.expiry_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+        const left = Number(pkg.sessions_total || 0) > 0 ? `${pkg.sessions_remaining ?? 0} sessions left` : "";
+        const tail = left ? ` (${left})` : "";
+        const vars = { member_name: memberName, package_name: packageName, trainer_name: trainerName, expiry_date: dateLabel, sessions_left: String(pkg.sessions_remaining ?? ""), event_key: mark === "low" ? "pt_package_low_sessions" : "pt_package_expiring" };
+        const when = mark === "low" ? `is almost finished${tail}` : mark === "d0" ? `ends today${tail}` : `ends on ${dateLabel}${tail}`;
+
+        const aud = settings.audiences;
+        if (aud.member.enabled && member?.user_id) {
+          for (const ch of aud.member.channels) await sendPt(ch, { branchId: pkg.branch_id, memberId: pkg.member_id, userId: member.user_id, phone: member.profiles?.phone, email: member.profiles?.email,
+            title: "Your PT package is ending", body: `Hi ${memberName}, your PT package ${packageName} with ${trainerName} ${when}. Speak to ${trainerName} or the front desk to continue.`,
+            actionUrl: "/my-pt-sessions", key: ptDedupeKey(pkg.id, "member", mark, ch), vars });
+        }
+        if (aud.trainer.enabled && trainer?.user_id) {
+          for (const ch of aud.trainer.channels) await sendPt(ch, { branchId: pkg.branch_id, userId: trainer.user_id, phone: trainer.profiles?.phone, email: trainer.profiles?.email,
+            title: "Client PT package ending", body: `${memberName}'s PT package ${packageName} ${when}. Please follow up.`,
+            actionUrl: "/pt-sessions?tab=clients", key: ptDedupeKey(pkg.id, "trainer", mark, ch), vars });
+        }
+        if (aud.manager.enabled) {
+          const list = managerSummary.get(pkg.branch_id) ?? []; list.push(`${memberName} (${mark === "low" ? left : dateLabel})`); managerSummary.set(pkg.branch_id, list);
+        }
+        results.pt_expiry = (results.pt_expiry || 0) + 1;
+      }
+
+      for (const [branchId, list] of managerSummary) {
+        const cfg = getConfig(branchId, "pt_expiry");
+        const chans = normalizePtSettings(cfg?.settings).audiences.manager.channels;
+        const { data: mgrs } = await adminClient.from("branch_managers").select("user_id, profiles:user_id (phone, email)").eq("branch_id", branchId).eq("is_active", true);
+        const body = `${list.length} PT package${list.length === 1 ? "" : "s"} need follow-up: ${list.slice(0, 8).join(", ")}${list.length > 8 ? "…" : ""}.`;
+        for (const m of (mgrs || []) as any[]) for (const ch of chans)
+          await sendPt(ch, { branchId, userId: m.user_id, phone: m.profiles?.phone, email: m.profiles?.email, title: "PT packages ending", body,
+            actionUrl: "/pt-sessions?tab=clients", key: `pt_expiry_summary:${branchId}:${m.user_id}:${todayIst}:${ch}`, vars: { event_key: "pt_package_expiring", count: String(list.length) } });
+      }
+    } catch (err) {
+      console.error("PT expiry reminders error:", err);
     }
 
     // ── 6. Benefit booking reminders (HONEST delivery) ──────────────
