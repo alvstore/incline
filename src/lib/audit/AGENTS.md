@@ -1,0 +1,1 @@
+Audit repeat folding is display-only: compare exact actor, target and payload identity within 60 seconds before pagination, retaining raw occurrences and exporting raw events so grouping never destroys evidence.

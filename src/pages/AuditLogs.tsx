@@ -23,9 +23,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Switch } from '@/components/ui/switch';
 import { AuditChangeList } from '@/components/audit/AuditChangeList';
 import { actionKind, isNoise, sentence, sentenceText, actorLabel } from '@/lib/audit/humanize';
+import { foldRepeats, type FoldableAuditRow, type AuditEventGroup } from '@/lib/audit/foldRepeats';
+import { useBranchContext } from '@/contexts/BranchContext';
 
 export default function AuditLogsPage() {
   const { user } = useAuth();
+  const { branchFilter } = useBranchContext();
   const queryClient = useQueryClient();
   const onlineUsers = useOnlineUsers();
   const onlineIds = useMemo(() => new Set(onlineUsers.map(u => u.user_id)), [onlineUsers]);
@@ -45,6 +48,7 @@ export default function AuditLogsPage() {
     dateTo: format(new Date(), 'yyyy-MM-dd'),
   });
   const [hideNoise, setHideNoise] = useState(true);
+  const [combineRepeats, setCombineRepeats] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [newRowIds, setNewRowIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,15 +79,19 @@ export default function AuditLogsPage() {
     setCurrentPage(1);
   };
 
-  const { data: logsResult, isLoading, refetch } = useQuery({
-    queryKey: ['audit-logs', filters, currentPage],
+  const { data: logsResult, isLoading, isError, refetch } = useQuery({
+    queryKey: ['audit-logs', filters, branchFilter],
     queryFn: async () => {
+      const fetchPage = async (offset: number) => {
       let query = supabase
         .from('audit_logs')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
-        .gte('created_at', `${filters.dateFrom}T00:00:00`)
-        .lte('created_at', `${filters.dateTo}T23:59:59`);
+        .order('id', { ascending: false })
+        .gte('created_at', `${filters.dateFrom}T00:00:00+05:30`)
+        .lte('created_at', `${filters.dateTo}T23:59:59.999+05:30`);
+
+      if (branchFilter) query = query.eq('branch_id', branchFilter);
 
       if (filters.action === 'SPECIAL') query = query.not('action', 'in', '(INSERT,UPDATE,DELETE)');
       else if (filters.action !== 'all') query = query.eq('action', filters.action);
@@ -98,11 +106,22 @@ export default function AuditLogsPage() {
       if (safeSearch) {
         query = query.or(`record_id.ilike.%${safeSearch}%,table_name.ilike.%${safeSearch}%,actor_name.ilike.%${safeSearch}%,target_name.ilike.%${safeSearch}%`);
       }
-      query = query.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+      query = query.range(offset, offset + 499);
 
       const { data, error, count } = await query;
       if (error) throw error;
-      return { data: data || [], count: count || 0 } as { data: any[]; count: number };
+      return { data: (data || []) as unknown as FoldableAuditRow[], count: count || 0 };
+      };
+      // Read below the API cap; fold before display pagination so page edges cannot split repeats.
+      const first = await fetchPage(0);
+      const data = [...first.data];
+      for (let offset = 500; offset < first.count; offset += 2000) {
+        const offsets = [offset, offset + 500, offset + 1000, offset + 1500].filter(n => n < first.count);
+        const pages = await Promise.all(offsets.map(fetchPage));
+        pages.forEach(page => data.push(...page.data));
+      }
+      const unique = [...new Map(data.map(row => [row.id, row])).values()];
+      return { data: unique, count: first.count };
     },
   });
 
@@ -127,17 +146,28 @@ export default function AuditLogsPage() {
     },
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ['audit-log-stats'],
+  const { data: stats, isError: statsError } = useQuery({
+    queryKey: ['audit-log-stats', filters.dateFrom, filters.dateTo, branchFilter],
     queryFn: async () => {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const { count: totalCount } = await supabase.from('audit_logs').select('*', { count: 'exact', head: true });
-      const { count: todayCount } = await supabase.from('audit_logs').select('*', { count: 'exact', head: true }).gte('created_at', `${today}T00:00:00`);
-      const { data: mostActiveTable } = await supabase.from('audit_logs').select('table_name').order('created_at', { ascending: false }).limit(100);
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const scopedCount = () => {
+        const query = supabase.from('audit_logs').select('*', { count: 'exact', head: true });
+        return branchFilter ? query.eq('branch_id', branchFilter) : query;
+      };
+      const rangeCount = () => scopedCount().gte('created_at', `${filters.dateFrom}T00:00:00+05:30`).lte('created_at', `${filters.dateTo}T23:59:59.999+05:30`);
+      let recent = supabase.from('audit_logs').select('table_name').order('created_at', { ascending: false }).limit(100);
+      if (branchFilter) recent = recent.eq('branch_id', branchFilter);
+      const [totalResult, todayResult, tableResult, deletionResult, specialResult] = await Promise.all([
+        scopedCount(), scopedCount().gte('created_at', `${today}T00:00:00+05:30`), recent,
+        rangeCount().eq('action', 'DELETE'), rangeCount().not('action', 'in', '(INSERT,UPDATE,DELETE)'),
+      ]);
+      for (const result of [totalResult, todayResult, tableResult, deletionResult, specialResult]) {
+        if (result.error) throw result.error;
+      }
       const tableCounts: Record<string, number> = {};
-      mostActiveTable?.forEach(log => { tableCounts[log.table_name] = (tableCounts[log.table_name] || 0) + 1; });
+      tableResult.data?.forEach(log => { tableCounts[log.table_name] = (tableCounts[log.table_name] || 0) + 1; });
       const topTable = Object.entries(tableCounts).sort((a, b) => b[1] - a[1])[0];
-      return { total: totalCount || 0, today: todayCount || 0, mostActiveTable: topTable?.[0] || 'N/A' };
+      return { total: totalResult.count || 0, today: todayResult.count || 0, mostActiveTable: topTable?.[0] || 'N/A', deletions: deletionResult.count || 0, special: specialResult.count || 0 };
     },
   });
 
@@ -169,7 +199,11 @@ export default function AuditLogsPage() {
   };
 
   const logs = logsResult || { data: [], count: 0 };
-  const totalPages = Math.ceil((logs.count || 0) / pageSize);
+  const shownLogs = useMemo(() => hideNoise ? logs.data.filter(l => !isNoise(l)) : logs.data, [logs.data, hideNoise]);
+  const eventGroups = useMemo(() => combineRepeats ? foldRepeats(shownLogs) : shownLogs.map(row => ({ row, occurrences: [row] })), [shownLogs, combineRepeats]);
+  const totalPages = Math.ceil(eventGroups.length / pageSize);
+  const visiblePage = Math.min(currentPage, Math.max(1, totalPages));
+  const pageGroups = eventGroups.slice((visiblePage - 1) * pageSize, visiblePage * pageSize);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -195,18 +229,19 @@ export default function AuditLogsPage() {
     a.href = URL.createObjectURL(blob);
     a.download = `audit-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
+    URL.revokeObjectURL(a.href);
     toast.success('Exported to CSV');
   };
 
   // Group logs by date
-  const groupedLogs: { label: string; date: string; logs: any[] }[] = [];
-  const dateMap = new Map<string, any[]>();
-  const shownLogs = hideNoise ? logs.data.filter((l: any) => !isNoise(l)) : logs.data;
+  const groupedLogs: { label: string; date: string; logs: AuditEventGroup<FoldableAuditRow>[] }[] = [];
+  const dateMap = new Map<string, AuditEventGroup<FoldableAuditRow>[]>();
   const hiddenCount = logs.data.length - shownLogs.length;
-  shownLogs.forEach((log: any) => {
-    const dateKey = format(new Date(log.created_at), 'yyyy-MM-dd');
-    if (!dateMap.has(dateKey)) dateMap.set(dateKey, []);
-    dateMap.get(dateKey)!.push(log);
+  pageGroups.forEach(event => {
+    const dateKey = new Date(event.row.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const day = dateMap.get(dateKey) ?? [];
+    day.push(event);
+    dateMap.set(dateKey, day);
   });
   dateMap.forEach((dateLogs, dateKey) => {
     const d = new Date(dateKey);
@@ -217,12 +252,15 @@ export default function AuditLogsPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <StatCard title="Total Logs" value={stats?.total || 0} icon={Database} variant="default" />
-          <StatCard title="Today's Activity" value={stats?.today || 0} icon={Activity} variant="info" />
-          <StatCard title="Most Active" value={stats?.mostActiveTable ? formatTableName(stats.mostActiveTable) : 'N/A'} icon={ClipboardList} variant="accent" />
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+          <StatCard title="Total Logs" value={stats?.total ?? '—'} icon={Database} variant="default" description="All recorded events" />
+          <StatCard title="Today's Activity" value={stats?.today ?? '—'} icon={Activity} variant="info" description="Today · IST" />
+          <StatCard title="Deletions" value={stats?.deletions ?? '—'} icon={Trash2} variant="destructive" description={`${filters.dateFrom} → ${filters.dateTo}`} />
+          <StatCard title="Special events" value={stats?.special ?? '—'} icon={Activity} variant="warning" description={`${filters.dateFrom} → ${filters.dateTo}`} />
+          <StatCard title="Most Active" value={stats?.mostActiveTable ? formatTableName(stats.mostActiveTable) : '—'} icon={ClipboardList} variant="accent" description="Latest 100 events" />
           <StatCard title="Online Now" value={onlineUsers.length} icon={Users} variant="success" />
         </div>
+        {statsError && <p role="alert" className="text-sm text-destructive">Summary counts could not load. <Button variant="link" onClick={() => queryClient.invalidateQueries({ queryKey: ['audit-log-stats'] })}>Retry summary</Button></p>}
 
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -240,8 +278,8 @@ export default function AuditLogsPage() {
                 className={`px-2.5 py-1 text-xs rounded-md transition ${density === 'compact' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'}`}
               >Compact</button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
-            <Button variant="outline" size="sm" onClick={exportToCSV}><Download className="h-4 w-4 mr-2" />Export</Button>
+            <Button variant="outline" size="sm" onClick={() => { refetch(); queryClient.invalidateQueries({ queryKey: ['audit-log-stats'] }); }}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
+            <Button variant="outline" size="sm" onClick={exportToCSV} disabled={isLoading || isError || !logs.data.length}><Download className="h-4 w-4 mr-2" />Export</Button>
           </div>
         </div>
 
@@ -343,18 +381,26 @@ export default function AuditLogsPage() {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-base font-semibold tracking-tight">Activity timeline <span className="font-normal text-muted-foreground">· {logs.count || 0} events</span></CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Switch id="combine-repeats" checked={combineRepeats} onCheckedChange={value => { setCombineRepeats(value); setCurrentPage(1); }} />
+                  <Label htmlFor="combine-repeats">Combine repeats · 1 min</Label>
+                </div>
+                <div className="flex items-center gap-2">
                 <Switch id="hide-noise" checked={hideNoise} onCheckedChange={setHideNoise} />
-                <Label htmlFor="hide-noise" className="text-sm">Hide automatic timestamp updates{hideNoise && hiddenCount > 0 ? ` (${hiddenCount} hidden on this page)` : ''}</Label>
+                <Label htmlFor="hide-noise" className="text-sm">Hide automatic timestamp updates{hideNoise && hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}</Label>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {isError ? (
+              <div role="alert" className="py-8 text-center space-y-3"><p>Audit events could not load.</p><Button variant="outline" onClick={() => refetch()}>Retry</Button></div>
+            ) : isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-            ) : logs.data.length === 0 ? (
+            ) : shownLogs.length === 0 ? (
               <div className="text-center py-16">
                 <ClipboardList className="h-14 w-14 mx-auto mb-4 text-muted-foreground/40" />
                 <p className="text-base font-medium text-foreground mb-1">No audit logs match these filters</p>
@@ -368,13 +414,13 @@ export default function AuditLogsPage() {
                     <div className="sticky top-0 z-[5] -mx-2 px-2 py-1 mb-3 flex items-center gap-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
                       <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
                       <div className="flex-1 h-px bg-border" />
-                      <span className="text-xs text-muted-foreground">{group.logs.length} events</span>
+                      <span className="text-xs text-muted-foreground">{group.logs.length} rows · {group.logs.reduce((n, event) => n + event.occurrences.length, 0)} events</span>
                     </div>
                     <div className="relative pl-6 space-y-0">
                       {/* Timeline connector */}
                       <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
 
-                      {group.logs.map((log: any) => {
+                      {group.logs.map(({ row: log, occurrences }) => {
                         const style = getActionStyle(log.action);
                         const ActionIcon = style.icon;
                         const human = sentence(log);
@@ -384,7 +430,7 @@ export default function AuditLogsPage() {
                         const changedCount = log.action === 'UPDATE' ? getChangedFieldsCount(log.old_data, log.new_data) : 0;
                         const target = log.target_name || (log.record_id ? log.record_id.substring(0, 8) : '—');
                         const route = deepLinkFor(log.table_name, log.record_id);
-                        const isNew = newRowIds.has(log.id);
+                        const isNew = occurrences.some(row => newRowIds.has(row.id));
                         const accent = log.action === 'DELETE' ? 'border-l-2 border-l-destructive' : log.action === 'INSERT' ? 'border-l-2 border-l-success' : 'border-l-2 border-l-info';
                         const padY = density === 'compact' ? 'p-2' : 'p-3';
 
@@ -400,7 +446,7 @@ export default function AuditLogsPage() {
                               <CollapsibleTrigger asChild>
                                 <div role="button" tabIndex={0} aria-expanded={expandedRows.has(log.id)}
                                   onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggleRow(log.id); } }}
-                                  aria-label={`${sentenceText(log)}, ${formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}. ${expandedRows.has(log.id) ? 'Hide' : 'Show'} details`}
+                                  aria-label={`${sentenceText(log)}${occurrences.length > 1 ? `, repeated ${occurrences.length} times within one minute` : ''}, ${formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}. ${expandedRows.has(log.id) ? 'Hide' : 'Show'} details`}
                                   className={`ml-2 block w-[calc(100%-0.5rem)] text-left border ${accent} rounded-xl mb-2 cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isNew ? 'ring-2 ring-success/60' : ''}`}
                                   onClick={() => toggleRow(log.id)}
                                 >
@@ -423,6 +469,7 @@ export default function AuditLogsPage() {
                                             {human.target && <span className="font-medium">{human.target}</span>}
                                           </span>
                                           {isNew && <Badge className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-success/20">New</Badge>}
+                                          {occurrences.length > 1 && <Badge variant="secondary" className="gap-1"><Copy className="h-3 w-3" aria-hidden />{occurrences.length} occurrences · 1 min</Badge>}
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap mt-1">
                                           <Badge variant="outline" className={`gap-1 text-xs font-medium px-2 py-0 ${style.bg}`}><ActionIcon className="h-3 w-3" aria-hidden />{style.label}</Badge>
@@ -500,6 +547,17 @@ export default function AuditLogsPage() {
                                       <AuditChangeList row={log} />
                                     </div>
                                   </div>
+                                  {occurrences.length > 1 && (
+                                    <div className="mt-4 border-t border-border pt-3">
+                                      <h4 className="font-medium text-sm mb-2">Individual events · {occurrences.length}</h4>
+                                      <ol className="space-y-2">
+                                        {occurrences.map(row => <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                          <time dateTime={row.created_at}>{new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' })} IST</time>
+                                          <span className="inline-flex items-center gap-1 font-mono">{row.id.slice(0, 8)}<Button size="icon" variant="ghost" className="h-9 w-9" aria-label={`Copy audit event reference ${row.id}`} onClick={() => copyToClipboard(row.id)}><Copy className="h-3 w-3" /></Button></span>
+                                        </li>)}
+                                      </ol>
+                                    </div>
+                                  )}
                                 </div>
                               </CollapsibleContent>
                             </div>
@@ -513,13 +571,13 @@ export default function AuditLogsPage() {
             )}
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+              <div className="flex flex-wrap gap-3 items-center justify-between mt-6 pt-4 border-t">
                 <p className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * pageSize) + 1} – {Math.min(currentPage * pageSize, logs.count || 0)} of {logs.count || 0}
+                  Showing {((visiblePage - 1) * pageSize) + 1} – {Math.min(visiblePage * pageSize, eventGroups.length)} of {eventGroups.length} rows · {shownLogs.length} events
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(Math.max(1, visiblePage - 1))} disabled={visiblePage === 1}>Previous</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(Math.min(totalPages, visiblePage + 1))} disabled={visiblePage === totalPages}>Next</Button>
                 </div>
               </div>
             )}
