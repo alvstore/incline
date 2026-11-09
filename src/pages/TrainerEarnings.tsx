@@ -47,7 +47,9 @@ export default function TrainerEarnings() {
     queryFn: async (): Promise<OfficialSlip | null> => {
       const { data, error } = await supabase.rpc('my_payslip_for_month', { p_month: monthStartDate });
       if (error) throw error;
-      return (data as unknown as OfficialSlip) ?? null;
+      const slip = (data as unknown as OfficialSlip) ?? null;
+      track('trainer_payslip_viewed', { month: monthKey, stage: slipStage(slip) });
+      return slip;
     },
   });
   const officialPayroll = slipQuery.data ?? null;
@@ -142,15 +144,15 @@ export default function TrainerEarnings() {
 
   return (
     <AppLayout>
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">My earnings</h1>
-            <p className="text-sm text-muted-foreground">PT commission instalments and salary for {format(monthDate, 'MMMM yyyy')}</p>
+            <p className="text-sm text-muted-foreground">Salary and PT commission for {format(monthDate, 'MMMM yyyy')}</p>
           </div>
-          <div className="flex gap-2" role="group" aria-label="Choose month">
+          <div className="grid grid-cols-3 gap-2 sm:flex" role="group" aria-label="Choose month">
             {[0, 1, 2].map(o => (
-              <Button key={o} size="sm" className="min-h-11" variant={selectedMonth === o ? 'default' : 'outline'} aria-pressed={selectedMonth === o} onClick={() => setSelectedMonth(o)}>
+              <Button key={o} size="sm" className="min-h-11 px-2 sm:px-3" variant={selectedMonth === o ? 'default' : 'outline'} aria-pressed={selectedMonth === o} onClick={() => setSelectedMonth(o)}>
                 {format(subMonths(new Date(), o), 'MMM yyyy')}
               </Button>
             ))}
@@ -158,7 +160,7 @@ export default function TrainerEarnings() {
         </header>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-12">
           <Kpi className="lg:col-span-3" label="Payable this month" value={inr(totals.payable + totals.paid)} hint={totals.paid > 0 ? `${inr(totals.paid)} already paid` : 'PT commission'} icon={Wallet} loading={summary.isLoading} />
           <Kpi className="lg:col-span-3" label="On hold" value={inr(totals.onHold)} hint="Released once the member clears dues" icon={Lock} loading={summary.isLoading} />
           <Kpi className="lg:col-span-3" label="Upcoming instalments" value={inr(totals.upcoming)} hint="Future months" icon={CalendarClock} loading={summary.isLoading} />
@@ -186,7 +188,31 @@ export default function TrainerEarnings() {
                   <p className="text-sm text-muted-foreground">No PT commission for this month yet.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <ul className="divide-y divide-border sm:hidden" aria-label={`PT commission instalments for ${format(monthDate, 'MMMM yyyy')}`}>
+                  {monthRows.map(r => {
+                    const st = installmentState(r, monthStartDate);
+                    const s = STATE_UI[st];
+                    const Icon = s.icon;
+                    return (
+                      <li key={r.installment_id} className="space-y-1 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-foreground">{r.member_name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{r.package_name ?? 'PT package'} · {r.installment_index} of {r.installment_count}</p>
+                          </div>
+                          <p className="shrink-0 font-semibold tabular-nums text-foreground">{inr(r.amount)}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>{r.sale_amount != null ? `Sale ${inr(r.sale_amount)}` : ''}{r.share_pct != null ? ` · ${r.share_pct}%` : ''}</span>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${s.cls}`}><Icon className="h-3 w-3" aria-hidden />{s.label}</span>
+                        </div>
+                        {st === 'on_hold' && <p className="text-xs text-muted-foreground">{(r.invoice_balance ?? 0) > 0 ? `Member owes ${inr(r.invoice_balance!)}` : r.blocked_reason ?? 'Awaiting payment'}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="hidden overflow-x-auto sm:block">
                   <table className="w-full text-sm">
                     <caption className="sr-only">PT commission instalments for {format(monthDate, 'MMMM yyyy')}</caption>
                     <thead className="sticky top-0 z-10 bg-card">
@@ -234,6 +260,7 @@ export default function TrainerEarnings() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
               {upcomingRows.length > 0 && (
                 <p className="mt-4 text-xs text-muted-foreground">
