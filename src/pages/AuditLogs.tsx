@@ -20,6 +20,9 @@ import { CATEGORY_LABEL, TABLE_CATEGORY, categoryOf, deepLinkFor, type AuditCate
 import { useOnlineUsers } from '@/hooks/usePresence';
 import { OnlinePresencePill } from '@/components/presence/OnlinePresencePill';
 import { useAuth } from '@/contexts/AuthContext';
+import { Switch } from '@/components/ui/switch';
+import { AuditChangeList } from '@/components/audit/AuditChangeList';
+import { actionKind, isNoise, sentence, sentenceText, actorLabel } from '@/lib/audit/humanize';
 
 export default function AuditLogsPage() {
   const { user } = useAuth();
@@ -41,6 +44,7 @@ export default function AuditLogsPage() {
     dateFrom: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
     dateTo: format(new Date(), 'yyyy-MM-dd'),
   });
+  const [hideNoise, setHideNoise] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [newRowIds, setNewRowIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,7 +85,8 @@ export default function AuditLogsPage() {
         .gte('created_at', `${filters.dateFrom}T00:00:00`)
         .lte('created_at', `${filters.dateTo}T23:59:59`);
 
-      if (filters.action !== 'all') query = query.eq('action', filters.action);
+      if (filters.action === 'SPECIAL') query = query.not('action', 'in', '(INSERT,UPDATE,DELETE)');
+      else if (filters.action !== 'all') query = query.eq('action', filters.action);
       if (filters.table !== 'all') query = query.eq('table_name', filters.table);
       if (filters.actor !== 'all') query = query.eq('actor_name', filters.actor);
       if (filters.onlyMe && user?.id) query = query.eq('user_id', user.id);
@@ -141,7 +146,7 @@ export default function AuditLogsPage() {
       case 'INSERT': return { bg: 'bg-success/10 text-success border-success/20', icon: Plus, label: 'Created' };
       case 'UPDATE': return { bg: 'bg-info/10 text-info border-info/20', icon: Pencil, label: 'Updated' };
       case 'DELETE': return { bg: 'bg-destructive/10 text-destructive border-destructive/20', icon: Trash2, label: 'Deleted' };
-      default: return { bg: 'bg-muted text-muted-foreground', icon: Activity, label: action };
+      default: return { bg: 'bg-accent/10 text-accent border-accent/20', icon: Activity, label: 'Event' };
     }
   };
 
@@ -172,13 +177,14 @@ export default function AuditLogsPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Time', 'Action', 'Category', 'Table', 'Actor', 'Target', 'Description', 'Record ID'];
+    const headers = ['Time', 'What happened', 'Action', 'Category', 'Table', 'Actor', 'Target', 'Description', 'Record ID'];
     const rows = logs.data.map((log: any) => [
       format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+      sentenceText(log),
       log.action,
       CATEGORY_LABEL[categoryOf(log.table_name)],
       log.table_name,
-      log.actor_name || 'System',
+      actorLabel(log),
       log.target_name || '',
       log.action_description || '',
       log.record_id || '',
@@ -225,7 +231,9 @@ export default function AuditLogsPage() {
   // Group logs by date
   const groupedLogs: { label: string; date: string; logs: any[] }[] = [];
   const dateMap = new Map<string, any[]>();
-  logs.data.forEach((log: any) => {
+  const shownLogs = hideNoise ? logs.data.filter((l: any) => !isNoise(l)) : logs.data;
+  const hiddenCount = logs.data.length - shownLogs.length;
+  shownLogs.forEach((log: any) => {
     const dateKey = format(new Date(log.created_at), 'yyyy-MM-dd');
     if (!dateMap.has(dateKey)) dateMap.set(dateKey, []);
     dateMap.get(dateKey)!.push(log);
@@ -333,6 +341,7 @@ export default function AuditLogsPage() {
                     <SelectItem value="INSERT">Created</SelectItem>
                     <SelectItem value="UPDATE">Updated</SelectItem>
                     <SelectItem value="DELETE">Deleted</SelectItem>
+                    <SelectItem value="SPECIAL">Special events</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -362,7 +371,13 @@ export default function AuditLogsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Activity Timeline ({logs.count || 0} records)</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-base font-semibold tracking-tight">Activity timeline <span className="font-normal text-muted-foreground">· {logs.count || 0} events</span></CardTitle>
+              <div className="flex items-center gap-2">
+                <Switch id="hide-noise" checked={hideNoise} onCheckedChange={setHideNoise} />
+                <Label htmlFor="hide-noise" className="text-sm">Hide automatic timestamp updates{hideNoise && hiddenCount > 0 ? ` (${hiddenCount} hidden on this page)` : ''}</Label>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -392,7 +407,8 @@ export default function AuditLogsPage() {
                       {group.logs.map((log: any) => {
                         const style = getActionStyle(log.action);
                         const ActionIcon = style.icon;
-                        const actorDisplay = log.actor_name || (log.user_id ? 'Unknown user' : 'System');
+                        const human = sentence(log);
+                        const actorDisplay = human.actor;
                         const isOnline = log.user_id && onlineIds.has(log.user_id);
                         const initials = (actorDisplay || '?').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
                         const changedCount = log.action === 'UPDATE' ? getChangedFieldsCount(log.old_data, log.new_data) : 0;
@@ -412,8 +428,9 @@ export default function AuditLogsPage() {
                               </div>
 
                               <CollapsibleTrigger asChild>
-                                <div
-                                  className={`ml-2 border ${accent} rounded-lg mb-2 cursor-pointer transition-all hover:bg-muted/50 hover:shadow-sm ${isNew ? 'ring-2 ring-success/60 animate-in fade-in' : ''}`}
+                                <button type="button" aria-expanded={expandedRows.has(log.id)}
+                                  aria-label={`${sentenceText(log)}, ${formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}. ${expandedRows.has(log.id) ? 'Hide' : 'Show'} details`}
+                                  className={`ml-2 block w-[calc(100%-0.5rem)] text-left border ${accent} rounded-xl mb-2 cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isNew ? 'ring-2 ring-success/60' : ''}`}
                                   onClick={() => toggleRow(log.id)}
                                 >
                                   <div className={`flex items-start justify-between ${padY} gap-3`}>
@@ -424,25 +441,25 @@ export default function AuditLogsPage() {
                                           <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">{initials}</AvatarFallback>
                                         </Avatar>
                                         {isOnline && (
-                                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-success" title="Online now" />
+                                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-success" title="Online now"><span className="sr-only">Online now</span></span>
                                         )}
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm text-foreground">
+                                          <span className="text-sm text-foreground leading-snug">
                                             <span className="font-semibold">{actorDisplay}</span>
-                                            <span className="text-muted-foreground"> {style.label.toLowerCase()} </span>
-                                            <span className="font-medium">{target}</span>
+                                            <span className="text-muted-foreground"> {human.verb} </span>
+                                            {human.target && <span className="font-medium">{human.target}</span>}
                                           </span>
                                           {isNew && <Badge className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-success/20">New</Badge>}
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap mt-1">
-                                          <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 capitalize">{CATEGORY_LABEL[categoryOf(log.table_name)]}</Badge>
-                                          <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">{formatTableName(log.table_name)}</Badge>
+                                          <Badge variant="outline" className={`gap-1 text-xs font-medium px-2 py-0 ${style.bg}`}><ActionIcon className="h-3 w-3" aria-hidden />{style.label}</Badge>
+                                          <Badge variant="outline" className="text-xs font-normal px-2 py-0">{CATEGORY_LABEL[categoryOf(log.table_name)]}</Badge>
                                           {changedCount > 0 && (
                                             <span className="text-xs text-muted-foreground">{changedCount} field{changedCount !== 1 ? 's' : ''} changed</span>
                                           )}
-                                          {log.action_description && density !== 'compact' && (
+                                          {actionKind(log.action) === 'event' && log.action_description && density !== 'compact' && (
                                             <span className="text-xs text-muted-foreground truncate">· {log.action_description}</span>
                                           )}
                                         </div>
@@ -465,7 +482,7 @@ export default function AuditLogsPage() {
                                       {expandedRows.has(log.id) ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                     </div>
                                   </div>
-                                </div>
+                                </button>
                               </CollapsibleTrigger>
                               <CollapsibleContent>
                                 <div className="ml-2 mb-2 border border-t-0 rounded-b-lg -mt-2 px-4 pb-4 pt-3 bg-muted/30">
