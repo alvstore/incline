@@ -1,6 +1,6 @@
 # Audit-log follow-up (9 Nov 2026)
-- [ ] Fold identical events within 60 seconds across page boundaries, preserving individual audit details.
-- [ ] Add date-range Deletions and Special events cards; verify tests and authenticated desktop/mobile views.
+- [x] Fold exact repeats within 60 seconds before pagination; expandable timestamps/references and raw CSV preserve evidence. Eight tests pass; temporary browser fixture verified folding, expansion and unfolding without inserting audit rows.
+- [x] Add branch-scoped date-range Deletions and Special events cards; signed-in live preview showed 8 deletions/71 special events, desktop/mobile had no overflow or page errors, automatic build OK. No exact repeats appeared on the first live page; grouping interaction was verified with temporary sample events.
 
 # Contract profile photos (7 Nov 2026)
 - [x] Linked display photos added to Contracts and server/local PDFs; all five trainer photos loaded in signed-in preview, a real draft PDF embedded the correct photo, eight tests passed and build OK. PDF skill visual review of all seven pages found no new clipping or overlap; cached signed copies unchanged.
