@@ -1,3 +1,7 @@
+# Audit-log follow-up (9 Nov 2026)
+- [ ] Fold identical events within 60 seconds across page boundaries, preserving individual audit details.
+- [ ] Add date-range Deletions and Special events cards; verify tests and authenticated desktop/mobile views.
+
 # Contract profile photos (7 Nov 2026)
 - [x] Linked display photos added to Contracts and server/local PDFs; all five trainer photos loaded in signed-in preview, a real draft PDF embedded the correct photo, eight tests passed and build OK. PDF skill visual review of all seven pages found no new clipping or overlap; cached signed copies unchanged.
 
