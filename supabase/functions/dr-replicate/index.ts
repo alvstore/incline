@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v2.0.0 — 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
+// v2.0.1 — 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
@@ -35,12 +35,27 @@ async function bootstrapStandby(): Promise<void> {
   const u = new URL(raw);
   if (u.hostname !== new URL(DR_URL).hostname) throw new Error("refusing: DR_DB_URL is not the standby host");
   u.searchParams.delete("sslmode");
-  const sql = postgres(u.toString(), { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
-  try {
-    await sql.unsafe(BOOTSTRAP_SQL);
-  } finally {
-    await sql.end();
+  u.searchParams.delete("pgbouncer");
+  // DDL must go to Postgres itself, never the pooler: the standby's pooler (6543) runs an
+  // auth query that its database refuses ("permission denied for schema pgbouncer").
+  // Try the direct port first; fall back to the configured URL only if direct is unreachable.
+  const direct = new URL(u.toString());
+  direct.port = "5432";
+  const candidates = [...new Set([direct.toString(), u.toString()])];
+  let lastErr: unknown;
+  for (const url of candidates) {
+    const sql = postgres(url, { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+    try {
+      await sql.unsafe(BOOTSTRAP_SQL);
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.error("dr-replicate bootstrap attempt failed", new URL(url).port, (e as Error).message);
+    } finally {
+      await sql.end({ timeout: 5 }).catch(() => {});
+    }
   }
+  throw lastErr;
 }
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
