@@ -17958,8 +17958,19 @@ export type Database = {
           table_name: string
         }[]
       }
+      dr_get_standby_config: { Args: never; Returns: Json }
       dr_is_operational: { Args: never; Returns: boolean }
       dr_request_sync: { Args: { p_kind?: string }; Returns: Json }
+      dr_save_standby_config: {
+        Args: {
+          p_app_url?: string
+          p_db_url?: string
+          p_label?: string
+          p_service_key?: string
+          p_standby_url: string
+        }
+        Returns: Json
+      }
       dr_sync_status: { Args: never; Returns: Json }
       dr_table_counts: {
         Args: never

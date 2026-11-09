@@ -26,7 +26,7 @@ const SETTINGS_MENU = [
   { value: 'ai-agent', label: 'AI Agent', icon: Bot },
   { value: 'automations', label: 'Automation Brain', icon: Zap },
   { value: 'appearance', label: 'Appearance', icon: Palette },
-  { value: 'backup', label: 'Backup & Restore', icon: Database },
+  { value: 'backup', label: 'Disaster Recovery', icon: Database },
   { value: 'benefits', label: 'Benefits', icon: Sparkles },
   { value: 'howbody', label: 'Body Scanner', icon: ScanLine },
   { value: 'branches', label: 'Branches', icon: Building2 },
