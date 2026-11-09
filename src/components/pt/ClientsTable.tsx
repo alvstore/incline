@@ -12,9 +12,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Search, Users, MoreHorizontal, CalendarPlus, RefreshCw, XCircle, ArrowUpDown, IndianRupee,
-  ArrowRightLeft, UserRound, AlertTriangle, Loader2,
+  ArrowRightLeft, UserRound, AlertTriangle, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { buildSuccessorMap, queuedRenewalOf } from './ptContinuation';
 import { avatarColor, initialsOf, type PTMemberPackageRow } from './ptTypes';
 
 type SortKey = 'member' | 'progress' | 'expiry';
@@ -56,13 +57,14 @@ function progressOf(pkg: PTMemberPackageRow) {
 
 const isExpired = (p: PTMemberPackageRow) => p.status === 'expired';
 const daysLeftOf = (p: PTMemberPackageRow) => differenceInDays(new Date(p.expiry_date), new Date());
-const matchers: Record<ClientFilter, (p: PTMemberPackageRow) => boolean> = {
+type Matcher = (p: PTMemberPackageRow, continued: (p: PTMemberPackageRow) => boolean) => boolean;
+const matchers: Record<ClientFilter, Matcher> = {
   all: (p) => !isExpired(p),
   needs_trainer: (p) => !isExpired(p) && p.trainer_active === false,
   payment_due: (p) => !isExpired(p) && (p.due ?? 0) > 0,
   expiring: (p) => !isExpired(p) && daysLeftOf(p) <= 7,
   low_sessions: (p) => !isExpired(p) && Number(p.sessions_total || 0) > 0 && Number(p.sessions_remaining || 0) <= 2,
-  expired: isExpired,
+  expired: (p, continued) => isExpired(p) && !continued(p),
 };
 const FILTERS: { key: ClientFilter; label: string; warn?: boolean }[] = [
   { key: 'all', label: 'All active' },
@@ -109,15 +111,20 @@ export function ClientsTable(props: Props) {
   const [asc, setAsc] = useState(true);
   const [page, setPage] = useState(0);
 
+  const successors = useMemo(() => buildSuccessorMap(rows), [rows]);
+  const continued = (p: PTMemberPackageRow) => !!successors.get(p.id);
+  const test = (k: ClientFilter) => (p: PTMemberPackageRow) => matchers[k](p, continued);
+
   const counts = useMemo(() => {
     const c = {} as Record<ClientFilter, number>;
-    FILTERS.forEach((f) => { c[f.key] = rows.filter(matchers[f.key]).length; });
+    FILTERS.forEach((f) => { c[f.key] = rows.filter(test(f.key)).length; });
     return c;
-  }, [rows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, successors]);
 
   const filtered = useMemo(() => {
     const q = term.trim().toLowerCase();
-    const base = rows.filter(matchers[filter]).filter((r) => !q || [r.member_name, r.member_code, r.trainer_name, r.package_name]
+    const base = rows.filter(test(filter)).filter((r) => !q || [r.member_name, r.member_code, r.trainer_name, r.package_name]
       .filter(Boolean).join(' ').toLowerCase().includes(q));
     const dir = asc ? 1 : -1;
     return base.sort((a, b) => {
@@ -125,7 +132,8 @@ export function ClientsTable(props: Props) {
       if (sort === 'progress') return dir * (progressOf(a).pct - progressOf(b).pct);
       return dir * (new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
     });
-  }, [rows, filter, term, sort, asc]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, successors, filter, term, sort, asc]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -173,6 +181,16 @@ export function ClientsTable(props: Props) {
   }
 
   function PrimaryButton({ pkg }: { pkg: PTMemberPackageRow }) {
+    const queued = queuedRenewalOf(pkg, successors.get(pkg.id) ?? null);
+    if (queued && (pkg.due ?? 0) <= 0 && !(pkg.trainer_active === false && canManage)) {
+      const when = queued.start_date ? format(new Date(queued.start_date), 'dd MMM') : '';
+      return (
+        <span className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 text-sm font-medium text-emerald-600"
+          aria-label={`Already renewed${when ? `, next package starts ${when}` : ''}`}>
+          <CheckCircle2 className="h-4 w-4" aria-hidden />Renewed{when && ` · ${when}`}
+        </span>
+      );
+    }
     const a = primaryOf(pkg);
     const busy = a.label === 'Renew' && renewingId === pkg.id;
     return (
@@ -242,7 +260,7 @@ export function ClientsTable(props: Props) {
     );
   }
 
-  const needsTrainerRows = rows.filter(matchers.needs_trainer);
+  const needsTrainerRows = rows.filter(test('needs_trainer'));
 
   return (
     <Card className={shell}>
@@ -252,7 +270,7 @@ export function ClientsTable(props: Props) {
             const active = filter === f.key;
             const alert = f.warn && counts[f.key] > 0;
             return (
-              <button key={f.key} role="tab" aria-selected={active} type="button"
+              <button key={f.key} role="tab" aria-selected={active} type="button" aria-label={`${f.label}: ${counts[f.key]}`}
                 onClick={() => { setFilter(f.key); setPage(0); }}
                 className={cn(
                   'inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
