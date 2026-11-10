@@ -568,7 +568,19 @@ export default function POSPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 pb-24 lg:pb-0">
+        {cart.length > 0 && (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur px-4 pt-3 pb-safe lg:hidden">
+            <Button
+              className="mb-3 h-12 w-full justify-between rounded-xl"
+              onClick={() => document.getElementById('pos-cart')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              aria-label={`View cart, ${cart.length} items, total ₹${cartTotal.toLocaleString()}`}
+            >
+              <span className="flex items-center gap-2"><ShoppingCart className="h-4 w-4" aria-hidden /> Cart ({cart.length})</span>
+              <span className="tabular-nums">₹{cartTotal.toLocaleString()}</span>
+            </Button>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">Point of Sale</h1>
           <Badge variant="secondary" className="text-sm sm:text-lg px-3 sm:px-4 py-1.5 sm:py-2">
