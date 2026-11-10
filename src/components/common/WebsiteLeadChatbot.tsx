@@ -361,7 +361,7 @@ export default function WebsiteLeadChatbot() {
           </ol>
 
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/40 px-4 py-4" aria-live="polite" aria-relevant="additions">
-            {messages.map((m, i) => (
+            {step !== 'form' && step !== 'saving' && messages.map((m, i) => (
               <div key={i} className={cn('flex', m.from === 'user' ? 'justify-end' : 'justify-start')}>
                 <p className={cn('max-w-[85%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-relaxed',
                   m.from === 'user' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm border border-border bg-card text-foreground')}>
@@ -380,7 +380,9 @@ export default function WebsiteLeadChatbot() {
               </div>
             ))}
             {(typing || step === 'saving') && (
-              <div className="flex justify-start" aria-label={step === 'saving' ? 'Saving your enquiry' : 'Incline is typing'}>
+              <div className={cn('flex', step === 'saving' ? 'flex-col items-center gap-3 py-16 text-sm text-muted-foreground' : 'justify-start')} aria-label={step === 'saving' ? 'Saving your enquiry' : 'Incline is typing'}>
+                {step === 'saving' && <Loader2 className="h-6 w-6 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />}
+                {step === 'saving' && <p>Saving your details and connecting you…</p>}
                 <span className="flex gap-1 rounded-2xl rounded-bl-sm border border-border bg-card px-3 py-3">
                   {[0, 1, 2].map((d) => <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground motion-reduce:animate-none" style={{ animationDelay: `${d * 120}ms` }} />)}
                 </span>
