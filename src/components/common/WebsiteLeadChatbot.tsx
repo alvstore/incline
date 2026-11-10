@@ -351,7 +351,7 @@ export default function WebsiteLeadChatbot() {
               <X className="h-4 w-4" />
             </button>
           </header>
-          <ol className="flex items-center gap-2 border-b border-border bg-card px-4 py-2" aria-label="Progress">
+          <ol className={cn('flex items-center gap-2 border-b border-border bg-card px-4 py-2', step === 'form' && 'hidden')} aria-label="Progress">
             {STAGES.map((s, i) => (
               <li key={s} className="flex flex-1 flex-col gap-1" aria-current={i === stage ? 'step' : undefined}>
                 <span className={cn('h-1 rounded-full transition-colors duration-300', i <= stage ? 'bg-accent' : 'bg-muted')} />
