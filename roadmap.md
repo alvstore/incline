@@ -1,3 +1,7 @@
+# Mobile HOWBODY height picker (10 Nov 2026)
+- [x] Replace scanner height text entry with a dual-unit scroll wheel and manual-entry fallback; retain centimetre validation and prevent accidental default submission.
+- [ ] Verify Mohit Gurjar’s signed-in flow, mobile gestures/keyboard/manual entry, and capture mobile screenshots without sending a test scan to hardware.
+
 # Selected permission and insights errors (10 Nov 2026)
 - [x] Restore caller-bound trainer workout policy access; live trainer SELECT succeeds, internal/anonymous helper calls remain blocked. Four live permission tests pass; actual client progress drawer shows the cardio section without errors.
 - [x] Replace fabricated insight authors with validated real accounts; six attribution tests pass, function deployed, signed-in owner refresh saves a valid-author forecast and reads it back. Automatic build OK.
