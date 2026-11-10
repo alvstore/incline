@@ -1,0 +1,8 @@
+.height-wheel { perspective: 600px; }
+.height-wheel-track { scrollbar-width: none; scroll-snap-type: y mandatory; overscroll-behavior-y: contain; }
+.height-wheel-track::-webkit-scrollbar { display: none; }
+.height-wheel-row { scroll-snap-align: center; }
+.height-wheel-mask { background: linear-gradient(to bottom, hsl(var(--card)), transparent 35%, transparent 65%, hsl(var(--card))); }
+@media (prefers-reduced-motion: reduce) {
+  .height-wheel-track { scroll-behavior: auto; }
+}

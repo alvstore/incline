@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getHowbodyDeviceLabel } from "@/services/howbodyDeviceService";
-import { HeightInput } from "@/components/scans/HeightInput";
+import { HeightWheelPicker } from "@/components/scans/HeightWheelPicker";
 import { isValidHeightCm } from "@/lib/scans/height";
 import { Loader2, ScanLine, CheckCircle2, AlertTriangle, Search, ShieldCheck } from "lucide-react";
 
@@ -264,7 +264,7 @@ export default function HowbodyLogin() {
         <div className="flex items-start gap-3">
           <div className="rounded-full bg-success/10 p-2 text-success"><ScanLine className="h-6 w-6" /></div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold">Body Scanner Login</h2>
+            <h2 className="text-lg font-bold">Link your body scan</h2>
             <p className="text-sm text-muted-foreground">
               {deviceLabel ? <span className="font-medium text-foreground">{deviceLabel}</span> : "Device"}
               {" · "}<span className="font-mono text-xs">{equipmentNo}</span>
@@ -279,26 +279,27 @@ export default function HowbodyLogin() {
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scan type</p>
           <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Scan type">
             {(["body", "posture"] as ScanKind[]).map((k) => (
-              <button
+              <Button
                 key={k}
+                variant="outline"
                 type="button"
                 aria-pressed={kind === k}
                 onClick={() => setKind(k)}
                 disabled={status === "binding"}
-                className={`cursor-pointer rounded-xl border p-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
+                className={`h-auto min-h-11 cursor-pointer whitespace-normal rounded-xl border px-2 py-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
                   kind === k
                     ? "border-success/40 bg-success/10 text-success"
                     : "border-border text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {k === "body" ? "Body composition" : "Posture"}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         <div className="mt-5">
-          <HeightInput
+          <HeightWheelPicker
             valueCm={height}
             onChangeCm={(cm) => { setHeight(cm); setHeightPrefilled(false); }}
             disabled={status === "binding"}
@@ -316,7 +317,7 @@ export default function HowbodyLogin() {
             </div>
             <Button
               onClick={() => bindMember(memberId)}
-              disabled={status === "binding"}
+              disabled={status === "binding" || !isValidHeightCm(Number.parseFloat(height))}
               className="w-full bg-success hover:bg-success"
             >
               {status === "binding" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -342,7 +343,7 @@ export default function HowbodyLogin() {
                 placeholder="Name, phone, or member code"
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
-              <Button onClick={handleSearch} disabled={searching} variant="outline">
+              <Button onClick={handleSearch} disabled={searching} variant="outline" aria-label="Search members">
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               </Button>
             </div>
@@ -352,7 +353,7 @@ export default function HowbodyLogin() {
                 <button
                   key={m.id}
                   onClick={() => bindMember(m.id)}
-                  disabled={status === "binding"}
+                  disabled={status === "binding" || !isValidHeightCm(Number.parseFloat(height))}
                   className="flex w-full items-center justify-between rounded-xl border border-border p-3 text-left transition hover:border-success/40 hover:bg-success/10 disabled:opacity-50"
                 >
                   <div>
@@ -377,7 +378,7 @@ export default function HowbodyLogin() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-muted via-white to-success/10 px-4 py-8">
+    <div className="min-h-[100dvh] bg-background px-4 py-5 pb-safe">
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
           <p className="text-xs uppercase tracking-[0.2em] text-success">Incline · Body Scan</p>
