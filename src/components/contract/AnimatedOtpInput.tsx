@@ -1,5 +1,4 @@
-import { useContext } from 'react';
-import { OTPInput, OTPInputContext } from 'input-otp';
+import { OTPInput, type SlotProps } from 'input-otp';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -13,10 +12,11 @@ interface Props {
   id?: string;
 }
 
-function Slot({ index, error }: { index: number; error?: boolean }) {
-  const ctx = useContext(OTPInputContext);
+function Slot({ index, slot, error }: { index: number; slot?: SlotProps; error?: boolean }) {
   const reduce = useReducedMotion();
-  const { char, isActive, hasFakeCaret } = ctx.slots[index];
+  const char = slot?.char ?? null;
+  const isActive = !!slot?.isActive;
+  const hasFakeCaret = !!slot?.hasFakeCaret;
   return (
     <motion.div
       initial={reduce ? false : { opacity: 0, y: 10, scale: 0.9 }}
@@ -71,10 +71,10 @@ export function AnimatedOtpInput({ value, onChange, error, errorKey, disabled, i
         aria-label="6-digit verification code"
         aria-invalid={error || undefined}
         containerClassName="flex w-full items-center justify-between gap-1.5 sm:justify-start sm:gap-2.5 has-[:disabled]:opacity-50"
-        render={() => (
+        render={({ slots }) => (
           <>
             {Array.from({ length: 6 }).map((_, i) => (
-              <Slot key={i} index={i} error={error} />
+              <Slot key={i} index={i} slot={slots?.[i]} error={error} />
             ))}
           </>
         )}

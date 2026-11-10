@@ -427,22 +427,21 @@ async function requestOtp(body: any) {
       trainers(user_id)`)
     .eq("id", requestRow.contract_id).single();
 
-  const { name, phone, email } = await resolveRecipient(contract);
+  const t0 = Date.now();
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  // Recipient and throttle count are independent — run them together.
+  const [{ name, phone, email }, { count: recent }] = await Promise.all([
+    resolveRecipient(contract),
+    supabase.from("otp_verifications").select("id", { count: "exact", head: true })
+      .eq("purpose", "contract_sign").eq("context_id", requestRow.id).gte("created_at", tenMinAgo),
+  ]);
+  if ((recent || 0) >= 3) return json({ error: "Too many OTP requests. Please try again in a few minutes." }, 429);
   const { template, channels } = await loadOtpChannelState(phone, email);
   if (channels.length === 0) {
     await logEdgeError("contract-signing:otp_no_channel", "No working OTP channel for contract signer", { request_id: requestRow.id });
     return json({ error: "We couldn't send a code — no working contact method. Please contact HR." }, 422);
   }
-
-  // Throttle: max 3 OTPs per 10 minutes per request — scoped via purpose+context_id.
-  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const { count: recent } = await supabase
-    .from("otp_verifications")
-    .select("id", { count: "exact", head: true })
-    .eq("purpose", "contract_sign")
-    .eq("context_id", requestRow.id)
-    .gte("created_at", tenMinAgo);
-  if ((recent || 0) >= 3) return json({ error: "Too many OTP requests. Please try again in a few minutes." }, 429);
+  console.log(`[otp] lookups ${Date.now() - t0}ms`);
 
   const codeStr = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   const codeHash = await sha256(codeStr);
@@ -478,6 +477,7 @@ async function requestOtp(body: any) {
         force: true,
       },
     });
+    console.log(`[otp] dispatch ${ch} done at ${Date.now() - t0}ms`);
     if (!res.error && dispatchSucceeded(res.data)) {
       return json({
         success: true, channel: ch,
