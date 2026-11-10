@@ -601,7 +601,7 @@ export default function FinancePage() {
                       <TableBody>
                         {combinedIncomeData.slice(0, 30).map((payment: any) => (
                           <TableRow key={payment.id}>
-                            <TableCell>{format(new Date(payment.date), 'MMM d, yyyy')}</TableCell>
+                            <TableCell className="whitespace-nowrap">{format(new Date(payment.date), 'MMM d, yyyy')}</TableCell>
                             <TableCell>
                               <Badge variant={payment.type.includes('POS') ? 'secondary' : 'outline'}>
                                 {payment.type}
