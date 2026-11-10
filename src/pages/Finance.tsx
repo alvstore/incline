@@ -397,7 +397,7 @@ export default function FinancePage() {
         </div>
 
         {/* Revenue Report + Budget Card Row */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
           {/* Revenue Report - Wide */}
           <Card className="lg:col-span-2 rounded-2xl border-none shadow-lg shadow-primary/10">
             <CardHeader>
@@ -472,7 +472,7 @@ export default function FinancePage() {
         </div>
 
         {/* Budget Summary Row */}
-        <div className="grid gap-6 md:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-4 [&>*]:min-w-0">
           <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
             <CardContent className="pt-6 text-center">
               <p className="text-3xl font-bold text-foreground">{formatCurrency(totalIncome)}</p>
@@ -516,7 +516,7 @@ export default function FinancePage() {
         </div>
 
         {/* Transactions Timeline + Income/Expense Tables */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
           {/* Recent Transactions Timeline */}
           <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
             <CardHeader>
@@ -543,7 +543,7 @@ export default function FinancePage() {
                         <p className="text-sm font-semibold text-foreground truncate">{tx.description}</p>
                         <p className="text-xs text-muted-foreground truncate">{tx.member || tx.method}</p>
                       </div>
-                      <span className={`text-sm font-bold tabular-nums ${tx.type === 'income' ? 'text-success' : 'text-destructive'}`}>
+                      <span className={`shrink-0 text-sm font-bold tabular-nums ${tx.type === 'income' ? 'text-success' : 'text-destructive'}`}>
                         {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
                       </span>
                     </div>
@@ -560,7 +560,7 @@ export default function FinancePage() {
           {/* Income / Expenses Tabs - Wide */}
           <div className="lg:col-span-2">
             <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') === 'gst' ? 'gst' : 'income'} className="space-y-4">
-              <TabsList>
+              <TabsList className="h-auto w-full max-w-full justify-start overflow-x-auto sm:w-auto">
                 <TabsTrigger value="income" className="gap-2">
                   <ArrowUpRight className="h-4 w-4 text-success" />
                   Income ({combinedIncomeData.length})
@@ -642,7 +642,7 @@ export default function FinancePage() {
                         <CardDescription>Manage expense submissions and approvals</CardDescription>
                       </div>
                       <Tabs value={expenseTab} onValueChange={setExpenseTab}>
-                        <TabsList>
+                        <TabsList className="h-auto w-full max-w-full justify-start overflow-x-auto sm:w-auto">
                           <TabsTrigger value="pending" className="gap-2">
                             <Clock className="h-4 w-4" />
                             Pending ({pendingExpenses.length})
