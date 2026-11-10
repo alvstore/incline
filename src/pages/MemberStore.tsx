@@ -605,7 +605,7 @@ export default function MemberStore() {
                   const options = g.isGroup && PRODUCT_VARIANTS_ENABLED
                     ? [...g.items].sort((a: any, b: any) => (a.variant_sort ?? 0) - (b.variant_sort ?? 0))
                     : [];
-                  const product: any = options.find((o: any) => o.id === selectedOption[g.key]) ?? options[0] ?? g.items[0];
+                  const product: any = options.find((o: any) => o.id === selectedOption[g.key]) ?? options.find((o: any) => getStockDisplay(o).canAdd) ?? options[0] ?? g.items[0];
                   const title = options.length && product.name.includes(' — ') ? product.name.slice(0, product.name.lastIndexOf(' — ')) : product.name;
                   const stockInfo = getStockDisplay(product);
                   const cartItem = cart.find((item) => item.product.id === product.id);

@@ -611,7 +611,7 @@ export default function POSPage() {
                 {groupVariants(filteredProducts as any[]).map((g) => {
                   if (PRODUCT_VARIANTS_ENABLED && g.isGroup) {
                     const items = [...g.items].sort((a: any, b: any) => (a.variant_sort ?? 0) - (b.variant_sort ?? 0));
-                    const sel: any = items.find((i: any) => i.id === selectedVariant[g.key]) ?? items[0];
+                    const sel: any = items.find((i: any) => i.id === selectedVariant[g.key]) ?? items.find((i: any) => (getStock(i) ?? 0) > 0) ?? items[0];
                     const selStock = getStock(sel);
                     const selOut = selStock !== null && selStock <= 0;
                     const title = sel.name.includes(' — ') ? sel.name.slice(0, sel.name.lastIndexOf(' — ')) : sel.name;
