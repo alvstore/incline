@@ -1115,10 +1115,18 @@ export default function WhatsAppChatPage() {
                               ? 'border-destructive/40 text-destructive bg-destructive/10 dark:bg-destructive/10 dark:border-destructive/30'
                               : contact.platform === 'messenger'
                               ? 'border-info/40 text-info bg-info/10 dark:bg-info/10 dark:border-info/30'
+                              : contact.platform === 'web_chat'
+                              ? 'border-primary/40 text-primary bg-primary/10'
                               : 'border-success/40 text-success bg-success/10 dark:bg-success/10 dark:border-success/30'
                           }`}>
-                            {contact.platform === 'instagram' ? 'IG' : contact.platform === 'messenger' ? 'FB' : 'WA'}
+                            {contact.platform === 'instagram' ? 'IG' : contact.platform === 'messenger' ? 'FB' : contact.platform === 'web_chat' ? 'WEB' : 'WA'}
                           </Badge>
+                          {contact.platform === 'web_chat' && Date.now() - new Date(contact.last_message_time).getTime() < 5 * 60_000 && (
+                            <span className="flex items-center gap-1 text-[10px] font-medium text-success flex-shrink-0">
+                              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse motion-reduce:animate-none" aria-hidden="true" />
+                              Live
+                            </span>
+                          )}
                         </div>
                         <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-2">
                           {formatContactTime(contact.last_message_time)}
