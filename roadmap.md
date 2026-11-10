@@ -1,6 +1,6 @@
 # Mobile HOWBODY height picker (10 Nov 2026)
 - [x] Replace scanner height text entry with a dual-unit scroll wheel and manual-entry fallback; retain centimetre validation and prevent accidental default submission.
-- [ ] Verify Mohit Gurjar’s signed-in flow, mobile gestures/keyboard/manual entry, and capture mobile screenshots without sending a test scan to hardware.
+- [x] Mohit’s real signed-in session prefills 168 cm; keyboard, scroll selection, manual conversion, invalid-height blocking and reduced motion pass at 320–1280px without overflow. Six conversion tests pass; scanner submission is intercepted, not sent to hardware. Preview-wide ref warnings remain; no page errors or failed HTTP responses.
 
 # Selected permission and insights errors (10 Nov 2026)
 - [x] Restore caller-bound trainer workout policy access; live trainer SELECT succeeds, internal/anonymous helper calls remain blocked. Four live permission tests pass; actual client progress drawer shows the cardio section without errors.

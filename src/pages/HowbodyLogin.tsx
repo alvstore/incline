@@ -281,11 +281,12 @@ export default function HowbodyLogin() {
             {(["body", "posture"] as ScanKind[]).map((k) => (
               <Button
                 key={k}
+                variant="outline"
                 type="button"
                 aria-pressed={kind === k}
                 onClick={() => setKind(k)}
                 disabled={status === "binding"}
-                className={`cursor-pointer rounded-xl border p-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
+                className={`h-auto min-h-11 cursor-pointer whitespace-normal rounded-xl border px-2 py-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
                   kind === k
                     ? "border-success/40 bg-success/10 text-success"
                     : "border-border text-muted-foreground hover:bg-muted"

@@ -51,7 +51,7 @@ export function HeightWheelPicker({ valueCm, onChangeCm, disabled, hint }: Heigh
     <div className="min-w-0 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span id={`${id}-label`} className="flex items-center gap-2 text-sm font-semibold"><Ruler className="h-4 w-4 text-primary" />Height</span>
-        <Button variant="ghost" className="min-h-11 px-2 text-xs" disabled={disabled} aria-pressed={manual} onClick={() => setManual(!manual)}>
+        <Button variant="ghost" className="min-h-11 px-2 text-xs" disabled={disabled} aria-pressed={manual} onClick={() => { interacting.current = false; setManual(!manual); }}>
           {manual ? <Ruler /> : <Keyboard />}{manual ? "Scroll height" : "Enter height"}
         </Button>
       </div>
