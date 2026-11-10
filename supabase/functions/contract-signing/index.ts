@@ -583,8 +583,13 @@ async function signContract(req: Request, body: any) {
       const path = `${requestRow.contract_id}/${requestRow.id}.png`;
       const { error: upErr } = await supabase.storage
         .from("signature-assets").upload(path, bytes, { contentType: "image/png", upsert: true });
-      if (!upErr) signatureImagePath = path;
-    } catch (_) { /* best-effort */ }
+      if (upErr) throw new Error(upErr.message);
+      signatureImagePath = path;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await logEdgeError("contract-signing:signature_upload", msg, { request_id: requestRow.id });
+      return json({ error: "Your signature image could not be saved. Please try again." }, 500);
+    }
   }
 
   const { error: insertSignatureError } = await supabase
