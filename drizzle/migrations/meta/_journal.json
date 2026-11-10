@@ -1156,6 +1156,13 @@
       "when": 1794299740571,
       "tag": "0164_pos_zero_stock_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1794323976061,
+      "tag": "0165_pt_purchase_payment_date",
+      "breakpoints": true
     }
   ]
 }

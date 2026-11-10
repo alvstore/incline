@@ -19530,6 +19530,7 @@ export type Database = {
           _idempotency_key: string
           _member_id: string
           _package_id: string
+          _payment_date?: string
           _payment_method: string
           _payment_notes?: string
           _payment_source: string
