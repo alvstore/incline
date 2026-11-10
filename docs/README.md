@@ -4,6 +4,7 @@
 
 - [Flutter Member app — complete guide and roadmap](flutter-member-app-readme.md): member-only app (refuses team accounts), general/PT daily plans, PDFs, progress, HOWBODY, bookings, referrals and release gates.
 - [Flutter Team app — staff/trainer/manager/owner guide and roadmap](flutter-team-app-readme.md): separate role-based app, feature map from the web, verified server functions, release switches, phases T0–T6.
+- [Team mobile PWA motion blueprint](team-pwa-motion-blueprint.md): Halvi-inspired layout and exact GSAP timings, using only Incline theme tokens.
 - [Communication dispatcher](communication-dispatcher.md): canonical outbound delivery architecture.
 - [Browser notifications](browser-notifications.md): web push and privacy boundaries.
 - [Production readiness](production-readiness.md): operational checks and known dependencies.
