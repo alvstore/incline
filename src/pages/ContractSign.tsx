@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { FileSignature, ShieldCheck, Eraser, ScrollText, CheckCircle2, MessageSquare, Mail, Smartphone, KeyRound } from 'lucide-react';
+import { AnimatedOtpInput } from '@/components/contract/AnimatedOtpInput';
 import { useNoindex } from '@/lib/seo/useNoindex';
 
 function extractTerms(terms: any): string {
@@ -376,23 +377,15 @@ export default function ContractSignPage() {
                   <p className="text-xs text-muted-foreground">
                     Code sent via <strong className="capitalize">{otpSent.channel}</strong> to <strong>{otpSent.recipient_masked}</strong>. It expires in 10 minutes.
                   </p>
-                  <div className="flex gap-2 items-end">
-                    <div className="space-y-1 flex-1 max-w-[200px]">
-                      <Label htmlFor="otp" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">6-digit code</Label>
-                      <Input
-                        id="otp"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        maxLength={6}
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="• • • • • •"
-                        className="tracking-widest text-center font-mono text-lg"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="otp" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">6-digit code</Label>
+                    <AnimatedOtpInput id="otp" value={otp} onChange={(v) => { setOtp(v); if (otpError) setOtpError(null); }} error={!!otpError} errorKey={otpError} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="outline"
+                      className="min-h-11 flex-1 sm:flex-none"
                       disabled={resendCooldown > 0 || otpMutation.isPending}
                       onClick={() => otpMutation.mutate(otpSent.channel)}
                     >
@@ -401,6 +394,7 @@ export default function ContractSignPage() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="min-h-11 flex-1 sm:flex-none"
                       onClick={() => { setOtpSent(null); setOtp(''); }}
                     >
                       Change method
