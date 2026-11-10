@@ -570,7 +570,7 @@ export default function POSPage() {
     <AppLayout>
       <div className="space-y-6 pb-24 lg:pb-0">
         {cart.length > 0 && (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur px-4 pt-3 pb-safe lg:hidden">
+          <div className="fixed inset-x-0 bottom-[var(--dock-offset,0px)] z-40 border-t border-border bg-card/95 backdrop-blur px-4 pt-3 pb-safe lg:hidden">
             <Button
               className="mb-3 h-12 w-full justify-between rounded-xl"
               onClick={() => document.getElementById('pos-cart')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}

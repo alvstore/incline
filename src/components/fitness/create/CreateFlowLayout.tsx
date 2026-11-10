@@ -179,7 +179,7 @@ export function CreateFlowLayout({
 
       {/* Mobile action bar — the sticky header hides actions below sm. */}
       {actions && (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t bg-background/95 p-3 pb-safe backdrop-blur sm:hidden [&>*]:flex-1 [&_button]:w-full">
+        <div className="fixed inset-x-0 bottom-[var(--dock-offset,0px)] z-40 flex gap-2 border-t bg-background/95 p-3 pb-safe backdrop-blur sm:hidden [&>*]:flex-1 [&_button]:w-full">
           {actions}
         </div>
       )}

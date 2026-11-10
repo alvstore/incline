@@ -290,7 +290,7 @@ export function NotificationSettings() {
         </TabsContent>
       </Tabs>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 pb-safe md:hidden">
+      <div className="fixed inset-x-0 bottom-[var(--dock-offset,0px)] z-20 flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 pb-safe md:hidden">
         {dirty ? <StatusBadge tone="warn">Unsaved changes</StatusBadge> : <StatusBadge tone="on">All saved</StatusBadge>}
         {saveButton}
       </div>
