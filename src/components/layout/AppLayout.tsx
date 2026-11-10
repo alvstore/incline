@@ -44,7 +44,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const root = document.documentElement;
     if (!showDock) { root.style.removeProperty('--dock-offset'); return; }
     root.style.setProperty('--dock-offset', showTeamMobileNav ? 'calc(max(env(safe-area-inset-bottom), 0.75rem) + 4.5rem)' : 'calc(max(env(safe-area-inset-bottom), 0.5rem) + 4rem)');
-    return () => root.style.removeProperty('--dock-offset');
+    return () => { root.style.removeProperty('--dock-offset'); };
   }, [showDock, showTeamMobileNav]);
 
   // Live presence heartbeat (mounted once globally)
