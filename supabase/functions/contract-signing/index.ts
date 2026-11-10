@@ -1,3 +1,4 @@
+// v5.9.0 — OTP uses the approved verification template, real send result, channel fallback; only live channels offered; failures go to System Health.
 // v5.8.0 — Contract PDFs embed the linked trainer/employee display profile photo; existing signed copies remain unchanged.
 // v5.7.0 — Witnesses come only from the contract (drawer/saved witnesses); employees are never asked; PDF prints witness signatures.
 // v5.6.0 — PDF uses the contract's saved notice days and shows only the selected role's duties.
@@ -25,6 +26,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+import { availableChannels, deliveryOrder, dispatchSucceeded, type OtpChannel } from "./otpChannels.ts";
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 async function logEdgeError(fingerprint: string, message: string, context: Record<string, unknown> = {}) {
@@ -61,6 +63,7 @@ serve(async (req: Request) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    await logEdgeError("contract-signing:fatal", message, {});
     return json({ error: message }, 500);
   }
 });
@@ -301,6 +304,7 @@ async function getContractByToken(body: any) {
       employee_code: code || "-",
       employee_phone_masked: maskPhone(phone),
       employee_email_masked: maskEmail(email),
+      available_channels: (await loadOtpChannelState(phone, email)).channels,
       contract_type: contract.contract_type,
       start_date: contract.start_date,
       end_date: contract.end_date,
@@ -382,6 +386,25 @@ async function fillFields(body: any) {
   });
 }
 
+async function loadOtpChannelState(phone: string | null, email: string | null) {
+  const [tpl, sms] = await Promise.all([
+    supabase.from("templates").select("id, content")
+      .eq("type", "whatsapp").eq("trigger_event", "otp_verification").eq("meta_template_status", "APPROVED")
+      .order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("integration_settings").select("id", { count: "exact", head: true })
+      .eq("integration_type", "sms").eq("is_active", true),
+  ]);
+  const template = tpl.data as { id: string; content: string | null } | null;
+  return {
+    template,
+    channels: availableChannels({
+      hasPhone: !!phone, hasEmail: !!email,
+      whatsappTemplateApproved: !!template?.id,
+      smsProviderActive: (sms.count ?? 0) > 0,
+    }),
+  };
+}
+
 // ── 3. Request OTP (reuses shared otp_verifications + otp_verification template) ──
 async function requestOtp(body: any) {
   const token = body?.token;
@@ -405,8 +428,11 @@ async function requestOtp(body: any) {
     .eq("id", requestRow.contract_id).single();
 
   const { name, phone, email } = await resolveRecipient(contract);
-  const recipient = channel === "email" ? email : phone;
-  if (!recipient) return json({ error: `No ${channel} address on file for this employee` }, 422);
+  const { template, channels } = await loadOtpChannelState(phone, email);
+  if (channels.length === 0) {
+    await logEdgeError("contract-signing:otp_no_channel", "No working OTP channel for contract signer", { request_id: requestRow.id });
+    return json({ error: "We couldn't send a code — no working contact method. Please contact HR." }, 422);
+  }
 
   // Throttle: max 3 OTPs per 10 minutes per request — scoped via purpose+context_id.
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -422,43 +448,50 @@ async function requestOtp(body: any) {
   const codeHash = await sha256(codeStr);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-  await supabase.from("otp_verifications").insert({
-    phone: recipient,            // existing column — works for sms/wa/email recipient
-    code_hash: codeHash,
-    expires_at: expiresAt,
-    purpose: "contract_sign",
-    context_id: requestRow.id,
+  const { error: insErr } = await supabase.from("otp_verifications").insert({
+    phone: channel === "email" ? (email || phone) : (phone || email),
+    code_hash: codeHash, expires_at: expiresAt, purpose: "contract_sign", context_id: requestRow.id,
   });
+  if (insErr) {
+    await logEdgeError("contract-signing:otp_persist", insErr.message, { request_id: requestRow.id });
+    return json({ error: "Could not create a code. Please try again." }, 500);
+  }
 
-  const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: requestRow.branch_id });
-  const employerName = (employer as any)?.legal_name || "Incline";
-
-  // Reuse the existing, Meta-approved `otp_verification` template — variables {{code}}, {{name}}.
-  const dispatchRes = await supabase.functions.invoke("dispatch-communication", {
-    body: {
-      branch_id: requestRow.branch_id,
-      channel,
-      category: "transactional",
-      recipient,
-      event: "otp_verification",
-      payload: {
-        subject: `${employerName} — Verification code`,
-        body: `Your one-time code is ${codeStr}. It expires in 10 minutes. Do not share this code with anyone.`,
-        variables: { code: codeStr, name: name || "there", otp: codeStr, expires_in: "10 minutes", employer_name: employerName },
-        use_branded_template: channel === "email",
+  const failures: Record<string, string> = {};
+  for (const ch of deliveryOrder(channel as OtpChannel, channels)) {
+    const recipient = ch === "email" ? email! : phone!;
+    const payload = ch === "email"
+      ? {
+          subject: "Your Incline verification code",
+          body: `<p>Hi ${name || "there"},</p><p>Your code to sign your employment agreement is <strong style="font-size:24px;letter-spacing:4px">${codeStr}</strong></p><p>It expires in 10 minutes. Do not share this code.</p>`,
+          variables: { code: codeStr },
+        }
+      : ch === "whatsapp"
+      ? { body: template?.content || `*${codeStr}* is your verification code.`, variables: { code: codeStr, otp: codeStr, expires_in: "10", "1": codeStr } }
+      : { body: `Your Incline verification code is ${codeStr}. It expires in 10 minutes.`, variables: { code: codeStr, otp: codeStr } };
+    const res = await supabase.functions.invoke("dispatch-communication", {
+      body: {
+        branch_id: requestRow.branch_id, channel: ch, category: "transactional", recipient,
+        ...(ch === "whatsapp" && template?.id ? { template_id: template.id } : {}),
+        payload,
+        dedupe_key: `contract_sign_otp:${requestRow.id}:${Date.now()}:${ch}`,
+        force: true,
       },
-      dedupe_key: `contract_sign_otp:${requestRow.id}:${Date.now()}:${channel}`,
-      force: true,
-    },
-  });
-  if (dispatchRes.error) return json({ error: "Could not send OTP: " + dispatchRes.error.message }, 500);
+    });
+    if (!res.error && dispatchSucceeded(res.data)) {
+      return json({
+        success: true, channel: ch,
+        recipient_masked: ch === "email" ? maskEmail(recipient) : maskPhone(recipient),
+        expires_at: expiresAt,
+        fallback_used: ch !== channel,
+      });
+    }
+    const d = res.data as { status?: string; error?: string; reason?: string } | null;
+    failures[ch] = res.error?.message || d?.error || d?.reason || d?.status || "unknown";
+  }
 
-  return json({
-    success: true,
-    channel,
-    recipient_masked: channel === "email" ? maskEmail(recipient) : maskPhone(recipient),
-    expires_at: expiresAt,
-  });
+  await logEdgeError("contract-signing:otp_send_failed", "Contract signing code could not be delivered", { request_id: requestRow.id, failures });
+  return json({ error: "We couldn't send a code. Please contact HR." }, 502);
 }
 
 // ── 4. Sign contract (OTP gated) ──────────────────────────────────────────
@@ -550,8 +583,13 @@ async function signContract(req: Request, body: any) {
       const path = `${requestRow.contract_id}/${requestRow.id}.png`;
       const { error: upErr } = await supabase.storage
         .from("signature-assets").upload(path, bytes, { contentType: "image/png", upsert: true });
-      if (!upErr) signatureImagePath = path;
-    } catch (_) { /* best-effort */ }
+      if (upErr) throw new Error(upErr.message);
+      signatureImagePath = path;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await logEdgeError("contract-signing:signature_upload", msg, { request_id: requestRow.id });
+      return json({ error: "Your signature image could not be saved. Please try again." }, 500);
+    }
   }
 
   const { error: insertSignatureError } = await supabase
@@ -568,7 +606,10 @@ async function signContract(req: Request, body: any) {
       geolocation,
       terms_hash_at_sign: termsHashAtSign,
     });
-  if (insertSignatureError) return json({ error: "Failed to store signature: " + insertSignatureError.message }, 500);
+  if (insertSignatureError) {
+    await logEdgeError("contract-signing:sign_store", insertSignatureError.message, { request_id: requestRow.id });
+    return json({ error: "Failed to store signature: " + insertSignatureError.message }, 500);
+  }
 
   await supabase.from("contract_signature_requests").update({
     status: "signed", used_at: now, signer_name: signedName, signer_contact: signerContact || null,
