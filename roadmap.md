@@ -1,8 +1,9 @@
 # Selected permission and insights errors (10 Nov 2026)
-- [ ] Restore caller-bound trainer workout policy access without exposing the internal ownership helper.
-- [ ] Replace fabricated insight authors with validated real accounts; test and deploy.
-- [ ] Verify authenticated dashboard reads/generation and role-scoped workout reads; resolve only verified error groups.
-- [ ] Publish current server-only dashboard frontend after security review.
+- [x] Restore caller-bound trainer workout policy access; live trainer SELECT succeeds, internal/anonymous helper calls remain blocked. Four live permission tests pass; actual client progress drawer shows the cardio section without errors.
+- [x] Replace fabricated insight authors with validated real accounts; six attribution tests pass, function deployed, signed-in owner refresh saves a valid-author forecast and reads it back. Automatic build OK.
+- [x] Verify owner dashboard load/refresh: only table GETs and function POSTs, no direct browser writes or insight HTTP failures. Resolve only the two verified historical dashboard groups.
+- [ ] Member `/my-progress` and populated same-/cross-branch RLS regression checks require a member session and privileged test connection; injected session is trainer, managed shell cannot assume authenticated/service roles. Rolled-back SQL suite is retained but could not run; no workout rows were created. Progress error remains open pending member confirmation.
+- [ ] Published frontend update remains the user's Publish → Update action; current preview is verified, live-site deployment was not requested separately.
 
 # Audit-log follow-up (9 Nov 2026)
 - [x] Fold exact repeats within 60 seconds before pagination; expandable timestamps/references and raw CSV preserve evidence. Eight tests pass; temporary browser fixture verified folding, expansion and unfolding without inserting audit rows.
