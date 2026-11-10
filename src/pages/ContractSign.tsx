@@ -39,6 +39,8 @@ export default function ContractSignPage() {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState<{ channel: Channel; recipient_masked: string; expires_at: string } | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [signError, setSignError] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['public-contract-sign', token],
@@ -88,12 +90,19 @@ export default function ContractSignPage() {
       if (data?.error) throw new Error(data.error);
       return data;
     },
+    onMutate: () => setOtpError(null),
     onSuccess: (data) => {
       setOtpSent({ channel: data.channel, recipient_masked: data.recipient_masked, expires_at: data.expires_at });
       setResendCooldown(30);
-      toast.success(`Code sent to ${data.recipient_masked}`);
+      toast.success(data.fallback_used
+        ? `That method was unavailable — code sent via ${data.channel} to ${data.recipient_masked}`
+        : `Code sent to ${data.recipient_masked}`);
     },
-    onError: (err: any) => toast.error(err?.message || 'Failed to send code'),
+    onError: (err: Error) => {
+      const msg = err?.message || "We couldn't send a code. Please contact HR.";
+      setOtpError(msg);
+      toast.error(msg);
+    },
   });
 
   const signMutation = useMutation({
@@ -122,11 +131,16 @@ export default function ContractSignPage() {
       if (data?.error) throw new Error(data.error);
       return data;
     },
+    onMutate: () => setSignError(null),
     onSuccess: () => {
       toast.success('Contract signed successfully');
       setSigned(true);
     },
-    onError: (err: any) => toast.error(err?.message || 'Failed to sign contract'),
+    onError: (err: Error) => {
+      const msg = err?.message || 'Failed to sign contract';
+      setSignError(msg);
+      toast.error(msg);
+    },
   });
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading contract...</div>;
@@ -169,6 +183,7 @@ export default function ContractSignPage() {
     /^\d{6}$/.test(otp) &&
     !signMutation.isPending;
 
+  const channels: Channel[] = Array.isArray(contract.available_channels) ? contract.available_channels : [];
   const hasPhone = !!contract.employee_phone_masked;
   const hasEmail = !!contract.employee_email_masked;
 
@@ -222,6 +237,9 @@ export default function ContractSignPage() {
             <Separator />
 
             {/* OTP block */}
+            <div aria-live="polite" role="status" className="sr-only">
+              {otpSent ? `Code sent via ${otpSent.channel} to ${otpSent.recipient_masked}` : ''}
+            </div>
             <div className="rounded-xl border border-primary/15 bg-primary/10 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-primary" />
@@ -231,28 +249,31 @@ export default function ContractSignPage() {
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">Send a 6-digit code to your registered contact to confirm it's really you.</p>
                   <div className="flex flex-wrap gap-2">
-                    {hasPhone && (
+                    {channels.includes('whatsapp') && (
                       <Button size="sm" variant="outline" disabled={otpMutation.isPending}
                         onClick={() => otpMutation.mutate('whatsapp')}>
                         <MessageSquare className="h-3.5 w-3.5 mr-1" /> WhatsApp to {contract.employee_phone_masked}
                       </Button>
                     )}
-                    {hasPhone && (
+                    {channels.includes('sms') && (
                       <Button size="sm" variant="outline" disabled={otpMutation.isPending}
                         onClick={() => otpMutation.mutate('sms')}>
                         <Smartphone className="h-3.5 w-3.5 mr-1" /> SMS to {contract.employee_phone_masked}
                       </Button>
                     )}
-                    {hasEmail && (
+                    {channels.includes('email') && (
                       <Button size="sm" variant="outline" disabled={otpMutation.isPending}
                         onClick={() => otpMutation.mutate('email')}>
                         <Mail className="h-3.5 w-3.5 mr-1" /> Email to {contract.employee_email_masked}
                       </Button>
                     )}
-                    {!hasPhone && !hasEmail && (
-                      <p className="text-xs text-destructive">No phone or email on record. Please contact HR.</p>
+                    {channels.length === 0 && (
+                      <p className="text-xs text-destructive">
+                        {!hasPhone && !hasEmail ? 'No phone or email on record.' : 'No way to send a code right now.'} Please contact HR.
+                      </p>
                     )}
                   </div>
+                  {otpMutation.isPending && <p className="text-xs text-muted-foreground">Sending code…</p>}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -291,6 +312,7 @@ export default function ContractSignPage() {
                   </div>
                 </div>
               )}
+              {otpError && <p role="alert" className="text-xs text-destructive">{otpError}</p>}
             </div>
 
             <div className="space-y-4">
