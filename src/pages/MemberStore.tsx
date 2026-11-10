@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { hashCart } from '@/lib/cartHash';
+import { stockFor } from '@/lib/store/stockStatus';
 import { AddOnShowcase } from '@/components/member/store/AddOnShowcase';
 
 
@@ -285,7 +286,14 @@ export default function MemberStore() {
 
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to place order');
+      const msg: string = error?.message || '';
+      if (msg.includes('OUT_OF_STOCK')) {
+        // Someone bought the last unit meanwhile — refresh counts so the cart can be fixed.
+        queryClient.invalidateQueries({ queryKey: ['store-products'] });
+        toast.error('Not enough stock', { description: msg.replace(/^.*OUT_OF_STOCK:\s*/, '') + '. Please adjust your cart.' });
+        return;
+      }
+      toast.error(msg || 'Failed to place order');
     },
   });
 
@@ -312,13 +320,12 @@ export default function MemberStore() {
 
 
   const getStockDisplay = (product: any) => {
-    const hasInventory = product.inventory && product.inventory.length > 0;
-    const stock = hasInventory ? product.inventory[0].quantity : null;
-    
-    if (!hasInventory) {
-      return { text: 'Available', canAdd: true, stock: null };
+    // Batch-tracked items are confirmed by the server at checkout; everything else follows the shared rule.
+    if (product.requires_batch_tracking) {
+      return { text: 'Available', canAdd: true, stock: null as number | null };
     }
-    if (stock === 0) {
+    const stock = stockFor(product, actor?.branch_id);
+    if (stock <= 0) {
       return { text: 'Out of Stock', canAdd: false, stock: 0 };
     }
     return { text: `${stock} in stock`, canAdd: true, stock };
@@ -598,7 +605,7 @@ export default function MemberStore() {
                   const options = g.isGroup && PRODUCT_VARIANTS_ENABLED
                     ? [...g.items].sort((a: any, b: any) => (a.variant_sort ?? 0) - (b.variant_sort ?? 0))
                     : [];
-                  const product: any = options.find((o: any) => o.id === selectedOption[g.key]) ?? options[0] ?? g.items[0];
+                  const product: any = options.find((o: any) => o.id === selectedOption[g.key]) ?? options.find((o: any) => getStockDisplay(o).canAdd) ?? options[0] ?? g.items[0];
                   const title = options.length && product.name.includes(' — ') ? product.name.slice(0, product.name.lastIndexOf(' — ')) : product.name;
                   const stockInfo = getStockDisplay(product);
                   const cartItem = cart.find((item) => item.product.id === product.id);

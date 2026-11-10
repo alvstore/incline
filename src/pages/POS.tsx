@@ -24,6 +24,7 @@ import { buildPaymentReceiptPdf } from '@/utils/pdfBlob';
 import { blobToBase64 } from '@/utils/uploadAttachment';
 import { sendWhatsAppDocument } from '@/utils/whatsappDocumentSender';
 import { PRODUCT_VARIANTS_ENABLED, groupVariants, priceRange } from '@/lib/products/variantRules';
+import { stockFor, minStockFor } from '@/lib/store/stockStatus';
 
 export default function POSPage() {
   const queryClient = useQueryClient();
@@ -381,19 +382,11 @@ export default function POSPage() {
     },
   });
 
-  const getStock = (product: any): number | null => {
-    if (product.requires_batch_tracking) {
-      // Stock comes from active, non-expired batches only
-      return batchMap.get(product.id)?.totalQty ?? 0;
-    }
-    const inv = (product.inventory ?? []).find((i: { branch_id: string }) => i.branch_id === effectiveBranchId);
-    if (!inv) return null; // No stock row for this branch → not counted
-    return inv.quantity ?? 0;
-  };
+  // Shared rule: no stock row for this branch = 0 on the shelf (server refuses the sale too).
+  const getStock = (product: any): number | null =>
+    stockFor(product, effectiveBranchId, batchMap.get(product.id)?.totalQty);
 
-  const getMinStock = (product: any): number => {
-    return (product.inventory ?? []).find((i: { branch_id: string }) => i.branch_id === effectiveBranchId)?.min_quantity ?? 5;
-  };
+  const getMinStock = (product: any): number => minStockFor(product, effectiveBranchId);
 
   const addToCart = (product: any) => {
     const stock = getStock(product);
@@ -618,7 +611,7 @@ export default function POSPage() {
                 {groupVariants(filteredProducts as any[]).map((g) => {
                   if (PRODUCT_VARIANTS_ENABLED && g.isGroup) {
                     const items = [...g.items].sort((a: any, b: any) => (a.variant_sort ?? 0) - (b.variant_sort ?? 0));
-                    const sel: any = items.find((i: any) => i.id === selectedVariant[g.key]) ?? items[0];
+                    const sel: any = items.find((i: any) => i.id === selectedVariant[g.key]) ?? items.find((i: any) => (getStock(i) ?? 0) > 0) ?? items[0];
                     const selStock = getStock(sel);
                     const selOut = selStock !== null && selStock <= 0;
                     const title = sel.name.includes(' — ') ? sel.name.slice(0, sel.name.lastIndexOf(' — ')) : sel.name;
