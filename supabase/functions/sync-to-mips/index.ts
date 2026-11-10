@@ -1,3 +1,4 @@
+// v3.10.0 — new/changed MIPS personId ignores saved photo hash and forces upload + gate push.
 // v3.9.0 — trainers who are also active employees delegate to the employee gate identity (fixes "Mobile already exists").
 // v3.8.0 — remove historical-delivery veto of real changes; honour explicit repair events.
 // v3.7.0 — future validity lock preserves enrolled faces when access is blocked.
@@ -1320,14 +1321,23 @@ Deno.serve(async (req) => {
     // while 16 faces were missing from the gates.
     let photoResult = { success: false, message: "No photo available" } as any;
     let knownPhotoHash: string | null = null;
-    if (photoUrl && force !== true) {
+    // v3.10.0 — a saved photo hash only proves the face is on THIS MIPS person.
+    // If the person was just (re)created or its personId changed, the new record
+    // has no face, so the hash must not skip the upload or the gate push.
+    let identityChanged = !existing;
+    {
       const { data: hashRow } = await supabase
         .from(tableName)
-        .select("mips_photo_hash")
+        .select("mips_photo_hash, mips_person_id")
         .eq("id", person_id)
         .maybeSingle();
-      knownPhotoHash = (hashRow as any)?.mips_photo_hash ?? null;
+      const storedPid = (hashRow as any)?.mips_person_id ?? null;
+      if (!storedPid || String(storedPid) !== String(personId)) identityChanged = true;
+      if (photoUrl && force !== true && !identityChanged) {
+        knownPhotoHash = (hashRow as any)?.mips_photo_hash ?? null;
+      }
     }
+    if (identityChanged) console.log(`MIPS identity new/changed (personId=${personId}) — forcing photo upload and gate push`);
     if (photoUrl) {
       const photoStarted = Date.now();
       try {
@@ -1399,7 +1409,7 @@ Deno.serve(async (req) => {
       dispatchResult = { skipped: true, reason: "deploy_to_devices=false" };
     } else {
       try {
-        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id, force === true,
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id, force === true || identityChanged,
           // Photo fingerprint, not file location: a re-uploaded face reuses the
           // same storage path, so the path alone made new photos look unchanged.
           `${String(validTimeBegin).slice(0, 10)}|${String(validTimeEnd).slice(0, 10)}|${photoSource ?? ""}:${photoResult?.hash ?? String(photoUrl || "").split("?")[0]}`);
