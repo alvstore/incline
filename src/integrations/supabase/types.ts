@@ -18703,6 +18703,20 @@ export type Database = {
         Args: { p_waitlist_id: string }
         Returns: Json
       }
+      list_inbox_threads: {
+        Args: { p_branch?: string }
+        Returns: {
+          contact_avatar_url: string
+          contact_name: string
+          direction: string
+          has_messages: boolean
+          last_message: string
+          last_message_time: string
+          member_id: string
+          phone_number: string
+          platform: string
+        }[]
+      }
       list_members_page: {
         Args: {
           p_branch_id?: string
