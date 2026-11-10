@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   DoorOpen, LayoutDashboard, ListChecks, Menu, Plus, ReceiptIndianRupee,
-  ScanLine, ShoppingCart, UserPlus, Users, Wallet, X, type LucideIcon,
+  ScanLine, ShoppingCart, UserPlus, Users, Wallet, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { openMobileMenu } from '@/components/layout/AppSidebar';
@@ -132,7 +132,7 @@ export function TeamMobileDock() {
             className="mx-1 grid h-14 w-14 shrink-0 -translate-y-3 cursor-pointer place-items-center rounded-full bg-accent text-accent-foreground shadow-lg ring-4 ring-background focus-visible:outline-none focus-visible:ring-primary"
           >
             <motion.span animate={{ rotate: open ? 45 : 0 }} transition={spring} className="grid place-items-center">
-              {open ? <X className="h-6 w-6" aria-hidden /> : <Plus className="h-6 w-6" aria-hidden />}
+              <Plus className="h-6 w-6" aria-hidden />
             </motion.span>
           </motion.button>
           {right.map(renderTab)}
