@@ -374,6 +374,7 @@ export default function ContractSignPage() {
                 <ShieldCheck className="h-4 w-4 mr-2" />
                 {signMutation.isPending ? 'Signing...' : 'Sign contract'}
               </Button>
+              {signError && <p role="alert" className="text-sm text-destructive">{signError}</p>}
             </div>
           </CardContent>
         </Card>
