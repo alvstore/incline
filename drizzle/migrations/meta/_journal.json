@@ -1128,6 +1128,13 @@
       "when": 1794254594287,
       "tag": "0160_ai_insights_persistence_forecast",
       "breakpoints": true
+    },
+    {
+      "idx": 161,
+      "version": "7",
+      "when": 1794288350309,
+      "tag": "0161_trainer_workout_policy_caller_guard",
+      "breakpoints": true
     }
   ]
 }

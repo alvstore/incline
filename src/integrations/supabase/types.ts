@@ -20381,6 +20381,10 @@ export type Database = {
         Returns: number
       }
       touch_presence: { Args: never; Returns: undefined }
+      trainer_can_read_member_runs: {
+        Args: { p_member: string }
+        Returns: boolean
+      }
       trainer_can_view_member: {
         Args: { _member_id: string; _user_id: string }
         Returns: boolean
