@@ -152,7 +152,7 @@ export default function WebsiteLeadChatbot() {
           phone: normalizeIndianMobile(phone),
           plan_interest: interest,
           fitness_goal: goal || undefined,
-          notes: intent ? `Enquiry type: ${intent}${goal ? ` · Goal: ${goal}` : ''}` : undefined,
+          notes: intent ? `Enquiry type: ${intent}${goal ? ` · Goal: ${goal}` : ''}${duration && intent !== 'Just exploring' ? ` · Preferred plan: ${duration}` : ''}` : undefined,
           submission_id: submissionId.current,
           company_website: hp,
           utm_source: ft?.utm_source || params.get('utm_source') || null,
@@ -251,27 +251,54 @@ export default function WebsiteLeadChatbot() {
   };
 
 
-  const submitForm = (e: FormEvent) => {
-    e.preventDefault();
+  const [wiz, setWiz] = useState(0);
+  const skipPlan = intent === 'Just exploring';
+  const wizSteps = skipPlan ? [0, 1, 2, 4] : [0, 1, 2, 3, 4];
+  const validateWiz = (s: number): FormErrors => {
     const errs: FormErrors = {};
     const n = name.trim();
-    if (n.length < 2 || !/^[\p{L} .'-]+$/u.test(n)) errs.name = 'Please enter your full name (letters only).';
-    if (!normalizeIndianMobile(phone)) errs.phone = 'Enter a valid 10-digit Indian mobile number.';
-    if (!email.trim()) errs.email = `Email is required. ${EMAIL_REQUIRED_COPY}`;
-    else if (!isValidEmail(email.trim())) errs.email = 'Please enter a valid email, like name@example.com.';
-    if (!intent) errs.intent = 'Please choose what you are looking for.';
-    if (intent === 'Membership' && !duration) errs.duration = 'Please choose a membership duration.';
-    if (!goal) errs.goal = 'Please choose your main goal.';
+    if (s === 0) {
+      if (n.length < 2 || !/^[\p{L} .'-]+$/u.test(n)) errs.name = 'Please enter your full name (letters only).';
+      if (!normalizeIndianMobile(phone)) errs.phone = 'Enter a valid 10-digit Indian mobile number.';
+      if (!email.trim()) errs.email = `Email is required. ${EMAIL_REQUIRED_COPY}`;
+      else if (!isValidEmail(email.trim())) errs.email = 'Please enter a valid email, like name@example.com.';
+    }
+    if (s === 1 && !intent) errs.intent = 'Please choose what you are looking for.';
+    if (s === 2 && !goal) errs.goal = 'Please choose your main goal.';
+    if (s === 3 && !skipPlan && !duration) errs.duration = 'Please choose a plan, or "Not sure yet".';
+    return errs;
+  };
+  const goNext = () => {
+    const errs = validateWiz(wiz);
     setFormErrors(errs);
     if (Object.keys(errs).length) {
       const first = Object.keys(errs)[0];
       requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus());
       return;
     }
+    const i = wizSteps.indexOf(wiz);
+    setWiz(wizSteps[Math.min(i + 1, wizSteps.length - 1)]);
+  };
+  const goBack = () => { const i = wizSteps.indexOf(wiz); setFormErrors({}); setWiz(wizSteps[Math.max(i - 1, 0)]); };
+  useEffect(() => { if (open && step === 'form') panelRef.current?.querySelector<HTMLElement>('[data-step-focus]')?.focus(); }, [wiz]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitForm = (e: FormEvent) => {
+    e.preventDefault();
+    if (wiz !== 4) { goNext(); return; }
+    const errs: FormErrors = { ...validateWiz(0), ...validateWiz(1), ...validateWiz(2), ...validateWiz(3) };
+    setFormErrors(errs);
+    if (Object.keys(errs).length) { setWiz(errs.name || errs.phone || errs.email ? 0 : errs.intent ? 1 : errs.goal ? 2 : 3); return; }
+    const n = name.trim();
+    if (Object.keys(errs).length) {
+      const first = Object.keys(errs)[0];
+      requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>(`[data-field="${first}"]`)?.focus());
+      return;
+    }
     setName(n); setEmail(email.trim());
-    const chosen = intent === 'Membership' ? `${duration} membership` : intent;
-    setInterest(chosen);
-    const summary = `${n} · ${chosen} · ${goal}`;
+    const plan = !skipPlan && duration && duration !== 'Not sure yet' ? duration : '';
+    const chosen = plan ? (intent === 'Membership' ? plan : `${intent} · ${plan}`) : intent;
+    setInterest(chosen.slice(0, 60));
+    const summary = `${n} · ${intent}${plan ? ` · ${plan}` : ''} · ${goal}`;
     if (lastSubmitted.current !== summary) { userSay(summary); lastSubmitted.current = summary; }
     // A counter (not `interest`) triggers the save, so retries with unchanged answers still send.
     setSaveTick((t) => t + 1);
