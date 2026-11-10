@@ -1,5 +1,15 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { hasSuccessor, normalizePtSettings, ptReminderMark, type PtPkg } from "./ptExpiry.ts";
+import { PT_REMINDER_ACTION_URLS, hasSuccessor, normalizePtSettings, ptReminderMark, type PtPkg } from "./ptExpiry.ts";
+
+Deno.test("trainer reminders open the trainer-authorized client list", () => {
+  assertEquals(PT_REMINDER_ACTION_URLS.trainer, "/my-clients");
+});
+Deno.test("manager reminders retain the staff PT client workspace", () => {
+  assertEquals(PT_REMINDER_ACTION_URLS.manager, "/pt-sessions?tab=clients");
+});
+Deno.test("member reminders retain the member PT workspace", () => {
+  assertEquals(PT_REMINDER_ACTION_URLS.member, "/my-pt-sessions");
+});
 
 const pkg = (o: Partial<PtPkg>): PtPkg => ({ id: "a", member_id: "m", status: "active", expiry_date: "2026-11-16", sessions_total: 0, sessions_remaining: 0, ...o });
 

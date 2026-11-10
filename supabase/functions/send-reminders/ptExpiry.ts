@@ -2,6 +2,13 @@
 export type PtAudience = "member" | "trainer" | "manager";
 export type PtChannel = "notification" | "email" | "sms" | "rcs" | "whatsapp";
 
+/** Keep each audience on its existing role-authorized PT workspace. */
+export const PT_REMINDER_ACTION_URLS: Record<PtAudience, string> = {
+  member: "/my-pt-sessions",
+  trainer: "/my-clients",
+  manager: "/pt-sessions?tab=clients",
+};
+
 export interface PtExpirySettings {
   low_sessions: number;
   audiences: Record<PtAudience, { enabled: boolean; channels: PtChannel[] }>;
