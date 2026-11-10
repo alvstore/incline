@@ -43,7 +43,7 @@ function Slot({ index, error }: { index: number; error?: boolean }) {
       </AnimatePresence>
       {hasFakeCaret && (
         <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="h-6 w-0.5 animate-caret-blink rounded bg-primary" />
+          <span className="h-6 w-0.5 animate-pulse rounded bg-primary" />
         </span>
       )}
     </motion.div>
