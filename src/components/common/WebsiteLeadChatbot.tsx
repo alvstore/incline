@@ -198,7 +198,7 @@ export default function WebsiteLeadChatbot() {
       } else {
         setLeadId(data.lead_id ?? null);
         const welcome = [
-          { text: `Thanks ${firstName(name)}! I've noted your interest in ${interest.toLowerCase()}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}.` },
+          { text: `Hi ${firstName(name)}! You're interested in ${interest}${goal ? ` with a focus on ${goal.toLowerCase()}` : ''}. I have your details, so no need to repeat them.` },
           { text: 'Ask me anything, like prices, plan inclusions, recovery, trainers or planning a visit.' },
         ];
         botSay(welcome, 'chat');
@@ -320,7 +320,7 @@ export default function WebsiteLeadChatbot() {
 
   const restart = () => {
     setStep('form'); setInterest(''); setName(''); setEmail(''); setPhone(''); setIntent(''); setGoal(''); setDuration('');
-    setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); topics.current = new Set();
+    setDraft(''); setFieldError(''); setSaveError(''); setLeadId(null); setWiz(0); topics.current = new Set();
     setConcierge((c) => ({ ...c, discountAsks: 0, awaitingVisit: false, offeredVisit: false, isMember: false, lastTopic: undefined, visitOffers: 0, declinedVisit: false, quote: {} }));
     submissionId.current = newSubmissionId();
     setMessages([{ from: 'bot', text: WELCOME }, { from: 'bot', text: FIRST_Q }]); setFormErrors({});
@@ -360,7 +360,7 @@ export default function WebsiteLeadChatbot() {
             ))}
           </ol>
 
-          <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/40 px-4 py-4" aria-live="polite" aria-relevant="additions">
+          <div ref={scrollRef} className={cn('flex-1 space-y-2 overflow-y-auto px-4 py-4', step === 'form' ? 'bg-card' : 'bg-muted/40')} aria-live="polite" aria-relevant="additions">
             {step !== 'form' && step !== 'saving' && messages.map((m, i) => (
               <div key={i} className={cn('flex', m.from === 'user' ? 'justify-end' : 'justify-start')}>
                 <p className={cn('max-w-[85%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-relaxed',
@@ -389,8 +389,20 @@ export default function WebsiteLeadChatbot() {
               </div>
             )}
             {step === 'form' && !typing && (
-              <form onSubmit={submitForm} noValidate aria-label="Your details" className="space-y-3 rounded-2xl border border-border bg-card p-4">
-                {([
+              <form onSubmit={submitForm} noValidate aria-label="Your details" className="flex min-h-full flex-col gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Step {wizSteps.indexOf(wiz) + 1} of {wizSteps.length}</p>
+                  <div className="mt-2 flex gap-1" aria-hidden="true">
+                    {wizSteps.map((s, i) => <span key={s} className={cn('h-1 flex-1 rounded-full transition-colors duration-300', i <= wizSteps.indexOf(wiz) ? 'bg-accent' : 'bg-muted')} />)}
+                  </div>
+                  <h3 className="mt-3 text-base font-semibold tracking-tight text-foreground">
+                    {['Let\'s get to know you', 'What are you looking for?', 'Your main fitness goal', 'Preferred membership plan', 'Review and start chat'][wiz]}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {['So our concierge can help you personally.', 'Pick the one that fits best.', 'We will tailor suggestions to it.', 'No prices here — our concierge will guide you.', 'Our concierge will already know these details.'][wiz]}
+                  </p>
+                </div>
+                {wiz === 0 && ([
                   ['name', 'Full name', 'text', 'name', name, setName, 'Your full name', undefined],
                   ['phone', 'Mobile number', 'tel', 'tel', phone, setPhone, '98XXXXXXXX', 'tel'],
                   ['email', 'Email address', 'email', 'email', email, setEmail, 'you@example.com', 'email'],
@@ -399,32 +411,56 @@ export default function WebsiteLeadChatbot() {
                     <label htmlFor={`wcb-${key}`} className="text-xs font-semibold text-foreground">{label} <span className="text-destructive" aria-hidden="true">*</span></label>
                     <Input id={`wcb-${key}`} data-field={key} {...(key === 'name' ? { 'data-step-focus': true } : {})} value={val} type={type} autoComplete={ac} inputMode={im} placeholder={ph}
                       maxLength={key === 'email' ? 255 : 100} aria-required="true" aria-invalid={!!formErrors[key]}
-                      aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined}
+                      aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined} className="min-h-[44px]"
                       onChange={(e) => { set(e.target.value); setFormErrors((f) => ({ ...f, [key]: undefined })); }} />
-                    {formErrors[key] && <p id={`wcb-${key}-err`} className="text-xs text-destructive">{formErrors[key]}</p>}
+                    {formErrors[key] && <p id={`wcb-${key}-err`} role="alert" className="text-xs text-destructive">{formErrors[key]}</p>}
                   </div>
                 ))}
-                {([
-                  ['intent', 'What are you looking for?', INTENTS, intent, (v: string) => { setIntent(v); if (v !== 'Membership') setDuration(''); }],
-                  ...(intent === 'Membership' ? [['duration', 'Membership duration', DURATIONS, duration, setDuration] as const] : []),
-                  ['goal', 'Your main fitness goal', GOALS, goal, setGoal],
-                ] as const).map(([key, label, opts, val, set]) => (
-                  <fieldset key={key} className="space-y-1.5" aria-describedby={formErrors[key] ? `wcb-${key}-err` : undefined}>
-                    <legend className="text-xs font-semibold text-foreground">{label} <span className="text-destructive" aria-hidden="true">*</span></legend>
-                    <div className="flex flex-wrap gap-2">
-                      {opts.map((o, i) => (
-                        <button key={o} type="button" aria-pressed={val === o} {...(i === 0 ? { 'data-field': key } : {})}
-                          onClick={() => { set(o); setFormErrors((f) => ({ ...f, [key]: undefined })); }}
-                          className={cn(chip, 'min-h-[40px] px-3 py-1.5 text-xs', val === o && 'border-primary bg-primary text-primary-foreground hover:bg-primary')}>{o}</button>
-                      ))}
-                    </div>
-                    {formErrors[key] && <p id={`wcb-${key}-err`} className="text-xs text-destructive">{formErrors[key]}</p>}
-                  </fieldset>
-                ))}
+                {(wiz === 1 || wiz === 2 || wiz === 3) && (() => {
+                  const cfg = wiz === 1
+                    ? { key: 'intent' as const, opts: [...INTENTS] as string[], val: intent, set: (v: string) => { setIntent(v); if (v === 'Just exploring') setDuration(''); } }
+                    : wiz === 2
+                      ? { key: 'goal' as const, opts: [...GOALS] as string[], val: goal, set: setGoal }
+                      : { key: 'duration' as const, opts: [...(plans.length ? plans : DURATIONS), 'Not sure yet'], val: duration, set: setDuration };
+                  return (
+                    <fieldset className="space-y-2" aria-describedby={formErrors[cfg.key] ? `wcb-${cfg.key}-err` : undefined}>
+                      <legend className="sr-only">{['', 'What are you looking for?', 'Your main fitness goal', 'Preferred membership plan'][wiz]}</legend>
+                      <div className="grid gap-2">
+                        {cfg.opts.map((o, i) => (
+                          <button key={o} type="button" aria-pressed={cfg.val === o} {...(i === 0 ? { 'data-field': cfg.key, 'data-step-focus': true } : {})}
+                            onClick={() => { cfg.set(o); setFormErrors((f) => ({ ...f, [cfg.key]: undefined })); }}
+                            className={cn('flex min-h-[48px] w-full cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-4 text-left text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              cfg.val === o && 'border-primary bg-primary/5 ring-1 ring-primary')}>
+                            {o}
+                            <span className={cn('h-4 w-4 rounded-full border border-border', cfg.val === o && 'border-4 border-primary')} aria-hidden="true" />
+                          </button>
+                        ))}
+                      </div>
+                      {formErrors[cfg.key] && <p id={`wcb-${cfg.key}-err`} role="alert" className="text-xs text-destructive">{formErrors[cfg.key]}</p>}
+                    </fieldset>
+                  );
+                })()}
+                {wiz === 4 && (
+                  <dl className="divide-y divide-border rounded-xl border border-border bg-card text-sm">
+                    {([
+                      ['Name', name, 0], ['Mobile', phone, 0], ['Email', email, 0], ['Looking for', intent, 1], ['Goal', goal, 2],
+                      ...(skipPlan ? [] : [['Preferred plan', duration, 3] as const]),
+                    ] as const).map(([k, v, s], i) => (
+                      <div key={k} className="flex items-center gap-2 px-3 py-2">
+                        <dt className="w-24 shrink-0 text-xs text-muted-foreground">{k}</dt>
+                        <dd className="min-w-0 flex-1 truncate font-medium text-foreground">{v}</dd>
+                        <button type="button" {...(i === 0 ? { 'data-step-focus': true } : {})} onClick={() => setWiz(s)} className="min-h-[36px] cursor-pointer rounded-md px-2 text-xs font-semibold text-primary hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Edit ${k}`}>Edit</button>
+                      </div>
+                    ))}
+                  </dl>
+                )}
                 {saveError && (
                   <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">{saveError}</p>
                 )}
-                <Button type="submit" className="min-h-[44px] w-full">{saveError ? 'Try again' : 'Start chatting'}</Button>
+                <div className="mt-auto flex gap-2 pt-2">
+                  {wiz !== 0 && <Button type="button" variant="outline" onClick={goBack} className="min-h-[44px]">Back</Button>}
+                  <Button type="submit" className="min-h-[44px] flex-1">{wiz === 4 ? (saveError ? 'Try again' : 'Start chat') : 'Next'}</Button>
+                </div>
                 <p className="text-[11px] text-muted-foreground">We use these details only to help with your enquiry.</p>
               </form>
             )}
