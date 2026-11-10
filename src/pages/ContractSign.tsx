@@ -30,7 +30,10 @@ export default function ContractSignPage() {
   const termsScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [signedName, setSignedName] = useState('');
-  const [signerContact, setSignerContact] = useState('');
+  const [step, setStep] = useState<'sign' | 'verify'>('sign');
+  const [sigData, setSigData] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const [signatureText, setSignatureText] = useState('');
   const [consent, setConsent] = useState(false);
   const [reachedBottom, setReachedBottom] = useState(false);
@@ -74,6 +77,26 @@ export default function ContractSignPage() {
     return () => clearInterval(t);
   }, [resendCooldown]);
 
+  useEffect(() => {
+    if (contract?.employee_name && !signedName) setSignedName(String(contract.employee_name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract?.employee_name]);
+
+  function goStep(next: 'sign' | 'verify') {
+    setStep(next);
+    setTimeout(() => stepHeadingRef.current?.focus(), 0);
+  }
+
+  function continueToVerify() {
+    if (!sigRef.current || sigRef.current.isEmpty()) {
+      setSignError('Please draw your signature in the box.');
+      return;
+    }
+    setSignError(null);
+    setSigData(sigRef.current.getCanvas().toDataURL('image/png'));
+    goStep('verify');
+  }
+
   function onTermsScroll() {
     const el = termsScrollRef.current;
     if (!el) return;
@@ -108,11 +131,9 @@ export default function ContractSignPage() {
   const signMutation = useMutation({
     mutationFn: async () => {
       if (!token) throw new Error('Missing signing token');
-      if (!sigRef.current || sigRef.current.isEmpty()) {
-        throw new Error('Please draw your signature in the box.');
-      }
+      if (!sigData) throw new Error('Please draw your signature first.');
       if (!/^\d{6}$/.test(otp)) throw new Error('Enter the 6-digit code sent to you.');
-      const signature_image_base64 = sigRef.current.getCanvas().toDataURL('image/png');
+      const signature_image_base64 = sigData;
 
       const { data, error } = await supabase.functions.invoke('contract-signing', {
         body: {
@@ -120,7 +141,7 @@ export default function ContractSignPage() {
           token,
           otp,
           signed_name: signedName.trim(),
-          signer_contact: signerContact.trim() || null,
+          signer_contact: null,
           signature_text: signatureText.trim() || signedName.trim(),
           consent,
           signature_image_base64,
@@ -198,7 +219,7 @@ export default function ContractSignPage() {
             </CardTitle>
             <CardDescription>
               {employer?.legal_name ? `Issued by ${employer.legal_name}` : 'Please read every clause'},
-              draw your signature and verify the one-time code we send you. Your acceptance is recorded
+              draw your signature, then verify the one-time code we send you. Your acceptance is recorded
               as a valid electronic signature under Section 10A of the IT Act, 2000.
             </CardDescription>
           </CardHeader>
@@ -236,6 +257,81 @@ export default function ContractSignPage() {
 
             <Separator />
 
+            <h3 ref={stepHeadingRef} tabIndex={-1} aria-live="polite" className="font-semibold text-sm outline-none">
+              {step === 'sign' ? 'Step 2 of 3 · Draw your signature' : 'Step 3 of 3 · Verify and sign'}
+            </h3>
+
+            {step === 'sign' ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {editingName ? (
+                  <>
+                    <Label htmlFor="signed-name">Full legal name *</Label>
+                    <Input id="signed-name" value={signedName} onChange={(e) => setSignedName(e.target.value)} placeholder="As per PAN / Aadhaar" />
+                  </>
+                ) : (
+                  <p className="text-sm">
+                    Signing as <strong>{signedName || '—'}</strong>{' '}
+                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setEditingName(true)}>Edit</Button>
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">Your name is printed next to your signature on the agreement.</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Draw your signature *</Label>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => sigRef.current?.clear()}>
+                    <Eraser className="h-3.5 w-3.5 mr-1" /> Clear
+                  </Button>
+                </div>
+                <div className="rounded-md border-2 border-dashed border-primary/25 bg-card">
+                  <SignatureCanvas
+                    ref={(r) => { sigRef.current = r; if (r && sigData && r.isEmpty()) r.fromDataURL(sigData); }}
+                    penColor="#1e1b4b"
+                    canvasProps={{ className: 'w-full h-40 rounded-md' }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Use mouse, stylus or finger on touch devices.</p>
+              </div>
+
+              {Array.isArray(contract?.witnesses) && contract.witnesses.length > 0 && (
+                <div className="rounded-md border p-3 bg-muted/30" aria-label="Witnesses">
+                  <p className="text-sm font-medium">Witnessed by</p>
+                  <ul className="mt-1 text-sm text-muted-foreground space-y-0.5">
+                    {contract.witnesses.map((w: { slot: number; name: string; phone: string | null }) => (
+                      <li key={w.slot}>Witness {w.slot}: {w.name}{w.phone ? ` · ${w.phone}` : ''}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-1">Witnesses are added by Incline. You don't need to fill these.</p>
+                </div>
+              )}
+
+              <div className="flex items-start gap-2 rounded-md border p-3 bg-card">
+                <Checkbox id="consent" checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
+                <Label htmlFor="consent" className="text-sm leading-relaxed">
+                  I confirm I have read and agree to this contract and the linked policies. I consent
+                  to my electronic signature, IP address{geo ? ', geo-location' : ''} and device details
+                  being recorded as legal evidence under the IT Act, 2000 and the Indian Evidence Act, 1872.
+                </Label>
+              </div>
+
+              <Button
+                className="w-full"
+                disabled={!reachedBottom || !signedName.trim() || !consent}
+                onClick={continueToVerify}
+              >
+                Continue to verification
+              </Button>
+              {!reachedBottom && <p className="text-xs text-muted-foreground">Scroll to the end of the contract first.</p>}
+              {signError && <p role="alert" className="text-sm text-destructive">{signError}</p>}
+            </div>
+            ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-md border p-3 bg-card">
+                {sigData && <img src={sigData} alt="Your signature" className="h-14 w-32 object-contain rounded bg-background" />}
+                <div className="flex-1 text-sm">Signed as <strong>{signedName}</strong></div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => goStep('sign')}>Back</Button>
+              </div>
             {/* OTP block */}
             <div aria-live="polite" role="status" className="sr-only">
               {otpSent ? `Code sent via ${otpSent.channel} to ${otpSent.recipient_masked}` : ''}
@@ -314,57 +410,6 @@ export default function ContractSignPage() {
               )}
               {otpError && <p role="alert" className="text-xs text-destructive">{otpError}</p>}
             </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="signed-name">Full legal name *</Label>
-                  <Input id="signed-name" value={signedName} onChange={(e) => setSignedName(e.target.value)} placeholder="As per PAN / Aadhaar" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signer-contact">Phone or email (optional)</Label>
-                  <Input id="signer-contact" value={signerContact} onChange={(e) => setSignerContact(e.target.value)} placeholder="For confirmation" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Draw your signature *</Label>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => sigRef.current?.clear()}>
-                    <Eraser className="h-3.5 w-3.5 mr-1" /> Clear
-                  </Button>
-                </div>
-                <div className="rounded-md border-2 border-dashed border-primary/25 bg-card">
-                  <SignatureCanvas
-                    ref={(r) => { sigRef.current = r; }}
-                    penColor="#1e1b4b"
-                    canvasProps={{ className: 'w-full h-40 rounded-md' }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">Use mouse, stylus or finger on touch devices.</p>
-              </div>
-
-              {Array.isArray(contract?.witnesses) && contract.witnesses.length > 0 && (
-                <div className="rounded-md border p-3 bg-muted/30" aria-label="Witnesses">
-                  <p className="text-sm font-medium">Witnessed by</p>
-                  <ul className="mt-1 text-sm text-muted-foreground space-y-0.5">
-                    {contract.witnesses.map((w: { slot: number; name: string; phone: string | null }) => (
-                      <li key={w.slot}>Witness {w.slot}: {w.name}{w.phone ? ` · ${w.phone}` : ''}</li>
-                    ))}
-                  </ul>
-                  <p className="text-xs text-muted-foreground mt-1">Witnesses are added by Incline. You don't need to fill these.</p>
-                </div>
-              )}
-
-              <div className="flex items-start gap-2 rounded-md border p-3 bg-card">
-                <Checkbox id="consent" checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
-                <Label htmlFor="consent" className="text-sm leading-relaxed">
-                  I confirm I have read and agree to this contract and the linked policies. I consent
-                  to my electronic signature, IP address{geo ? ', geo-location' : ''} and device details
-                  being recorded as legal evidence under the IT Act, 2000 and the Indian Evidence Act, 1872.
-                </Label>
-              </div>
-
               <Button
                 className="w-full bg-primary hover:bg-primary"
                 disabled={!canSubmit}
@@ -372,10 +417,11 @@ export default function ContractSignPage() {
                 aria-label="Sign contract"
               >
                 <ShieldCheck className="h-4 w-4 mr-2" />
-                {signMutation.isPending ? 'Signing...' : 'Sign contract'}
+                {signMutation.isPending ? 'Signing...' : 'Verify & sign contract'}
               </Button>
               {signError && <p role="alert" className="text-sm text-destructive">{signError}</p>}
             </div>
+            )}
           </CardContent>
         </Card>
       </div>
