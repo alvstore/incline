@@ -165,6 +165,7 @@ export function PurchasePTPackageDrawer({
   const [collectMode, setCollectMode] = useState<CollectMode>('full');
   const [collectInput, setCollectInput] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
+  const [receivedOn, setReceivedOn] = useState<string>(todayISO());
   const [txnRef, setTxnRef] = useState<string>('');
   const [custom, setCustom] = useState<CustomForm>({
     name: '',
@@ -459,6 +460,7 @@ export function PurchasePTPackageDrawer({
           _amount_paid: paySource === 'payment_link' ? 0 : collectedNow,
           _due_date: needsDueDate ? (dueDate || addDaysISO(7)) : null,
           _transaction_id: txnRef.trim() || null,
+          _payment_date: paySource === 'in_person' && collectedNow > 0 && receivedOn !== todayISO() ? receivedOn : null,
           _payment_notes: balanceDue > 0
             ? `PT package purchase · part payment (balance ₹${balanceDue.toLocaleString('en-IN')})`
             : 'PT package purchase',
@@ -1024,6 +1026,24 @@ export function PurchasePTPackageDrawer({
                     </Select>
                   </div>
                 </div>
+                {paySource === 'in_person' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pt-received-on" className="text-xs">Payment received on</Label>
+                    <Input
+                      id="pt-received-on"
+                      type="date"
+                      className="h-11 rounded-xl"
+                      value={receivedOn}
+                      max={todayISO()}
+                      min={addDaysISO(-90)}
+                      onChange={(e) => setReceivedOn(e.target.value || todayISO())}
+                      aria-describedby="pt-received-on-help"
+                    />
+                    <p id="pt-received-on-help" className="text-xs text-muted-foreground">
+                      Invoice and receipt use this date. Earlier dates (up to 90 days) are recorded in the audit log.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {paySource === 'payment_link' ? (
