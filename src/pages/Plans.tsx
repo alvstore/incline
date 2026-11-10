@@ -201,7 +201,7 @@ function PlanDetailPanel({
       className={`h-full flex flex-col transition-all duration-200 ${animIn ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
     >
       {/* Hero banner */}
-      <div className={`relative bg-gradient-to-br ${accent.gradient} rounded-2xl p-6 text-primary-foreground overflow-hidden mb-6`}>
+      <div className={`relative bg-gradient-to-br ${accent.gradient} rounded-2xl p-5 sm:p-6 text-primary-foreground overflow-hidden mb-6`}>
         <div className="absolute top-0 right-0 w-40 h-40 bg-card/10 rounded-full -translate-y-16 translate-x-16" />
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-card/5 rounded-full translate-y-8 -translate-x-8" />
         <div className="relative z-10">
@@ -249,7 +249,7 @@ function PlanDetailPanel({
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="rounded-xl bg-muted/40 px-4 py-3 text-center">
+        <div className="rounded-xl bg-muted/40 px-2 sm:px-4 py-3 text-center">
           <button
             data-testid={`btn-members-${plan.id}`}
             onClick={() => onMemberCountClick(plan.id, plan.name)}
@@ -264,14 +264,14 @@ function PlanDetailPanel({
             </div>
           </button>
         </div>
-        <div className="rounded-xl bg-muted/40 px-4 py-3 text-center">
+        <div className="rounded-xl bg-muted/40 px-2 sm:px-4 py-3 text-center">
           <div className="text-2xl font-bold text-foreground">{plan.max_freeze_days ?? '—'}</div>
           <div className="text-xs text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
             <Snowflake className="h-3 w-3" />
             Freeze Days
           </div>
         </div>
-        <div className="rounded-xl bg-muted/40 px-4 py-3 text-center">
+        <div className="rounded-xl bg-muted/40 px-2 sm:px-4 py-3 text-center">
           <div className="text-2xl font-bold text-foreground">{plan.is_transferable ? 'Yes' : 'No'}</div>
           <div className="text-xs text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
             <ArrowRightLeft className="h-3 w-3" />
@@ -288,7 +288,7 @@ function PlanDetailPanel({
         {benefits.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">No benefits configured for this plan.</p>
         ) : (
-          <div className={`grid gap-2 ${benefits.length > 4 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-2 grid-cols-1 ${benefits.length > 4 ? 'sm:grid-cols-2' : ''}`}>
             {benefits.map((b) => (
               <div
                 key={b.id}
@@ -478,11 +478,11 @@ export default function PlansPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
                 <Crown className="h-6 w-6" />
               </div>
@@ -493,7 +493,7 @@ export default function PlansPage() {
           <Button
             data-testid="btn-create-plan"
             onClick={() => setAddPlanOpen(true)}
-            className="gap-2 h-11 rounded-xl shadow-lg shadow-primary/20"
+            className="gap-2 h-11 rounded-xl shadow-lg shadow-primary/20 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Create Plan
@@ -580,9 +580,9 @@ export default function PlansPage() {
             </div>
           </div>
         ) : (
-          <div className="bg-card/60 dark:bg-foreground/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden flex min-h-[520px]">
+          <div className="bg-card/60 dark:bg-foreground/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden flex flex-col md:flex-row md:min-h-[520px]">
             {/* Left panel — plan list (35%) */}
-            <div className="w-[35%] bg-muted/30 flex flex-col overflow-y-auto border-r border-border/40">
+            <div className="w-full md:w-[35%] max-h-[50dvh] md:max-h-none bg-muted/30 flex flex-col overflow-y-auto border-b md:border-b-0 md:border-r border-border/40">
               {/* Search */}
               <div className="p-3 border-b border-border/40 sticky top-0 bg-muted/30 backdrop-blur-sm z-10">
                 <div className="relative">
@@ -661,7 +661,7 @@ export default function PlansPage() {
 
             {/* Right panel — detail (65%) */}
             <div className="flex-1 overflow-y-auto">
-              <div className="sticky top-0 p-6">
+              <div className="md:sticky md:top-0 p-4 sm:p-6">
               {selectedPlan ? (
                 <PlanDetailPanel
                   key={selectedPlan.id}

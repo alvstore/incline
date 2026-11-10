@@ -569,18 +569,18 @@ export default function POSPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">Point of Sale</h1>
-          <Badge variant="secondary" className="text-lg px-4 py-2">
+          <Badge variant="secondary" className="text-sm sm:text-lg px-3 sm:px-4 py-1.5 sm:py-2">
             Today's Sales: ₹{todayTotal.toLocaleString()}
           </Badge>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3 min-w-0">
           {/* Products */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex gap-4">
-              <div className="relative flex-1">
+          <div className="lg:col-span-2 space-y-4 min-w-0">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search products..."
@@ -590,7 +590,7 @@ export default function POSPage() {
                 />
               </div>
               <Select value={categoryFilter || "all"} onValueChange={(val) => setCategoryFilter(val === "all" ? "" : val)}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-full sm:w-[150px]">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -607,7 +607,7 @@ export default function POSPage() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {groupVariants(filteredProducts as any[]).map((g) => {
                   if (PRODUCT_VARIANTS_ENABLED && g.isGroup) {
                     const items = [...g.items].sort((a: any, b: any) => (a.variant_sort ?? 0) - (b.variant_sort ?? 0));
@@ -716,7 +716,7 @@ export default function POSPage() {
           </div>
 
           {/* Cart */}
-          <div className="space-y-4">
+          <div id="pos-cart" className="space-y-4 min-w-0 scroll-mt-20">
             {/* Enhanced Member Selection */}
             <Card>
               <CardHeader className="pb-2">
