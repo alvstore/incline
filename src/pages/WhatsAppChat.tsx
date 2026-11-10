@@ -446,49 +446,30 @@ export default function WhatsAppChatPage() {
 
   const { data: contacts = [] } = useQuery<ChatContact[]>({
     queryKey: ['whatsapp-contacts', selectedBranch],
+    refetchInterval: chatFilter === 'web_chat' ? 10000 : 30000,
     queryFn: async (): Promise<ChatContact[]> => {
       const branchFilter = selectedBranch !== 'all' ? selectedBranch : undefined;
-      let q = supabase
-        .from('whatsapp_messages')
-        .select('phone_number, contact_name, contact_avatar_url, member_id, content, created_at, direction, platform')
-        .order('created_at', { ascending: false });
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data, error } = await q;
-      if (error) throw error;
-      const contactMap = new Map<string, ChatContact>();
-      (data || []).forEach((msg: {
-        phone_number: string;
-        contact_name: string | null;
-        contact_avatar_url: string | null;
-        member_id: string | null;
-        content: string | null;
-        created_at: string;
-        direction: string;
-        platform: string | null;
-      }) => {
-        const existing = contactMap.get(msg.phone_number);
-        if (!existing) {
-          contactMap.set(msg.phone_number, {
-            phone_number: msg.phone_number,
-            contact_name: msg.contact_name,
-            contact_avatar_url: msg.contact_avatar_url,
-            member_id: msg.member_id,
-            last_message: msg.content || '',
-            last_message_time: msg.created_at,
-            unread_count: 0,
-            platform: msg.platform || 'whatsapp',
-          });
-        } else {
-          // Backfill name/avatar from older messages if newest didn't have them
-          if (!existing.contact_avatar_url && msg.contact_avatar_url) {
-            existing.contact_avatar_url = msg.contact_avatar_url;
-          }
-          if (!existing.contact_name && msg.contact_name) {
-            existing.contact_name = msg.contact_name;
-          }
-        }
-      });
-      return Array.from(contactMap.values());
+      // One row per conversation from the server (avoids the 1,000-row cap that hid older chats).
+      const PAGE = 1000;
+      const data: Array<{ phone_number: string; contact_name: string | null; contact_avatar_url: string | null; member_id: string | null; last_message: string | null; last_message_time: string; platform: string | null; has_messages: boolean }> = [];
+      for (let from = 0; from < 10 * PAGE; from += PAGE) {
+        const { data: page, error } = await supabase
+          .rpc('list_inbox_threads', { p_branch: branchFilter ?? null })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        data.push(...(page ?? []));
+        if (!page || page.length < PAGE) break;
+      }
+      return data.map((t) => ({
+        phone_number: t.phone_number,
+        contact_name: t.contact_name,
+        contact_avatar_url: t.contact_avatar_url,
+        member_id: t.member_id,
+        last_message: t.has_messages ? (t.last_message || '') : 'Earlier conversation was not saved',
+        last_message_time: t.last_message_time,
+        unread_count: 0,
+        platform: t.platform || 'whatsapp',
+      }));
     },
   });
 
@@ -1035,7 +1016,7 @@ export default function WhatsAppChatPage() {
                 ))}
               </div>
               {/* Platform filter badges — always visible */}
-              <div className="flex gap-1 mt-1.5 overflow-x-auto no-scrollbar -mx-1 px-1">
+              <div role="group" aria-label="Filter by channel" className="flex gap-1 mt-1.5 overflow-x-auto no-scrollbar -mx-1 px-1">
                 {[
                   { key: 'whatsapp' as ChatFilter, icon: <MessageSquare className="h-3 w-3" />, label: 'WhatsApp', color: 'text-success', activeBg: 'bg-success/15 text-success dark:text-success ring-1 ring-success/30' },
                   { key: 'instagram' as ChatFilter, icon: <Instagram className="h-3 w-3" />, label: 'Instagram', color: 'text-destructive', activeBg: 'bg-destructive/15 text-destructive dark:text-destructive ring-1 ring-destructive/30' },
@@ -1044,6 +1025,9 @@ export default function WhatsAppChatPage() {
                 ].map(tab => (
                   <button
                     key={tab.key}
+                    type="button"
+                    aria-pressed={chatFilter === tab.key}
+                    aria-label={`Show only ${tab.label} chats`}
                     onClick={() => setChatFilter(prev => prev === tab.key ? 'all' : tab.key)}
                     className={`flex items-center gap-1 shrink-0 text-xs font-medium px-2.5 py-1 rounded-lg transition-all ${
                       chatFilter === tab.key
@@ -1061,11 +1045,15 @@ export default function WhatsAppChatPage() {
             {/* Contact List */}
             <ScrollArea className="flex-1 w-full [&>div>div]:!block [&>div>div]:min-w-0">
               {filteredContacts.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground">
-                  <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <div className="p-6 text-center text-muted-foreground" role="status" aria-live="polite">
+                  <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-30" aria-hidden="true" />
                   <p className="text-sm">
-                    {chatFilter === 'all' ? 'No conversations yet' : `No ${chatFilter === 'unread' ? 'unread' : 'human-needed'} chats`}
+                    {({ all: 'No conversations yet', unread: 'No unread chats', needs_human: 'No human-needed chats', my_chats: 'No chats assigned to you',
+                        whatsapp: 'No WhatsApp chats', instagram: 'No Instagram chats', messenger: 'No Messenger chats', web_chat: 'No website chats yet' } as Record<ChatFilter, string>)[chatFilter]}
                   </p>
+                  {chatFilter === 'web_chat' && (
+                    <p className="text-xs mt-1 text-muted-foreground/70">Conversations appear here once a visitor shares their details in the site chat.</p>
+                  )}
                   {chatFilter === 'all' && (
                     <p className="text-xs mt-1 text-muted-foreground/60">
                       Use the + button to start a new chat
@@ -1135,10 +1123,18 @@ export default function WhatsAppChatPage() {
                               ? 'border-destructive/40 text-destructive bg-destructive/10 dark:bg-destructive/10 dark:border-destructive/30'
                               : contact.platform === 'messenger'
                               ? 'border-info/40 text-info bg-info/10 dark:bg-info/10 dark:border-info/30'
+                              : contact.platform === 'web_chat'
+                              ? 'border-primary/40 text-primary bg-primary/10'
                               : 'border-success/40 text-success bg-success/10 dark:bg-success/10 dark:border-success/30'
                           }`}>
-                            {contact.platform === 'instagram' ? 'IG' : contact.platform === 'messenger' ? 'FB' : 'WA'}
+                            {contact.platform === 'instagram' ? 'IG' : contact.platform === 'messenger' ? 'FB' : contact.platform === 'web_chat' ? 'WEB' : 'WA'}
                           </Badge>
+                          {contact.platform === 'web_chat' && Date.now() - new Date(contact.last_message_time).getTime() < 5 * 60_000 && (
+                            <span className="flex items-center gap-1 text-[10px] font-medium text-success flex-shrink-0">
+                              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse motion-reduce:animate-none" aria-hidden="true" />
+                              Live
+                            </span>
+                          )}
                         </div>
                         <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-2">
                           {formatContactTime(contact.last_message_time)}
