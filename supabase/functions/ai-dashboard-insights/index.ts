@@ -1,4 +1,4 @@
-// v3.0.0 — Server-persisted insights + sales forecast (renewals, PT, trainers, projection).
+// v3.0.1 — Validate real account attribution for every internal insight generation path.
 // Modes: signed-in owner/admin/manager for one branch, or internal (x-internal-token) all_branches for the daily job.
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
 import { captureEdgeError } from '../_shared/capture-edge-error.ts'
@@ -6,13 +6,13 @@ import { generateOnce } from '../_shared/ai-runtime.ts'
 import { projectMonth, type ForecastStats } from '../_shared/salesForecast.ts'
 import { authenticateCronRequest } from '../_shared/cron-auth.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveInsightAuthor } from './author.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-const SYSTEM_USER = '00000000-0000-0000-0000-000000000000';
 const FRESH_MS = 6 * 3600_000;
 const DEBOUNCE_MS = 2 * 60_000;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -110,14 +110,29 @@ Deno.serve(async (req) => {
     const force = body?.force === true;
     const admin = caller.admin;
 
+    const resolveAuthor = () => resolveInsightAuthor(caller, {
+      ownerIds: async () => {
+        const { data, error } = await admin.from('user_roles').select('user_id')
+          .eq('role', 'owner').order('user_id');
+        if (error) throw new Error(`insight_author_lookup_failed: ${error.message}`);
+        return (data ?? []).map((row: { user_id: string }) => row.user_id);
+      },
+      accountExists: async (id: string) => {
+        const { data, error } = await admin.auth.admin.getUserById(id);
+        if (error) {
+          if (error.status === 404) return false;
+          throw new Error(`insight_author_validation_failed: ${error.message}`);
+        }
+        return data?.user?.id === id;
+      },
+    });
+
     if (caller.internal && body?.all_branches === true) {
+      const authorId = await resolveAuthor();
       const { data: branches } = await admin.from('branches').select('id').eq('is_active', true);
-      // user_id references a real account; attribute scheduled rows to the first owner.
-      const { data: owner } = await admin.from('user_roles').select('user_id').eq('role', 'owner').limit(1).maybeSingle();
-      const sysUser = owner?.user_id ?? SYSTEM_USER;
       const results: Array<{ branch_id: string; ok: boolean; error?: string }> = [];
       for (const b of branches ?? []) {
-        try { await buildForBranch(admin, b.id, sysUser); results.push({ branch_id: b.id, ok: true }); }
+        try { await buildForBranch(admin, b.id, authorId); results.push({ branch_id: b.id, ok: true }); }
         catch (e) { await captureEdgeError('ai-dashboard-insights', e); results.push({ branch_id: b.id, ok: false, error: String((e as Error).message) }); }
       }
       return json({ success: true, results });
@@ -132,7 +147,8 @@ Deno.serve(async (req) => {
     const age = prev ? Date.now() - new Date(prev.generated_at).getTime() : Infinity;
     if (prev && (age < DEBOUNCE_MS || (!force && age < FRESH_MS))) return json({ ...prev, reused: true });
 
-    const out = await buildForBranch(admin, branchId, caller.userId ?? SYSTEM_USER);
+    const authorId = await resolveAuthor();
+    const out = await buildForBranch(admin, branchId, authorId);
     return json({ ...out, reused: false });
   } catch (error) {
     await captureEdgeError('ai-dashboard-insights', error);
