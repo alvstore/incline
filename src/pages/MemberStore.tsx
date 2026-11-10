@@ -312,13 +312,12 @@ export default function MemberStore() {
 
 
   const getStockDisplay = (product: any) => {
-    const hasInventory = product.inventory && product.inventory.length > 0;
-    const stock = hasInventory ? product.inventory[0].quantity : null;
-    
-    if (!hasInventory) {
-      return { text: 'Available', canAdd: true, stock: null };
+    // Batch-tracked items are confirmed by the server at checkout; everything else follows the shared rule.
+    if (product.requires_batch_tracking) {
+      return { text: 'Available', canAdd: true, stock: null as number | null };
     }
-    if (stock === 0) {
+    const stock = stockFor(product, actor?.branch_id);
+    if (stock <= 0) {
       return { text: 'Out of Stock', canAdd: false, stock: 0 };
     }
     return { text: `${stock} in stock`, canAdd: true, stock };
