@@ -24,6 +24,7 @@ import { buildPaymentReceiptPdf } from '@/utils/pdfBlob';
 import { blobToBase64 } from '@/utils/uploadAttachment';
 import { sendWhatsAppDocument } from '@/utils/whatsappDocumentSender';
 import { PRODUCT_VARIANTS_ENABLED, groupVariants, priceRange } from '@/lib/products/variantRules';
+import { stockFor, minStockFor } from '@/lib/store/stockStatus';
 
 export default function POSPage() {
   const queryClient = useQueryClient();

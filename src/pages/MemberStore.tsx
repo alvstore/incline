@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { hashCart } from '@/lib/cartHash';
+import { stockFor } from '@/lib/store/stockStatus';
 import { AddOnShowcase } from '@/components/member/store/AddOnShowcase';
 
 
@@ -285,7 +286,14 @@ export default function MemberStore() {
 
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to place order');
+      const msg: string = error?.message || '';
+      if (msg.includes('OUT_OF_STOCK')) {
+        // Someone bought the last unit meanwhile — refresh counts so the cart can be fixed.
+        queryClient.invalidateQueries({ queryKey: ['store-products'] });
+        toast.error('Not enough stock', { description: msg.replace(/^.*OUT_OF_STOCK:\s*/, '') + '. Please adjust your cart.' });
+        return;
+      }
+      toast.error(msg || 'Failed to place order');
     },
   });
 
