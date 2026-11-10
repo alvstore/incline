@@ -450,9 +450,17 @@ export default function WhatsAppChatPage() {
     queryFn: async (): Promise<ChatContact[]> => {
       const branchFilter = selectedBranch !== 'all' ? selectedBranch : undefined;
       // One row per conversation from the server (avoids the 1,000-row cap that hid older chats).
-      const { data, error } = await supabase.rpc('list_inbox_threads', { p_branch: branchFilter ?? null });
-      if (error) throw error;
-      return (data ?? []).map((t) => ({
+      const PAGE = 1000;
+      const data: Array<{ phone_number: string; contact_name: string | null; contact_avatar_url: string | null; member_id: string | null; last_message: string | null; last_message_time: string; platform: string | null; has_messages: boolean }> = [];
+      for (let from = 0; from < 10 * PAGE; from += PAGE) {
+        const { data: page, error } = await supabase
+          .rpc('list_inbox_threads', { p_branch: branchFilter ?? null })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        data.push(...(page ?? []));
+        if (!page || page.length < PAGE) break;
+      }
+      return data.map((t) => ({
         phone_number: t.phone_number,
         contact_name: t.contact_name,
         contact_avatar_url: t.contact_avatar_url,
