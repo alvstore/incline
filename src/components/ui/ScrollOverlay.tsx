@@ -31,6 +31,9 @@ const ScrollOverlay = () => {
           <div aria-hidden="true" />
           <div className="max-w-md text-right pl-3 min-[700px]:pl-6 min-[700px]:pr-8" data-hero-copy>
             <h1 className="text-xl min-[700px]:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6">
+              <span className="block text-xs min-[700px]:text-sm font-semibold tracking-wide text-muted-foreground mb-2">
+                The Incline Life · Luxury gym &amp; recovery club in Udaipur
+              </span>
               EXPERIENCE THE <span className="text-primary">PINNACLE</span>
               <br />
               OF <span className="text-primary">STRENGTH & RECOVERY.</span>
