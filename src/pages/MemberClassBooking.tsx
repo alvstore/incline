@@ -118,7 +118,7 @@ export default function MemberClassBooking() {
     const t = searchParams.get('type');
     return t === 'recovery' || t === 'classes' || t === 'pt' ? t : 'all';
   })();
-  const { member, activeMembership, ptPackages, isLoading: memberLoading } = useMemberData();
+  const { member, activeMembership, scheduledMembership, ptPackages, isLoading: memberLoading } = useMemberData();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [showMyBookings, setShowMyBookings] = useState(false);
@@ -136,7 +136,13 @@ export default function MemberClassBooking() {
   const endDate = addDays(today, 13); // 2 weeks
   const todayStr = format(today, 'yyyy-MM-dd');
   // Nothing is bookable after the membership end date.
-  const coverageEndStr: string | null = activeMembership?.end_date ? String(activeMembership.end_date).slice(0, 10) : null;
+  // An advance renewal that starts right after the current plan extends coverage (no gap).
+  const activeEndStr: string | null = activeMembership?.end_date ? String(activeMembership.end_date).slice(0, 10) : null;
+  const renewalStartStr: string | null = scheduledMembership?.start_date ? String(scheduledMembership.start_date).slice(0, 10) : null;
+  const renewalEndStr: string | null = scheduledMembership?.end_date ? String(scheduledMembership.end_date).slice(0, 10) : null;
+  const renewalContinues = !!(activeEndStr && renewalStartStr && renewalEndStr
+    && renewalStartStr <= format(addDays(new Date(activeEndStr), 1), 'yyyy-MM-dd'));
+  const coverageEndStr: string | null = renewalContinues ? renewalEndStr : activeEndStr;
   const isCoveredDay = (k: string) => !!coverageEndStr && k <= coverageEndStr;
   const endDateStr = format(endDate, 'yyyy-MM-dd');
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -422,10 +428,17 @@ export default function MemberClassBooking() {
   const bookSlot = useMutation({
     mutationFn: async (slotId: string) => {
       if (!member || !activeMembership) throw new Error('No active membership');
+      // Book dates after the current plan against the paid advance renewal.
+      let membershipId = activeMembership.id;
+      if (scheduledMembership && renewalStartStr && activeEndStr) {
+        const { data: slot } = await supabase.from('benefit_slots').select('slot_date').eq('id', slotId).maybeSingle();
+        const d = slot?.slot_date ? String(slot.slot_date).slice(0, 10) : null;
+        if (d && d > activeEndStr && d >= renewalStartStr) membershipId = scheduledMembership.id;
+      }
       const { data, error } = await supabase.rpc('book_facility_slot', {
         p_slot_id: slotId,
         p_member_id: member.id,
-        p_membership_id: activeMembership.id,
+        p_membership_id: membershipId,
       });
       if (error) throw error;
       const result = data as { success: boolean; error?: string };
