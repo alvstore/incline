@@ -36,21 +36,6 @@ export const PROVIDER_DEFAULTS: Record<string, ProviderPreset> = {
     ],
     help: 'Built-in Lovable AI Gateway. LOVABLE_API_KEY is auto-provisioned — no setup needed.',
   },
-  google: {
-    label: 'Google Gemini (direct)',
-    base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    secret_name: 'GOOGLE_AI_API_KEY',
-    default_model: 'gemini-flash-latest',
-    models: [
-      'gemini-flash-latest',
-      'gemini-flash-lite-latest',
-      'gemini-pro-latest',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-pro',
-    ],
-    help: 'Google Gemini direct API (OpenAI-compatible). Free tier. Get key at aistudio.google.com/apikey.',
-  },
   openrouter: {
     label: 'OpenRouter',
     base_url: 'https://openrouter.ai/api/v1/chat/completions',

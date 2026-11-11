@@ -1,3 +1,8 @@
+# Lovable AI credential cleanup (11 Nov 2026)
+- [x] Audit source, saved provider/purpose routing, settings and live database functions: Lovable already serves all active AI features; Google provider has no purpose references.
+- [x] Remove Google-direct preset and obsolete key example; preserve existing models, prompts, limits and generation behavior.
+- [ ] Verify signed-in Lovable connection, remove unused Google provider, confirm no runtime references, then delete GOOGLE_AI_API_KEY.
+
 # Mobile HOWBODY height picker (10 Nov 2026)
 - [x] Replace scanner height text entry with a dual-unit scroll wheel and manual-entry fallback; retain centimetre validation and prevent accidental default submission.
 - [x] Mohit’s real signed-in session prefills 168 cm; keyboard, scroll selection, manual conversion, invalid-height blocking and reduced motion pass at 320–1280px without overflow. Six conversion tests pass; scanner submission is intercepted, not sent to hardware. Preview-wide ref warnings remain; no page errors or failed HTTP responses.

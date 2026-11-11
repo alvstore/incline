@@ -421,7 +421,7 @@ function ProviderDrawer({
                       <div className="text-xs text-warning mt-2 bg-warning/10 border border-warning/25 rounded p-2">
                         ⚠️ You pasted the raw API key in the Secret Name field. This worked for testing,
                         but for production you must store the key as a Cloud secret and put only the
-                        secret name (e.g. <code>GOOGLE_AI_API_KEY</code>) in this field.
+                        secret name (e.g. <code>OPENROUTER_API_KEY</code>) in this field.
                       </div>
                     )}
                   </div>
