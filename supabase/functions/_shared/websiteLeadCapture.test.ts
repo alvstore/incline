@@ -142,7 +142,7 @@ Deno.test("existing lead: public submission never modifies the lead row", async 
   assertEquals(l.status, "qualified");
   assertEquals(l.plan_interest, null);
   assertEquals(l.email, null);
-  assertEquals(m.t.lead_activities.at(-1).metadata.unverified, true);
+  assertEquals((m.t.lead_activities[m.t.lead_activities.length - 1] as any).metadata.unverified, true);
 });
 
 Deno.test("existing member phone does not create a lead", async () => {
