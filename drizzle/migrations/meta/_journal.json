@@ -1184,6 +1184,13 @@
       "when": 1794406739993,
       "tag": "0168_member_requests_need_coverage",
       "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1794406776842,
+      "tag": "0169_member_requests_allow_frozen",
+      "breakpoints": true
     }
   ]
 }

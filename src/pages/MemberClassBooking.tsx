@@ -132,6 +132,9 @@ export default function MemberClassBooking() {
   const today = istToday();
   const endDate = addDays(today, 13); // 2 weeks
   const todayStr = format(today, 'yyyy-MM-dd');
+  // Nothing is bookable after the membership end date.
+  const coverageEndStr: string | null = activeMembership?.end_date ? String(activeMembership.end_date).slice(0, 10) : null;
+  const isCoveredDay = (k: string) => !!coverageEndStr && k <= coverageEndStr;
   const endDateStr = format(endDate, 'yyyy-MM-dd');
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
 
@@ -654,7 +657,7 @@ export default function MemberClassBooking() {
                     mode="single"
                     selected={selectedDate}
                     onSelect={(d) => { if (d) setSelectedDate(startOfDay(d)); }}
-                    disabled={(d) => d < today || d > endDate}
+                    disabled={(d) => d < today || d > endDate || !isCoveredDay(format(d, 'yyyy-MM-dd'))}
                     initialFocus
                   />
                 </PopoverContent>
@@ -667,11 +670,15 @@ export default function MemberClassBooking() {
                 const k = format(d, 'yyyy-MM-dd');
                 const isSelected = k === selectedDateStr;
                 const count = countsByDay[k] || 0;
+                const covered = isCoveredDay(k);
                 return (
                   <button
                     key={k}
-                    onClick={() => setSelectedDate(d)}
-                    className={`shrink-0 w-14 sm:w-16 rounded-2xl py-2.5 transition-all ${
+                    onClick={() => covered && setSelectedDate(d)}
+                    disabled={!covered}
+                    aria-label={covered ? undefined : `${format(d, 'd MMM')} — renew to book`}
+                    title={covered ? undefined : 'Renew to book'}
+                    className={`shrink-0 w-14 sm:w-16 rounded-2xl py-2.5 transition-all disabled:opacity-35 disabled:cursor-not-allowed ${
                       isSelected
                         ? 'bg-card text-primary shadow-lg scale-105'
                         : 'bg-card/10 text-primary-foreground hover:bg-card/20'
@@ -731,6 +738,18 @@ export default function MemberClassBooking() {
               <Button size="sm" variant="outline" asChild>
                 <a href="/member-profile">Update</a>
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ─── Beyond membership end ─── */}
+        {activeMembership && !isCoveredDay(selectedDateStr) && (
+          <Card className="border-warning/20 bg-warning/5">
+            <CardContent className="py-4 text-center">
+              <AlertCircle className="h-8 w-8 mx-auto text-warning mb-2" />
+              <p className="text-sm font-medium">
+                Your membership ends on {coverageEndStr ? format(new Date(coverageEndStr), 'd MMM') : '—'}. Renew to book after this date.
+              </p>
             </CardContent>
           </Card>
         )}

@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +24,8 @@ export default function MemberRequests() {
   const isFrozen = activeMembership?.status === 'frozen';
   const freezeDaysAllowance = Number((activeMembership as any)?.plan?.max_freeze_days || 0);
   const freezeAllowed = freezeDaysAllowance > 0;
+  const todayIst = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+  const membershipEnded = !activeMembership || String(activeMembership.end_date) < todayIst;
 
   // Approval-backed requests (freeze / unfreeze / trainer / locker)
   const { data: requests = [], isLoading: requestsLoading } = useQuery({
@@ -177,8 +180,15 @@ export default function MemberRequests() {
       tone: 'bg-success/10 text-success',
     });
 
+    // Nothing can be requested once the membership has ended.
+    if (membershipEnded) {
+      const reason = activeMembership?.end_date
+        ? `Membership ended on ${format(new Date(activeMembership.end_date), 'd MMM')} — renew to continue`
+        : 'No active membership — renew to continue';
+      return list.map((o) => ({ ...o, disabledReason: reason }));
+    }
     return list;
-  }, [isFrozen, freezeAllowed, freezeDaysAllowance, activeMembership, member, hasPending, lockerCfg]);
+  }, [membershipEnded, isFrozen, freezeAllowed, freezeDaysAllowance, activeMembership, member, hasPending, lockerCfg]);
 
   const openComposer = (kind: RequestKind | null) => {
     setComposerKind(kind);
