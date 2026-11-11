@@ -1,3 +1,4 @@
+// v2.10.0 — Accepts x-internal-token (verified) as the system worker.
 // v2.9.0 — Adds `delete_meta` (removes a template from the Meta catalog by name).
 // v2.8.0 — System-worker auth and idempotent approved-template event reconciliation.
 // v2.7.0 — Paginated full-catalog reconciliation; imported Meta rows carry live
@@ -121,7 +122,7 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     // Verify caller identity via JWT, or accept the dedicated Automation Brain worker.
-    const authHeader = req.headers.get("Authorization");
+    const authHeader = req.headers.get("Authorization") ?? (req.headers.get("x-internal-token") ? "Bearer internal" : null);
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing Authorization header" }),
@@ -130,7 +131,14 @@ serve(async (req) => {
     }
 
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const isSystemWorker = bearer === supabaseServiceKey && req.headers.get("x-system-call") === "template-manager-worker";
+    let isSystemWorker = bearer === supabaseServiceKey && req.headers.get("x-system-call") === "template-manager-worker";
+    // DB jobs/triggers authenticate with the rotating internal token instead of a stored service key.
+    const internalTok = req.headers.get("x-internal-token");
+    if (!isSystemWorker && internalTok) {
+      const admin = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: okTok } = await admin.rpc("verify_internal_fn_token", { p_token: internalTok });
+      isSystemWorker = okTok === true;
+    }
     let user: { id: string } | null = null;
     if (!isSystemWorker) {
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -620,6 +628,11 @@ serve(async (req) => {
         operational_update: "The Steam Room will be closed for maintenance today from 2 PM to 4 PM.",
         message: "The facility will close early at 6:00 PM tomorrow for Diwali.",
         schedule_occasion: "Holi", schedule_line_1: "Thu 4 Mar 2027: Open until 1:00 PM",
+        recipient_name: "Rajat", report_date: "11 Nov 2026", total_checkins: "92", unique_members: "78",
+        new_memberships: "3", renewals: "1", pt_packages_sold: "2", amount_received: "48,480",
+        cash_received: "480", upi_received: "48,000", card_received: "0", other_received: "0",
+        dues_collected: "12,000", dues_pending: "1,25,000", pt_sessions_done: "8", active_pt_clients: "13",
+        facility_bookings: "21", facility_no_shows: "2", expiring_7d: "6", new_leads: "4",
         schedule_line_2: "Fri 5 Mar 2027: Closed", schedule_line_3: "Sat 6 Mar 2027: Regular hours resume from 6:00 AM",
       };
       
