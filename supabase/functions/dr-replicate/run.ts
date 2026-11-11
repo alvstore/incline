@@ -317,6 +317,10 @@ async function runStep(step: string, env: Env, run: Run, deadline: number, persi
       run.report.jobs = await mirrorJobs(env.primary, env.standby);
       return true;
     case "verify":
+      if (!(await env.standby.helpersReady())) {
+        await env.bootstrap();
+        run.report.helpersInstalled = true;
+      }
       return await verifyStep(env, run, deadline);
     default:
       throw new Error(`unknown step ${step}`);

@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
+// v2.2.0 — helper install over encrypted Postgres only; verify self-heals helpers. v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
@@ -76,7 +76,7 @@ async function bootstrapStandby(): Promise<void> {
     }
   }
   for (const url of candidates) {
-    const sql = postgres(url, { ssl: false, max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
+    const sql = postgres(url, { ssl: "require", max: 1, prepare: false, connect_timeout: 15, idle_timeout: 5 });
     try {
       await sql.unsafe(BOOTSTRAP_SQL);
       return;
