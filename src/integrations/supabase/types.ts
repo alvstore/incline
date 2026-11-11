@@ -17865,6 +17865,10 @@ export type Database = {
             }
             Returns: Json
           }
+      create_member_plan_request: {
+        Args: { _kind: string; _note?: string }
+        Returns: Json
+      }
       create_pos_sale: {
         Args: {
           p_awaiting_payment?: boolean
