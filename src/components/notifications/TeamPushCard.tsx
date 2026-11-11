@@ -6,9 +6,9 @@ const TEAM_ROLES = ['owner', 'admin', 'manager'];
 
 /** Phone & browser alerts for owners/admins/managers (late check-ins, approvals, tasks). */
 export function TeamPushCard({ variant = 'settings' }: { variant?: 'prompt' | 'settings' }) {
-  const { roles } = useAuth();
+  const { hasAnyRole } = useAuth();
   const { effectiveBranchId, branches } = useBranchContext();
-  const isTeam = (roles || []).some((r: any) => TEAM_ROLES.includes(typeof r === 'string' ? r : r?.role));
+  const isTeam = hasAnyRole(TEAM_ROLES as any);
   const branchId = effectiveBranchId || branches?.[0]?.id;
   if (!isTeam || !branchId) return null;
   return <BrowserNotifications branchId={branchId} variant={variant} />;
