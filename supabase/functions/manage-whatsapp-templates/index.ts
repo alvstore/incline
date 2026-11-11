@@ -1,3 +1,4 @@
+// v2.10.0 — Accepts x-internal-token (verified) as the system worker.
 // v2.9.0 — Adds `delete_meta` (removes a template from the Meta catalog by name).
 // v2.8.0 — System-worker auth and idempotent approved-template event reconciliation.
 // v2.7.0 — Paginated full-catalog reconciliation; imported Meta rows carry live
@@ -121,7 +122,7 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     // Verify caller identity via JWT, or accept the dedicated Automation Brain worker.
-    const authHeader = req.headers.get("Authorization");
+    const authHeader = req.headers.get("Authorization") ?? (req.headers.get("x-internal-token") ? "Bearer internal" : null);
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing Authorization header" }),
@@ -130,7 +131,14 @@ serve(async (req) => {
     }
 
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const isSystemWorker = bearer === supabaseServiceKey && req.headers.get("x-system-call") === "template-manager-worker";
+    let isSystemWorker = bearer === supabaseServiceKey && req.headers.get("x-system-call") === "template-manager-worker";
+    // DB jobs/triggers authenticate with the rotating internal token instead of a stored service key.
+    const internalTok = req.headers.get("x-internal-token");
+    if (!isSystemWorker && internalTok) {
+      const admin = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: okTok } = await admin.rpc("verify_internal_fn_token", { p_token: internalTok });
+      isSystemWorker = okTok === true;
+    }
     let user: { id: string } | null = null;
     if (!isSystemWorker) {
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
