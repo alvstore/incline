@@ -35,7 +35,7 @@ async function teamAccess(db: any, userId: string, branchId: string | null) {
 }
 // Lock-screen safe titles per category (no names, amounts or health data).
 const TEAM_TITLES: Record<string, [string, string]> = {
-  staff_late: ['Late check-in', '/hrm?tab=attendance'],
+  staff_late: ['Late check-in', '/staff-attendance'],
   approval: ['Approval waiting', '/approvals'],
   task: ['New task', '/tasks'],
   payment: ['Payment update', '/invoices'],
