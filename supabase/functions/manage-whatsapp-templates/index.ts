@@ -620,6 +620,11 @@ serve(async (req) => {
         operational_update: "The Steam Room will be closed for maintenance today from 2 PM to 4 PM.",
         message: "The facility will close early at 6:00 PM tomorrow for Diwali.",
         schedule_occasion: "Holi", schedule_line_1: "Thu 4 Mar 2027: Open until 1:00 PM",
+        recipient_name: "Rajat", report_date: "11 Nov 2026", total_checkins: "92", unique_members: "78",
+        new_memberships: "3", renewals: "1", pt_packages_sold: "2", amount_received: "48,480",
+        cash_received: "480", upi_received: "48,000", card_received: "0", other_received: "0",
+        dues_collected: "12,000", dues_pending: "1,25,000", pt_sessions_done: "8", active_pt_clients: "13",
+        facility_bookings: "21", facility_no_shows: "2", expiring_7d: "6", new_leads: "4",
         schedule_line_2: "Fri 5 Mar 2027: Closed", schedule_line_3: "Sat 6 Mar 2027: Regular hours resume from 6:00 AM",
       };
       

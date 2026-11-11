@@ -1,3 +1,6 @@
+// daily-ops-summary v2.0.0 — richer report: unique members, renewals, PT sales/sessions/clients,
+//   payment split, facility bookings/no-shows, expiring members, leads. WhatsApp uses
+//   UTILITY template `daily_ops_summary_v2` (20 slots); falls back to SMS until approved.
 // daily-ops-summary v1.1.0
 // Sends the end-of-day owner report at 23:00 IST (17:30 UTC), driven by the
 // master cron. Reports, for the IST calendar day:
@@ -55,11 +58,17 @@ Deno.serve(async (req) => {
       { data: openInvoices },
       { data: branches },
       { count: attendanceCount },
-      { count: activePtCredits },
+      { data: attendanceRows },
+      { data: ptPackagesToday },
+      { count: ptSessionsDone },
+      { data: activePtRows },
+      { data: slotBookings },
+      { data: expiringRows },
+      { count: leadsToday },
     ] = await Promise.all([
       supabase
         .from("memberships")
-        .select("id, branch_id, price_paid, status")
+        .select("id, branch_id, member_id, price_paid, status")
         .gte("created_at", startUtc.toISOString())
         .lt("created_at", endUtc.toISOString())
         .neq("status", "cancelled"),
@@ -86,17 +95,73 @@ Deno.serve(async (req) => {
         .gte("check_in", startUtc.toISOString())
         .lt("check_in", endUtc.toISOString()),
       supabase
-        .from("member_benefit_credits")
+        .from("member_attendance")
+        .select("member_id")
+        .gte("check_in", startUtc.toISOString())
+        .lt("check_in", endUtc.toISOString())
+        .limit(5000),
+      supabase
+        .from("member_pt_packages")
+        .select("id")
+        .gte("created_at", startUtc.toISOString())
+        .lt("created_at", endUtc.toISOString())
+        .not("status", "in", "(cancelled,reversed)"),
+      supabase
+        .from("pt_sessions")
         .select("id", { count: "exact", head: true })
-        .eq("benefit_type", "pt_sessions")
-        .gt("credits_remaining", 0),
+        .eq("status", "completed")
+        .gte("scheduled_at", startUtc.toISOString())
+        .lt("scheduled_at", endUtc.toISOString()),
+      supabase
+        .from("member_pt_packages")
+        .select("member_id")
+        .eq("status", "active")
+        .limit(5000),
+      supabase
+        .from("benefit_bookings")
+        .select("status, benefit_slots!inner(slot_date)")
+        .eq("benefit_slots.slot_date", isoDate)
+        .neq("status", "cancelled")
+        .limit(5000),
+      supabase
+        .from("memberships")
+        .select("member_id")
+        .eq("status", "active")
+        .gte("end_date", isoDate)
+        .lte("end_date", new Date(Date.parse(isoDate) + 7 * 86400000).toISOString().slice(0, 10))
+        .limit(5000),
+      supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", startUtc.toISOString())
+        .lt("created_at", endUtc.toISOString()),
     ]);
 
+    // Renewals = memberships created today for members who already had one.
+    const todayMemberIds = [...new Set((memberships ?? []).map((m: any) => m.member_id).filter(Boolean))];
+    let renewalMemberIds = new Set<string>();
+    if (todayMemberIds.length) {
+      const { data: prior } = await supabase
+        .from("memberships")
+        .select("member_id")
+        .in("member_id", todayMemberIds)
+        .lt("created_at", startUtc.toISOString());
+      renewalMemberIds = new Set((prior ?? []).map((r: any) => r.member_id));
+    }
+    const renewals = (memberships ?? []).filter((m: any) => renewalMemberIds.has(m.member_id)).length;
+    const uniqueMembers = new Set((attendanceRows ?? []).map((a: any) => a.member_id)).size;
+    const ptPackagesSold = (ptPackagesToday ?? []).length;
+    const ptDone = ptSessionsDone ?? 0;
+    const activePtClients = new Set((activePtRows ?? []).map((r: any) => r.member_id)).size;
+    const facilityBookings = (slotBookings ?? []).length;
+    const facilityNoShows = (slotBookings ?? []).filter((b: any) => b.status === "no_show").length;
+    const expiringSoon = new Set((expiringRows ?? []).map((r: any) => r.member_id)).size;
+    const newLeads = leadsToday ?? 0;
+
     const totalCheckins = attendanceCount ?? 0;
-    const activePtSessions = activePtCredits ?? 0;
     const branchName = new Map((branches ?? []).map((b: any) => [b.id, b.name]));
 
-    const newMemberships = (memberships ?? []).length;
+    const allMemberships = (memberships ?? []).length;
     const invoicedTotal = (invoices ?? []).reduce(
       (s: number, i: any) => s + Number(i.total_amount || 0), 0,
     );
@@ -126,6 +191,12 @@ Deno.serve(async (req) => {
       .map(([k, v]) => `  • ${MODE_LABEL[k] ?? k}: ₹${inr(v)}`)
       .join("\n") || "  • No payments recorded";
 
+    const newMemberships = allMemberships - renewals;
+    const cashAmt = byMode.get("cash") ?? 0;
+    const upiAmt = byMode.get("upi") ?? 0;
+    const cardAmt = byMode.get("card") ?? 0;
+    const otherAmt = receivedTotal - cashAmt - upiAmt - cardAmt;
+
     const perBranch = (branches ?? [])
       .map((b: any) => {
         const mCount = (memberships ?? []).filter((m: any) => m.branch_id === b.id).length;
@@ -138,14 +209,17 @@ Deno.serve(async (req) => {
       .join("\n");
 
     const body =
-      `The Incline — Daily Report (${dateLabel})\n\n` +
-      `Total Check-ins: ${totalCheckins}\n` +
-      `New memberships enrolled: ${newMemberships}\n` +
+      `The Incline — Daily Operations Summary (${dateLabel})\n\n` +
+      `Footfall: ${totalCheckins} check-ins (${uniqueMembers} unique members)\n` +
+      `Sales: ${newMemberships} new memberships, ${renewals} renewals, ${ptPackagesSold} PT packages\n` +
       `Total sales invoiced: ₹${inr(invoicedTotal)}\n` +
-      `Amount received: ₹${inr(receivedTotal)}\n${modeLines}\n\n` +
-      `Active PT Sessions: ${activePtSessions}\n` +
+      `Revenue received: ₹${inr(receivedTotal)}\n${modeLines}\n\n` +
       `Dues collected today: ₹${inr(duesCollected)}\n` +
-      `Dues still outstanding: ₹${inr(duesPending)}` +
+      `Dues still outstanding: ₹${inr(duesPending)}\n\n` +
+      `PT: ${ptDone} sessions done, ${activePtClients} active clients\n` +
+      `Facilities: ${facilityBookings} recovery bookings (${facilityNoShows} no-shows)\n` +
+      `Expiring in 7 days: ${expiringSoon} members\n` +
+      `New leads today: ${newLeads}` +
       (perBranch ? `\n\nBy branch:\n${perBranch}` : "");
 
     // ── recipients ──
@@ -195,44 +269,40 @@ Deno.serve(async (req) => {
     }> = [];
 
     for (const [recipientIndex, r] of recipients.entries()) {
-      const variables = {
-        recipient_name: r.name ?? "there",
-        member_name: r.name ?? "there",
-        full_name: r.name ?? "there",
-        report_date: dateLabel,
-        new_memberships: String(newMemberships),
-        total_checkins: String(totalCheckins),
-        checkins: String(totalCheckins),
-        active_pt_sessions: String(activePtSessions),
-        pt_sessions: String(activePtSessions),
-        total_revenue: inr(receivedTotal),
+      const name = r.name ?? "Team";
+      // Order MUST match the `variables` list on the UTILITY template
+      // `daily_ops_summary_v2` ({{1}}…{{20}}).
+      const slots: Array<[string, string]> = [
+        ["recipient_name", name],
+        ["report_date", dateLabel],
+        ["total_checkins", String(totalCheckins)],
+        ["unique_members", String(uniqueMembers)],
+        ["new_memberships", String(newMemberships)],
+        ["renewals", String(renewals)],
+        ["pt_packages_sold", String(ptPackagesSold)],
+        ["amount_received", inr(receivedTotal)],
+        ["cash_received", inr(cashAmt)],
+        ["upi_received", inr(upiAmt)],
+        ["card_received", inr(cardAmt)],
+        ["other_received", inr(otherAmt)],
+        ["dues_collected", inr(duesCollected)],
+        ["dues_pending", inr(duesPending)],
+        ["pt_sessions_done", String(ptDone)],
+        ["active_pt_clients", String(activePtClients)],
+        ["facility_bookings", String(facilityBookings)],
+        ["facility_no_shows", String(facilityNoShows)],
+        ["expiring_7d", String(expiringSoon)],
+        ["new_leads", String(newLeads)],
+      ];
+      const variables: Record<string, string> = {
+        member_name: name, full_name: name, event_key: "daily_ops_summary_report",
         total_sales: inr(invoicedTotal),
-        amount: inr(receivedTotal),
-        amount_received: inr(receivedTotal),
-        revenue: inr(receivedTotal),
-        cash_received: inr(byMode.get("cash") ?? 0),
-        upi_received: inr(byMode.get("upi") ?? 0),
-        card_received: inr(byMode.get("card") ?? 0),
-        dues_collected: inr(duesCollected),
-        dues_pending: inr(duesPending),
-        event_key: "daily_ops_summary_report",
-        // Positional slots for the approved Meta template
-        // `daily_ops_summary_report`:
-        // Hi {{1}}, … summary for {{2}}. Check-ins: {{3}}. New Memberships:
-        // {{4}}. Total Revenue: ₹{{5}}. Active PT Sessions: {{6}}.
-        "1": r.name ?? "Team",
-        "2": dateLabel,
-        "3": String(totalCheckins),
-        "4": String(newMemberships),
-        "5": inr(receivedTotal),
-        "6": String(activePtSessions),
-        variable_1: r.name ?? "Team",
-        variable_2: dateLabel,
-        variable_3: String(totalCheckins),
-        variable_4: String(newMemberships),
-        variable_5: inr(receivedTotal),
-        variable_6: String(activePtSessions),
       };
+      slots.forEach(([k, v], idx) => {
+        variables[k] = v;
+        variables[String(idx + 1)] = v;
+        variables[`variable_${idx + 1}`] = v;
+      });
 
       const send = async (
         channel: "whatsapp" | "email" | "sms",
