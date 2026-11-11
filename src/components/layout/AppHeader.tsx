@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { getISTNow } from '@/lib/utils/datetime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
