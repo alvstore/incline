@@ -1,3 +1,4 @@
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
 import { describe, it, expect } from 'bun:test';
 import { isDayCovered, hasMembershipEnded, friendlyError } from './coverage';
 
