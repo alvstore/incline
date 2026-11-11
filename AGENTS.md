@@ -47,4 +47,3 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - `CampaignWizard` is the sole campaign composer; parallel composers drifted.
 - Renewal cases open each membership cycle via scheduled `detect_renewal_cases` + trigger, independent of messaging.
 - Agreement text: `employmentAgreementTemplate.ts`; policies only via frozen `policy_snapshot`; witnesses from contract vars, never signer.
-- Bookings need an active membership covering the service date (RPC + triggers; force-book exempt), because 'active today' allowed post-expiry bookings.
