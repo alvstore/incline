@@ -1,0 +1,1 @@
+- Bookings need an active membership covering the service date (RPC + triggers; force-book exempt), because 'active today' allowed post-expiry bookings.

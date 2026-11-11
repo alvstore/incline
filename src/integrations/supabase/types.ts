@@ -17390,6 +17390,10 @@ export type Database = {
         }
         Returns: Json
       }
+      booking_coverage_enforced: {
+        Args: { p_branch_id: string }
+        Returns: boolean
+      }
       build_contract_policy_snapshot: {
         Args: { _branch: string; _role: string }
         Returns: Json
@@ -18928,6 +18932,10 @@ export type Database = {
       member_gate_check_out: {
         Args: { _at: string; _branch_id: string; _member_id: string }
         Returns: Json
+      }
+      member_has_active_coverage: {
+        Args: { p_date: string; p_member_id: string }
+        Returns: boolean
       }
       member_login_access_candidates: {
         Args: never
