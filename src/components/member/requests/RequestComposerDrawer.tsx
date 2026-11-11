@@ -216,64 +216,29 @@ export function RequestComposerDrawer({
       };
 
       if (kind === 'diet' || kind === 'workout') {
-        const title = `${kind === 'diet' ? 'Diet' : 'Workout'} plan request from ${memberName}`;
-        const { count: openCount } = await supabase
+        // Server dedupes across all open requests (incl. staff-raised) and assigns the member's trainer.
+        const { data: res, error: rpcErr } = await (supabase as any).rpc('create_member_plan_request', {
+          _kind: kind,
+          _note: note?.trim() || null,
+        });
+        if (rpcErr) throw rpcErr;
+        if (!res?.success) throw new Error(res?.message || 'You already have an open request.');
+        const { data: t } = await supabase
           .from('tasks')
-          .select('id', { count: 'exact', head: true })
-          .eq('linked_entity_type', 'member')
-          .eq('linked_entity_id', member.id)
-          .ilike('title', `${kind === 'diet' ? 'Diet' : 'Workout'} plan request%`)
-          .in('status', ['pending', 'in_progress']);
-        if ((openCount ?? 0) > 0) {
-          throw new Error(`You already have an open ${kind} plan request. Your trainer will send it soon.`);
+          .select('id, branch_id, assigned_to, title, description, priority, due_date')
+          .eq('id', res.task_id)
+          .maybeSingle();
+        if (t) {
+          await notifyTaskAssignee({
+            taskId: (t as any).id,
+            branchId: (t as any).branch_id,
+            assignedTo: (t as any).assigned_to,
+            title: (t as any).title,
+            description: (t as any).description,
+            priority: (t as any).priority,
+            dueDate: (t as any).due_date,
+          });
         }
-        const assignees: string[] = [];
-        if (member.assigned_trainer_id) {
-          const { data: t } = await (supabase as any)
-            .from('trainers_directory')
-            .select('user_id')
-            .eq('id', member.assigned_trainer_id)
-            .maybeSingle();
-          if (t?.user_id) assignees.push(t.user_id);
-        }
-        if (assignees.length === 0) {
-          const { data: branchTrainers } = await (supabase as any)
-            .from('trainers_directory')
-            .select('user_id')
-            .eq('branch_id', member.branch_id)
-            .eq('is_active', true);
-          (branchTrainers || []).forEach((t: any) => t.user_id && assignees.push(t.user_id));
-        }
-        const targets = assignees.length > 0 ? assignees : [null];
-        const rows = targets.map((uid) => ({
-          branch_id: member.branch_id,
-          title,
-          description: note || `Member ${memberName} has requested a new ${kind} plan.`,
-          priority: 'medium',
-          status: 'pending',
-          assigned_to: uid,
-          assigned_by: userId,
-          linked_entity_type: 'member',
-          linked_entity_id: member.id,
-        }));
-        const { data: created, error } = await supabase
-          .from('tasks')
-          .insert(rows as any)
-          .select('id, branch_id, assigned_to, title, description, priority, due_date');
-        if (error) throw error;
-        await Promise.all(
-          (created || []).map((t: any) =>
-            notifyTaskAssignee({
-              taskId: t.id,
-              branchId: t.branch_id,
-              assignedTo: t.assigned_to,
-              title: t.title,
-              description: t.description,
-              priority: t.priority,
-              dueDate: t.due_date,
-            }),
-          ),
-        );
         return;
       }
 
