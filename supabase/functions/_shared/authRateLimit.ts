@@ -23,7 +23,7 @@ export async function checkLimits(rpc: Rpc, rules: LimitRule[], source: string):
         p_key: `${source}:${await sha256Hex(r.key)}`, p_limit: r.limit, p_window_seconds: r.windowSeconds,
       });
       if (error) {
-        await rpc("log_error_event", { p_source: "edge_function", p_severity: "warning",
+        await rpc("log_error_event", { p_severity: "warning", p_source: "edge_function",
           p_message: `${source} rate limiter unavailable`, p_function_name: source }).then(() => {}, () => {});
         continue;
       }

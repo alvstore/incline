@@ -55,6 +55,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           'resolve-login-identifier',
           { body: { phone: id.value, password: data.password } },
         );
+        const status = (resolveErr as { context?: Response } | null)?.context?.status;
+        if (status === 429) {
+          throw new Error('Too many sign-in attempts. Please wait a minute and try again.');
+        }
         if (resolveErr || !resolved?.session) {
           throw new Error('Invalid credentials');
         }

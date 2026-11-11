@@ -1,9 +1,10 @@
-// v1.0.0 — Password-reset fallback.
+// v1.1.0 — Password-reset fallback (email 3/10min, IP 10/10min limits).
 // Generates a recovery link server-side and sends it through our own mail
 // engine (dispatch-communication → send-email) when the built-in auth mailer
 // fails or silently drops the message.
 // Never reveals whether an account exists.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkLimits, clientIp } from "../_shared/authRateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,14 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+    const ip = clientIp(req);
+    const limited = await checkLimits((fn, a) => sb.rpc(fn, a), [
+      { key: `email:${email}`, limit: 3, windowSeconds: 600 },
+      ...(ip ? [{ key: `ip:${ip}`, limit: 10, windowSeconds: 600 }] : []),
+    ], "request-password-reset");
+    // Same generic reply as unknown accounts, so limits never reveal existence.
+    if (limited) return json({ ok: true, sent: false });
 
     // Generate the recovery link without sending the built-in email.
     const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
