@@ -5,6 +5,7 @@ import "./index.css";
 import { initGlobalErrorLogging } from "./services/errorLogService";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { captureFirstTouch } from "./lib/leads/firstTouch";
+import { startOriginAudit } from "./lib/security/originAudit";
 
 // Capture first-touch attribution (UTMs + external referrer) BEFORE React mounts,
 // so SPA navigations can't clobber document.referrer before a lead form reads it.
@@ -18,6 +19,7 @@ const deferIdle =
 deferIdle(() => {
   try {
     initGlobalErrorLogging();
+    startOriginAudit();
   } catch (e) {
     console.warn("error logging init failed", e);
   }
