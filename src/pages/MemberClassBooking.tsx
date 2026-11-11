@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemberData } from '@/hooks/useMemberData';
+import { friendlyError } from '@/lib/bookings/coverage';
 import { useAuth } from '@/contexts/AuthContext';
 import { ensureSlotsForDateRange } from '@/services/benefitBookingService';
 import {
@@ -117,6 +119,7 @@ export default function MemberClassBooking() {
     return t === 'recovery' || t === 'classes' || t === 'pt' ? t : 'all';
   })();
   const { member, activeMembership, ptPackages, isLoading: memberLoading } = useMemberData();
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [showMyBookings, setShowMyBookings] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(istToday());
@@ -399,7 +402,7 @@ export default function MemberClassBooking() {
       queryClient.invalidateQueries({ queryKey: ['agenda-classes'] });
       queryClient.invalidateQueries({ queryKey: ['my-class-bookings-agenda'] });
     },
-    onError: (e: any) => toast.error(e.message || 'Failed to book class'),
+    onError: (e: any) => toast.error(friendlyError(e?.message, 'Failed to book class')),
   });
 
   const cancelClassBooking = useMutation({
@@ -750,6 +753,7 @@ export default function MemberClassBooking() {
               <p className="text-sm font-medium">
                 Your membership ends on {coverageEndStr ? format(new Date(coverageEndStr), 'd MMM') : '—'}. Renew to book after this date.
               </p>
+              <Button size="sm" className="mt-3" onClick={() => navigate('/renewal-center')}>Renew membership</Button>
             </CardContent>
           </Card>
         )}
@@ -759,7 +763,8 @@ export default function MemberClassBooking() {
           <Card className="border-warning/20 bg-warning/5">
             <CardContent className="py-4 text-center">
               <AlertCircle className="h-8 w-8 mx-auto text-warning mb-2" />
-              <p className="text-sm font-medium">No active membership — booking is disabled</p>
+              <p className="text-sm font-medium">Renew your membership to book sessions</p>
+              <Button size="sm" className="mt-3" onClick={() => navigate('/renewal-center')}>Renew membership</Button>
             </CardContent>
           </Card>
         )}

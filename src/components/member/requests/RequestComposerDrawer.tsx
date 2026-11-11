@@ -1,3 +1,4 @@
+import { friendlyError } from '@/lib/bookings/coverage';
 import { useEffect, useMemo, useState } from 'react';
 import { useLockerPricing } from '@/hooks/useLockerPricing';
 import { track } from '@/lib/analytics';
@@ -384,7 +385,7 @@ export function RequestComposerDrawer({
       queryClient.invalidateQueries({ queryKey: ['my-plan-requests'] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to submit request'),
+    onError: (e: any) => toast.error(friendlyError(e?.message, 'Failed to submit request')),
   });
 
   const baseCopy = kind ? COPY[kind] : null;
