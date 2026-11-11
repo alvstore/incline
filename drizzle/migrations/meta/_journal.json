@@ -1198,6 +1198,13 @@
       "when": 1794406967948,
       "tag": "0170_freeze_requires_unexpired",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1794413068268,
+      "tag": "0171_member_plan_request_rpc",
+      "breakpoints": true
     }
   ]
 }

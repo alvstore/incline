@@ -167,6 +167,7 @@ export default function MemberRequests() {
 
     list.push({
       kind: 'diet',
+      disabledReason: hasPending('diet') ? 'Request already pending' : undefined,
       title: 'Request a diet plan',
       description: 'Personalised nutrition from your trainer',
       icon: UtensilsCrossed,
@@ -175,6 +176,7 @@ export default function MemberRequests() {
 
     list.push({
       kind: 'workout',
+      disabledReason: hasPending('workout') ? 'Request already pending' : undefined,
       title: 'Request a workout plan',
       description: 'A routine designed around your goals',
       icon: Dumbbell,
