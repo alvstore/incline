@@ -1205,6 +1205,13 @@
       "when": 1794413068268,
       "tag": "0171_member_plan_request_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1794413206691,
+      "tag": "0172_advance_renewal_counts_as_coverage",
+      "breakpoints": true
     }
   ]
 }
