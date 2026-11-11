@@ -224,3 +224,5 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] Website chat answers from the shared knowledge base with pricing guard and tel escalation; built-in answers as fallback.
 - [x] Website chat transcripts saved to the team inbox under a read-only Web Chat filter.
 - [x] 21 tests pass. Live end-to-end chat not run (would create a real lead and staff alert).
+
+- [ ] Enforce Content Security Policy (Phase 2) — waiting ~1 week of report-only data in System Health ("CSP report-only" warnings) after publish.
