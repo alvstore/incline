@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -265,6 +266,18 @@ export default function MemberRequests() {
           ))}
         </div>
 
+        {membershipEnded && !memberLoading && (
+          <div className="rounded-2xl bg-warning/10 p-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium">
+              {activeMembership?.end_date
+                ? `Your membership ended on ${format(new Date(activeMembership.end_date), 'd MMM')}. Renew to send requests.`
+                : 'Renew your membership to send requests.'}
+            </p>
+            <Link to="/renewal-center" className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">
+              Renew membership
+            </Link>
+          </div>
+        )}
         <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <RequestLauncher options={options} onSelect={(kind) => openComposer(kind)} />
           <RequestTimeline

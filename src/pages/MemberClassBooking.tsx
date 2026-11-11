@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -118,6 +119,7 @@ export default function MemberClassBooking() {
     return t === 'recovery' || t === 'classes' || t === 'pt' ? t : 'all';
   })();
   const { member, activeMembership, ptPackages, isLoading: memberLoading } = useMemberData();
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [showMyBookings, setShowMyBookings] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(istToday());
