@@ -164,24 +164,9 @@ Deno.serve(async (req) => {
           { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      const accountInUse = !!(existingUser as { last_sign_in_at?: string | null }).last_sign_in_at
-
-      // Update their profile (include avatar if provided) — only for never-used accounts
-      if (!accountInUse) await supabaseAdmin
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          phone: phone || null,
-          gender: gender || null,
-          date_of_birth: dateOfBirth || null,
-          address: address || null,
-          emergency_contact_name: emergencyContactName || null,
-          emergency_contact_phone: emergencyContactPhone || null,
-          must_set_password: true,
-          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
-        })
-        .eq('id', userId)
-
+      // Security: an existing account is controlled by whoever registered it.
+      // Staff may link it to the new member record, but never overwrite its
+      // password or profile (that would let staff take over the account).
       // Ensure member role exists
       await supabaseAdmin
         .from('user_roles')
@@ -190,11 +175,6 @@ Deno.serve(async (req) => {
           { onConflict: 'user_id,role' }
         )
 
-      // If admin supplied a password, reset it on the orphan auth user too
-      if (suppliedPassword && !accountInUse) {
-        await supabaseAdmin.auth.admin.updateUserById(userId, { password: suppliedPassword })
-        createdTempPassword = suppliedPassword
-      }
 
     } else {
       // Create new auth user

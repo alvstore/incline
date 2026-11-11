@@ -27,6 +27,7 @@ const corsHeaders = {
 
 const APP_BASE = Deno.env.get("APP_BASE_URL") || "https://incline.lovable.app";
 
+const escHtml = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 function htmlResponse(title: string, body: string, status = 200): Response {
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
@@ -80,8 +81,8 @@ Deno.serve(async (req) => {
       return htmlResponse(
         "Instagram authorization failed",
         `<h1>❌ Authorization failed</h1>
-         <p><b>${error}</b></p>
-         <p>${errorDescription || "The Instagram authorization was cancelled or denied."}</p>
+         <p><b>${escHtml(error)}</b></p>
+         <p>${errorDescription ? escHtml(errorDescription) : "The Instagram authorization was cancelled or denied."}</p>
          <p><a href="${APP_BASE}/settings?tab=integrations">← Back to Integrations</a></p>`,
         400,
       );

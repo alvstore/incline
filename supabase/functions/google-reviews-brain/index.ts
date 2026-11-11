@@ -90,6 +90,7 @@ const json = (payload: unknown, status = 200) =>
 
 const supa = () => createClient(SUPABASE_URL, SERVICE_ROLE);
 
+const escHtml = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 function htmlResponse(title: string, body: string, status = 200): Response {
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc;color:#0f172a}.card{background:#fff;border-radius:16px;padding:32px;max-width:520px;box-shadow:0 18px 45px -25px rgba(15,23,42,.35)}h1{margin:0 0 12px;font-size:22px}p{margin:8px 0;color:#475569;line-height:1.5}a{color:#4f46e5;text-decoration:none;font-weight:700}</style></head><body><div class="card">${body}</div></body></html>`,
@@ -187,7 +188,7 @@ async function handleGoogleOAuthCallback(url: URL) {
   const branchId = await verifyOAuthState(url.searchParams.get("state"));
   const error = url.searchParams.get("error");
   if (error) {
-    return htmlResponse("Google authorization failed", `<h1>Authorization failed</h1><p>${error}</p><p><a href="${APP_BASE}/settings?tab=integrations">Back to Integrations</a></p>`, 400);
+    return htmlResponse("Google authorization failed", `<h1>Authorization failed</h1><p>${escHtml(error)}</p><p><a href="${APP_BASE}/settings?tab=integrations">Back to Integrations</a></p>`, 400);
   }
   if (!code || !branchId) {
     return htmlResponse("Invalid Google callback", `<h1>Missing callback data</h1><p>This URL must be opened by Google after authorization.</p><p><a href="${APP_BASE}/settings?tab=integrations">Back to Integrations</a></p>`, 400);
@@ -226,7 +227,7 @@ async function handleGoogleOAuthCallback(url: URL) {
     }
     return htmlResponse(
       "Google token exchange failed",
-      `<h1>Token exchange failed</h1><p>${desc || err || "Google refused the authorization code."}</p><p>${hint}</p><p><a href="${APP_BASE}/settings?tab=integrations">Back to Integrations</a></p>`,
+      `<h1>Token exchange failed</h1><p>${escHtml(desc || err || "Google refused the authorization code.")}</p><p>${hint}</p><p><a href="${APP_BASE}/settings?tab=integrations">Back to Integrations</a></p>`,
       400,
     );
   }

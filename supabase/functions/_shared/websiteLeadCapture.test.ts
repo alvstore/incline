@@ -132,7 +132,7 @@ Deno.test("duplicate submission / same phone returns existing lead without dupli
   assertEquals(m.t.lead_activities[1].activity_type, "website_chatbot_returned");
 });
 
-Deno.test("existing lead: only empty fields are filled; notes/source/status kept", async () => {
+Deno.test("existing lead: public submission never modifies the lead row", async () => {
   const m = mockDb({ leads: [{ id: "lead-old", branch_id: "b1", phone: "9829012345", source: "instagram", status: "qualified", notes: "VIP referral", plan_interest: null, email: null }] });
   const r = await handleCaptureLead(base, meta, deps(m.db));
   const l = m.t.leads[0];
@@ -140,8 +140,9 @@ Deno.test("existing lead: only empty fields are filled; notes/source/status kept
   assertEquals(l.notes, "VIP referral");
   assertEquals(l.source, "instagram");
   assertEquals(l.status, "qualified");
-  assertEquals(l.plan_interest, "Quarterly Plan");
-  assertEquals(l.email, "aarav@example.com");
+  assertEquals(l.plan_interest, null);
+  assertEquals(l.email, null);
+  assertEquals((m.t.lead_activities[m.t.lead_activities.length - 1] as any).metadata.unverified, true);
 });
 
 Deno.test("existing member phone does not create a lead", async () => {

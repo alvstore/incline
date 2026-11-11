@@ -695,7 +695,7 @@ serve(async (req) => {
               meta_template_name: safeName,
               meta_template_status: 'DRAFT',
               meta_rejection_reason: errMsg,
-            }).eq('id', local_template_id);
+            }).eq('id', local_template_id).or(`branch_id.eq.${branch_id},branch_id.is.null`);
           }
           return new Response(JSON.stringify({
             success: false, error: errMsg,
@@ -708,7 +708,7 @@ serve(async (req) => {
             meta_template_name: safeName,
             meta_template_status: authData.status || 'PENDING',
             meta_rejection_reason: null,
-          }).eq('id', local_template_id);
+          }).eq('id', local_template_id).or(`branch_id.eq.${branch_id},branch_id.is.null`);
         }
         return new Response(JSON.stringify({ success: true, meta_template_id: authData.id, status: authData.status, name: safeName }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -775,7 +775,7 @@ serve(async (req) => {
           await supabase.from('templates').update({
             meta_template_status: 'DRAFT',
             meta_rejection_reason: userMsg,
-          }).eq('id', local_template_id);
+          }).eq('id', local_template_id).or(`branch_id.eq.${branch_id},branch_id.is.null`);
         }
         return new Response(JSON.stringify({
           success: false,
@@ -837,7 +837,7 @@ serve(async (req) => {
             meta_template_name: safeName,
             meta_template_status: 'DRAFT',
             meta_rejection_reason: errMsg,
-          }).eq('id', local_template_id);
+          }).eq('id', local_template_id).or(`branch_id.eq.${branch_id},branch_id.is.null`);
         }
         // Return 200 so supabase-js does NOT wrap as FunctionsHttpError and swallow body.
         // Client must inspect `success:false` + `meta_error`.
@@ -883,7 +883,8 @@ serve(async (req) => {
               meta_template_status: metaData.status || "PENDING",
               meta_rejection_reason: null,
             })
-            .eq("id", local_template_id);
+            .eq("id", local_template_id)
+            .or(`branch_id.eq.${branch_id},branch_id.is.null`);
         }
       }
 
@@ -1004,7 +1005,8 @@ serve(async (req) => {
             meta_rejection_reason: null,
             content: body_text || undefined,
           })
-          .eq("id", local_template_id);
+          .eq("id", local_template_id)
+          .or(`branch_id.eq.${branch_id},branch_id.is.null`);
       }
 
       return new Response(

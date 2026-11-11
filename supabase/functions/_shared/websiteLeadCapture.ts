@@ -220,17 +220,13 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
       replay = !!prior;
     }
     if (!replay) {
-      // Fill only empty fields — never overwrite notes, source, stage, owner or consent.
-      const patch: Record<string, unknown> = {};
-      const fill = (k: string, v: unknown) => { if (v && !existing[k]) patch[k] = v; };
-      fill("email", email); fill("fitness_goal", goal); fill("plan_interest", planInterest);
-      fill("expected_start_date", expectedStartFor(timeframe, deps.now)); fill("preferred_time", preferredTime);
-      fill("notes", note); fill("utm_source", utm.utm_source); fill("utm_medium", utm.utm_medium);
-      fill("utm_campaign", utm.utm_campaign); fill("landing_page", utm.landing_page); fill("referrer_url", utm.referrer_url);
-      if (Object.keys(patch).length) await db.from("leads").update(patch).eq("id", existing.id);
+      // Security: the caller only proved knowledge of a phone number, not control of
+      // the lead, so the existing lead row is never modified. The submitted details are
+      // kept on an activity entry marked unverified for staff to review.
       await db.from("lead_activities").insert({
         lead_id: existing.id, branch_id: existing.branch_id, activity_type: "website_chatbot_returned",
-        title: "Returned through Website Chatbot", notes: activitySummary, metadata: activityMeta,
+        title: "Returned through Website Chatbot (unverified)", notes: activitySummary,
+        metadata: { ...activityMeta, unverified: true, submitted: { email, preferred_time: preferredTime, note } },
       });
     }
     return { status: 200, body: chatbotOk(existing.id, existing.branch_id, false) };
