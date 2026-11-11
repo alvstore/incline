@@ -5,8 +5,10 @@ self.addEventListener('push', event => {
   let data = {};
   try { data = event.data?.json() || {}; } catch { /* Keep a safe generic message. */ }
   const url = typeof data.url === 'string' && data.url.startsWith('/') && !data.url.startsWith('//') ? data.url : '/member-dashboard';
-  event.waitUntil(self.registration.showNotification('Incline', {
-    body: 'You have a new update. Open Incline to view it.',
+  const title = typeof data.title === 'string' && data.title.length <= 40 ? data.title : 'Incline';
+  const body = typeof data.body === 'string' && data.body.length <= 80 ? data.body : 'You have a new update. Open Incline to view it.';
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
     icon: '/icon-192.png', badge: '/icon-192.png',
     tag: data.tag || 'incline-update', data: { url },
   }));

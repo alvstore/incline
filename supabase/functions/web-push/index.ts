@@ -1,3 +1,4 @@
+// v2.3.0 — owners/admins/managers can subscribe; team alerts get generic lock-screen titles + deep links.
 // v2.2.0 — one device-push worker: browser (web) + Flutter (fcm). Phone push uses direct Firebase settings; connector is fallback.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { classifyFcmError, loadFcmConfig, sendFcm } from '../_shared/fcm.ts';
@@ -19,6 +20,25 @@ const endpointAllowed = (endpoint: string) => {
     return u.protocol === 'https:' && !u.username && !u.password && !u.port &&
       (u.hostname === 'fcm.googleapis.com' || u.hostname === 'updates.push.services.mozilla.com' || u.hostname.endsWith('.push.services.mozilla.com') || u.hostname === 'web.push.apple.com' || u.hostname.endsWith('.notify.windows.com'));
   } catch { return false; }
+};
+
+// Team access: owner/admin = every branch; manager = branches they manage.
+async function teamAccess(db: any, userId: string, branchId: string | null) {
+  const { data: roles } = await db.from('user_roles').select('role').eq('user_id', userId).in('role', ['owner', 'admin', 'manager']);
+  const set = new Set((roles || []).map((r: any) => r.role));
+  if (set.has('owner') || set.has('admin')) return true;
+  if (!set.has('manager') || !branchId) return false;
+  const { data: bm } = await db.from('branch_managers').select('branch_id').eq('user_id', userId).eq('branch_id', branchId).limit(1);
+  if (bm?.length) return true;
+  const { data: emp } = await db.from('employees').select('id').eq('user_id', userId).eq('branch_id', branchId).limit(1);
+  return Boolean(emp?.length);
+}
+// Lock-screen safe titles per category (no names, amounts or health data).
+const TEAM_TITLES: Record<string, [string, string]> = {
+  staff_late: ['Late check-in', '/hrm?tab=attendance'],
+  approval: ['Approval waiting', '/approvals'],
+  task: ['New task', '/tasks'],
+  payment: ['Payment update', '/invoices'],
 };
 
 Deno.serve(async req => {
@@ -70,12 +90,13 @@ Deno.serve(async req => {
             const result = await db.from('web_push_deliveries').update({ status, last_error: lastError }).eq('id', job.id);
             if (result.error) throw result.error;
           };
-          if (!sub || !notice || notice.user_id !== sub.user_id || (notice.branch_id && notice.branch_id !== sub.branch_id) || !endpointAllowed(sub.endpoint) || Date.now() - Date.parse(notice.created_at) > 86400000) {
+          const isTeam = await teamAccess(db, sub?.user_id ?? '', notice?.branch_id ?? sub?.branch_id ?? null);
+          if (!sub || !notice || notice.user_id !== sub.user_id || (!isTeam && notice.branch_id && notice.branch_id !== sub.branch_id) || !endpointAllowed(sub.endpoint) || Date.now() - Date.parse(notice.created_at) > 86400000) {
             await finish('suppressed', 'Unavailable or stale notification'); return;
           }
-          const { data: member, error: memberLookupError } = await db.from('members').select('id,do_not_contact').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).maybeSingle();
+          const { data: member, error: memberLookupError } = isTeam ? { data: null, error: null } : await db.from('members').select('id,do_not_contact').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).maybeSingle();
           if (memberLookupError) { await finish('suppressed', 'Member access unavailable'); return; }
-          if (!member) {
+          if (!member && !isTeam) {
             // Trainers receive coaching alerts (client check-ins, PT dues) on opted-in devices.
             const { data: coach } = await db.from('trainers').select('id').eq('user_id', sub.user_id).eq('branch_id', sub.branch_id).eq('is_active', true).maybeSingle();
             if (!coach) { await finish('suppressed', 'Account access unavailable'); return; }
@@ -95,11 +116,13 @@ Deno.serve(async req => {
               if (start !== end && (start < end ? time >= start && time < end : time >= start || time < end)) { await finish('suppressed', 'Quiet hours; notification remains in inbox'); return; }
             }
           }
-          const home = member ? '/member-dashboard' : '/trainer-dashboard';
+          const teamKey = isTeam ? Object.keys(TEAM_TITLES).find(k => String(notice.category || '').includes(k)) : undefined;
+          const home = isTeam ? (teamKey ? TEAM_TITLES[teamKey][1] : '/dashboard') : member ? '/member-dashboard' : '/trainer-dashboard';
           const rawUrl = notice.action_url || home;
           const url = rawUrl.startsWith('/') && !rawUrl.startsWith('//') ? rawUrl : home;
           // Never expose names, prices, attendance, or health data on the lock screen.
-          const payload = JSON.stringify({ title: 'Incline', body: 'You have a new update. Open Incline to view it.', url, tag: notice.id });
+          const title = teamKey ? TEAM_TITLES[teamKey][0] : 'Incline';
+          const payload = JSON.stringify({ title, body: teamKey ? 'Tap to view in Incline.' : 'You have a new update. Open Incline to view it.', url, tag: notice.id });
           if (sub.kind === 'fcm') {
             const title = String(notice.title || 'Incline Alert');
             const body = String(notice.message || notice.body || 'You have a new update.');
@@ -168,7 +191,8 @@ Deno.serve(async req => {
       const { data: coach } = await db.from('trainers').select('id').eq('user_id', user.id).eq('branch_id', input.branch_id).eq('is_active', true).maybeSingle();
       coachId = coach?.id ?? null;
     }
-    if (memberError || (!member && !coachId)) return respond(403, { error: 'Member or trainer account required for this branch' });
+    const team = !member && !coachId ? await teamAccess(db, user.id, String(input.branch_id || '')) : false;
+    if (memberError || (!member && !coachId && !team)) return respond(403, { error: 'Member, trainer or team account required for this branch' });
     const accountBranch = member?.branch_id ?? String(input.branch_id);
     if (input.action === 'subscribe') {
       const sub = input.subscription;
