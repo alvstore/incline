@@ -20,6 +20,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.10.0",
+    "@lovable.dev/ai-gateway": "^0.1.11",
     "@lovable.dev/mcp-js": "^0.28.0",
     "@radix-ui/react-accordion": "^1.2.21",
     "@radix-ui/react-alert-dialog": "^1.1.24",
