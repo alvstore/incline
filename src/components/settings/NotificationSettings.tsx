@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { TeamPushCard } from '@/components/notifications/TeamPushCard';
 import {
   LeadNotificationCards,
   AdminRecipientsCard,
@@ -209,6 +210,7 @@ export function NotificationSettings() {
   return (
     <div className="space-y-5 pb-24 md:pb-0">
       <p className="sr-only" aria-live="polite">{liveMsg}</p>
+      <TeamPushCard />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

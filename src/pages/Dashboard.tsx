@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { TeamPushCard } from '@/components/notifications/TeamPushCard';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatCardSkeleton } from '@/components/ui/table-skeleton';
@@ -345,6 +346,7 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="min-w-0 space-y-4 sm:space-y-6">
+        <TeamPushCard variant="prompt" />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="min-w-0">

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { TeamPushCard } from '@/components/notifications/TeamPushCard';
 
 export default function ProfilePage() {
   const { profile, user, roles, refreshProfile } = useAuth();
@@ -204,6 +205,7 @@ export default function ProfilePage() {
 
           {/* Right: Edit + Activity */}
           <div className="lg:col-span-2 space-y-6">
+            <TeamPushCard />
             {/* Editable Contact Card */}
             <Card className="shadow-lg shadow-primary/5 rounded-2xl border-0">
               <CardHeader className="flex flex-row items-center justify-between">
