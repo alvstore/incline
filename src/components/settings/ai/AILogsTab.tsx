@@ -196,6 +196,7 @@ export function AILogsTab() {
               <button
                 key={s}
                 type="button"
+                aria-pressed={isActive}
                 onClick={() => {
                   setStream(s);
                   setStatusFilter("all");
@@ -295,6 +296,7 @@ export function AILogsTab() {
               <button
                 key={chip.value}
                 type="button"
+                aria-pressed={isActive}
                 onClick={() => setStatusFilter(chip.value)}
                 className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
                   isActive
@@ -319,6 +321,7 @@ export function AILogsTab() {
               <button
                 key={chip.value}
                 type="button"
+                aria-pressed={isActive}
                 onClick={() => setPlatformFilter(chip.value)}
                 className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
                   isActive

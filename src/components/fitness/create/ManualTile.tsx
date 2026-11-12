@@ -20,7 +20,8 @@ export function ManualTile({
   return (
     <div className="group flex min-h-[112px] flex-col rounded-xl bg-muted/40 ring-1 ring-border transition-all duration-200 hover:bg-muted/70 hover:ring-primary/30 motion-reduce:transition-none">
       <button
-        onClick={onClick}
+        type="button"
+            onClick={onClick}
         aria-label={title}
         className="flex flex-1 cursor-pointer flex-col items-start gap-1.5 rounded-xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -32,7 +33,8 @@ export function ManualTile({
       </button>
       {secondaryLabel && onSecondary && (
         <button
-          onClick={onSecondary}
+          type="button"
+            onClick={onSecondary}
           className="mx-4 mb-3 w-fit cursor-pointer rounded text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {secondaryLabel}

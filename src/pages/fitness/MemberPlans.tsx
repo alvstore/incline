@@ -336,8 +336,10 @@ export default function FitnessMemberPlansPage() {
           {(["active", "expired", "all"] as StatusFilter[]).map((s) => (
             <button
               key={s}
+              type="button"
+              aria-pressed={statusFilter === s}
               onClick={() => setStatusFilter(s)}
-              className={`min-h-9 text-xs px-3 py-1.5 rounded-full border transition ${
+              className={`min-h-9 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring text-xs px-3 py-1.5 rounded-full border transition ${
                 statusFilter === s
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background hover:bg-muted border-border"
@@ -399,8 +401,10 @@ export default function FitnessMemberPlansPage() {
                     >
                       <CardContent className="p-4 space-y-3">
                         <button
+                          type="button"
+                          aria-expanded={isOpen}
                           onClick={() => toggleMember(g.member_id)}
-                          className="w-full flex items-center gap-3"
+                          className="w-full flex items-center gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {isOpen ? (
                             <ChevronDown className="h-4 w-4 text-muted-foreground" />
