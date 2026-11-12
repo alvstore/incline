@@ -347,7 +347,7 @@ export function AgentFlowCanvas() {
           const tone = TONES[node.tone];
           return (
             <div key={node.id}>
-              <Card className={`rounded-2xl border ${tone.ring} shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10`}>
+              <Card className={`rounded-2xl border ${tone.ring} shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10`}>
                 <CardContent className="flex gap-4 p-4">
                   <div className="flex flex-col items-center">
                     <span className={`rounded-full p-2.5 ${tone.chip}`}>
