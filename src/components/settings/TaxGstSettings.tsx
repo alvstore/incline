@@ -108,7 +108,7 @@ export function TaxGstSettings() {
             {rates.map(rate => (
               <Badge key={rate} variant="secondary" className="text-sm px-3 py-1.5 gap-2">
                 {rate}%
-                <button type="button" onClick={() => removeRate(rate)} className="hover:text-destructive">
+                <button type="button" onClick={() => removeRate(rate)} aria-label={`Remove ${rate}% rate`} className="rounded-full hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <X className="h-3 w-3" />
                 </button>
               </Badge>
