@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v2.2.0 — helper install over encrypted Postgres only; verify self-heals helpers. v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
+// v2.3.0 — honest verify reasons (refused writes, deduped links, jobs cause), unique-slot retry, access probe. v2.2.0 — helper install over encrypted Postgres only; verify self-heals helpers. v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
