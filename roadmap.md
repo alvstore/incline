@@ -231,3 +231,6 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 - [x] 21 tests pass. Live end-to-end chat not run (would create a real lead and staff alert).
 
 - [ ] Enforce Content Security Policy (Phase 2) — waiting ~1 week of report-only data in System Health ("CSP report-only" warnings) after publish.
+
+- [ ] Connect Firebase Cloud Messaging (new workspace)
+- [ ] Connect Google Search Console (new workspace)
