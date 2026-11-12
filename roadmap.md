@@ -1,3 +1,10 @@
+# UI unification — remaining buttons (12 Nov 2026)
+- [ ] Mark every remaining raw action button as a plain button so it never submits a form by accident (46 spots).
+- [ ] Announce selected/open state on every chip, tab-like and toggle button still missing it (~36 spots).
+- [ ] Replace fixed colours inside buttons with theme colours (21 spots) so dark mode works.
+- [ ] Give the 6 icon-only buttons a readable name.
+- [ ] Re-scan, compile, run tests, and browser-check light/dark/phone on a sample of changed screens.
+
 # Lovable AI credential cleanup (11 Nov 2026)
 - [x] Audit source, saved provider/purpose routing, settings and live database functions: Lovable already serves all active AI features; Google provider has no purpose references.
 - [x] Remove Google-direct preset and obsolete key example; preserve existing models, prompts, limits and generation behavior.
