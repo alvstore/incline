@@ -211,6 +211,7 @@ export function RescheduleBookingDrawer({ booking, branchId, onOpenChange }: Pro
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
+                  aria-pressed={mode === 'move'}
                   onClick={() => setMode('move')}
                   className={cn(
                     'rounded-xl border p-3 text-left text-sm transition-all cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none',
@@ -224,6 +225,7 @@ export function RescheduleBookingDrawer({ booking, branchId, onOpenChange }: Pro
                 </button>
                 <button
                   type="button"
+                  aria-pressed={mode === 'restore'}
                   onClick={() => setMode('restore')}
                   className={cn(
                     'rounded-xl border p-3 text-left text-sm transition-all cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none',

@@ -690,6 +690,8 @@ export default function MemberClassBooking() {
                 return (
                   <button
                     key={k}
+                    type="button"
+                    aria-pressed={isSelected}
                     onClick={() => covered && setSelectedDate(d)}
                     disabled={!covered}
                     aria-label={covered ? undefined : `${format(d, 'd MMM')} — renew to book`}
@@ -815,7 +817,7 @@ export default function MemberClassBooking() {
               {upsellPackages.map((p) => (
                 <Card
                   key={p.id}
-                  className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                  className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
                 >
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
@@ -1126,7 +1128,7 @@ function RecoveryTimeGrid({
   const duration = ordered[0]?.duration ?? 30;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -1141,7 +1143,7 @@ function RecoveryTimeGrid({
             </div>
           </div>
           {bookedCount > 0 && (
-            <Badge className="bg-emerald-100 text-emerald-700 border-0 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
+            <Badge className="bg-success/15 text-success border-0 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0">
               <Check className="h-3 w-3 mr-1" />{bookedCount} booked
             </Badge>
           )}
@@ -1160,7 +1162,7 @@ function RecoveryTimeGrid({
                       type="button"
                       disabled={isCancelling}
                       aria-label={`Cancel ${facility} at ${label}`}
-                      className="min-h-[44px] rounded-xl px-2 py-2 text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 cursor-pointer transition-all duration-200 hover:bg-emerald-100 focus:ring-2 focus:ring-primary focus:outline-none"
+                      className="min-h-[44px] rounded-xl px-2 py-2 text-xs font-semibold bg-success/10 text-success ring-1 ring-success/30 cursor-pointer transition-all duration-200 hover:bg-success/15 focus:ring-2 focus:ring-primary focus:outline-none"
                     >
                       <span className="flex items-center justify-center gap-1">
                         <Check className="h-3 w-3" />{label}
