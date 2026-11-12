@@ -119,6 +119,7 @@ export default function SettingsPage() {
                     <button
                       key={item.value}
                       type="button"
+                      aria-current={isActive ? 'page' : undefined}
                       onClick={() => handleTabChange(item.value)}
                       className={cn(
                         'relative inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium transition-all duration-200 whitespace-nowrap',
@@ -163,6 +164,8 @@ export default function SettingsPage() {
                 return (
                   <button
                     key={item.value}
+                    type="button"
+                    aria-current={isActive ? 'page' : undefined}
                     onClick={() => handleTabChange(item.value)}
                     className={cn(
                       'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors whitespace-nowrap',

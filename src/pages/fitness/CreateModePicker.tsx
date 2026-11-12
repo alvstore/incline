@@ -212,6 +212,7 @@ export default function CreateModePickerPage() {
                     Your meal catalog is empty, so diet plans will generate without your gym's
                     foods.{' '}
                     <button
+                      type="button"
                       onClick={() => navigate('/fitness/meal-catalog')}
                       className="cursor-pointer font-semibold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >

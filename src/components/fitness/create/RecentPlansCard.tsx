@@ -33,6 +33,7 @@ export function RecentPlansCard() {
             Recently assigned
           </h2>
           <button
+            type="button"
             onClick={() => navigate('/fitness/member-plans')}
             className="flex cursor-pointer items-center gap-1 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -89,6 +90,7 @@ export function RecentPlansCard() {
                 )}
 
                 <button
+                  type="button"
                   onClick={() =>
                     navigate(
                       `/fitness/create/ai?memberId=${r.member_id}&memberName=${encodeURIComponent(

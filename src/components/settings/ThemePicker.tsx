@@ -56,6 +56,8 @@ export function ThemePicker() {
               <button
                 key={theme.id}
                 data-testid={`theme-option-${theme.id}`}
+                type="button"
+                aria-pressed={isActive}
                 onClick={() => setTheme(theme.id as ThemeId)}
                 className={cn(
                   'group relative flex flex-col items-center gap-2.5 p-4 rounded-2xl border transition-all duration-200 text-left',
@@ -109,6 +111,8 @@ export function ThemePicker() {
                 <button
                   key={value}
                   data-testid={`dark-mode-${value}`}
+                  type="button"
+                  aria-pressed={isActive}
                   onClick={() => setDarkMode(value)}
                   className={cn(
                     'flex flex-col items-center gap-2 py-4 px-2 rounded-xl border transition-all duration-200',
@@ -141,6 +145,8 @@ export function ThemePicker() {
                 <button
                   key={value}
                   data-testid={`sidebar-mode-${value}`}
+                  type="button"
+                  aria-pressed={isActive}
                   onClick={() => setSidebarMode(value)}
                   className={cn(
                     'flex flex-col items-center gap-2 py-5 px-3 rounded-xl border transition-all duration-200',

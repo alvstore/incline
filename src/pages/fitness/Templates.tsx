@@ -454,6 +454,8 @@ export default function FitnessTemplatesPage() {
             ).map((f) => (
               <button
                 key={f.key}
+                type="button"
+                aria-pressed={commonFilter === f.key}
                 onClick={() => setCommonFilter(f.key)}
                 className={`cursor-pointer text-xs px-3 py-1.5 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary ${
                   commonFilter === f.key
