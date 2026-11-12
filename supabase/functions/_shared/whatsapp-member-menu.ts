@@ -1,4 +1,7 @@
-// whatsapp-member-menu.ts — v1.3.0
+// whatsapp-member-menu.ts — v1.4.0
+// v1.4.0 — member feedback/complaints escalate to the branch manager (urgent
+// task + team in-app/push alert + 4h bot pause) before keyword routing, so
+// words like "yoga room" or "trainer" inside a complaint never open menus.
 // v1.3.0 — slot row titles keep the AM/PM space ("7:30 PM" not "7:30PM") so
 // morning members stop misreading evening slots; the day picker flags
 // "evening only" when advance-notice rules have hidden all morning slots.
@@ -924,6 +927,79 @@ async function handleUpgradeLink(supabase: any, ctx: MemberContext): Promise<str
 
 // ─── router ───────────────────────────────────────────────────────────────────
 
+// ─── Feedback / complaint escalation ─────────────────────────────────────────
+export const FEEDBACK_RE = /\b(feedback|complain|complaint|complaints|disappoint|disappointed|disappointing|rude|helpless|unprofessional|not happy|unhappy|worst|pathetic|terrible|horrible|poor service|bad service|bad experience|misbehav\w*|ignor(e|ed|es|ing)|careless|lazy|frustrat\w*|upset|bekar|bakwas|ganda|kharab|shikayat|naraz)\b/;
+
+export function isFeedbackMessage(raw: string): boolean {
+  const n = norm(raw);
+  if (!n) return false;
+  if (FEEDBACK_RE.test(n)) return true;
+  return n.split(" ").filter(Boolean).length >= 12;
+}
+
+async function handleFeedbackEscalation(supabase: any, ctx: MemberContext, text: string, phone: string): Promise<string> {
+  let managerId: string | null = null;
+  try {
+    const { data: mgrs } = await supabase.from("branch_managers")
+      .select("user_id, is_primary").eq("branch_id", ctx.branchId)
+      .order("is_primary", { ascending: false }).limit(5);
+    managerId = mgrs?.[0]?.user_id ?? null;
+    const recipients = new Set<string>((mgrs ?? []).map((m: any) => m.user_id).filter(Boolean));
+    const { data: admins } = await supabase.from("user_roles").select("user_id").in("role", ["owner", "admin"]);
+    for (const a of admins ?? []) if (a?.user_id) recipients.add(a.user_id);
+
+    const { data: task } = await supabase.from("tasks").insert({
+      branch_id: ctx.branchId,
+      title: cut(`Member feedback: ${ctx.fullName}`, 120),
+      description: `Escalated complaint/feedback from WhatsApp.\n\n"${cut(text, 1500)}"\n\nFrom: ${phone}${ctx.memberCode ? ` · ${ctx.memberCode}` : ""}\nPlease call the member personally.`,
+      priority: "urgent",
+      status: "pending",
+      assigned_to: managerId,
+      sla_hours: 1,
+      linked_entity_type: "member",
+      linked_entity_id: ctx.memberId,
+      member_created: true,
+    }).select("id").maybeSingle();
+
+    const stamp = Date.now();
+    await Promise.allSettled([...recipients].map((uid) =>
+      supabase.functions.invoke("dispatch-communication", {
+        body: {
+          branch_id: ctx.branchId,
+          channel: "in_app",
+          category: "task_reminder",
+          recipient: uid,
+          user_id: uid,
+          payload: {
+            subject: "Member feedback received",
+            body: `Urgent: ${ctx.fullName} raised feedback on WhatsApp. Please review and call back.`,
+            variables: { task_id: task?.id ?? null, action_url: "/tasks" },
+          },
+          dedupe_key: `member_feedback:${ctx.memberId}:${uid}:${Math.floor(stamp / 600000)}`,
+          force: true,
+          source_caller: "whatsapp-member-menu",
+        },
+      })
+    ));
+  } catch (e) {
+    console.error("[member-menu] feedback escalation failed", e);
+  }
+  await supabase.from("whatsapp_chat_settings").upsert(
+    {
+      branch_id: ctx.branchId,
+      phone_number: phone,
+      bot_active: false,
+      bot_paused_until: new Date(Date.now() + 4 * 3600_000).toISOString(),
+      bot_paused_reason: "member_feedback",
+      handoff_reason: "member_feedback",
+      handoff_requested_at: new Date().toISOString(),
+      is_unread: true,
+    },
+    { onConflict: "branch_id,phone_number" },
+  );
+  return `Thank you for telling us this, ${ctx.firstName} — we're sorry your experience fell short. 🙏 I've escalated it directly to our branch manager, who will personally look into it and get back to you shortly. Your feedback stays confidential.`;
+}
+
 export async function runMemberGateway(
   supabase: any,
   ctx: MemberContext,
@@ -955,6 +1031,10 @@ export async function runMemberGateway(
     const classTap = await bookClassByTitle(supabase, ctx, raw);
     if (classTap) return classTap;
   }
+
+  // Complaints/feedback escalate before keyword routing (menu taps are exact
+  // short titles and never reach here as long free-form text).
+  if (!menuMatch && isFeedbackMessage(raw)) return await handleFeedbackEscalation(supabase, ctx, raw, phone);
 
   // Plan-request sub-menu taps must resolve before the keyword chain below —
   // Meta echoes the row title ("Workout plan"/"Diet plan"), which would
