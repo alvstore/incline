@@ -47,4 +47,4 @@ Historical body silhouettes never fetch the latest scanner model; scan AI analys
 - `CampaignWizard` is the sole campaign composer; parallel composers drifted.
 - Renewal cases open each membership cycle via scheduled `detect_renewal_cases` + trigger, independent of messaging.
 - Agreement text: `employmentAgreementTemplate.ts`; policies only via frozen `policy_snapshot`; witnesses from contract vars, never signer.
-- Internal app screens use shadcn primitives (`src/components/ui`) with semantic tokens only (bg-card/bg-muted/text-foreground/text-muted-foreground/border-border); no bg-white or slate-* utilities, because hardcoded colours break dark mode. Public website styling is exempt.
+- App screens: shadcn primitives + semantic tokens only (no bg-white/slate-*), since hardcoded colours break dark mode; public site exempt.
