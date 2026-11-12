@@ -232,5 +232,5 @@ Source doc: /mnt/documents/Incline_Security_Lint_Audit.md
 
 - [ ] Enforce Content Security Policy (Phase 2) — waiting ~1 week of report-only data in System Health ("CSP report-only" warnings) after publish.
 
-- [ ] Connect Firebase Cloud Messaging (new workspace)
-- [ ] Connect Google Search Console (new workspace)
+- [ ] Connect Firebase Cloud Messaging (new workspace) — blocked: connect card was declined
+- [x] Connect Google Search Console (new workspace)
