@@ -1022,7 +1022,7 @@ export default function AttendanceDashboard() {
                 {memberView === 'absent' ? (
                   <div className="space-y-2">
                     {absentLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />) : absentError ? <p className="py-10 text-center text-sm text-destructive">Could not load absent members.</p> : filteredAbsentMembers.length === 0 ? (
-                      <div className="py-12 text-center"><CheckCircle className="mx-auto mb-3 h-10 w-10 text-emerald-500" /><p className="text-sm font-medium">Everyone has visited in the last 3 days</p></div>
+                      <div className="py-12 text-center"><CheckCircle className="mx-auto mb-3 h-10 w-10 text-success" /><p className="text-sm font-medium">Everyone has visited in the last 3 days</p></div>
                     ) : filteredAbsentMembers.map((m) => (
                       <div key={m.member_id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3 shadow-sm transition-colors duration-150 hover:bg-muted">
                         <Avatar className="h-10 w-10"><AvatarImage src={m.avatar_url ?? undefined} /><AvatarFallback className="bg-accent/10 text-accent text-xs">{getInitials(m.full_name)}</AvatarFallback></Avatar>
@@ -1150,6 +1150,7 @@ export default function AttendanceDashboard() {
                       <button
                         key={seg.key}
                         type="button"
+                        aria-pressed={historyScope === seg.key}
                         onClick={() => setHistoryScope(seg.key)}
                         className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
                           historyScope === seg.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'

@@ -573,6 +573,7 @@ export default function MemberStore() {
                 <button
                   key={cat}
                   type="button"
+                  aria-pressed={activeCategory === cat}
                   onClick={() => setActiveCategory(cat)}
                   className={`min-h-9 shrink-0 whitespace-nowrap cursor-pointer rounded-full px-4 py-1.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
                     activeCategory === cat

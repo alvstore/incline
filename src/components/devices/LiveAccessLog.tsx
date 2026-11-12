@@ -448,9 +448,10 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
             <button
               key={f.key}
               type="button"
+              aria-pressed={filter === f.key}
               onClick={() => setFilter(f.key)}
               className={cn(
-                "cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                "cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
                 filter === f.key
                   ? "bg-indigo-600 text-white"
                   : "bg-muted text-muted-foreground hover:bg-muted/70",
@@ -619,7 +620,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
 
                           <Collapsible open={expanded} onOpenChange={(o) => setExpandedPerson(o ? p.key : null)}>
                             <CollapsibleTrigger asChild>
-                              <button className="flex items-center gap-1 text-[10px] text-primary hover:underline">
+                              <button type="button" className="flex items-center gap-1 text-[10px] text-primary hover:underline">
                                 <Eye className="h-3 w-3" />
                                 {expanded ? "Hide" : "Raw"} payload
                               </button>
@@ -644,7 +645,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
         {grouped.systemActions.length > 0 && (
           <Collapsible>
             <CollapsibleTrigger asChild>
-              <button className="flex w-full items-center justify-between rounded-xl bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70">
+              <button type="button" className="flex w-full items-center justify-between rounded-xl bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70">
                 <span className="flex items-center gap-1.5">
                   <ShieldAlert className="h-3.5 w-3.5" />
                   CRM hardware actions today
