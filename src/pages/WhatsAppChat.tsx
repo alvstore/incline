@@ -1352,7 +1352,7 @@ export default function WhatsAppChatPage() {
                               type="button"
                               onClick={() => applyPause(null)}
                               disabled={!effectivelyPaused}
-                              className="w-full text-left px-2 py-2 text-sm rounded-lg text-emerald-700 font-medium hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              className="w-full text-left px-2 py-2 text-sm rounded-lg text-success font-medium hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
                               Resume AI now
                             </button>
@@ -1690,6 +1690,7 @@ export default function WhatsAppChatPage() {
                         .map((t: any) => (
                           <button
                             key={t.id}
+                            type="button"
                             className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-muted/80 flex items-center gap-2"
                             onClick={() => {
                               setNewMessage(t.content);
@@ -1858,6 +1859,8 @@ export default function WhatsAppChatPage() {
                     {displayLabel(selectedContact)}
                   </h3>
                   <button
+                    type="button"
+                    aria-label={`Copy phone number ${selectedContact.phone_number}`}
                     onClick={() => {
                       navigator.clipboard.writeText(selectedContact.phone_number);
                       toast.success('Phone copied');
@@ -2084,6 +2087,7 @@ export default function WhatsAppChatPage() {
             {staffList.map((staff: any) => (
               <button
                 key={staff.id}
+                type="button"
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/80 transition-colors text-left"
                 onClick={async () => {
                   if (!selectedContact || !selectedBranch || selectedBranch === 'all') return;

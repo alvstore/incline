@@ -2200,12 +2200,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
               { id: 'scheduled', label: 'Schedule for Later', desc: 'Pick a date and time. Sent automatically by our background worker.', icon: Clock, color: 'amber' },
               { id: 'automated', label: 'Save as Automated Rule', desc: 'Save the campaign so it runs on a schedule or trigger later.', icon: Save, color: 'blue' },
             ] as const).map((t) => (
-              <button key={t.id} type="button" onClick={() => setTrigger(t.id as CampaignTriggerType)}
+              <button key={t.id} type="button" aria-pressed={trigger === t.id} onClick={() => setTrigger(t.id as CampaignTriggerType)}
                 className={`w-full text-left rounded-2xl p-4 border-2 transition-all ${
-                  trigger === t.id ? `border-${t.color}-500 bg-${t.color}-50 dark:bg-${t.color}-500/10 shadow-md shadow-${t.color}-200/40` : 'border-border bg-card'
+                  trigger === t.id ? 'border-primary bg-primary/10 shadow-md shadow-primary/20' : 'border-border bg-card'
                 }`}>
                 <div className="flex items-start gap-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${trigger === t.id ? `bg-${t.color}-600 text-primary-foreground` : 'bg-muted text-muted-foreground'}`}>
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${trigger === t.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                     <t.icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">

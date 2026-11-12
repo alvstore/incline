@@ -428,12 +428,13 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                       <button
                         key={member.id}
                         type="button"
+                        aria-pressed={isSelected(member.id)}
                         onClick={() => toggleMember(member)}
                         className={`w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2 border-b last:border-b-0 ${
                           isSelected(member.id) ? 'bg-accent/10' : ''
                         }`}
                       >
-                        <Checkbox checked={isSelected(member.id)} onCheckedChange={() => toggleMember(member)} />
+                        <Checkbox checked={isSelected(member.id)} tabIndex={-1} aria-hidden="true" className="pointer-events-none" />
                         <User className="h-4 w-4 text-muted-foreground" />
                         <span className="flex-1 text-sm">{member.full_name}</span>
                         <Badge variant="outline" className="text-[10px]">{member.member_code}</Badge>

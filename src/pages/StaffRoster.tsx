@@ -368,6 +368,8 @@ export default function StaffRoster() {
               <Users className="h-3.5 w-3.5" /> Role
             </span>
             <button
+              type="button"
+              aria-pressed={roleFilter === 'all'}
               onClick={() => { setRoleFilter('all'); setDeptFilter(null); }}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 roleFilter === 'all'
@@ -382,6 +384,8 @@ export default function StaffRoster() {
               return (
                 <button
                   key={role}
+                  type="button"
+                  aria-pressed={active}
                   onClick={() => { setRoleFilter(role); setDeptFilter(null); }}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     active
@@ -400,6 +404,8 @@ export default function StaffRoster() {
                 Department
               </span>
               <button
+                type="button"
+                aria-pressed={deptFilter === null}
                 onClick={() => setDeptFilter(null)}
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                   deptFilter === null
@@ -414,6 +420,8 @@ export default function StaffRoster() {
                 return (
                   <button
                     key={dept}
+                    type="button"
+                    aria-pressed={active}
                     onClick={() => setDeptFilter(active ? null : dept)}
                     className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                       active
@@ -756,6 +764,7 @@ function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow
                 return (
                   <td key={d.idx} className="px-2 py-2 text-center align-middle">
                     <button
+                      type="button"
                       onClick={() => canEditFor(t.user_id) && onEdit({ trainer: t, weekday: d.idx })}
                       disabled={!canEditFor(t.user_id)}
                       className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 enabled:hover:border-primary/25 enabled:hover:bg-primary/10 transition-colors disabled:cursor-default"
@@ -836,6 +845,7 @@ function MonthView({
           return (
             <button
               key={i}
+              type="button"
               onClick={() => onEditDay(wd)}
               className={`h-24 rounded-lg ${intensity} border border-border hover:border-primary hover:shadow-md hover:shadow-primary/20 transition-all p-2 text-left flex flex-col`}
             >
