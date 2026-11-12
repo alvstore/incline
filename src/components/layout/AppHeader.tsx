@@ -110,7 +110,7 @@ export function AppHeader({ variant = 'standalone', showBrand = false }: AppHead
             <img
               src={org.logo_url}
               alt={org.name || 'Logo'}
-              className="max-h-8 object-contain object-left"
+              className={`max-h-8 object-contain object-left${logoTone === 'dark' ? ' dark:brightness-0 dark:invert' : ''}`}
             />
           ) : (
             <span className="text-lg font-bold text-foreground">
