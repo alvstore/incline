@@ -19,7 +19,7 @@ import { track } from '@/lib/analytics';
 const SIDEBAR_SCROLL_KEY = 'incline:sidebar-scroll';
 /** Pages each mount their own layout, so the sidebar remounts on navigation; remember its scroll. */
 function useSidebarScrollMemory() {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const vp = ref.current?.querySelector<HTMLDivElement>('[data-radix-scroll-area-viewport]');
     if (!vp) return;
