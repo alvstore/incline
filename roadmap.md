@@ -3,7 +3,11 @@
 - [x] Announce selected/open state on every chip, tab-like and toggle button still missing it (~36 spots).
 - [x] Replace fixed colours inside buttons with theme colours (21 spots) so dark mode works.
 - [x] Give the 6 icon-only buttons a readable name.
-- [~] Re-scan, compile, run tests, and browser-check light/dark/phone on a sample of changed screens.
+- [x] Re-scan, compile, run tests, and browser-check light/dark/phone on a sample of changed screens.
+- [x] Make 37 clickable cards/rows usable with the keyboard; campaign re-trigger confirm uses the shared confirmation box.
+- [x] Dark mode: default, Slate and Graphite themes now use a readable highlight colour (was near-black on dark).
+- [ ] Mobile top-bar logo is dim on the dark header; needs a light logo variant from branding settings.
+- [ ] Remaining non-button colour cleanup outside buttons (category tones like AgentFlowCanvas step chips) for dark mode.
 
 # Lovable AI credential cleanup (11 Nov 2026)
 - [x] Audit source, saved provider/purpose routing, settings and live database functions: Lovable already serves all active AI features; Google provider has no purpose references.
