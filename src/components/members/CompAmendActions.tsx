@@ -80,7 +80,7 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
           variant="ghost"
           size={compact ? 'icon' : 'sm'}
           aria-label={`Edit ${benefitName} gift`}
-          className="cursor-pointer h-8 w-8 text-slate-500 hover:text-indigo-600"
+          className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-indigo-600"
           onClick={() => { setSessions(String(comp.comp_sessions)); setReason(''); setMode('edit'); }}
         >
           <Pencil className="h-4 w-4" />
@@ -90,7 +90,7 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
           variant="ghost"
           size={compact ? 'icon' : 'sm'}
           aria-label={`Revoke ${benefitName} gift`}
-          className="cursor-pointer h-8 w-8 text-slate-500 hover:text-red-600"
+          className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-red-600"
           onClick={() => { setReason(''); setMode('revoke'); }}
         >
           <Trash2 className="h-4 w-4" />
@@ -109,9 +109,9 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
           </SheetHeader>
 
           <div className="mt-4 space-y-4">
-            <div className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
-              Currently <span className="font-semibold text-slate-900">{comp.comp_sessions}</span> granted,{' '}
-              <span className="font-semibold text-slate-900">{used}</span> used.
+            <div className="rounded-2xl bg-muted p-3 text-sm text-muted-foreground">
+              Currently <span className="font-semibold text-foreground">{comp.comp_sessions}</span> granted,{' '}
+              <span className="font-semibold text-foreground">{used}</span> used.
             </div>
 
             {mode === 'edit' && (
@@ -146,7 +146,7 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
                 placeholder="e.g. Added by mistake, wrong benefit selected"
                 rows={3}
               />
-              {!reasonValid && <p className="text-xs text-slate-500">Minimum 4 characters.</p>}
+              {!reasonValid && <p className="text-xs text-muted-foreground">Minimum 4 characters.</p>}
             </div>
           </div>
 

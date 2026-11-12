@@ -582,11 +582,11 @@ export default function PaymentsPage() {
                                         </Button>
                                       </CollapsibleTrigger>
                                       <div>
-                                        <p className="font-semibold text-slate-900">{g.name}</p>
+                                        <p className="font-semibold text-foreground">{g.name}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
-                                          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1 rounded">{g.code}</span>
+                                          <span className="text-xs font-mono text-muted-foreground bg-muted px-1 rounded">{g.code}</span>
                                           {g.lastPayment && (
-                                            <Badge variant="outline" className="text-[10px] py-0 h-4 border-slate-200 bg-white gap-1 font-normal text-slate-500">
+                                            <Badge variant="outline" className="text-[10px] py-0 h-4 border-border bg-card gap-1 font-normal text-muted-foreground">
                                               <HistoryIcon className="h-2.5 w-2.5" />
                                               Last: {g.lastPayment.method}
                                             </Badge>
@@ -604,7 +604,7 @@ export default function PaymentsPage() {
                                   <TableCell>
                                     {g.earliest ? (
                                       <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium", 
-                                        isOverdue ? "bg-red-50 text-red-700 border border-red-100" : "bg-slate-50 text-slate-600 border border-slate-100")}>
+                                        isOverdue ? "bg-red-50 text-red-700 border border-red-100" : "bg-muted text-muted-foreground border border-border")}>
                                         <Clock className="h-3 w-3" />
                                         {format(g.earliest, 'dd MMM')}
                                       </div>
@@ -620,7 +620,7 @@ export default function PaymentsPage() {
                                   <TableRow className="bg-muted/20 border-t-0 hover:bg-muted/20">
                                     <TableCell colSpan={5} className="py-3 px-12">
                                       <div className="space-y-3">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                                           < Receipt className="h-3 w-3" /> Outstanding Breakdown
                                         </p>
                                         <div className="grid gap-2">
@@ -628,19 +628,19 @@ export default function PaymentsPage() {
                                             const balance = (inv.total_amount || 0) - (inv.amount_paid || 0);
                                             const isGst = (inv.tax_amount || 0) > 0 || (inv.gst_rate || 0) > 0;
                                             return (
-                                              <div key={inv.id} className="flex items-start justify-between p-3 rounded-xl bg-white border border-slate-200/60 shadow-sm">
+                                              <div key={inv.id} className="flex items-start justify-between p-3 rounded-xl bg-card border border-border/60 shadow-sm">
                                                 <div className="space-y-1">
                                                   <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-semibold text-slate-800">#{inv.invoice_number}</span>
+                                                    <span className="text-sm font-semibold text-foreground">#{inv.invoice_number}</span>
                                                     {isGst ? (
                                                       <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] h-4 py-0 font-medium">GST INVOICE</Badge>
                                                     ) : (
-                                                      <Badge variant="outline" className="text-[9px] h-4 py-0 font-medium text-slate-400 border-slate-200">CASH / NON-TAX</Badge>
+                                                      <Badge variant="outline" className="text-[9px] h-4 py-0 font-medium text-muted-foreground border-border">CASH / NON-TAX</Badge>
                                                     )}
                                                   </div>
                                                   <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
                                                     {(inv.invoice_items || []).map((item: any, i: number) => (
-                                                      <div key={i} className="text-xs text-slate-500 flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                                                      <div key={i} className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded-lg border border-border">
                                                         <Tag className="h-2.5 w-2.5 opacity-60" />
                                                         {item.description}
                                                         <span className="text-[10px] opacity-60">x{item.quantity}</span>

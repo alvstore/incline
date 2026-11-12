@@ -207,8 +207,8 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
             </div>
 
             {!member && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Walk-in Customer Details</p>
+              <div className="p-4 rounded-2xl bg-muted border border-border space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Walk-in Customer Details</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-[10px]">Name</Label>
@@ -280,7 +280,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
                 key={preset.label}
                 variant="outline"
                 size="sm"
-                className="h-7 text-[10px] px-2 rounded-full cursor-pointer hover:bg-slate-50 transition-colors"
+                className="h-7 text-[10px] px-2 rounded-full cursor-pointer hover:bg-muted transition-colors"
                 onClick={() => setDueDate(format(addDays(new Date(), preset.days), 'yyyy-MM-dd'))}
               >
                 <Clock className="h-3 w-3 mr-1 opacity-60" />
@@ -406,10 +406,10 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
                   <div>
-                    <Label className="text-sm font-semibold text-slate-900 cursor-pointer" htmlFor="instant-pay">
+                    <Label className="text-sm font-semibold text-foreground cursor-pointer" htmlFor="instant-pay">
                       Mark as Paid Immediately
                     </Label>
-                    <p className="text-[10px] text-slate-500">Record settlement now instead of creating as unpaid dues</p>
+                    <p className="text-[10px] text-muted-foreground">Record settlement now instead of creating as unpaid dues</p>
                   </div>
                 </div>
                 <Switch 

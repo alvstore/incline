@@ -74,8 +74,8 @@ function metaStatusBadge(status: string | null | undefined) {
     PENDING: { label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-700 border-amber-200' },
     PENDING_DELETION: { label: 'Deleting', icon: Trash2, className: 'bg-red-50 text-red-700 border-red-200 animate-pulse' },
     REJECTED: { label: 'Rejected', icon: XCircle, className: 'bg-red-50 text-red-700 border-red-200' },
-    PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-slate-100 text-slate-600 border-slate-200' },
-    DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-slate-100 text-slate-600 border-slate-200' },
+    PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
+    DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
   };
   const cfg = map[String(status).toUpperCase()];
   if (!cfg) return <span className="text-xs text-muted-foreground">—</span>;
@@ -159,11 +159,11 @@ export function TemplateTable({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, event or content"
-              className="pl-9 rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500"
+              className="pl-9 rounded-xl border-border shadow-sm focus:ring-indigo-500"
             />
           </div>
           {channel === 'whatsapp' && (
-            <div className="flex flex-wrap gap-1 p-1 bg-slate-100/50 rounded-2xl border border-slate-200/60">
+            <div className="flex flex-wrap gap-1 p-1 bg-muted/50 rounded-2xl border border-border/60">
               {(['all', 'ready', 'missing', 'mismatch', 'pending'] as const).map((value) => (
                 <Button 
                   key={value} 
@@ -171,7 +171,7 @@ export function TemplateTable({
                   size="sm" 
                   variant={alignment === value ? 'default' : 'ghost'} 
                   onClick={() => setAlignment(value)} 
-                  className={`h-8 rounded-xl capitalize px-3 text-xs ${alignment === value ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-slate-600 hover:bg-slate-200/50'}`}
+                  className={`h-8 rounded-xl capitalize px-3 text-xs ${alignment === value ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-muted-foreground hover:bg-muted/50'}`}
                 >
                   {value === 'missing' ? 'Missing / Stale' : value === 'mismatch' ? 'Header mismatch' : value}
                 </Button>
@@ -200,10 +200,10 @@ export function TemplateTable({
           )}
         </div>
       ) : (
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-xl shadow-slate-200/40 overflow-hidden">
+        <div className="rounded-2xl bg-card border border-border shadow-xl shadow-slate-200/40 overflow-hidden">
           <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
             <Table>
-              <TableHeader className="sticky top-0 z-20 bg-slate-50/90 backdrop-blur-md border-b border-slate-200">
+              <TableHeader className="sticky top-0 z-20 bg-muted/90 backdrop-blur-md border-b border-border">
                 <TableRow>
                   <TableHead>Template</TableHead>
                   <TableHead className="hidden md:table-cell">Event</TableHead>
@@ -297,7 +297,7 @@ export function TemplateTable({
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        <span className="text-xs font-medium text-slate-500">{formatDate(t.updated_at || t.created_at)}</span>
+                        <span className="text-xs font-medium text-muted-foreground">{formatDate(t.updated_at || t.created_at)}</span>
                       </TableCell>
                       <TableCell className="text-right pr-4">
                         <div className="flex items-center justify-end gap-0.5">

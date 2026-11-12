@@ -424,7 +424,7 @@ export function EditBranchDrawer({ open, onOpenChange, branch }: EditBranchDrawe
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(formData.google_review_link)}`}
                   alt="Google review QR"
-                  className="h-24 w-24 rounded-md border bg-white p-1"
+                  className="h-24 w-24 rounded-md border bg-card p-1"
                 />
                 <div className="text-xs text-muted-foreground">
                   Scan-to-review QR. Print this and place it at the front desk or in the changing rooms.

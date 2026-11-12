@@ -2013,10 +2013,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                   {channel === 'email' ? (
                     <div className="rounded-xl border bg-muted/30 p-2.5">
                       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Email preview</p>
-                      <div className="rounded-lg overflow-hidden border bg-white">
-                        <div className="px-3 py-2 border-b bg-slate-50">
-                          <p className="text-[11px] text-slate-500">From: The Incline Life by Incline</p>
-                          <p className="text-[13px] font-semibold text-slate-900 truncate">
+                      <div className="rounded-lg overflow-hidden border bg-card">
+                        <div className="px-3 py-2 border-b bg-muted">
+                          <p className="text-[11px] text-muted-foreground">From: The Incline Life by Incline</p>
+                          <p className="text-[13px] font-semibold text-foreground truncate">
                             {renderPreview(subject || '(no subject)', varOverrides)}
                           </p>
                         </div>
@@ -2024,10 +2024,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                           <img src={attachment.url} alt="Campaign banner" className="w-full max-h-56 object-cover" />
                         )}
                         <div
-                          className="px-4 py-3 text-[13px] leading-relaxed text-slate-800"
+                          className="px-4 py-3 text-[13px] leading-relaxed text-foreground"
                           dangerouslySetInnerHTML={{ __html: emailPreviewHtml(previewText) }}
                         />
-                        <div className="px-4 py-2 border-t text-[10px] text-slate-400">
+                        <div className="px-4 py-2 border-t text-[10px] text-muted-foreground">
                           You're receiving this because you're a member of The Incline Life by Incline.
                         </div>
                       </div>
@@ -2052,8 +2052,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                         {attachment?.kind === 'image' && (
                           <img src={attachment.url} alt="Campaign poster" className="rounded-lg mb-1.5 w-full object-cover max-h-48" />
                         )}
-                        <pre className="text-xs whitespace-pre-wrap text-slate-900 dark:text-foreground font-sans leading-relaxed">{previewText}</pre>
-                        <p className="text-[9px] text-slate-500 text-right mt-1">
+                        <pre className="text-xs whitespace-pre-wrap text-foreground dark:text-foreground font-sans leading-relaxed">{previewText}</pre>
+                        <p className="text-[9px] text-muted-foreground text-right mt-1">
                           {new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
                         </p>
                       </div>

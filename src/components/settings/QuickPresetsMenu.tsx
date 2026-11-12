@@ -85,14 +85,14 @@ export function QuickPresetsMenu({ onSelect, filterType, variant = 'compact' }: 
           return (
             <div key={channel}>
               {idx > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-slate-50/50 py-1.5 px-3">
+              <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50 py-1.5 px-3">
                 <ChannelIcon className="h-3 w-3" />
                 {meta.label}
               </DropdownMenuLabel>
               
               {Object.entries(presetsByTrigger).map(([trigger, items]) => (
                 <div key={trigger} className="py-1">
-                  <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                  <div className="px-3 py-1 text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                     Trigger: {trigger}
                   </div>
                   {items.map((p) => (
@@ -103,8 +103,8 @@ export function QuickPresetsMenu({ onSelect, filterType, variant = 'compact' }: 
                     >
                       <FileText className="h-4 w-4 mt-0.5 text-indigo-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">{p.label}</p>
-                        <p className="text-[11px] text-slate-500 truncate">
+                        <p className="text-sm font-semibold text-foreground">{p.label}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
                           {p.attachment_filename_template ? `Attach: ${p.attachment_filename_template}` : 'Text only'}
                         </p>
                       </div>

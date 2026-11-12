@@ -131,27 +131,27 @@ export function MapTemplateDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-xl p-0 flex flex-col">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-slate-100">
-          <SheetTitle className="flex items-center gap-2 text-slate-900">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <SheetTitle className="flex items-center gap-2 text-foreground">
             <span className="bg-indigo-50 text-indigo-600 p-2 rounded-full">
               <Link2 className="h-4 w-4" />
             </span>
             Map template
           </SheetTitle>
-          <SheetDescription className="text-sm text-slate-500">
+          <SheetDescription className="text-sm text-muted-foreground">
             Choose which approved message is sent for{' '}
-            <span className="font-semibold text-slate-700">{eventLabel || event}</span>. One template
+            <span className="font-semibold text-foreground">{eventLabel || event}</span>. One template
             can serve several events — reuse a generic utility message when you do not need
             dedicated copy.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="px-6 py-4 border-b border-slate-100">
-          <Label htmlFor="tpl-search" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <div className="px-6 py-4 border-b border-border">
+          <Label htmlFor="tpl-search" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Search templates
           </Label>
           <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               id="tpl-search"
               value={search}
@@ -176,8 +176,8 @@ export function MapTemplateDrawer({
             )}
             {!isLoading && !isError && eligible.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-sm font-semibold text-slate-700">No approved templates yet</p>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm font-semibold text-foreground">No approved templates yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
                   Create one from the Studio, then map it here once it is approved.
                 </p>
               </div>
@@ -192,13 +192,13 @@ export function MapTemplateDrawer({
                   className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                     active
                       ? 'border-indigo-300 bg-indigo-50/60 shadow-lg shadow-indigo-500/10'
-                      : 'border-slate-100 bg-white hover:shadow-lg hover:shadow-slate-200/50'
+                      : 'border-border bg-card hover:shadow-lg hover:shadow-slate-200/50'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-sm text-slate-900 truncate">{t.name}</p>
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                      <p className="font-semibold text-sm text-foreground truncate">{t.name}</p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                         {t.content || 'No preview available'}
                       </p>
                     </div>
@@ -206,7 +206,7 @@ export function MapTemplateDrawer({
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-3">
                     {t.trigger_event && (
-                      <Badge className="bg-slate-100 text-slate-600 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
+                      <Badge className="bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
                         {t.trigger_event}
                       </Badge>
                     )}
@@ -227,7 +227,7 @@ export function MapTemplateDrawer({
           </div>
         </ScrollArea>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2 bg-white">
+        <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2 bg-card">
           <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

@@ -134,7 +134,7 @@ export function SetInvoiceDueDateDrawer({ open, onOpenChange, invoice }: SetInvo
                     className={`min-h-[44px] cursor-pointer items-center rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       active
                         ? 'bg-indigo-600 text-white hover:bg-indigo-600'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-muted dark:text-muted-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted dark:bg-muted dark:text-muted-foreground'
                     }`}
                   >
                     {preset.label}

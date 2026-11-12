@@ -50,7 +50,7 @@ const TYPE_META: Record<string, { label: string; icon: typeof Droplets; tone: st
 };
 
 function metaFor(type: string) {
-  return TYPE_META[type] ?? { label: type.replace(/_/g, ' '), icon: Sparkles, tone: 'bg-slate-100 text-slate-700' };
+  return TYPE_META[type] ?? { label: type.replace(/_/g, ' '), icon: Sparkles, tone: 'bg-muted text-foreground' };
 }
 
 /**

@@ -70,7 +70,7 @@ export function InvoiceCatalogPicker({ branchId, onPick, placeholder = 'Search s
 
   return (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       <Input
         aria-label="Search catalog items"
         placeholder={placeholder}
@@ -83,11 +83,11 @@ export function InvoiceCatalogPicker({ branchId, onPick, placeholder = 'Search s
       {focused && (
         <div className="absolute z-50 mt-1 w-full rounded-xl border bg-background shadow-lg max-h-60 overflow-y-auto">
           {isLoading ? (
-            <div className="p-3 text-sm text-slate-500 flex items-center gap-2">
+            <div className="p-3 text-sm text-muted-foreground flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading catalog…
             </div>
           ) : results.length === 0 ? (
-            <div className="p-3 text-sm text-slate-500 text-center">No matching items — type a custom description instead.</div>
+            <div className="p-3 text-sm text-muted-foreground text-center">No matching items — type a custom description instead.</div>
           ) : (
             results.map((item) => (
               <button
@@ -99,15 +99,15 @@ export function InvoiceCatalogPicker({ branchId, onPick, placeholder = 'Search s
                   setTerm('');
                   setFocused(false);
                 }}
-                className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm flex items-center justify-between gap-2 border-b last:border-b-0 cursor-pointer focus:outline-none focus:bg-slate-50"
+                className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center justify-between gap-2 border-b last:border-b-0 cursor-pointer focus:outline-none focus:bg-muted"
               >
                 <span className="flex items-center gap-2 min-w-0">
-                  <Badge className={`${groupClass[item.group] || 'bg-slate-100 text-slate-600'} rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0`}>
+                  <Badge className={`${groupClass[item.group] || 'bg-muted text-muted-foreground'} rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0`}>
                     {item.group}
                   </Badge>
-                  <span className="truncate font-medium text-slate-900">{item.name}</span>
+                  <span className="truncate font-medium text-foreground">{item.name}</span>
                 </span>
-                <span className="text-xs font-semibold text-slate-700 shrink-0">₹{item.price.toLocaleString('en-IN')}</span>
+                <span className="text-xs font-semibold text-foreground shrink-0">₹{item.price.toLocaleString('en-IN')}</span>
               </button>
             ))
           )}

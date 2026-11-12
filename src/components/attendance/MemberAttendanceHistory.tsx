@@ -120,8 +120,8 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
           <div className="bg-indigo-50 p-4 rounded-full mb-6">
             <History className="h-10 w-10 text-indigo-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Member Attendance History</h2>
-          <p className="text-slate-500 max-w-sm mb-8 leading-relaxed">
+          <h2 className="text-2xl font-bold text-foreground mb-2">Member Attendance History</h2>
+          <p className="text-muted-foreground max-w-sm mb-8 leading-relaxed">
             Search for a member by name, mobile, or member code to view their detailed monthly attendance records.
           </p>
           <MemberHistorySearch branchId={branchId} onSelect={setSelectedMember} />
@@ -129,15 +129,15 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
       ) : (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Header Actions */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-4 rounded-2xl shadow-sm border border-border">
             <div className="flex items-center gap-4">
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={() => setSelectedMember(null)}
-                className="h-10 w-10 rounded-full hover:bg-slate-100"
+                className="h-10 w-10 rounded-full hover:bg-muted"
               >
-                <ArrowLeft className="h-5 w-5 text-slate-600" />
+                <ArrowLeft className="h-5 w-5 text-muted-foreground" />
               </Button>
               <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12 ring-2 ring-indigo-50">
@@ -147,8 +147,8 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-bold text-lg text-slate-900 leading-tight">{selectedMember.full_name}</h3>
-                  <p className="text-sm text-slate-500 font-medium">{selectedMember.member_code}</p>
+                  <h3 className="font-bold text-lg text-foreground leading-tight">{selectedMember.full_name}</h3>
+                  <p className="text-sm text-muted-foreground font-medium">{selectedMember.member_code}</p>
                 </div>
               </div>
             </div>
@@ -160,7 +160,7 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                   type="month" 
                   value={month}
                   onChange={(e) => setMonth(e.target.value)} 
-                  className="h-10 w-[180px] rounded-xl border-slate-200"
+                  className="h-10 w-[180px] rounded-xl border-border"
                 />
               </div>
               <Button 
@@ -168,7 +168,7 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                 size="sm" 
                 onClick={handleExport}
                 disabled={visits.length === 0}
-                className="h-10 gap-2 rounded-xl border-slate-200"
+                className="h-10 gap-2 rounded-xl border-border"
               >
                 <Download className="h-4 w-4" />
                 Export
@@ -187,44 +187,44 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
           {/* Stats Summary */}
           {summary && (
             <div className="grid gap-4 md:grid-cols-3">
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-white">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
                       <CalendarDays className="h-5 w-5" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Visits</p>
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Total Visits</p>
                   </div>
-                  <p className="text-3xl font-bold text-slate-900">{summary.totalVisits}</p>
-                  <p className="text-xs text-slate-400 mt-1">Sessions this month</p>
+                  <p className="text-3xl font-bold text-foreground">{summary.totalVisits}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Sessions this month</p>
                 </CardContent>
               </Card>
 
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-white">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
                       <History className="h-5 w-5" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Avg Duration</p>
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Avg Duration</p>
                   </div>
-                  <p className="text-3xl font-bold text-slate-900">{summary.avgDuration}m</p>
-                  <p className="text-xs text-slate-400 mt-1">Minutes per session</p>
+                  <p className="text-3xl font-bold text-foreground">{summary.avgDuration}m</p>
+                  <p className="text-xs text-muted-foreground mt-1">Minutes per session</p>
                 </CardContent>
               </Card>
 
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-white">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
                       <Info className="h-5 w-5" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Last Visit</p>
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Last Visit</p>
                   </div>
-                  <p className="text-xl font-bold text-slate-900">
+                  <p className="text-xl font-bold text-foreground">
                     {format(parseISO(summary.lastVisit), 'd MMM, h:mm a')}
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">Recent check-in</p>
+                  <p className="text-xs text-muted-foreground mt-1">Recent check-in</p>
                 </CardContent>
               </Card>
             </div>
@@ -235,58 +235,58 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
               <Skeleton className="h-64 w-full rounded-2xl" />
             </div>
           ) : isError ? (
-            <Card className="rounded-2xl border-dashed border-2 border-slate-200 py-12 text-center text-slate-500">
+            <Card className="rounded-2xl border-dashed border-2 border-border py-12 text-center text-muted-foreground">
               <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-500 opacity-50" />
               <p className="font-medium">Could not load attendance history.</p>
             </Card>
           ) : visits.length === 0 ? (
-            <Card className="rounded-2xl border-dashed border-2 border-slate-200 py-20 text-center text-slate-500">
+            <Card className="rounded-2xl border-dashed border-2 border-border py-20 text-center text-muted-foreground">
               <History className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-              <p className="text-lg font-medium text-slate-400">No attendance records found for this month.</p>
-              <p className="text-sm text-slate-400">Try selecting a different month or member.</p>
+              <p className="text-lg font-medium text-muted-foreground">No attendance records found for this month.</p>
+              <p className="text-sm text-muted-foreground">Try selecting a different month or member.</p>
             </Card>
           ) : (
-            <Card className="rounded-2xl border-0 shadow-xl shadow-slate-200/50 overflow-hidden bg-white">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                <CardTitle className="text-lg font-bold text-slate-900">Session Logs</CardTitle>
+            <Card className="rounded-2xl border-0 shadow-xl shadow-slate-200/50 overflow-hidden bg-card">
+              <CardHeader className="bg-muted/50 border-b border-border">
+                <CardTitle className="text-lg font-bold text-foreground">Session Logs</CardTitle>
                 <CardDescription>Detailed check-in and check-out records for {format(parseISO(`${month}-01`), 'MMMM yyyy')}</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-slate-50/80">
+                    <TableHeader className="bg-muted/80">
                       <TableRow>
-                        <TableHead className="font-bold text-slate-900 py-4">Date</TableHead>
-                        <TableHead className="font-bold text-slate-900 py-4">Check-in</TableHead>
-                        <TableHead className="font-bold text-slate-900 py-4">Check-out</TableHead>
-                        <TableHead className="font-bold text-slate-900 py-4 text-center">Duration</TableHead>
-                        <TableHead className="font-bold text-slate-900 py-4 text-right pr-6">Source</TableHead>
+                        <TableHead className="font-bold text-foreground py-4">Date</TableHead>
+                        <TableHead className="font-bold text-foreground py-4">Check-in</TableHead>
+                        <TableHead className="font-bold text-foreground py-4">Check-out</TableHead>
+                        <TableHead className="font-bold text-foreground py-4 text-center">Duration</TableHead>
+                        <TableHead className="font-bold text-foreground py-4 text-right pr-6">Source</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visits.map((v) => (
-                        <TableRow key={v.id} className="transition-colors duration-150 hover:bg-slate-50 group">
-                          <TableCell className="font-medium text-slate-700 py-4">
+                        <TableRow key={v.id} className="transition-colors duration-150 hover:bg-muted group">
+                          <TableCell className="font-medium text-foreground py-4">
                             {format(parseISO(v.check_in), 'd MMM yyyy')}
                           </TableCell>
-                          <TableCell className="text-slate-600 font-medium">
+                          <TableCell className="text-muted-foreground font-medium">
                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 rounded-lg px-2 py-1">
                               {format(parseISO(v.check_in), 'h:mm a')}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-slate-600 font-medium">
+                          <TableCell className="text-muted-foreground font-medium">
                             {v.check_out ? (
                               <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 rounded-lg px-2 py-1">
                                 {format(parseISO(v.check_out), 'h:mm a')}
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 rounded-lg px-2 py-1">
+                              <Badge variant="outline" className="bg-muted text-muted-foreground border-border rounded-lg px-2 py-1">
                                 Open
                               </Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-center">
-                            <span className="text-sm font-bold text-slate-900 bg-slate-100 px-3 py-1 rounded-full">
+                            <span className="text-sm font-bold text-foreground bg-muted px-3 py-1 rounded-full">
                               {durationLabel(v.check_in, v.check_out)}
                             </span>
                           </TableCell>

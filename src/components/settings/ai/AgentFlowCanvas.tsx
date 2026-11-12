@@ -28,7 +28,7 @@ type NodeTone = 'entry' | 'check' | 'agent' | 'tool' | 'human' | 'end' | 'stop';
 
 const TONES: Record<NodeTone, { ring: string; chip: string }> = {
   entry: { ring: 'border-indigo-200 bg-indigo-50/70', chip: 'bg-indigo-100 text-indigo-700' },
-  check: { ring: 'border-slate-200 bg-white', chip: 'bg-slate-100 text-slate-600' },
+  check: { ring: 'border-border bg-card', chip: 'bg-muted text-muted-foreground' },
   agent: { ring: 'border-violet-200 bg-violet-50/70', chip: 'bg-violet-100 text-violet-700' },
   tool: { ring: 'border-sky-200 bg-sky-50/70', chip: 'bg-sky-100 text-sky-700' },
   human: { ring: 'border-amber-200 bg-amber-50/70', chip: 'bg-amber-100 text-amber-700' },
@@ -324,7 +324,7 @@ export function AgentFlowCanvas() {
                   onClick={() => setJourney(j.id)}
                   aria-pressed={active}
                   className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl p-3 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/70 ${
-                    active ? 'bg-white text-slate-900 shadow-lg' : 'bg-white/10 text-white hover:bg-white/20'
+                    active ? 'bg-card text-foreground shadow-lg' : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
                   <span className={`rounded-full p-2 ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-white/15 text-white'}`}>
@@ -332,7 +332,7 @@ export function AgentFlowCanvas() {
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold">{j.label}</span>
-                    <span className={`block text-xs ${active ? 'text-slate-500' : 'text-indigo-100'}`}>{j.blurb}</span>
+                    <span className={`block text-xs ${active ? 'text-muted-foreground' : 'text-indigo-100'}`}>{j.blurb}</span>
                   </span>
                 </button>
               );
@@ -353,11 +353,11 @@ export function AgentFlowCanvas() {
                     <span className={`rounded-full p-2.5 ${tone.chip}`}>
                       <Icon className="h-5 w-5" />
                     </span>
-                    <span className="mt-2 text-xs font-semibold text-slate-400">{i + 1}</span>
+                    <span className="mt-2 text-xs font-semibold text-muted-foreground">{i + 1}</span>
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-bold text-slate-900">{node.title}</h4>
+                      <h4 className="font-bold text-foreground">{node.title}</h4>
                       {node.status && (
                         <Badge
                           className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -368,11 +368,11 @@ export function AgentFlowCanvas() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm leading-relaxed text-slate-600">{node.detail}</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{node.detail}</p>
                     {node.items?.length ? (
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         {node.items.map((item) => (
-                          <span key={item} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                          <span key={item} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                             {item}
                           </span>
                         ))}
@@ -391,8 +391,8 @@ export function AgentFlowCanvas() {
         })}
       </div>
 
-      <Card className="rounded-2xl bg-white shadow-lg shadow-slate-200/50">
-        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-xs text-slate-500">
+      <Card className="rounded-2xl bg-card shadow-lg shadow-slate-200/50">
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-xs text-muted-foreground">
           <span className="font-semibold uppercase tracking-wider">Legend</span>
           {[
             ['Entry point', TONES.entry.chip],

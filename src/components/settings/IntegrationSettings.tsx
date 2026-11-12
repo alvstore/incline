@@ -413,7 +413,7 @@ export function IntegrationSettings() {
                               <p className="text-xs text-muted-foreground line-clamp-2">{provider.description}</p>
                             </div>
                           </div>
-                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : hasCreds ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}>
+                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : hasCreds ? 'bg-amber-100 text-amber-700' : 'bg-muted text-muted-foreground'}>
                             {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
                             {label}
                           </Badge>

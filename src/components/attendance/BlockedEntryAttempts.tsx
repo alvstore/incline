@@ -50,9 +50,9 @@ function reasonLabel(message: string | null): { label: string; tone: string } {
   if (text.includes('dues')) return { label: 'Payment overdue', tone: 'bg-red-100 text-red-700' };
   if (text.includes('expired')) return { label: 'Plan expired', tone: 'bg-amber-100 text-amber-700' };
   if (text.includes('frozen')) return { label: 'Plan frozen', tone: 'bg-blue-100 text-blue-700' };
-  if (text.includes('already checked in')) return { label: 'Already inside', tone: 'bg-slate-100 text-slate-600' };
-  if (text.includes('no membership')) return { label: 'No active plan', tone: 'bg-slate-100 text-slate-600' };
-  return { label: 'Entry refused', tone: 'bg-slate-100 text-slate-600' };
+  if (text.includes('already checked in')) return { label: 'Already inside', tone: 'bg-muted text-muted-foreground' };
+  if (text.includes('no membership')) return { label: 'No active plan', tone: 'bg-muted text-muted-foreground' };
+  return { label: 'Entry refused', tone: 'bg-muted text-muted-foreground' };
 }
 
 export function BlockedEntryAttempts({
@@ -117,14 +117,14 @@ export function BlockedEntryAttempts({
   });
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-white overflow-hidden">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card overflow-hidden">
       <CardHeader className="bg-red-50/40 border-b border-red-100/60">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-red-50 text-red-600">
             <ShieldAlert className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <CardTitle className="text-lg font-bold text-slate-900">{title}</CardTitle>
+            <CardTitle className="text-lg font-bold text-foreground">{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
           {onForceEntry && (
@@ -142,26 +142,26 @@ export function BlockedEntryAttempts({
             <Skeleton className="h-10 w-full rounded-xl" />
           </div>
         ) : isError ? (
-          <div className="py-10 text-center text-slate-500">
+          <div className="py-10 text-center text-muted-foreground">
             <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-500 opacity-60" />
             <p className="font-medium">Could not load blocked entry attempts.</p>
           </div>
         ) : rows.length === 0 ? (
-          <div className="py-12 text-center text-slate-500">
+          <div className="py-12 text-center text-muted-foreground">
             <DoorClosed className="mx-auto mb-3 h-9 w-9 text-slate-300" />
-            <p className="font-medium text-slate-400">No refused entries in this period.</p>
-            <p className="mx-auto mt-1 max-w-sm text-xs text-slate-400">If the gate showed "permission denied" but nothing appears here, the gate refused on its own without telling the system. Use Force entry to let them in.</p>
+            <p className="font-medium text-muted-foreground">No refused entries in this period.</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">If the gate showed "permission denied" but nothing appears here, the gate refused on its own without telling the system. Use Force entry to let them in.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader className="bg-slate-50/80">
+              <TableHeader className="bg-muted/80">
                 <TableRow>
-                  <TableHead className="font-bold text-slate-900 py-4">When</TableHead>
-                  {showMemberColumn && <TableHead className="font-bold text-slate-900 py-4">Member</TableHead>}
-                  <TableHead className="font-bold text-slate-900 py-4">Reason</TableHead>
-                  <TableHead className="font-bold text-slate-900 py-4">Details</TableHead>
-                  <TableHead className="font-bold text-slate-900 py-4 text-right pr-6">Gate</TableHead>
+                  <TableHead className="font-bold text-foreground py-4">When</TableHead>
+                  {showMemberColumn && <TableHead className="font-bold text-foreground py-4">Member</TableHead>}
+                  <TableHead className="font-bold text-foreground py-4">Reason</TableHead>
+                  <TableHead className="font-bold text-foreground py-4">Details</TableHead>
+                  <TableHead className="font-bold text-foreground py-4 text-right pr-6">Gate</TableHead>
                   {onForceEntry && <TableHead className="py-4 text-right pr-6"><span className="sr-only">Action</span></TableHead>}
                 </TableRow>
               </TableHeader>
@@ -169,15 +169,15 @@ export function BlockedEntryAttempts({
                 {rows.map((row) => {
                   const reason = reasonLabel(row.message);
                   return (
-                    <TableRow key={row.id} className="transition-colors duration-150 hover:bg-slate-50">
-                      <TableCell className="font-medium text-slate-700 py-4 whitespace-nowrap">
+                    <TableRow key={row.id} className="transition-colors duration-150 hover:bg-muted">
+                      <TableCell className="font-medium text-foreground py-4 whitespace-nowrap">
                         {format(parseISO(row.captured_at), 'd MMM yyyy, h:mm a')}
                       </TableCell>
                       {showMemberColumn && (
-                        <TableCell className="text-slate-700">
+                        <TableCell className="text-foreground">
                           <span className="font-semibold">{row.memberName || 'Unmatched person'}</span>
                           {row.memberCode && (
-                            <span className="block text-xs text-slate-500">{row.memberCode}</span>
+                            <span className="block text-xs text-muted-foreground">{row.memberCode}</span>
                           )}
                         </TableCell>
                       )}
@@ -188,13 +188,13 @@ export function BlockedEntryAttempts({
                           {reason.label}
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-600 max-w-md">
+                      <TableCell className="text-sm text-muted-foreground max-w-md">
                         {row.message || '—'}
                       </TableCell>
                       <TableCell className="text-right pr-6">
                         <Badge
                           variant="outline"
-                          className="rounded-full text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 border-slate-200 text-slate-600 bg-slate-50"
+                          className="rounded-full text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 border-border text-muted-foreground bg-muted"
                         >
                           {row.device_sn || 'gate'}
                         </Badge>

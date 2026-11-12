@@ -14,7 +14,7 @@ interface MemberIdentityHeaderProps {
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-700',
-  inactive: 'bg-slate-100 text-slate-600',
+  inactive: 'bg-muted text-muted-foreground',
   suspended: 'bg-amber-100 text-amber-700',
   blacklisted: 'bg-red-100 text-red-700',
 };
@@ -43,7 +43,7 @@ export function MemberIdentityHeader({
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 ${className}`}
+      className={`flex items-center gap-3 rounded-2xl bg-muted px-4 py-3 ${className}`}
     >
       {isLoading && !data ? (
         <Skeleton className="h-12 w-12 rounded-full" />
@@ -55,18 +55,18 @@ export function MemberIdentityHeader({
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate font-semibold text-slate-900">{name}</p>
+          <p className="truncate font-semibold text-foreground">{name}</p>
           {data?.status && (
             <Badge
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium border-0 ${
-                STATUS_STYLES[data.status] || 'bg-slate-100 text-slate-600'
+                STATUS_STYLES[data.status] || 'bg-muted text-muted-foreground'
               }`}
             >
               {data.status}
             </Badge>
           )}
         </div>
-        <p className="truncate text-xs text-slate-500">
+        <p className="truncate text-xs text-muted-foreground">
           {data?.member_code ? data.member_code : isLoading ? 'Loading…' : ''}
           {subtitle ? `${data?.member_code ? ' · ' : ''}${subtitle}` : ''}
         </p>

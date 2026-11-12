@@ -185,15 +185,15 @@ export default function MemberDashboard() {
     ? Math.max(1, differenceInDays(new Date(activeMembership.end_date), new Date(activeMembership.start_date)))
     : 1;
   const planUsedPct = activeMembership ? Math.min(100, Math.max(0, ((totalPlanDays - daysRemaining) / totalPlanDays) * 100)) : 0;
-  const card = 'rounded-2xl bg-white dark:bg-card shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
-  const label = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
+  const card = 'rounded-2xl bg-card dark:bg-card shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
+  const label = 'text-xs font-semibold text-muted-foreground uppercase tracking-wider';
   const iconBadge = 'bg-primary/10 text-primary p-2 rounded-full';
   const statusBadge = isFrozen
     ? { text: 'Frozen', cls: 'bg-blue-100 text-blue-700', Icon: Snowflake }
     : activeMembership
       ? { text: 'Active', cls: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle }
       : isScheduled
-        ? { text: 'Scheduled', cls: 'bg-slate-100 text-slate-600', Icon: CalendarClock }
+        ? { text: 'Scheduled', cls: 'bg-muted text-muted-foreground', Icon: CalendarClock }
         : { text: 'Inactive', cls: 'bg-red-100 text-red-700', Icon: AlertCircle };
 
   const quickActions = [
@@ -253,7 +253,7 @@ export default function MemberDashboard() {
                     </span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-valuenow={Math.round(planUsedPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Membership time used">
-                    <div className="h-full rounded-full bg-white" style={{ width: `${planUsedPct}%` }} />
+                    <div className="h-full rounded-full bg-card" style={{ width: `${planUsedPct}%` }} />
                   </div>
                   {isFrozen && freezeDetails?.end_date && (
                     <p className="text-xs text-white/80">Freeze ends {format(new Date(freezeDetails.end_date), 'dd MMM yyyy')}</p>
@@ -262,12 +262,12 @@ export default function MemberDashboard() {
               ) : isScheduled ? (
                 <p className="mt-4 text-sm text-white/90">{startsLabel} · {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}</p>
               ) : (
-                <Button asChild size="sm" className="mt-4 bg-white text-primary hover:bg-white/90">
+                <Button asChild size="sm" className="mt-4 bg-card text-primary hover:bg-white/90">
                   <Link to="/renewal-center">Get a membership</Link>
                 </Button>
               )}
               {activeMembership && !isFrozen && daysRemaining <= 15 && (
-                <Button asChild size="sm" className="mt-4 w-full bg-white text-primary hover:bg-white/90">
+                <Button asChild size="sm" className="mt-4 w-full bg-card text-primary hover:bg-white/90">
                   <Link to="/renewal-center">Renew now</Link>
                 </Button>
               )}
@@ -299,7 +299,7 @@ export default function MemberDashboard() {
             <Snowflake className="h-4 w-4 text-blue-600" />
             <AlertTitle className="text-blue-700">Membership frozen</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-slate-600">Gym access and bookings are paused.</span>
+              <span className="text-muted-foreground">Gym access and bookings are paused.</span>
               <Button size="sm" variant="outline" className="w-fit" asChild>
                 <Link to="/my-requests">Request Unfreeze</Link>
               </Button>
@@ -311,7 +311,7 @@ export default function MemberDashboard() {
           <Alert className="rounded-2xl border-0 bg-primary/10 shadow-lg shadow-slate-200/50">
             <CalendarClock className="h-4 w-4 text-primary" />
             <AlertTitle className="text-primary">Membership scheduled — {scheduledMembership?.plan?.name}</AlertTitle>
-            <AlertDescription className="text-slate-600">
+            <AlertDescription className="text-muted-foreground">
               Runs {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')} – {format(new Date(scheduledMembership!.end_date), 'dd MMM yyyy')}. Entry, bookings and benefits unlock automatically on your start date.
             </AlertDescription>
           </Alert>
@@ -321,25 +321,25 @@ export default function MemberDashboard() {
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           <div className={`${card} p-5`}>
             <div className="flex items-center justify-between"><span className={label}>PT Sessions</span><span className={iconBadge}><Dumbbell className="h-4 w-4" /></span></div>
-            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">{activePtPackage?.sessions_remaining || 0}</p>
-            <p className="text-xs text-slate-500">{activePtPackage ? `of ${activePtPackage.sessions_total} left` : 'No active package'}</p>
+            <p className="mt-3 text-2xl font-bold text-foreground dark:text-foreground">{activePtPackage?.sessions_remaining || 0}</p>
+            <p className="text-xs text-muted-foreground">{activePtPackage ? `of ${activePtPackage.sessions_total} left` : 'No active package'}</p>
           </div>
           <div className={`${card} p-5`}>
             <div className="flex items-center justify-between"><span className={label}>Visits this month</span><span className="bg-emerald-50 text-emerald-600 p-2 rounded-full"><Clock className="h-4 w-4" /></span></div>
-            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">{visitsThisMonth}</p>
-            <p className="text-xs text-slate-500">Last 10 check-ins tracked</p>
+            <p className="mt-3 text-2xl font-bold text-foreground dark:text-foreground">{visitsThisMonth}</p>
+            <p className="text-xs text-muted-foreground">Last 10 check-ins tracked</p>
           </div>
           <div className={`${card} p-5`}>
             <div className="flex items-center justify-between"><span className={label}>Classes booked</span><span className={iconBadge}><Calendar className="h-4 w-4" /></span></div>
-            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">{upcomingClasses.length}</p>
-            <p className="text-xs text-slate-500">Upcoming</p>
+            <p className="mt-3 text-2xl font-bold text-foreground dark:text-foreground">{upcomingClasses.length}</p>
+            <p className="text-xs text-muted-foreground">Upcoming</p>
           </div>
           <div className={`${card} p-5`}>
             <div className="flex items-center justify-between">
               <span className={label}>Pending dues</span>
               <span className={totalPendingAmount > 0 ? 'bg-red-50 text-red-600 p-2 rounded-full' : 'bg-emerald-50 text-emerald-600 p-2 rounded-full'}><FileText className="h-4 w-4" /></span>
             </div>
-            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-foreground">₹{totalPendingAmount.toLocaleString('en-IN')}</p>
+            <p className="mt-3 text-2xl font-bold text-foreground dark:text-foreground">₹{totalPendingAmount.toLocaleString('en-IN')}</p>
             {totalPendingAmount > 0 && pendingInvoices[0]?.id ? (
               <Link to={`/member/pay?invoice=${pendingInvoices[0].id}`} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-ring rounded">
                 <CreditCard className="h-3 w-3" /> Pay now · {pendingInvoices.length} invoice(s)
@@ -366,7 +366,7 @@ export default function MemberDashboard() {
           {/* Entitlements — wide */}
           <Card className={`${card} border-0 lg:col-span-2`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+              <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
                 <span className={iconBadge}><Sparkles className="h-5 w-5" /></span>
                 My Entitlements
               </CardTitle>
@@ -380,10 +380,10 @@ export default function MemberDashboard() {
               {!activeMembership ? (
                 <div className="py-6 text-center">
                   {isScheduled ? (
-                    <p className="text-sm text-slate-500">Your {scheduledMembership?.plan?.name} benefits unlock on {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}.</p>
+                    <p className="text-sm text-muted-foreground">Your {scheduledMembership?.plan?.name} benefits unlock on {format(new Date(scheduledMembership!.start_date), 'dd MMM yyyy')}.</p>
                   ) : (
                     <>
-                      <p className="text-sm text-slate-500 mb-4">No active membership</p>
+                      <p className="text-sm text-muted-foreground mb-4">No active membership</p>
                       <Button variant="outline" asChild><Link to="/renewal-center">Get Membership</Link></Button>
                     </>
                   )}
@@ -415,7 +415,7 @@ export default function MemberDashboard() {
           {/* Next up */}
           <Card className={`${card} border-0`}>
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+              <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
                 <span className={iconBadge}><Calendar className="h-5 w-5" /></span>
                 Next Up
               </CardTitle>
@@ -423,12 +423,12 @@ export default function MemberDashboard() {
             <CardContent>
               {upcomingClasses.length === 0 ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-slate-500">No classes booked yet — browse this week's schedule and reserve your spot.</p>
+                  <p className="text-sm text-muted-foreground">No classes booked yet — browse this week's schedule and reserve your spot.</p>
                   {clubClasses.map((cls) => (
-                    <div key={cls.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 dark:bg-muted/40 p-3">
+                    <div key={cls.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted dark:bg-muted/40 p-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{cls.name}</p>
-                        <p className="text-xs text-slate-500">{format(new Date(cls.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
+                        <p className="truncate text-sm font-semibold text-foreground dark:text-foreground">{cls.name}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(cls.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
                       </div>
                       {!isFrozen && <Button size="sm" variant="outline" asChild className="shrink-0 rounded-full"><Link to="/book">Book</Link></Button>}
                     </div>
@@ -438,10 +438,10 @@ export default function MemberDashboard() {
               ) : (
                 <div className="space-y-3">
                   {upcomingClasses.slice(0, 4).map((booking: any) => (
-                    <div key={booking.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 dark:bg-muted/40 p-3">
+                    <div key={booking.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted dark:bg-muted/40 p-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{booking.class?.name}</p>
-                        <p className="text-xs text-slate-500">{format(new Date(booking.class?.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
+                        <p className="truncate text-sm font-semibold text-foreground dark:text-foreground">{booking.class?.name}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(booking.class?.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
                       </div>
                       <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Booked</span>
                     </div>
@@ -454,20 +454,20 @@ export default function MemberDashboard() {
           {/* Recent attendance */}
           <Card className={`${card} border-0`}>
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+              <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
                 <span className="bg-emerald-50 text-emerald-600 p-2 rounded-full"><Clock className="h-5 w-5" /></span>
                 Recent Visits
               </CardTitle>
             </CardHeader>
             <CardContent>
               {recentAttendance.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">No visits yet</p>
+                <p className="py-4 text-center text-sm text-muted-foreground">No visits yet</p>
               ) : (
                 <ul className="space-y-3">
                   {recentAttendance.slice(0, 5).map((record) => (
                     <li key={record.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-slate-900 dark:text-foreground"><CheckCircle className="h-4 w-4 text-emerald-500" />{format(new Date(record.check_in), 'EEE, dd MMM')}</span>
-                      <span className="text-slate-500">{format(new Date(record.check_in), 'HH:mm')}{record.check_out && ` – ${format(new Date(record.check_out), 'HH:mm')}`}</span>
+                      <span className="flex items-center gap-2 text-foreground dark:text-foreground"><CheckCircle className="h-4 w-4 text-emerald-500" />{format(new Date(record.check_in), 'EEE, dd MMM')}</span>
+                      <span className="text-muted-foreground">{format(new Date(record.check_in), 'HH:mm')}{record.check_out && ` – ${format(new Date(record.check_out), 'HH:mm')}`}</span>
                     </li>
                   ))}
                 </ul>
@@ -478,7 +478,7 @@ export default function MemberDashboard() {
           {/* Trainer */}
           <Card className={`${card} border-0`}>
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+              <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
                 <span className={iconBadge}><Dumbbell className="h-5 w-5" /></span>
                 My Trainer
               </CardTitle>
@@ -496,13 +496,13 @@ export default function MemberDashboard() {
                       <AvatarFallback className="bg-primary/10 font-semibold text-primary">{ini}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900 dark:text-foreground">{name}</p>
-                      <p className="text-xs text-slate-500">{member.assigned_trainer ? 'Personal Trainer' : 'PT Package Trainer'}</p>
+                      <p className="truncate font-semibold text-foreground dark:text-foreground">{name}</p>
+                      <p className="text-xs text-muted-foreground">{member.assigned_trainer ? 'Personal Trainer' : 'PT Package Trainer'}</p>
                     </div>
                   </div>
                 );
               })() : (
-                <div className="py-2 text-center"><p className="mb-4 text-sm text-slate-500">No trainer assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Trainer</Link></Button></div>
+                <div className="py-2 text-center"><p className="mb-4 text-sm text-muted-foreground">No trainer assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Trainer</Link></Button></div>
               )}
             </CardContent>
           </Card>
@@ -510,7 +510,7 @@ export default function MemberDashboard() {
           {/* Locker */}
           <Card className={`${card} border-0`}>
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-slate-900 dark:text-foreground flex items-center gap-2">
+              <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
                 <span className="bg-amber-50 text-amber-600 p-2 rounded-full"><Lock className="h-5 w-5" /></span>
                 My Locker
               </CardTitle>
@@ -518,11 +518,11 @@ export default function MemberDashboard() {
             <CardContent>
               {assignedLocker ? (
                 <div>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-foreground">#{assignedLocker.locker?.locker_number}</p>
-                  <p className="text-xs text-slate-500">{assignedLocker.locker?.size || 'Standard'} size{assignedLocker.end_date && ` · until ${format(new Date(assignedLocker.end_date), 'dd MMM yyyy')}`}</p>
+                  <p className="text-2xl font-bold text-foreground dark:text-foreground">#{assignedLocker.locker?.locker_number}</p>
+                  <p className="text-xs text-muted-foreground">{assignedLocker.locker?.size || 'Standard'} size{assignedLocker.end_date && ` · until ${format(new Date(assignedLocker.end_date), 'dd MMM yyyy')}`}</p>
                 </div>
               ) : (
-                <div className="py-2 text-center"><p className="mb-4 text-sm text-slate-500">No locker assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Locker</Link></Button></div>
+                <div className="py-2 text-center"><p className="mb-4 text-sm text-muted-foreground">No locker assigned</p><Button variant="outline" asChild><Link to="/my-requests">Request Locker</Link></Button></div>
               )}
             </CardContent>
           </Card>

@@ -21,8 +21,8 @@ const STATE_META: Record<RowState, { label: string; icon: any; cls: string }> = 
   ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   pending: { label: 'Pending', icon: ShieldAlert, cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   rejected: { label: 'Rejected', icon: ShieldX, cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  inactive: { label: 'Inactive', icon: AlertCircle, cls: 'bg-slate-100 text-slate-500 border-slate-200' },
-  missing: { label: 'Missing', icon: AlertCircle, cls: 'bg-slate-50 text-slate-400 border-slate-200' },
+  inactive: { label: 'Inactive', icon: AlertCircle, cls: 'bg-muted text-muted-foreground border-border' },
+  missing: { label: 'Missing', icon: AlertCircle, cls: 'bg-muted text-muted-foreground border-border' },
 };
 
 interface Props {
@@ -136,10 +136,10 @@ export function TemplateCoverageMatrix({ channel }: Props) {
 
               <div className="flex-1 min-w-[280px]">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Coverage Status</p>
-                  <span className="text-sm font-black text-slate-900">{okCount} of {total} Events Protected · {pct}%</span>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">System Coverage Status</p>
+                  <span className="text-sm font-black text-foreground">{okCount} of {total} Events Protected · {pct}%</span>
                 </div>
-                <Progress value={pct} className="h-2.5 bg-slate-100 [&>div]:bg-indigo-600 [&>div]:shadow-[0_0_8px_rgba(79,70,229,0.4)] rounded-full" />
+                <Progress value={pct} className="h-2.5 bg-muted [&>div]:bg-indigo-600 [&>div]:shadow-[0_0_8px_rgba(79,70,229,0.4)] rounded-full" />
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -150,7 +150,7 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                   <Wand2 className="h-4 w-4" />
                   Auto-fill Missing ({missingEvents.length})
                 </Button>
-                <Button variant="outline" onClick={() => openAi()} className="gap-2 rounded-xl border-slate-200 hover:bg-slate-50 font-semibold px-5 h-11 text-slate-700 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
+                <Button variant="outline" onClick={() => openAi()} className="gap-2 rounded-xl border-border hover:bg-muted font-semibold px-5 h-11 text-foreground shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
                   <Sparkles className="h-4 w-4 text-indigo-500" />
                   Studio
                 </Button>
@@ -164,18 +164,18 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                 return (
                   <div
                     key={r.event}
-                    className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-white hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 group"
+                    className="flex items-center justify-between p-4 rounded-2xl border border-border bg-card hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 group"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <p className="font-bold text-sm tracking-tight text-slate-900 group-hover:text-indigo-700 transition-colors">{r.label}</p>
+                        <p className="font-bold text-sm tracking-tight text-foreground group-hover:text-indigo-700 transition-colors">{r.label}</p>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <p className="text-[11px] font-medium text-slate-400 truncate max-w-[150px]">
+                        <p className="text-[11px] font-medium text-muted-foreground truncate max-w-[150px]">
                           {r.tpl ? `→ ${r.tpl.name}` : 'No active template'}
                         </p>
                         {r.metaName && (
-                          <Badge variant="secondary" className="bg-slate-50 text-slate-500 border-0 h-4 text-[9px] px-1.5 font-mono rounded-md">
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 h-4 text-[9px] px-1.5 font-mono rounded-md">
                             {r.metaName}
                           </Badge>
                         )}
@@ -189,7 +189,7 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                         size="sm"
                         variant="ghost"
                         aria-label={`Map a template to ${r.label}`}
-                        className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:bg-muted hover:text-indigo-600 transition-colors cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                         onClick={() =>
                           setMapTarget({ event: r.event, label: r.label, templateId: r.tpl?.id ?? null })
                         }

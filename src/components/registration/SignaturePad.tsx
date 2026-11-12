@@ -112,27 +112,27 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
           onPointerCancel={onUp}
           onPointerLeave={onUp}
           style={{ height, touchAction: "none" }}
-          className={`block w-full cursor-crosshair bg-white ${className ?? ""}`}
+          className={`block w-full cursor-crosshair bg-card ${className ?? ""}`}
           aria-label="Signature pad"
         />
         {/* Signing guide line */}
-        <div className="pointer-events-none absolute inset-x-6 bottom-12 border-b border-dashed border-slate-300" />
+        <div className="pointer-events-none absolute inset-x-6 bottom-12 border-b border-dashed border-border" />
         {empty && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
             <PenLine className="h-5 w-5" />
             <span className="text-xs font-medium">Sign here</span>
           </div>
         )}
         {!hideToolbar && (
-          <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-2">
-            <span className="text-xs text-slate-500">{empty ? "Not signed yet" : "Signed — tap Clear to start again"}</span>
+          <div className="flex items-center justify-between gap-2 bg-muted px-3 py-2">
+            <span className="text-xs text-muted-foreground">{empty ? "Not signed yet" : "Signed — tap Clear to start again"}</span>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={undo}
                 disabled={empty}
                 aria-label="Undo last stroke"
-                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-muted-foreground transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Undo2 className="h-4 w-4" /> Undo
               </button>

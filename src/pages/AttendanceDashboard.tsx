@@ -579,7 +579,7 @@ export default function AttendanceDashboard() {
 
   const getStatusBadge = (att: ConsolidatedMemberVisit) => att.isActive
     ? <Badge className="gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>In gym</Badge>
-    : <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100"><CheckCircle className="h-3 w-3" />Completed</Badge>;
+    : <Badge className="gap-1 rounded-full border border-border bg-muted text-foreground hover:bg-muted"><CheckCircle className="h-3 w-3" />Completed</Badge>;
 
   const getStreakBadge = (memberId: string) => {
     if (streaksError) return null;
@@ -589,7 +589,7 @@ export default function AttendanceDashboard() {
     if (s.gapDays === null) return <Badge className="gap-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><Sparkles className="h-3 w-3" />First visit</Badge>;
     if (s.gapDays >= 5) return <Badge className="gap-1 rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50"><Undo2 className="h-3 w-3" />Back after {s.gapDays}d</Badge>;
     if (!s.lastVisit) return null;
-    return <Badge className="gap-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-50"><CalendarDays className="h-3 w-3" />Last {format(new Date(s.lastVisit), 'dd MMM')}</Badge>;
+    return <Badge className="gap-1 rounded-full border border-border bg-muted text-muted-foreground hover:bg-muted"><CalendarDays className="h-3 w-3" />Last {format(new Date(s.lastVisit), 'dd MMM')}</Badge>;
   };
 
   const absenceBadge = (days: number) => {
@@ -1024,7 +1024,7 @@ export default function AttendanceDashboard() {
                     {absentLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />) : absentError ? <p className="py-10 text-center text-sm text-destructive">Could not load absent members.</p> : filteredAbsentMembers.length === 0 ? (
                       <div className="py-12 text-center"><CheckCircle className="mx-auto mb-3 h-10 w-10 text-emerald-500" /><p className="text-sm font-medium">Everyone has visited in the last 3 days</p></div>
                     ) : filteredAbsentMembers.map((m) => (
-                      <div key={m.member_id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3 shadow-sm transition-colors duration-150 hover:bg-slate-50">
+                      <div key={m.member_id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3 shadow-sm transition-colors duration-150 hover:bg-muted">
                         <Avatar className="h-10 w-10"><AvatarImage src={m.avatar_url ?? undefined} /><AvatarFallback className="bg-accent/10 text-accent text-xs">{getInitials(m.full_name)}</AvatarFallback></Avatar>
                         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{m.full_name}</p><p className="text-xs text-muted-foreground">{m.member_code}</p></div>
                         <div className="text-right text-xs"><p className="text-muted-foreground">Last visit</p><p className="font-semibold">{m.last_visit ? `${format(new Date(m.last_visit), 'dd MMM')}, ${fmtTime(m.last_visit)}` : 'Never visited'}</p></div>
@@ -1074,7 +1074,7 @@ export default function AttendanceDashboard() {
                       <TableRow><TableCell colSpan={6} className="py-12 text-center text-destructive">Could not load member attendance.</TableCell></TableRow>
                     ) : filteredMemberAttendance.map((attendance) => (
                       <Fragment key={attendance.id}>
-                      <TableRow className="transition-colors duration-150 hover:bg-slate-50">
+                      <TableRow className="transition-colors duration-150 hover:bg-muted">
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10">

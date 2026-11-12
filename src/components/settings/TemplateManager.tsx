@@ -837,7 +837,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                     <span className="opacity-70 font-bold">{statusCounts[s.v] ?? 0}</span>
                   </button>
                 ))}
-                <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block" />
+                <div className="h-6 w-px bg-muted mx-2 hidden sm:block" />
                 <MetaSyncControls />
               </div>
             )}

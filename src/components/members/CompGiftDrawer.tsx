@@ -459,7 +459,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
               </p>
             )}
             {membershipId && (!(parseInt(days) > 0) || reason.trim().length < 6) && (
-              <p className="text-xs text-slate-500">Enter a day count above 0 and a reason of at least 6 characters.</p>
+              <p className="text-xs text-muted-foreground">Enter a day count above 0 and a reason of at least 6 characters.</p>
             )}
             <SheetFooter>
               <Button
@@ -507,7 +507,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                 <div className="flex items-center justify-between">
                   <Label htmlFor="comp-expiry">Expires on</Label>
                   {currentMembership?.end_date && (
-                    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+                    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
                       <Switch
                         id="comp-sync-membership"
                         checked={syncExpiryToMembership}
@@ -525,7 +525,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                   onChange={e => setCompExpiresAt(e.target.value)}
                 />
                 {syncExpiryToMembership && currentMembership?.end_date && (
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Auto-set to the membership end date ({format(parseISO(String(currentMembership.end_date)), 'dd MMM yyyy')}).
                   </p>
                 )}
@@ -541,26 +541,26 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
             </div>
 
             {existingComps.length > 0 && (
-              <div className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-3">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Comp history</p>
+              <div className="rounded-2xl bg-card shadow-lg shadow-slate-200/50 p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comp history</p>
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
                   {existingComps.map((c: any) => (
-                    <div key={c.id} className="flex items-start justify-between text-xs gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                    <div key={c.id} className="flex items-start justify-between text-xs gap-2 py-1.5 border-b border-border last:border-0">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-slate-900">{c.benefit_types?.name || 'Benefit'}</span>
+                          <span className="font-medium text-foreground">{c.benefit_types?.name || 'Benefit'}</span>
                           <Badge className={`h-4 text-[10px] px-1.5 ${c.source === 'approval' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
                             {c.source === 'approval' ? 'Approval' : 'Direct'}
                           </Badge>
                         </div>
-                        <p className="text-slate-500 truncate">{c.reason || '—'}</p>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-muted-foreground truncate">{c.reason || '—'}</p>
+                        <p className="text-[10px] text-muted-foreground">
                           {format(new Date(c.created_at), 'dd MMM yyyy')}
                           {c.expires_at && ` · expires ${format(new Date(c.expires_at), 'dd MMM yyyy')}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-slate-700 font-semibold whitespace-nowrap">
+                        <span className="text-foreground font-semibold whitespace-nowrap">
                           {c.used_sessions}/{c.comp_sessions}
                         </span>
                         <CompAmendActions comp={c} />

@@ -58,7 +58,7 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
             if (!e.target.value) setIsOpen(false);
           }}
           onFocus={() => query.length >= 2 && setIsOpen(true)}
-          className="h-12 pl-10 pr-10 rounded-2xl border-indigo-100 bg-white shadow-sm focus-visible:ring-indigo-500 transition-all text-base"
+          className="h-12 pl-10 pr-10 rounded-2xl border-indigo-100 bg-card shadow-sm focus-visible:ring-indigo-500 transition-all text-base"
         />
         {isLoading && (
           <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-indigo-500" />
@@ -66,7 +66,7 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
       </div>
 
       {isOpen && results.length > 0 && (
-        <Card className="absolute top-full mt-2 w-full z-50 overflow-hidden rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-white animate-in fade-in slide-in-from-top-2 duration-200">
+        <Card className="absolute top-full mt-2 w-full z-50 overflow-hidden rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-card animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="max-h-[300px] overflow-y-auto p-2">
             {results.map((member) => (
               <button
@@ -88,16 +88,16 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                  <p className="font-semibold text-foreground truncate group-hover:text-indigo-600 transition-colors">
                     {member.full_name}
                   </p>
                   <div className="flex items-center gap-3 mt-0.5">
-                    <span className="flex items-center gap-1 text-xs text-slate-500">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Hash className="h-3 w-3" />
                       {member.member_code}
                     </span>
                     {member.phone && (
-                      <span className="flex items-center gap-1 text-xs text-slate-500">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Phone className="h-3 w-3" />
                         {member.phone}
                       </span>
@@ -111,9 +111,9 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
       )}
 
       {isOpen && query.length >= 2 && results.length === 0 && !isLoading && (
-        <Card className="absolute top-full mt-2 w-full z-50 p-8 text-center rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-white">
+        <Card className="absolute top-full mt-2 w-full z-50 p-8 text-center rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-card">
           <User className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-          <p className="text-sm text-slate-500 font-medium">No members found matching "{query}"</p>
+          <p className="text-sm text-muted-foreground font-medium">No members found matching "{query}"</p>
         </Card>
       )}
     </div>

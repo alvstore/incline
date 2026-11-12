@@ -1,0 +1,1 @@
+- App screens: shadcn primitives + semantic tokens only (no bg-white/slate-*), since hardcoded colours break dark mode; public site exempt.

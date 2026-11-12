@@ -21,7 +21,7 @@ const INTENT_BADGE: Record<string, string> = {
   pricing:    'bg-amber-100 text-amber-700 hover:bg-amber-100',
   timeline:   'bg-violet-100 text-violet-700 hover:bg-violet-100',
   handoff:    'bg-red-100 text-red-700 hover:bg-red-100',
-  decline:    'bg-slate-200 text-slate-700 hover:bg-slate-200',
+  decline:    'bg-muted text-foreground hover:bg-muted',
   name_block: 'bg-blue-100 text-blue-700 hover:bg-blue-100',
   custom:     'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
 };
@@ -150,7 +150,7 @@ export function AITrainingTab() {
           {sample.trim() && (
             <div className={cn(
               'rounded-xl px-4 py-3 text-sm',
-              liveMatch ? 'bg-emerald-50 text-emerald-900' : 'bg-slate-50 text-slate-600'
+              liveMatch ? 'bg-emerald-50 text-emerald-900' : 'bg-muted text-muted-foreground'
             )}>
               {liveMatch ? (
                 <>
@@ -166,7 +166,7 @@ export function AITrainingTab() {
           <div className="rounded-xl border overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50">
+                <TableRow className="bg-muted">
                   <TableHead className="w-[200px]">Phrase</TableHead>
                   <TableHead className="w-[130px]">Intent</TableHead>
                   <TableHead>Instruction</TableHead>
@@ -190,17 +190,17 @@ export function AITrainingTab() {
                   </TableRow>
                 )}
                 {!isLoading && filtered.map((r) => (
-                  <TableRow key={r.id} className="hover:bg-slate-50/50">
+                  <TableRow key={r.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium font-mono text-sm">{r.phrase_or_pattern}</TableCell>
                     <TableCell>
                       <Badge className={INTENT_BADGE[r.intent_category] ?? INTENT_BADGE.custom}>
                         {r.intent_category}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600 max-w-md truncate" title={r.correction_instruction}>
+                    <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={r.correction_instruction}>
                       {r.correction_instruction}
                     </TableCell>
-                    <TableCell className="text-xs uppercase text-slate-500">{r.match_type}</TableCell>
+                    <TableCell className="text-xs uppercase text-muted-foreground">{r.match_type}</TableCell>
                     <TableCell className="text-sm">{r.priority}</TableCell>
                     <TableCell>
                       <Switch

@@ -206,7 +206,7 @@ export function CommissionLedger({ branchId }: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <label htmlFor="commission-month" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <label htmlFor="commission-month" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Month
             </label>
             <Input
@@ -227,7 +227,7 @@ export function CommissionLedger({ branchId }: Props) {
             </Button>
           </div>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               aria-label="Search commissions"
               value={search}
@@ -279,23 +279,23 @@ export function CommissionLedger({ branchId }: Props) {
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center">
             <Wallet className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
-            <p className="mt-3 text-sm font-medium text-slate-900">
+            <p className="mt-3 text-sm font-medium text-foreground">
               {month ? 'No PT commissions in this month' : 'No PT commissions yet'}
             </p>
-            <p className="text-sm text-slate-500">Sell a personal training package and the commission will appear here.</p>
+            <p className="text-sm text-muted-foreground">Sell a personal training package and the commission will appear here.</p>
           </div>
         ) : (
           <>
             <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {[
-                ['PT Sales', totals.sales, 'text-slate-900'],
+                ['PT Sales', totals.sales, 'text-foreground'],
                 ['Outstanding Dues', totals.due, 'text-red-600'],
-                ['Net Commission', totals.net, 'text-slate-900'],
+                ['Net Commission', totals.net, 'text-foreground'],
                 ['Payable Now', totals.pending, 'text-emerald-700'],
                 ['Held (member dues)', totals.blocked, 'text-amber-700'],
               ].map(([label, value, tone]) => (
-                <div key={label as string} className="rounded-xl bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label as string}</p>
+                <div key={label as string} className="rounded-xl bg-muted px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label as string}</p>
                   <p className={`text-xl font-bold ${tone as string}`}>{inr(value as number)}</p>
                 </div>
               ))}
@@ -322,26 +322,26 @@ export function CommissionLedger({ branchId }: Props) {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((r) => (
-                    <TableRow key={r.id} className="transition-colors duration-150 hover:bg-slate-50">
-                      <TableCell className="whitespace-nowrap text-sm text-slate-600">
+                    <TableRow key={r.id} className="transition-colors duration-150 hover:bg-muted">
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                         {r.sale_date ? formatISTDate(r.sale_date) : '—'}
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm font-medium text-slate-900">{r.member_name}</div>
-                        <div className="text-xs text-slate-500">{r.member_code || '—'}</div>
+                        <div className="text-sm font-medium text-foreground">{r.member_name}</div>
+                        <div className="text-xs text-muted-foreground">{r.member_code || '—'}</div>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-600">
+                      <TableCell className="text-sm text-muted-foreground">
                         {r.package_name}
-                        <span className="ml-1 text-xs text-slate-400">({r.plan_months} mo)</span>
+                        <span className="ml-1 text-xs text-muted-foreground">({r.plan_months} mo)</span>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-600">{r.trainer_name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{r.trainer_name}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{inr(r.total_amount)}</TableCell>
                       <TableCell className="text-right font-mono text-sm text-emerald-700">{inr(r.paid)}</TableCell>
                       <TableCell className="text-right font-mono text-sm text-red-600">{inr(r.due)}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{r.percent}%</TableCell>
                       <TableCell>
                         <Badge
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${MODE_BADGE[r.mode] || 'bg-slate-100 text-slate-600'}`}
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${MODE_BADGE[r.mode] || 'bg-muted text-muted-foreground'}`}
                         >
                           {r.mode}
                         </Badge>
@@ -350,7 +350,7 @@ export function CommissionLedger({ branchId }: Props) {
                       <TableCell className="text-right font-mono text-sm text-amber-700">
                         {r.gst_deduction > 0 ? `-${inr(r.gst_deduction)}` : '—'}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm font-bold text-slate-900">
+                      <TableCell className="text-right font-mono text-sm font-bold text-foreground">
                         {inr(r.net_commission)}
                       </TableCell>
                       <TableCell>
@@ -362,7 +362,7 @@ export function CommissionLedger({ branchId }: Props) {
                                 "flex flex-col items-center justify-center rounded-lg border px-2 py-1 transition-all hover:scale-105",
                                 i.status === 'paid' && "bg-emerald-50 border-emerald-200 text-emerald-700",
                                 i.status === 'blocked' && "bg-amber-50 border-amber-200 text-amber-700",
-                                i.status === 'pending' && "bg-slate-50 border-slate-200 text-slate-600"
+                                i.status === 'pending' && "bg-muted border-border text-muted-foreground"
                               )}
                               title={
                                 i.status === 'blocked'

@@ -73,8 +73,8 @@ export function WhatsAppCoexistenceCard() {
             <Smartphone size={20} aria-hidden="true" />
           </span>
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">Phone app coexistence</CardTitle>
-            <p className="text-sm text-slate-500">
+            <CardTitle className="text-base font-bold text-foreground">Phone app coexistence</CardTitle>
+            <p className="text-sm text-muted-foreground">
               Keep chatting from the WhatsApp Business app while the system runs on the same number.
             </p>
           </div>
@@ -112,19 +112,19 @@ export function WhatsAppCoexistenceCard() {
         {data && (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Number</p>
-                <p className="mt-1 text-sm font-bold text-slate-900">
+              <div className="rounded-xl bg-muted p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Number</p>
+                <p className="mt-1 text-sm font-bold text-foreground">
                   {data.display_phone_number || 'Not available'}
                 </p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Coexistence</p>
+              <div className="rounded-xl bg-muted p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Coexistence</p>
                 <span
                   className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     data.coexistence_enabled
                       ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-slate-100 text-slate-600'
+                      : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {data.coexistence_enabled ? (
@@ -135,9 +135,9 @@ export function WhatsAppCoexistenceCard() {
                   {data.coexistence_enabled ? 'Linked to phone app' : 'Not linked yet'}
                 </span>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Quality</p>
-                <p className="mt-1 text-sm font-bold text-slate-900">{data.quality_rating || 'Unknown'}</p>
+              <div className="rounded-xl bg-muted p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quality</p>
+                <p className="mt-1 text-sm font-bold text-foreground">{data.quality_rating || 'Unknown'}</p>
               </div>
             </div>
 
@@ -163,11 +163,11 @@ export function WhatsAppCoexistenceCard() {
                 </Button>
               </div>
             ) : (
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">How to link the phone</p>
+              <div className="rounded-xl bg-muted p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">How to link the phone</p>
                 <ol className="mt-3 space-y-2">
                   {STEPS.map((step, index) => (
-                    <li key={step} className="flex gap-3 text-sm leading-relaxed text-slate-600">
+                    <li key={step} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600">
                         {index + 1}
                       </span>
@@ -175,7 +175,7 @@ export function WhatsAppCoexistenceCard() {
                     </li>
                   ))}
                 </ol>
-                <p className="mt-4 text-sm leading-relaxed text-slate-500">
+                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                   If linking fails with &quot;number already connected&quot;, open the WhatsApp Business app,
                   go to Settings, Account, Business Platform, disconnect the account, then link again.
                 </p>

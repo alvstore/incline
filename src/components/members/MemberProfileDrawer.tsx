@@ -1546,7 +1546,7 @@ export function MemberProfileDrawer({
                         ? 'bg-emerald-100 text-emerald-700'
                         : ptState === 'pending'
                         ? 'bg-amber-100 text-amber-700'
-                        : 'bg-slate-100 text-slate-600'
+                        : 'bg-muted text-muted-foreground'
                     }`}
                   >
                     {ptState === 'active' ? 'Active' : ptState === 'pending' ? 'Awaiting payment' : 'Ended'}
@@ -1893,7 +1893,7 @@ export function MemberProfileDrawer({
                   <CardContent className="text-sm space-y-2">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div>
-                        <p className="font-medium text-slate-900">Signed digitally</p>
+                        <p className="font-medium text-foreground">Signed digitally</p>
                         <p className="text-xs text-muted-foreground">
                           {onboardingSig.signed_at ? format(new Date(onboardingSig.signed_at), 'dd MMM yyyy, HH:mm') : '—'}
                           {onboardingSig.signer_ip ? ` · IP ${onboardingSig.signer_ip}` : ''}
@@ -1928,7 +1928,7 @@ export function MemberProfileDrawer({
                             const yes = String(a).toLowerCase() === 'yes' || a === true;
                             return (
                               <li key={q} className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-2.5 py-1.5">
-                                <span className="text-[11px] leading-snug text-slate-600">{q}</span>
+                                <span className="text-[11px] leading-snug text-muted-foreground">{q}</span>
                                 <span
                                   className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                                     yes ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
@@ -2628,7 +2628,7 @@ export function MemberProfileDrawer({
             <AlertDialogHeader>
               <AlertDialogTitle>Deactivate {profile?.full_name || 'this member'}?</AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-3 text-sm text-slate-600">
+                <div className="space-y-3 text-sm text-muted-foreground">
                   <p>This takes effect immediately:</p>
                   <ul className="list-disc space-y-1 pl-5">
                     <li>Entry gate access is revoked at every turnstile</li>

@@ -308,7 +308,7 @@ export function RetryQueuePanel() {
                           {r.retry_count}/{r.max_retries}
                         </Badge>
                         {isExhausted && (
-                          <Badge className="text-[10px] rounded-full bg-slate-200 text-slate-700">Exhausted</Badge>
+                          <Badge className="text-[10px] rounded-full bg-muted text-foreground">Exhausted</Badge>
                         )}
                         {r.status === 'retrying' && (
                           <Badge className="text-[10px] rounded-full bg-amber-100 text-amber-700">Retrying</Badge>

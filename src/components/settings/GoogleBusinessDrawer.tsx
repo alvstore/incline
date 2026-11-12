@@ -64,7 +64,7 @@ function Chip({ ok, label, warn }: { ok: boolean; label: string; warn?: boolean 
     ? 'bg-emerald-100 text-emerald-700'
     : warn
       ? 'bg-amber-100 text-amber-700'
-      : 'bg-slate-100 text-slate-600';
+      : 'bg-muted text-muted-foreground';
   const Icon = ok ? CheckCircle2 : warn ? AlertTriangle : XCircle;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>
@@ -296,7 +296,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
-          <SheetHeader className="border-b border-slate-100 px-6 py-4">
+          <SheetHeader className="border-b border-border px-6 py-4">
             <SheetTitle>Google Business Profile</SheetTitle>
             <SheetDescription>
               {branchName ? `${branchName} · ` : ''}Pull Google reviews into the CRM and reply from here.
@@ -326,21 +326,21 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                   )}
                 </div>
 
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between rounded-2xl bg-muted px-4 py-3">
                   <div>
-                    <Label htmlFor="gbp-active" className="text-sm font-semibold text-slate-900">Enable integration</Label>
-                    <p className="text-xs text-slate-500">Turn off to pause all Google review syncing for this branch.</p>
+                    <Label htmlFor="gbp-active" className="text-sm font-semibold text-foreground">Enable integration</Label>
+                    <p className="text-xs text-muted-foreground">Turn off to pause all Google review syncing for this branch.</p>
                   </div>
                   <Switch id="gbp-active" checked={isActive} onCheckedChange={setIsActive} />
                 </div>
 
                 {/* Step 1 — Places */}
-                <section className="space-y-4 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/50">
+                <section className="space-y-4 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
                   <div className="flex items-start gap-2">
                     <span className="mt-0.5 rounded-full bg-indigo-50 p-2 text-indigo-600"><MapPin className="h-4 w-4" aria-hidden /></span>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">Step 1 · Quick connect (recommended)</h3>
-                      <p className="text-xs leading-relaxed text-slate-500">
+                      <h3 className="text-sm font-bold text-foreground">Step 1 · Quick connect (recommended)</h3>
+                      <p className="text-xs leading-relaxed text-muted-foreground">
                         Uses Google's Places API (New). Read-only — rating, total review count and the 5 most recent
                         reviews. No Google approval needed.
                       </p>
@@ -357,7 +357,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                       onChange={(e) => { setPlacesKey(e.target.value); setPlacesKeyTouched(true); }}
                       placeholder={hasStoredPlacesKey ? '•••••••• (saved — leave blank to keep)' : 'Paste a Google Cloud API key with Places API (New) enabled'}
                     />
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       Google Cloud Console → APIs &amp; Services → Credentials → <strong>Create credentials → API key</strong>,
                       then enable <strong>Places API (New)</strong>. Leave application restrictions as “None” or IP-based —
                       referrer restrictions block server-side calls.
@@ -386,10 +386,10 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                             <button
                               type="button"
                               onClick={() => { setPlaceId(p.place_id); setPlaceName(p.name); setResults([]); }}
-                              className="w-full cursor-pointer rounded-xl border border-slate-100 px-3 py-2 text-left transition-colors duration-150 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="w-full cursor-pointer rounded-xl border border-border px-3 py-2 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="truncate text-sm font-semibold text-slate-900">{p.name}</span>
+                                <span className="truncate text-sm font-semibold text-foreground">{p.name}</span>
                                 {p.rating != null && (
                                   <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600">
                                     <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
@@ -397,7 +397,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                   </span>
                                 )}
                               </div>
-                              <p className="truncate text-xs text-slate-500">{p.address}</p>
+                              <p className="truncate text-xs text-muted-foreground">{p.address}</p>
                             </button>
                           </li>
                         ))}
@@ -408,11 +408,11 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                   <div className="space-y-2">
                     <Label htmlFor="place-id">Place ID</Label>
                     <Input id="place-id" value={placeId} onChange={(e) => setPlaceId(e.target.value)} placeholder="ChIJ…" className="font-mono text-xs" />
-                    {placeName && <p className="text-xs text-slate-500">Linked to <strong>{placeName}</strong></p>}
+                    {placeName && <p className="text-xs text-muted-foreground">Linked to <strong>{placeName}</strong></p>}
                   </div>
 
-                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                    <Label htmlFor="auto-fetch" className="text-sm text-slate-700">Auto-fetch new reviews (every 4h)</Label>
+                  <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2">
+                    <Label htmlFor="auto-fetch" className="text-sm text-foreground">Auto-fetch new reviews (every 4h)</Label>
                     <Switch id="auto-fetch" checked={autoFetch} onCheckedChange={setAutoFetch} />
                   </div>
 
@@ -429,12 +429,12 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                 </section>
 
                 {/* Step 2 — Business Profile */}
-                <section className="space-y-4 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/50">
+                <section className="space-y-4 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
                   <div className="flex items-start gap-2">
                     <span className="mt-0.5 rounded-full bg-emerald-50 p-2 text-emerald-600"><ShieldCheck className="h-4 w-4" aria-hidden /></span>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">Step 2 · Full access (optional)</h3>
-                      <p className="text-xs leading-relaxed text-slate-500">
+                      <h3 className="text-sm font-bold text-foreground">Step 2 · Full access (optional)</h3>
+                      <p className="text-xs leading-relaxed text-muted-foreground">
                         Needed only to <strong>post replies</strong> and read the full review history. Requires the Business
                         Profile APIs enabled and quota approved by Google.
                       </p>
@@ -458,9 +458,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                   </div>
 
                   <div className="space-y-1.5 rounded-xl bg-indigo-50/60 p-3">
-                    <p className="text-xs font-semibold text-slate-700">Authorized redirect URI</p>
+                    <p className="text-xs font-semibold text-foreground">Authorized redirect URI</p>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 break-all rounded bg-white px-2 py-1.5 font-mono text-[11px] text-slate-600">{callbackUrl}</code>
+                      <code className="flex-1 break-all rounded bg-card px-2 py-1.5 font-mono text-[11px] text-muted-foreground">{callbackUrl}</code>
                       <Button
                         type="button" size="sm" variant="outline" aria-label="Copy redirect URI" className="cursor-pointer"
                         onClick={() => { navigator.clipboard.writeText(callbackUrl); toast.success('Redirect URI copied'); }}
@@ -477,23 +477,23 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
 
                   {/* Listing link — required for posting replies */}
                   {hasOAuth && (
-                    <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                    <div className="space-y-3 rounded-xl bg-muted p-3">
                       {hasLocation ? (
                         <div className="flex items-start gap-2">
                           <span className="mt-0.5 rounded-full bg-emerald-50 p-2 text-emerald-600">
                             <CheckCircle2 className="h-4 w-4" aria-hidden />
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">
+                            <p className="truncate text-sm font-semibold text-foreground">
                               {cfg.gbp_location_title ?? placeName ?? 'Google listing linked'}
                             </p>
-                            <p className="font-mono text-[11px] text-slate-500">
+                            <p className="font-mono text-[11px] text-muted-foreground">
                               account {cfg.account_id} · location {cfg.location_id}
                             </p>
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs leading-relaxed text-slate-600">
+                        <p className="text-xs leading-relaxed text-muted-foreground">
                           Pick which Google listing this branch is, so replies post to the right place.
                         </p>
                       )}
@@ -531,10 +531,10 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                 type="button"
                                 onClick={() => selectLocation.mutate(l)}
                                 disabled={selectLocation.isPending}
-                                className="w-full cursor-pointer rounded-xl border border-slate-100 bg-white px-3 py-2 text-left transition-colors duration-150 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full cursor-pointer rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               >
-                                <p className="truncate text-sm font-semibold text-slate-900">{l.title}</p>
-                                <p className="truncate text-xs text-slate-500">{l.address ?? l.account_name}</p>
+                                <p className="truncate text-sm font-semibold text-foreground">{l.title}</p>
+                                <p className="truncate text-xs text-muted-foreground">{l.address ?? l.account_name}</p>
                               </button>
                             </li>
                           ))}
@@ -552,7 +552,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                       </p>
                       <Button
                         asChild size="sm" variant="outline"
-                        className="h-11 cursor-pointer rounded-xl border-amber-300 bg-white"
+                        className="h-11 cursor-pointer rounded-xl border-amber-300 bg-card"
                       >
                         <a href={activationUrl} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -566,9 +566,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                 </section>
 
                 {/* Diagnostics */}
-                <section className="space-y-3 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/50">
+                <section className="space-y-3 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">Diagnostics</h3>
+                    <h3 className="text-sm font-bold text-foreground">Diagnostics</h3>
                     <Button type="button" size="sm" variant="outline" className="cursor-pointer rounded-xl" onClick={runDiagnose} disabled={diagRunning}>
                       {diagRunning ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : <Stethoscope className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
                       Run checks
@@ -579,16 +579,16 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     <div className="space-y-4">
                       {([['Quick connect (Places)', laneChecks.places], ['Full access (Business Profile)', laneChecks.gbp]] as const).map(([title, list]) => (
                         <div key={title} className="space-y-1.5">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
                           {list.map((c) => (
-                            <div key={c.key} className="flex items-start gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-50">
+                            <div key={c.key} className="flex items-start gap-2 rounded-xl px-2 py-1.5 hover:bg-muted">
                               {c.ok
                                 ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
                                 : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />}
                               <div className="min-w-0">
-                                <p className="text-sm text-slate-800">{c.label}</p>
+                                <p className="text-sm text-foreground">{c.label}</p>
                                 {(!c.ok || c.key === 'location') && c.hint && (
-                                  <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>
+                                  <p className="text-xs leading-relaxed text-muted-foreground">{c.hint}</p>
                                 )}
                                 {!c.ok && c.action_url && (
                                   <a
@@ -609,12 +609,12 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     </div>
                   )}
                   {!diagRunning && !diag && (
-                    <p className="text-xs text-slate-500">Run checks to see exactly which Google step is blocking review sync.</p>
+                    <p className="text-xs text-muted-foreground">Run checks to see exactly which Google step is blocking review sync.</p>
                   )}
                 </section>
 
                 <Separator />
-                <p className="text-xs leading-relaxed text-slate-500">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   Step 1 alone reads only the 5 most recent reviews and cannot post replies — that is a Google limit.
                   Step 2 (Google account connected + listing linked) unlocks the full review history and replying
                   straight from Feedback &amp; Reviews.
@@ -623,7 +623,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
             )}
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+          <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
             <Button variant="ghost" className="cursor-pointer" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button className="cursor-pointer rounded-xl" onClick={() => save.mutate()} disabled={save.isPending}>
               {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}

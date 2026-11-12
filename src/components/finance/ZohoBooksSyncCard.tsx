@@ -126,8 +126,8 @@ export function ZohoBooksSyncCard() {
             <BookOpenCheck className="h-5 w-5" />
           </span>
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">Zoho Books sync</CardTitle>
-            <CardDescription className="text-sm text-slate-500">
+            <CardTitle className="text-base font-bold text-foreground">Zoho Books sync</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">
               Pushes GST invoices and their recorded payments to Zoho Books. Non-GST and cancelled invoices are skipped.
             </CardDescription>
           </div>
@@ -169,9 +169,9 @@ export function ZohoBooksSyncCard() {
               { label: 'Pending', value: stats?.pending ?? 0 },
               { label: 'Payments synced', value: stats?.paySynced ?? 0 },
             ].map((s) => (
-              <div key={s.label} className="rounded-xl bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{s.label}</p>
-                <p className="text-2xl font-bold text-slate-900">{s.value}</p>
+              <div key={s.label} className="rounded-xl bg-muted p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                <p className="text-2xl font-bold text-foreground">{s.value}</p>
               </div>
             ))}
           </div>
@@ -188,7 +188,7 @@ export function ZohoBooksSyncCard() {
         )}
 
         {lastRun && (
-          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <span>Last run:</span>
             <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">

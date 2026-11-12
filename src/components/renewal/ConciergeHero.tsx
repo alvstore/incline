@@ -18,7 +18,7 @@ const TONE_CLASS: Record<string, string> = {
   good: 'bg-emerald-100 text-emerald-700',
   soon: 'bg-amber-100 text-amber-700',
   urgent: 'bg-red-100 text-red-700',
-  none: 'bg-slate-100 text-slate-600',
+  none: 'bg-muted text-muted-foreground',
 };
 
 /** Greeting plus the status card: plan, expiry and PT balance. */
@@ -51,10 +51,10 @@ export function ConciergeHero({
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white p-6 text-slate-900 shadow-xl shadow-primary/20">
+        <div className="rounded-2xl bg-card p-6 text-foreground shadow-xl shadow-primary/20">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Current plan</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current plan</p>
               <p className="mt-2 flex items-center gap-2 text-lg font-bold">
                 <span className="rounded-full bg-primary/10 p-2 text-primary"><Crown className="h-4 w-4" aria-hidden /></span>
                 <span className="truncate">{planName ?? 'No active plan'}</span>
@@ -65,14 +65,14 @@ export function ConciergeHero({
             </span>
           </div>
 
-          <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <CalendarCheck className="h-4 w-4 text-primary" aria-hidden />
-            Valid through <span className="font-medium text-slate-900">{formatDate(endDate)}</span>
+            Valid through <span className="font-medium text-foreground">{formatDate(endDate)}</span>
           </div>
 
-          <div className="mt-5 border-t border-slate-100 pt-4">
+          <div className="mt-5 border-t border-border pt-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2 text-slate-500">
+              <span className="flex items-center gap-2 text-muted-foreground">
                 <Dumbbell className="h-4 w-4 text-primary" aria-hidden />
                 Personal training
               </span>
@@ -81,7 +81,7 @@ export function ConciergeHero({
               </span>
             </div>
             <div
-              className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100"
+              className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted"
               role="progressbar"
               aria-valuenow={ptRemaining}
               aria-valuemin={0}
@@ -90,7 +90,7 @@ export function ConciergeHero({
             >
               <div className="h-full rounded-full bg-theme-gradient transition-all duration-300" style={{ width: `${ptPercent}%` }} />
             </div>
-            {trainerName && <p className="mt-3 text-xs text-slate-500">Coached by {trainerName}</p>}
+            {trainerName && <p className="mt-3 text-xs text-muted-foreground">Coached by {trainerName}</p>}
           </div>
         </div>
       </div>

@@ -100,21 +100,21 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
         </SheetHeader>
 
         <div className="mt-6 space-y-4">
-          <Card className="bg-slate-50">
+          <Card className="bg-muted">
             <CardContent className="pt-4 text-sm space-y-1">
               <div className="flex justify-between">
-                <span className="text-slate-500">Plan</span>
+                <span className="text-muted-foreground">Plan</span>
                 <span className="font-medium">{membership.membership_plans?.name || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Current period</span>
+                <span className="text-muted-foreground">Current period</span>
                 <span className="font-medium">
                   {format(new Date(membership.start_date), 'dd MMM yyyy')} → {format(new Date(membership.end_date), 'dd MMM yyyy')}
                 </span>
               </div>
               {baseEnd && (
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Plan end (before gifts)</span>
+                  <span className="text-muted-foreground">Plan end (before gifts)</span>
                   <span className="font-medium">{format(new Date(baseEnd), 'dd MMM yyyy')}</span>
                 </div>
               )}
@@ -135,16 +135,16 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
           <Card className="bg-indigo-50/50 border-indigo-100">
             <CardContent className="pt-4 text-xs space-y-1">
               <div className="flex justify-between">
-                <span className="text-slate-600">Total length (inclusive)</span>
+                <span className="text-muted-foreground">Total length (inclusive)</span>
                 <span className="font-mono">{lengthDays} days</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600 flex items-center gap-1">
+                <span className="text-muted-foreground flex items-center gap-1">
                   <Gift className="h-3 w-3" /> Complimentary days
                 </span>
                 <span className="font-mono font-semibold">{extraDays > 0 ? `+${extraDays}` : extraDays}</span>
               </div>
-              <p className="text-slate-500 pt-1">
+              <p className="text-muted-foreground pt-1">
                 Any difference against the plan end date is logged as a gift entry with your reason.
               </p>
             </CardContent>
@@ -159,10 +159,10 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
-            <p className="text-xs text-slate-500">Minimum 6 characters. Written to the audit trail.</p>
+            <p className="text-xs text-muted-foreground">Minimum 6 characters. Written to the audit trail.</p>
           </div>
 
-          <div className="sticky bottom-0 -mx-6 px-6 pt-4 pb-2 bg-white border-t flex gap-2">
+          <div className="sticky bottom-0 -mx-6 px-6 pt-4 pb-2 bg-card border-t flex gap-2">
             <Button variant="outline" className="flex-1 cursor-pointer" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

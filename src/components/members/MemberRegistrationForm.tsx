@@ -772,7 +772,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 <img
                   src={signatureUrl}
                   alt="Member signature"
-                  className="max-h-24 rounded border border-emerald-200 bg-white p-1"
+                  className="max-h-24 rounded border border-emerald-200 bg-card p-1"
                 />
               )}
               <div className="flex flex-wrap gap-2 pt-1">

@@ -119,11 +119,11 @@ export function MissingStaffRecordsCard() {
         {data.map((row) => (
           <div
             key={row.userId}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900">{row.name}</p>
-              <p className="truncate text-xs text-slate-500">
+              <p className="truncate text-sm font-semibold text-foreground">{row.name}</p>
+              <p className="truncate text-xs text-muted-foreground">
                 {row.email} · {row.role}
               </p>
             </div>

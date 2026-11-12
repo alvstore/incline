@@ -53,7 +53,7 @@ function summarise(kind: FlowNodeKind, data: FlowNodeData): string | undefined {
   }
 }
 
-const HANDLE_CLASS = '!h-2.5 !w-2.5 !bg-white !border-2 !border-slate-300';
+const HANDLE_CLASS = '!h-2.5 !w-2.5 !bg-card !border-2 !border-border';
 
 function FlowNodeCardInner({ id, type, data, selected }: NodeProps) {
   const kind = (type ?? 'end') as FlowNodeKind;
@@ -82,17 +82,17 @@ function FlowNodeCardInner({ id, type, data, selected }: NodeProps) {
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{KIND_LABEL[kind]}</p>
-          <p className="truncate text-sm font-bold text-slate-900">{nodeData.label}</p>
-          {summary && <p className="mt-0.5 truncate text-xs text-slate-500">{summary}</p>}
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{KIND_LABEL[kind]}</p>
+          <p className="truncate text-sm font-bold text-foreground">{nodeData.label}</p>
+          {summary && <p className="mt-0.5 truncate text-xs text-muted-foreground">{summary}</p>}
         </div>
       </div>
 
       {branches ? (
-        <div className="mt-2.5 space-y-1.5 border-t border-slate-200/70 pt-2">
+        <div className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2">
           {branches.map((branch, i) => (
             <div key={branch} className="relative flex items-center justify-end pr-1">
-              <span className="text-[11px] font-medium capitalize text-slate-600">{branch}</span>
+              <span className="text-[11px] font-medium capitalize text-muted-foreground">{branch}</span>
               <Handle
                 id={branch}
                 type="source"

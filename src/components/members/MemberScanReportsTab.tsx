@@ -52,7 +52,7 @@ const statusTone = (status?: string | null) => {
   const s = String(status || '').toLowerCase();
   if (['sent', 'delivered', 'read'].includes(s)) return 'bg-emerald-100 text-emerald-700';
   if (['failed', 'bounced', 'suppressed'].includes(s)) return 'bg-red-100 text-red-700';
-  return 'bg-slate-100 text-slate-600';
+  return 'bg-muted text-muted-foreground';
 };
 
 export function MemberScanReportsTab({ memberId }: Props) {
