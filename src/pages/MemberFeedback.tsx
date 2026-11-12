@@ -199,7 +199,9 @@ export default function MemberFeedback() {
                         onClick={() => setRating(star)}
                         onMouseEnter={() => setHoverRating(star)}
                         onMouseLeave={() => setHoverRating(0)}
-                        className="p-1 transition-transform hover:scale-110"
+                        aria-label={`${star} star${star === 1 ? '' : 's'}`}
+                        aria-pressed={rating === star}
+                        className="rounded-md p-1 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:scale-100"
                       >
                         <Star
                           className={`h-8 w-8 transition-colors ${
