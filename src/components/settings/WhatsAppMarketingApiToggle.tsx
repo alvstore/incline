@@ -93,7 +93,7 @@ export function WhatsAppMarketingApiToggle() {
           <Rocket className="h-5 w-5 text-primary" />
           Marketing Messages API for WhatsApp
           {anyEnabled ? (
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+            <Badge className="bg-success/10 text-success hover:bg-success/10">
               <ShieldCheck className="mr-1 h-3 w-3" /> Enabled
             </Badge>
           ) : (

@@ -34,9 +34,9 @@ function zone(value: number | null, band?: Band): 'low' | 'normal' | 'high' | nu
 }
 
 const zoneTone: Record<string, string> = {
-  low: 'bg-amber-100 text-amber-700',
-  normal: 'bg-emerald-100 text-emerald-700',
-  high: 'bg-red-100 text-red-700',
+  low: 'bg-warning/10 text-warning',
+  normal: 'bg-success/10 text-success',
+  high: 'bg-destructive/10 text-destructive',
 };
 
 const zoneLabel: Record<string, string> = { low: 'Under', normal: 'Normal', high: 'Over' };
@@ -78,7 +78,7 @@ export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                  isOriginal ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
+                  isOriginal ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {isOriginal ? (
@@ -131,7 +131,7 @@ function Gauge({
   }, [v, band]);
 
   return (
-    <div className="rounded-2xl bg-card p-3 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:shadow-md">
+    <div className="rounded-2xl bg-card p-3 shadow-sm shadow-foreground/5 transition-all duration-200 hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
         {z ? (
@@ -145,9 +145,9 @@ function Gauge({
       {pct != null ? (
         <div className="mt-2">
           <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="absolute inset-y-0 left-1/3 w-1/3 bg-emerald-200" />
+            <div className="absolute inset-y-0 left-1/3 w-1/3 bg-success/20" />
             <div
-              className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-600 ring-2 ring-white"
+              className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-white"
               style={{ left: `${pct}%` }}
             />
           </div>
@@ -277,7 +277,7 @@ function PostureMetrics({ r, onZoom }: { r: AnyReport | null; onZoom: (u: string
 
       {measures.length > 0 && (
         <Section title="Alignment assessment">
-          <div className="overflow-hidden rounded-2xl bg-card shadow-sm shadow-slate-200/60">
+          <div className="overflow-hidden rounded-2xl bg-card shadow-sm shadow-foreground/5">
             {measures.map((m, i) => (
               <div
                 key={m.key}

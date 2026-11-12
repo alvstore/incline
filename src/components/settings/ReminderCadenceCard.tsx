@@ -179,7 +179,7 @@ export function ReminderCadenceCard() {
         )}
 
         {effectiveBranchId && isError && (
-          <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
             We could not load the reminder schedule. Please refresh and try again.
           </p>
         )}

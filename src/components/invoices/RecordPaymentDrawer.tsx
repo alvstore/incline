@@ -212,7 +212,7 @@ export function RecordPaymentDrawer({
               className="cursor-pointer rounded-xl"
             />
             {paymentDate !== todayIso && (
-              <p className="text-xs text-amber-600 font-medium">
+              <p className="text-xs text-warning font-medium">
                 This payment will be recorded against {paymentDate}, not today.
               </p>
             )}

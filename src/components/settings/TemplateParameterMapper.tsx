@@ -77,7 +77,7 @@ export function TemplateParameterMapper({ content, eventName, value, onChange }:
               <Badge
                 key={k}
                 variant="outline"
-                className={`text-[11px] rounded-full ${known ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                className={`text-[11px] rounded-full ${known ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'}`}
               >
                 {`{{${k}}}`}
               </Badge>
@@ -104,11 +104,11 @@ export function TemplateParameterMapper({ content, eventName, value, onChange }:
         </div>
         <div className="flex items-center gap-2">
           {unmapped === 0 ? (
-            <Badge className="rounded-full bg-emerald-100 text-emerald-700 text-[11px] hover:bg-emerald-100">
+            <Badge className="rounded-full bg-success/10 text-success text-[11px] hover:bg-success/10">
               <CheckCircle2 className="h-3 w-3 mr-1" /> All mapped
             </Badge>
           ) : (
-            <Badge className="rounded-full bg-amber-100 text-amber-700 text-[11px] hover:bg-amber-100">
+            <Badge className="rounded-full bg-warning/10 text-warning text-[11px] hover:bg-warning/10">
               <AlertTriangle className="h-3 w-3 mr-1" /> {unmapped} unmapped
             </Badge>
           )}
@@ -139,7 +139,7 @@ export function TemplateParameterMapper({ content, eventName, value, onChange }:
                 <Select value={key || undefined} onValueChange={(v) => setSlot(index, v)}>
                   <SelectTrigger
                     aria-label={`Data field for placeholder ${index + 1}`}
-                    className={`h-9 rounded-lg ${key ? '' : 'border-amber-300 text-amber-700'}`}
+                    className={`h-9 rounded-lg ${key ? '' : 'border-warning/30 text-warning'}`}
                   >
                     <SelectValue placeholder="Choose a data field…" />
                   </SelectTrigger>
@@ -175,7 +175,7 @@ export function TemplateParameterMapper({ content, eventName, value, onChange }:
       </div>
 
       {unmapped > 0 && (
-        <p className="text-[11px] text-amber-700 flex items-start gap-1.5">
+        <p className="text-[11px] text-warning flex items-start gap-1.5">
           <AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" />
           Unmapped slots are blocked before sending (WhatsApp error 132018) so members never receive a
           half-written message.

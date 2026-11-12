@@ -77,7 +77,7 @@ export function MemberLoginAccessCard({ memberId }: { memberId: string }) {
     ? { label: 'No login', cls: 'bg-muted text-muted-foreground border-border', Icon: UserX }
     : disabled
       ? { label: auto ? 'Auto-revoked' : 'Disabled', cls: 'bg-destructive/10 text-destructive border-destructive/20', Icon: ShieldOff }
-      : { label: 'Active', cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', Icon: ShieldCheck };
+      : { label: 'Active', cls: 'bg-success/10 text-success border-success/20', Icon: ShieldCheck };
 
   return (
     <Card>

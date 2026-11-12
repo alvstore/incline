@@ -211,7 +211,7 @@ export function NodeSettingsDrawer({ node, readOnly, open, onOpenChange, onSave,
           {!readOnly && node.type !== 'trigger' && (
             <Button
               variant="ghost"
-              className="w-full justify-start gap-2 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700"
+              className="w-full justify-start gap-2 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => { onDelete(node.id); onOpenChange(false); }}
             >
               <Trash2 className="h-4 w-4" /> Remove this step

@@ -38,15 +38,15 @@ type PtPkg = {
 };
 
 const TYPE_META: Record<string, { label: string; icon: typeof Droplets; tone: string }> = {
-  sauna_access: { label: 'Sauna', icon: Flame, tone: 'bg-amber-100 text-amber-700' },
-  sauna_session: { label: 'Sauna', icon: Flame, tone: 'bg-amber-100 text-amber-700' },
-  steam_access: { label: 'Steam Room', icon: Droplets, tone: 'bg-sky-100 text-sky-700' },
-  ice_bath: { label: 'Ice Bath', icon: Snowflake, tone: 'bg-blue-100 text-blue-700' },
-  spa_access: { label: 'Spa', icon: Sparkles, tone: 'bg-violet-100 text-violet-700' },
-  pool_access: { label: 'Pool', icon: Droplets, tone: 'bg-cyan-100 text-cyan-700' },
-  body_scan: { label: '3D Body Scan', icon: ScanLine, tone: 'bg-indigo-100 text-indigo-700' },
-  posture_scan: { label: 'Posture Scan', icon: ScanLine, tone: 'bg-indigo-100 text-indigo-700' },
-  pt_sessions: { label: 'Personal Training', icon: Dumbbell, tone: 'bg-emerald-100 text-emerald-700' },
+  sauna_access: { label: 'Sauna', icon: Flame, tone: 'bg-warning/10 text-warning' },
+  sauna_session: { label: 'Sauna', icon: Flame, tone: 'bg-warning/10 text-warning' },
+  steam_access: { label: 'Steam Room', icon: Droplets, tone: 'bg-info/10 text-info' },
+  ice_bath: { label: 'Ice Bath', icon: Snowflake, tone: 'bg-info/10 text-info' },
+  spa_access: { label: 'Spa', icon: Sparkles, tone: 'bg-primary/10 text-primary' },
+  pool_access: { label: 'Pool', icon: Droplets, tone: 'bg-info/10 text-info' },
+  body_scan: { label: '3D Body Scan', icon: ScanLine, tone: 'bg-primary/10 text-primary' },
+  posture_scan: { label: 'Posture Scan', icon: ScanLine, tone: 'bg-primary/10 text-primary' },
+  pt_sessions: { label: 'Personal Training', icon: Dumbbell, tone: 'bg-success/10 text-success' },
 };
 
 function metaFor(type: string) {
@@ -192,7 +192,7 @@ export function AddOnShowcase({ memberId, memberName, membershipId, branchId }: 
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   {canBook ? (
-                    <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
+                    <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success hover:bg-success/10">
                       {remaining} credit{remaining > 1 ? 's' : ''} left
                     </Badge>
                   ) : (
@@ -245,7 +245,7 @@ export function AddOnShowcase({ memberId, memberName, membershipId, branchId }: 
           <Card className="rounded-2xl border-border/60 shadow-sm transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
             <CardContent className="flex h-full flex-col gap-3 p-4">
               <div className="flex items-start justify-between gap-2">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
                   <Dumbbell className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <Badge variant="outline" className="rounded-full text-xs">PT</Badge>

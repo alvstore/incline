@@ -79,14 +79,14 @@ export function WhatsAppPacingCard() {
           <>
             <div className="flex flex-wrap items-center gap-2">
               {openBreakers.length === 0 ? (
-                <Badge className="rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                <Badge className="rounded-full bg-success/10 text-success hover:bg-success/10">
                   <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Breaker closed — sending normally
                 </Badge>
               ) : (
                 openBreakers.map((row) => (
                   <Badge
                     key={row.phone_number_id}
-                    className="rounded-full bg-red-100 text-red-700 hover:bg-red-100"
+                    className="rounded-full bg-destructive/10 text-destructive hover:bg-destructive/10"
                   >
                     <ShieldAlert className="mr-1 h-3.5 w-3.5" />
                     Paused ({row.last_error_code ?? 'pacing'}) ·{' '}

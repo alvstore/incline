@@ -75,7 +75,7 @@ export default function GoogleConnectionBanner({
 }: Props) {
   if (state === 'unknown') {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
         <CardContent className="flex items-center gap-3 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Checking the Google connection for this branch…
@@ -89,7 +89,7 @@ export default function GoogleConnectionBanner({
   const failing = checks.filter((c) => !c.ok);
 
   return (
-    <Card className={`rounded-2xl border ${copy.tone.split(' ').slice(0, 2).join(' ')} shadow-lg shadow-slate-200/40`}>
+    <Card className={`rounded-2xl border ${copy.tone.split(' ').slice(0, 2).join(' ')} shadow-lg shadow-foreground/5`}>
       <CardContent className="space-y-3 py-4">
         <div className="flex flex-wrap items-start gap-3">
           <span
@@ -104,7 +104,7 @@ export default function GoogleConnectionBanner({
               <p className="font-semibold text-foreground">{copy.title}</p>
               <Badge
                 className={
-                  state === 'live'
+ state === 'live'
                     ? 'bg-success/15 text-success'
                     : state === 'read_only'
                       ? 'bg-warning/15 text-warning'

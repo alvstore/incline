@@ -253,7 +253,7 @@ export function UpgradeMembershipDrawer({
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <ArrowUpCircle className="h-5 w-5 text-indigo-600" />
+            <ArrowUpCircle className="h-5 w-5 text-primary" />
             Upgrade Membership
           </SheetTitle>
           <SheetDescription>
@@ -270,7 +270,7 @@ export function UpgradeMembershipDrawer({
           />
 
           {/* Current plan */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
             <CardContent className="pt-5 space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current plan</p>
               <div className="flex items-center justify-between">
@@ -286,7 +286,7 @@ export function UpgradeMembershipDrawer({
                   </>
                 )}
               </div>
-              <div className="text-xs font-medium text-emerald-700">
+              <div className="text-xs font-medium text-success">
                 Credit available: {inr(credit)} (already paid
                 {ledger?.invoice?.invoice_number ? ` on ${ledger.invoice.invoice_number}` : ''})
 
@@ -353,7 +353,7 @@ export function UpgradeMembershipDrawer({
           {newPlan && hasLockerBenefit && (
             <div className="space-y-2 rounded-xl bg-muted px-4 py-3">
               <Label htmlFor="upgrade-locker" className="flex items-center gap-2 text-sm">
-                <Lock className="h-4 w-4 text-indigo-600" />
+                <Lock className="h-4 w-4 text-primary" />
                 Complimentary locker
               </Label>
               <Select
@@ -404,14 +404,14 @@ export function UpgradeMembershipDrawer({
 
           {/* Breakdown */}
           {newPlan && (
-            <Card className="rounded-2xl border-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg">
+            <Card className="rounded-2xl border-0 bg-gradient-to-r from-primary to-primary text-white shadow-lg">
               <CardContent className="pt-5 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-white/80">{newPlan.name} ({newPlan.duration_days} days)</span>
                   <span className="font-semibold">{inr(listPrice)}</span>
                 </div>
                 {discountAmount > 0 && (
-                  <div className="flex justify-between text-emerald-200">
+                  <div className="flex justify-between text-success-foreground">
                     <span>Discount{discountReason ? ` (${discountReason})` : ''}</span>
                     <span>− {inr(Math.min(discountAmount, listPrice))}</span>
                   </div>
@@ -426,7 +426,7 @@ export function UpgradeMembershipDrawer({
                   <span className="text-white/80">Revised invoice total</span>
                   <span className="font-semibold">{inr(newTotal)}</span>
                 </div>
-                <div className="flex justify-between text-emerald-200">
+                <div className="flex justify-between text-success-foreground">
                   <span>Less: upgrade credit ({currentPlan?.name || 'current plan'})</span>
                   <span>− {inr(credit)}</span>
                 </div>
@@ -507,7 +507,7 @@ export function UpgradeMembershipDrawer({
                 <div className="flex items-center justify-between rounded-xl bg-muted px-4 py-3">
                   <div>
                     <Label htmlFor="upgrade-reminders" className="flex items-center gap-2 text-sm">
-                      <BellRing className="h-4 w-4 text-indigo-600" />
+                      <BellRing className="h-4 w-4 text-primary" />
                       Send payment reminders
                     </Label>
                     <p className="text-xs text-muted-foreground">WhatsApp, SMS and email nudges for the balance</p>

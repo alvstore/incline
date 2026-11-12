@@ -163,7 +163,7 @@ export function HowbodySettings() {
 
       {/* === Tab 1: Credentials === */}
       <TabsContent value="credentials" className="mt-6 space-y-6">
-        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow-foreground/5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-primary/10 p-2 text-primary"><KeyRound className="h-5 w-5" /></div>
@@ -175,7 +175,7 @@ export function HowbodySettings() {
               </div>
             </div>
             <Badge variant="outline" className={sourceBadge.cls}>
-              <SourceIcon className="mr-1 h-3 w-3" /> {sourceBadge.label}
+ <SourceIcon className="mr-1 h-3 w-3" /> {sourceBadge.label}
             </Badge>
           </div>
 
@@ -242,7 +242,7 @@ export function HowbodySettings() {
         </Card>
 
         {/* Test connection */}
-        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow-foreground/5">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-success/10 p-2 text-success"><CheckCircle2 className="h-5 w-5" /></div>
             <div className="flex-1">
@@ -267,7 +267,7 @@ export function HowbodySettings() {
 
       {/* === Tab 2: Webhooks === */}
       <TabsContent value="webhooks" className="mt-6 space-y-6">
-        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow-foreground/5">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-success/10 p-2 text-success"><ScanLine className="h-5 w-5" /></div>
             <div>
@@ -297,7 +297,7 @@ export function HowbodySettings() {
                 <div className="flex items-center justify-between gap-2">
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">{u.label}</Label>
                   <Badge variant="outline" className={u.tagCls}>{u.tag}</Badge>
-                </div>
+ </div>
                 <div className="mt-1 flex gap-2">
                   <Input readOnly value={u.value} className="font-mono text-xs" />
                   <Button variant="outline" size="icon" onClick={() => copy(u.value)}>

@@ -83,7 +83,7 @@ export function ReferralCodeField({ branchId, phone, email, initialCode = "", in
           aria-describedby={result ? msgId : undefined}
           aria-invalid={result ? !result.ok : undefined}
           className={inputClassName}
-          placeholder="e.g. INC-26-0014"
+ placeholder="e.g. INC-26-0014"
           onChange={(e) => {
             setCode(e.target.value.toUpperCase());
             setResult(null);
@@ -104,7 +104,7 @@ export function ReferralCodeField({ branchId, phone, email, initialCode = "", in
       </div>
       <p id={msgId} role="status" aria-live="polite" className="min-h-[1rem] text-xs">
         {result && (
-          <span className={`inline-flex items-center gap-1.5 ${result.ok ? "text-emerald-400" : "text-destructive"}`}>
+          <span className={`inline-flex items-center gap-1.5 ${result.ok ? "text-success" : "text-destructive"}`}>
             {result.ok ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : <AlertCircle className="h-3.5 w-3.5" aria-hidden />}
             {result.text}
           </span>

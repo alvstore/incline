@@ -25,11 +25,11 @@ interface Props {
 const statusClass = (status: string) => {
   switch (status) {
     case 'paid':
-      return 'bg-emerald-100 text-emerald-700';
+      return 'bg-success/10 text-success';
     case 'partial':
-      return 'bg-amber-100 text-amber-700';
+      return 'bg-warning/10 text-warning';
     case 'overdue':
-      return 'bg-red-100 text-red-700';
+      return 'bg-destructive/10 text-destructive';
     case 'cancelled':
     case 'refunded':
       return 'bg-muted text-muted-foreground';
@@ -75,7 +75,7 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-indigo-600" />
+              <FileText className="h-5 w-5 text-primary" />
               Invoices &amp; Payments
             </SheetTitle>
             <SheetDescription>
@@ -125,7 +125,7 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
                       </div>
                       <div>
                         <p className="text-muted-foreground">Balance</p>
-                        <p className={`font-semibold ${due > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        <p className={`font-semibold ${due > 0 ? 'text-destructive' : 'text-success'}`}>
                           ₹{Math.abs(due).toLocaleString('en-IN')}
                         </p>
                       </div>

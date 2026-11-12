@@ -115,17 +115,17 @@ export function PtAutoAttendancePanel({
   const pending = rows.filter(r => r.correction_status === 'pending').length;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow-foreground/5">
       <CardHeader className="pb-3 flex flex-row items-start justify-between gap-3">
         <div>
           <CardTitle className="text-base flex flex-wrap items-center gap-2">
             <ScanFace className="h-4 w-4 text-primary" aria-hidden />
             Automatic PT attendance
-            <Badge variant="outline" className={mode === 'manual' ? 'bg-muted text-muted-foreground' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}>
-              {MODE_LABEL[mode]}
+            <Badge variant="outline" className={mode === 'manual' ? 'bg-muted text-muted-foreground' : 'bg-success/10 text-success border-success/20'}>
+ {MODE_LABEL[mode]}
             </Badge>
             {pending > 0 && (
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
+              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
                 {pending} correction{pending > 1 ? 's' : ''} pending
               </Badge>
             )}
@@ -168,7 +168,7 @@ export function PtAutoAttendancePanel({
                       <p className="text-xs text-muted-foreground">
                         Client in {hhmm(r.member_first_at)} · Trainer {r.match_reason === 'outside_duty' ? 'last seen' : 'in'} {hhmm(r.trainer_first_at)}
                         {r.match_reason && <span> · {REASON[r.match_reason] ?? r.match_reason}</span>}
-                        {late && r.match_reason !== 'trainer_very_late' && <span className="text-amber-600"> · trainer {r.gap_minutes} min after client</span>}
+                        {late && r.match_reason !== 'trainer_very_late' && <span className="text-warning"> · trainer {r.gap_minutes} min after client</span>}
                         {r.manager_alert_kind && <span> · manager alerted</span>}
                       </p>
                     </div>
@@ -200,8 +200,8 @@ export function PtAutoAttendancePanel({
                     </div>
                   </div>
                   {r.correction_status === 'pending' && r.correction_id && (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                      <MessageSquareWarning className="h-4 w-4 text-amber-600 shrink-0" aria-hidden />
+                    <div className="rounded-xl border border-warning/20 bg-warning/5 p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                      <MessageSquareWarning className="h-4 w-4 text-warning shrink-0" aria-hidden />
                       <p className="text-xs flex-1">
                         Trainer asks to <strong>{r.correction_action === 'mark' ? 'mark this session' : 'undo this session'}</strong>: {r.correction_reason}
                       </p>

@@ -106,7 +106,7 @@ export function CancelInvoiceDrawer({
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Paid so far</span>
-              <span className="font-semibold text-emerald-600">
+              <span className="font-semibold text-success">
                 ₹{Number(invoice?.amount_paid || 0).toLocaleString('en-IN')}
               </span>
             </div>

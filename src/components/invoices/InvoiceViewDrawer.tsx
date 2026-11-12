@@ -432,7 +432,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
               </Button>
               <Button
                 variant="ghost"
-                className="w-full text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50"
+                className="w-full text-primary hover:text-primary hover:bg-primary/10"
                 onClick={handleVerifyRazorpay}
                 disabled={verifying}
               >
@@ -448,7 +448,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
           </Button>
 
           {canCorrect && invoice.status !== 'cancelled' && (
-            <Button variant="ghost" className="w-full text-amber-700 hover:text-amber-800 hover:bg-amber-50" onClick={() => setCorrectOpen(true)}>
+            <Button variant="ghost" className="w-full text-warning hover:text-warning hover:bg-warning/10" onClick={() => setCorrectOpen(true)}>
               <PencilLine className="h-4 w-4 mr-2" />
               Correct invoice amount
             </Button>

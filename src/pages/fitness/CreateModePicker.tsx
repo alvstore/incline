@@ -118,7 +118,7 @@ export default function CreateModePickerPage() {
         </header>
 
         {/* Step 0 — who is this for? */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-border">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 ring-1 ring-border">
           <CardContent className="p-5 sm:p-6">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">Who is this plan for?</h2>
@@ -168,7 +168,7 @@ export default function CreateModePickerPage() {
             onClick={() => setTemplateSheet('any')}
           />
 
-          <Card className="flex h-full flex-col rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-border transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
+          <Card className="flex h-full flex-col rounded-2xl border-0 shadow-lg shadow-foreground/5 ring-1 ring-border transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <CardContent className="flex flex-1 flex-col gap-4 p-5 sm:p-6">
               <div className="flex items-start gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
@@ -320,7 +320,7 @@ function PathCard({
           onClick();
         }
       }}
-      className={`group flex h-full cursor-pointer flex-col rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
+      className={`group flex h-full cursor-pointer flex-col rounded-2xl border-0 shadow-lg shadow-foreground/5 ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
         tone === 'primary' ? 'ring-primary/20' : 'ring-border'
       }`}
     >
@@ -351,7 +351,7 @@ function PathCard({
           {bullets.map((line) => (
             <li key={line} className="flex items-start gap-2">
               <span
-                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"
+                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success/10 text-success"
                 aria-hidden
               >
                 <Check className="h-3 w-3" />

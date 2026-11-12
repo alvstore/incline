@@ -80,7 +80,7 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
           variant="ghost"
           size={compact ? 'icon' : 'sm'}
           aria-label={`Edit ${benefitName} gift`}
-          className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-indigo-600"
+          className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-primary"
           onClick={() => { setSessions(String(comp.comp_sessions)); setReason(''); setMode('edit'); }}
         >
           <Pencil className="h-4 w-4" />
@@ -90,7 +90,7 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
           variant="ghost"
           size={compact ? 'icon' : 'sm'}
           aria-label={`Revoke ${benefitName} gift`}
-          className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-red-600"
+          className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-destructive"
           onClick={() => { setReason(''); setMode('revoke'); }}
         >
           <Trash2 className="h-4 w-4" />
@@ -125,13 +125,13 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
                   onChange={(e) => setSessions(e.target.value)}
                 />
                 {!editValid && (
-                  <p className="text-xs font-medium text-red-600">Cannot go below the {used} session(s) already used.</p>
+                  <p className="text-xs font-medium text-destructive">Cannot go below the {used} session(s) already used.</p>
                 )}
               </div>
             )}
 
             {mode === 'revoke' && used > 0 && (
-              <div className="flex items-start gap-2 rounded-2xl bg-red-50 p-3 text-xs text-red-700">
+              <div className="flex items-start gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>{used} session(s) already used — this gift cannot be revoked. Reduce it instead.</span>
               </div>

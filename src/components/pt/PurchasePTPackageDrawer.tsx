@@ -598,7 +598,7 @@ export function PurchasePTPackageDrawer({
       <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col gap-0">
         <SheetHeader className="space-y-2 border-b px-5 py-4 text-left sm:px-6">
           <SheetTitle className="flex items-center gap-2 text-base">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-500/10">
+            <span className="rounded-full bg-primary/10 p-2 text-primary ">
               <Dumbbell className="h-4 w-4" />
             </span>
             Purchase PT Package
@@ -631,16 +631,16 @@ export function PurchasePTPackageDrawer({
           {step === 1 && (
             <>
               {blockingPackage && (
-                <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-500/10">
+                <div className="rounded-2xl bg-warning/10 p-3 ">
                   <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      <p className="text-sm font-semibold text-warning ">
                         {blockingPackage.status === 'pending_payment'
                           ? 'Already has a package awaiting payment'
                           : 'Already has an active PT package'}
                       </p>
-                      <p className="text-xs text-amber-800 dark:text-amber-300/90">
+                      <p className="text-xs text-warning ">
                         {blockingPackage.pt_packages?.name ?? 'PT package'}
                         {trainers.find((t) => t.id === blockingPackage.trainer_id)
                           ? ` · ${trainers.find((t) => t.id === blockingPackage.trainer_id)!.full_name}`
@@ -666,7 +666,7 @@ export function PurchasePTPackageDrawer({
                             {duplicateAck ? 'Additional package confirmed' : 'Sell an additional package'}
                           </Button>
                         ) : (
-                          <p className="text-xs text-amber-800">Ask a manager to approve an additional package.</p>
+                          <p className="text-xs text-warning">Ask a manager to approve an additional package.</p>
                         )}
                       </div>
                     </div>
@@ -674,8 +674,8 @@ export function PurchasePTPackageDrawer({
                       variant="secondary"
                       className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                         blockingPackage.status === 'pending_payment'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700'
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-success/10 text-success'
                       }`}
                     >
                       {blockingPackage.status === 'pending_payment' ? 'Awaiting payment' : 'Active'}
@@ -753,7 +753,7 @@ export function PurchasePTPackageDrawer({
                   </div>
                 ) : packages.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 rounded-2xl bg-muted/40 px-4 py-8 text-center">
-                    <span className="rounded-full bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-500/10">
+                    <span className="rounded-full bg-primary/10 p-2 text-primary ">
                       <PackageOpen className="h-5 w-5" />
                     </span>
                     <p className="text-sm font-medium text-foreground">
@@ -910,7 +910,7 @@ export function PurchasePTPackageDrawer({
                     <span className="tabular-nums">{formatINR(listPrice)}</span>
                   </div>
                   {discount > 0 && (
-                    <div className="flex justify-between text-sm text-amber-600">
+                    <div className="flex justify-between text-sm text-warning">
                       <span>Discount</span>
                       <span className="tabular-nums">− {formatINR(discount)}</span>
                     </div>
@@ -926,7 +926,7 @@ export function PurchasePTPackageDrawer({
                     <span className="tabular-nums">{formatINR(breakdown.total)}</span>
                   </div>
                   {commissionPreview != null && (
-                    <div className="flex justify-between text-xs text-emerald-600">
+                    <div className="flex justify-between text-xs text-success">
                       <span>{trainerName} · {trainerShare}% commission</span>
                       <span className="tabular-nums">{formatINR(commissionPreview)}</span>
                     </div>
@@ -1107,7 +1107,7 @@ export function PurchasePTPackageDrawer({
                           aria-invalid={referenceMissing}
                         />
                         {referenceMissing && (
-                          <p className="text-xs text-amber-600">
+                          <p className="text-xs text-warning">
                             Required — this reference is how the payment is reconciled.
                           </p>
                         )}
@@ -1116,10 +1116,10 @@ export function PurchasePTPackageDrawer({
                   </div>
 
                   {needsDueDate && (
-                    <div className="space-y-2 rounded-2xl bg-amber-50 p-4 dark:bg-amber-500/10">
+                    <div className="space-y-2 rounded-2xl bg-warning/10 p-4 ">
                       <div className="flex items-center gap-2">
-                        <Wallet className="h-4 w-4 text-amber-600" />
-                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                        <Wallet className="h-4 w-4 text-warning" />
+                        <p className="text-sm font-semibold text-warning ">
                           {formatINR(balanceDue)} balance — due when?
                         </p>
                       </div>
@@ -1167,7 +1167,7 @@ export function PurchasePTPackageDrawer({
                   <span>Collecting now</span>
                   <span className="tabular-nums">{formatINR(collectedNow)}</span>
                 </div>
-                <div className="flex justify-between text-xs font-medium text-amber-600">
+                <div className="flex justify-between text-xs font-medium text-warning">
                   <span>Balance due {prettyDate(dueDate || addDaysISO(7))}</span>
                   <span className="tabular-nums">{formatINR(balanceDue)}</span>
                 </div>

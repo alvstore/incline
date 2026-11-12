@@ -18,7 +18,7 @@ export function MembershipRenewCard({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-2xl bg-card p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7 ${
+      className={`relative overflow-hidden rounded-2xl bg-card p-6 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7 ${
         isUpgrade ? 'ring-2 ring-primary/40' : ''
       }`}
     >
@@ -49,7 +49,7 @@ export function MembershipRenewCard({
         <ul className="mt-5 space-y-2">
           {plan.perks.map((perk) => (
             <li key={perk} className="flex items-start gap-2.5 text-sm text-foreground">
-              <span className="mt-0.5 rounded-full bg-emerald-50 p-0.5 text-emerald-600"><Check className="h-3.5 w-3.5" aria-hidden /></span>
+              <span className="mt-0.5 rounded-full bg-success/10 p-0.5 text-success"><Check className="h-3.5 w-3.5" aria-hidden /></span>
               {perk}
             </li>
           ))}

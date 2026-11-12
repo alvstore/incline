@@ -430,9 +430,9 @@ export function PurchaseMembershipDrawer({
 
           {/* Advance-booking confirmation banner */}
           {advanceBooking && (
-            <Alert className="border-blue-300 bg-blue-50">
-              <Calendar className="h-4 w-4 text-blue-700" />
-              <AlertDescription className="text-blue-800">
+            <Alert className="border-info/30 bg-info/10">
+              <Calendar className="h-4 w-4 text-info" />
+              <AlertDescription className="text-info">
                 Scheduled to start on <strong>{format(new Date(startDate), 'dd MMM yyyy')}</strong>.
                 The membership stays in <strong>Scheduled</strong> status until then — hardware access is not granted before the start date.
               </AlertDescription>
@@ -640,7 +640,7 @@ export function PurchaseMembershipDrawer({
                 </div>
 
                 {isBackdated && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning ">
                     Backdated start: this membership counts as already running since{' '}
                     <strong>{format(new Date(startDate), 'dd MMM yyyy')}</strong> —{' '}
                     <strong>{backdatedDays} day{backdatedDays === 1 ? '' : 's'}</strong> of cover are

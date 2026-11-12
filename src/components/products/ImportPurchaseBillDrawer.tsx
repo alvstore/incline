@@ -212,7 +212,7 @@ export function ImportPurchaseBillDrawer({ open, onOpenChange }: Props) {
                           <TableCell>
                             <p className="font-medium">{l.item_name}</p>
                             {l.warnings.map((w) => (
-                              <Badge key={w} variant="outline" className="mt-1 mr-1 bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1">
+                              <Badge key={w} variant="outline" className="mt-1 mr-1 bg-warning/10 text-warning border-warning/20 gap-1">
                                 <AlertTriangle className="h-3 w-3" aria-hidden />{w}
                               </Badge>
                             ))}

@@ -19,8 +19,8 @@ interface Analysis {
 const tone = (status: string) => {
   const s = status.toLowerCase();
   if (s.includes('above') || s.includes('high')) return 'bg-destructive/10 text-destructive border border-destructive/20';
-  if (s.includes('below') || s.includes('low') || s.includes('watch')) return 'bg-amber-500/10 text-amber-600 border border-amber-500/20';
-  return 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20';
+  if (s.includes('below') || s.includes('low') || s.includes('watch')) return 'bg-warning/10 text-warning border border-warning/20';
+  return 'bg-success/10 text-success border border-success/20';
 };
 
 export function ScanAiAnalysisPanel({ reportId, kind, canRegenerate }: { reportId: string; kind: 'body' | 'posture'; canRegenerate?: boolean }) {
@@ -101,8 +101,8 @@ export function ScanAiAnalysisPanel({ reportId, kind, canRegenerate }: { reportI
             <AccordionItem value="sf">
               <AccordionTrigger className="text-sm">Strengths and focus areas</AccordionTrigger>
               <AccordionContent className="space-y-2">
-                {data.strengths.map((s) => <p key={s} className="flex gap-2 text-xs"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />{s}</p>)}
-                {data.focus.map((s) => <p key={s} className="flex gap-2 text-xs"><AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />{s}</p>)}
+                {data.strengths.map((s) => <p key={s} className="flex gap-2 text-xs"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />{s}</p>)}
+                {data.focus.map((s) => <p key={s} className="flex gap-2 text-xs"><AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />{s}</p>)}
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="plan">

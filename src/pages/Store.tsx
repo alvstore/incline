@@ -225,28 +225,28 @@ export default function StorePage() {
         </div>
 
         {/* Hero Card */}
-        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl shadow-lg shadow-indigo-500/20 p-6 text-white">
+        <div className="bg-gradient-to-r from-primary to-primary rounded-2xl shadow-lg shadow-primary/20 p-6 text-white">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold tracking-tight">Store Overview</h2>
-              <p className="text-indigo-100/70 text-sm mt-1">Realized revenue and order performance across all channels</p>
+              <p className="text-primary/70 text-sm mt-1">Realized revenue and order performance across all channels</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <div className="text-center">
                 <p className="text-2xl font-bold">{posSales.filter((s: any) => s.payment_status !== 'cancelled').length}</p>
-                <p className="text-indigo-100/70 text-xs mt-1">Total Sales</p>
+                <p className="text-primary/70 text-xs mt-1">Total Sales</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{products.length}</p>
-                <p className="text-indigo-100/70 text-xs mt-1">Products</p>
+                <p className="text-primary/70 text-xs mt-1">Products</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">₹{todayPosTotal.toLocaleString()}</p>
-                <p className="text-indigo-100/70 text-xs mt-1">Today's POS</p>
+                <p className="text-primary/70 text-xs mt-1">Today's POS</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</p>
-                <p className="text-indigo-100/70 text-xs mt-1">Net Revenue</p>
+                <p className="text-primary/70 text-xs mt-1">Net Revenue</p>
               </div>
             </div>
           </div>
@@ -530,7 +530,7 @@ export default function StorePage() {
                               <TableCell className="font-medium">₹{order.total_amount.toLocaleString()}</TableCell>
                               <TableCell>
                                 <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                              </TableCell>
+ </TableCell>
                               <TableCell>{format(new Date(order.created_at), 'dd MMM yyyy HH:mm')}</TableCell>
                               <TableCell className="text-right">
                                 {['pending', 'partial', 'overdue'].includes(order.status) && (

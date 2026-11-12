@@ -49,7 +49,7 @@ export function QuickPresetsMenu({ onSelect, filterType, variant = 'compact' }: 
           variant={variant === 'header' ? 'secondary' : 'outline'}
           size={variant === 'header' ? 'default' : 'sm'}
           className={
-            variant === 'header'
+ variant === 'header'
               ? 'bg-card/15 hover:bg-card/25 text-primary-foreground border-0 backdrop-blur-sm cursor-pointer'
               : 'rounded-xl cursor-pointer'
           }
@@ -99,9 +99,9 @@ export function QuickPresetsMenu({ onSelect, filterType, variant = 'compact' }: 
                     <DropdownMenuItem
                       key={p.id}
                       onClick={() => onSelect(p)}
-                      className="flex items-start gap-2 py-2 px-4 cursor-pointer hover:bg-indigo-50/50"
+                      className="flex items-start gap-2 py-2 px-4 cursor-pointer hover:bg-primary/50"
                     >
-                      <FileText className="h-4 w-4 mt-0.5 text-indigo-600 flex-shrink-0" />
+                      <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground">{p.label}</p>
                         <p className="text-[11px] text-muted-foreground truncate">

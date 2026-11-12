@@ -91,7 +91,7 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-indigo-600" />
+            <CalendarClock className="h-5 w-5 text-primary" />
             Adjust Membership Dates
           </SheetTitle>
           <SheetDescription>
@@ -132,7 +132,7 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
             </div>
           </div>
 
-          <Card className="bg-indigo-50/50 border-indigo-100">
+          <Card className="bg-primary/50 border-primary/30">
             <CardContent className="pt-4 text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total length (inclusive)</span>
@@ -151,7 +151,7 @@ export function AdjustMembershipDatesDrawer({ open, onOpenChange, membership, on
           </Card>
 
           <div className="space-y-2">
-            <Label htmlFor="adj-reason">Reason <span className="text-red-500">*</span></Label>
+            <Label htmlFor="adj-reason">Reason <span className="text-destructive">*</span></Label>
             <Textarea
               id="adj-reason"
               rows={3}

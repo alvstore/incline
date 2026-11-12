@@ -76,8 +76,8 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
     auth: {
       icon: <KeyRound className="h-5 w-5" aria-hidden="true" />,
       badge: "Credentials rejected",
-      badgeClass: "bg-red-100 text-red-700",
-      iconClass: "bg-red-50 text-red-600",
+      badgeClass: "bg-destructive/10 text-destructive",
+      iconClass: "bg-destructive/10 text-destructive",
       title: "MIPS server reachable — but the login was rejected",
       detail:
         "The server answered, so this is not a network outage. The stored MIPS username/password is wrong or was changed on the server. Open Device Setup (gear icon) and re-enter the credentials to restore sync.",
@@ -85,8 +85,8 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
     paused: {
       icon: <PauseCircle className="h-5 w-5" aria-hidden="true" />,
       badge: "Sync paused",
-      badgeClass: "bg-amber-100 text-amber-700",
-      iconClass: "bg-amber-50 text-amber-600",
+      badgeClass: "bg-warning/10 text-warning",
+      iconClass: "bg-warning/10 text-warning",
       title: "MIPS server unreachable — sync paused, auto-resuming",
       detail: openUntil
         ? `Next automatic retry ${formatDistanceToNow(openUntil, { addSuffix: true })}. Nothing is lost: queued people resume without consuming their retry budget.`
@@ -95,16 +95,16 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
     down: {
       icon: <AlertTriangle className="h-5 w-5" aria-hidden="true" />,
       badge: "Unreachable",
-      badgeClass: "bg-red-100 text-red-700",
-      iconClass: "bg-red-50 text-red-600",
+      badgeClass: "bg-destructive/10 text-destructive",
+      iconClass: "bg-destructive/10 text-destructive",
       title: "MIPS server is not responding",
       detail: connection?.message || "The Device Command Center cannot reach the access-control server.",
     },
     degraded: {
       icon: <AlertTriangle className="h-5 w-5" aria-hidden="true" />,
       badge: "Degraded",
-      badgeClass: "bg-amber-100 text-amber-700",
-      iconClass: "bg-amber-50 text-amber-600",
+      badgeClass: "bg-warning/10 text-warning",
+      iconClass: "bg-warning/10 text-warning",
       title: "Intermittent MIPS connectivity",
       detail: `${breaker?.consecutive_failures} consecutive transport failure(s). Sync continues with backoff.`,
     },
@@ -112,8 +112,8 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
     healthy: {
       icon: <CheckCircle2 className="h-5 w-5" aria-hidden="true" />,
       badge: "Healthy",
-      badgeClass: "bg-emerald-100 text-emerald-700",
-      iconClass: "bg-emerald-50 text-emerald-600",
+      badgeClass: "bg-success/10 text-success",
+      iconClass: "bg-success/10 text-success",
       title: "MIPS server reachable — sync running",
       detail: breaker?.last_success_at
         ? `Last successful contact ${formatDistanceToNow(new Date(breaker.last_success_at), { addSuffix: true })}.`
@@ -122,7 +122,7 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
   }[state];
 
   return (
-    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
       <CardContent className="flex flex-wrap items-start gap-3 p-4">
         <div className={`rounded-full p-2.5 ${config.iconClass}`}>{config.icon}</div>
         <div className="min-w-0 flex-1">

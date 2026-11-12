@@ -572,29 +572,29 @@ export default function AttendanceDashboard() {
   const getSourceBadge = (att: ConsolidatedMemberVisit | MemberAttendanceRecord) => {
     const method = 'sourceLabel' in att ? att.sourceLabel : att.check_in_method || att.source || 'manual';
     const base = 'gap-1 rounded-full border text-xs font-medium';
-    if (method === 'force_entry') return <Badge variant="outline" className={`${base} bg-amber-50 text-amber-700 border-amber-200`}><ShieldAlert className="h-3 w-3" />Force</Badge>;
-    if (method === 'device' || method === 'biometric') return <Badge variant="outline" className={`${base} bg-violet-50 text-violet-700 border-violet-200`}><ScanFace className="h-3 w-3" />Face gate</Badge>;
-    if (method === 'mixed') return <Badge variant="outline" className={`${base} bg-indigo-50 text-indigo-700 border-indigo-200`}><Layers className="h-3 w-3" />Mixed</Badge>;
-    return <Badge variant="outline" className={`${base} bg-blue-50 text-blue-700 border-blue-200`}><UserCheck className="h-3 w-3" />Front desk</Badge>;
+    if (method === 'force_entry') return <Badge variant="outline" className={`${base} bg-warning/10 text-warning border-warning/30`}><ShieldAlert className="h-3 w-3" />Force</Badge>;
+    if (method === 'device' || method === 'biometric') return <Badge variant="outline" className={`${base} bg-primary/10 text-primary border-primary/30`}><ScanFace className="h-3 w-3" />Face gate</Badge>;
+    if (method === 'mixed') return <Badge variant="outline" className={`${base} bg-primary/10 text-primary border-primary/30`}><Layers className="h-3 w-3" />Mixed</Badge>;
+    return <Badge variant="outline" className={`${base} bg-info/10 text-info border-info/30`}><UserCheck className="h-3 w-3" />Front desk</Badge>;
   };
 
   const getStatusBadge = (att: ConsolidatedMemberVisit) => att.isActive
-    ? <Badge className="gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>In gym</Badge>
+    ? <Badge className="gap-1.5 rounded-full border border-success/30 bg-success/10 text-success hover:bg-success/10"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>In gym</Badge>
     : <Badge className="gap-1 rounded-full border border-border bg-muted text-foreground hover:bg-muted"><CheckCircle className="h-3 w-3" />Completed</Badge>;
 
   const getStreakBadge = (memberId: string) => {
     if (streaksError) return null;
     const s = memberStreaks[memberId];
     if (!s) return null;
-    if (s.streak >= 2) return <Badge className="gap-1 rounded-full border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50"><Flame className="h-3 w-3" />{s.streak}-day streak</Badge>;
-    if (s.gapDays === null) return <Badge className="gap-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"><Sparkles className="h-3 w-3" />First visit</Badge>;
-    if (s.gapDays >= 5) return <Badge className="gap-1 rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50"><Undo2 className="h-3 w-3" />Back after {s.gapDays}d</Badge>;
+    if (s.streak >= 2) return <Badge className="gap-1 rounded-full border border-warning/30 bg-warning/10 text-warning hover:bg-warning/10"><Flame className="h-3 w-3" />{s.streak}-day streak</Badge>;
+    if (s.gapDays === null) return <Badge className="gap-1 rounded-full border border-success/30 bg-success/10 text-success hover:bg-success/10"><Sparkles className="h-3 w-3" />First visit</Badge>;
+    if (s.gapDays >= 5) return <Badge className="gap-1 rounded-full border border-info/30 bg-info/10 text-info hover:bg-info/10"><Undo2 className="h-3 w-3" />Back after {s.gapDays}d</Badge>;
     if (!s.lastVisit) return null;
     return <Badge className="gap-1 rounded-full border border-border bg-muted text-muted-foreground hover:bg-muted"><CalendarDays className="h-3 w-3" />Last {format(new Date(s.lastVisit), 'dd MMM')}</Badge>;
   };
 
   const absenceBadge = (days: number) => {
-    const cls = days >= 14 ? 'border-red-200 bg-red-50 text-red-700' : days >= 7 ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-amber-200 bg-amber-50 text-amber-700';
+    const cls = days >= 14 ? 'border-destructive/30 bg-destructive/10 text-destructive' : days >= 7 ? 'border-warning/30 bg-warning/10 text-warning' : 'border-warning/30 bg-warning/10 text-warning';
     return <Badge className={`rounded-full border ${cls} hover:bg-transparent`}>{days}d absent</Badge>;
   };
 
@@ -865,7 +865,7 @@ export default function AttendanceDashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-          <Card className="rounded-2xl border-0 bg-gradient-to-br from-accent to-accent/80 text-accent-foreground shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <Card className="rounded-2xl border-0 bg-gradient-to-br from-accent to-accent/80 text-accent-foreground shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -877,7 +877,7 @@ export default function AttendanceDashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 bg-gradient-to-br from-success to-success/80 text-success-foreground shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <Card className="rounded-2xl border-0 bg-gradient-to-br from-success to-success/80 text-success-foreground shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -889,7 +889,7 @@ export default function AttendanceDashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 bg-gradient-to-br from-info to-info/80 text-info-foreground shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <Card className="rounded-2xl border-0 bg-gradient-to-br from-info to-info/80 text-info-foreground shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -901,7 +901,7 @@ export default function AttendanceDashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+          <Card className="rounded-2xl border-0 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -950,7 +950,7 @@ export default function AttendanceDashboard() {
         </div>
 
         {/* Main Tabs */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle>Attendance Management</CardTitle>
@@ -1109,7 +1109,7 @@ export default function AttendanceDashboard() {
                 </Table></div>
                 <div className="space-y-3 md:hidden">
                   {memberAttendanceLoading ? [0, 1, 2].map((item) => <Skeleton key={item} className="h-36 w-full rounded-2xl" />) : memberAttendanceError ? <p className="py-10 text-center text-sm text-destructive">Could not load member attendance.</p> : filteredMemberAttendance.map((attendance) => (
-                    <div key={attendance.id} className="rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
+                    <div key={attendance.id} className="rounded-2xl bg-card p-4 shadow-lg shadow-foreground/5">
                       <div className="flex items-start gap-3"><Avatar className="h-11 w-11"><AvatarImage src={attendance.members?.profiles?.avatar_url} /><AvatarFallback className="bg-accent/10 text-accent text-xs">{getInitials(attendance.members?.profiles?.full_name)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{attendance.members?.profiles?.full_name || 'Unknown'}</p><p className="text-xs text-muted-foreground">{attendance.members?.member_code}</p><div className="mt-1">{getStreakBadge(attendance.member_id)}</div></div>{getStatusBadge(attendance)}</div>
                       <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center"><div><p className="text-[11px] text-muted-foreground">First in</p><p className="mt-1 text-sm font-semibold">{fmtTime(attendance.firstCheckIn)}</p></div><div><p className="text-[11px] text-muted-foreground">Last out</p><p className="mt-1 text-sm font-semibold">{attendance.lastCheckOut ? fmtTime(attendance.lastCheckOut) : '—'}</p></div><div><p className="text-[11px] text-muted-foreground">Duration</p><p className="mt-1 text-sm font-semibold">{attendance.isActive ? 'Active' : formatDuration(attendance.firstCheckIn, attendance.lastCheckOut)}</p></div></div>
                       <div className="mt-3 flex min-h-11 items-center justify-between gap-2"><div className="flex items-center gap-2">{getSourceBadge(attendance)}{attendance.scanCount > 1 && <Badge variant="secondary" className="rounded-full">{attendance.scanCount} gate scans</Badge>}</div>{attendance.isActive ? <Button variant="outline" size="sm" className="min-h-11 gap-1.5" disabled={isCheckingOut} onClick={() => checkOut(attendance.member_id, { onSuccess: () => refetchMemberToday() })}><LogOut className="h-4 w-4" />Check Out</Button> : attendance.scanCount > 1 ? <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`Show ${attendance.scanCount} entries`} onClick={() => setExpandedMemberId(expandedMemberId === attendance.member_id ? null : attendance.member_id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedMemberId === attendance.member_id ? 'rotate-180' : ''}`} /></Button> : null}</div>

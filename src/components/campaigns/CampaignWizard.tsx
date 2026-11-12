@@ -1647,10 +1647,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
 
             {/* ── RCS template selection + variable mapping ── */}
             {channel === 'rcs' && (
-              <div className="rounded-2xl border-2 border-violet-500/25 bg-violet-500/5 p-3 space-y-3">
+              <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-3 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Radio className="h-4 w-4 text-violet-600" />
-                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS — approved template required</Label>
+                  <Radio className="h-4 w-4 text-primary" />
+                  <Label className="text-xs font-semibold text-primary ">RCS — approved template required</Label>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.

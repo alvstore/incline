@@ -348,15 +348,15 @@ export default function SarvamVoiceCard() {
                 <CardTitle className="flex items-center gap-2">
                   Sarvam Voice AI
                   {integration?.is_active
-                    ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
+                    ? <Badge className="bg-success/10 text-success hover:bg-success/10">Active</Badge>
                     : <Badge variant="secondary">Inactive</Badge>}
                   {readinessQuery.isLoading
                     ? <Badge variant="outline">Checking…</Badge>
                     : readiness?.production_ready
-                      ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Ready</Badge>
+                      ? <Badge className="bg-success/10 text-success hover:bg-success/10">Ready</Badge>
                       : readiness?.connected
-                        ? <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Action required</Badge>
-                        : <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Blocked</Badge>}
+                        ? <Badge className="bg-warning/10 text-warning hover:bg-warning/10">Action required</Badge>
+                        : <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/10">Blocked</Badge>}
                 </CardTitle>
                 <CardDescription>
                   Outbound AI voice agent for member follow-ups. API key is stored server-side only.
@@ -414,7 +414,7 @@ export default function SarvamVoiceCard() {
               Test connection
             </Button>
             {checkStatus === 'connected' && (
-              <span className="flex items-center gap-1.5 text-sm text-emerald-600">
+              <span className="flex items-center gap-1.5 text-sm text-success">
                 <CheckCircle2 className="h-4 w-4" /> Connected
                 {integration?.last_check_at && ` · ${new Date(integration.last_check_at).toLocaleString('en-IN')}`}
               </span>
@@ -452,7 +452,7 @@ export default function SarvamVoiceCard() {
             </p>
           )}
           {!!readiness?.warnings?.length && (
-            <ul className="space-y-1 text-sm text-amber-600">
+            <ul className="space-y-1 text-sm text-warning">
               {readiness.warnings.map((w) => (
                 <li key={w} className="flex items-start gap-1.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -490,7 +490,7 @@ export default function SarvamVoiceCard() {
               </Button>
             </div>
             {outboundUnsupported ? (
-              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 space-y-2">
+              <div className="rounded-xl bg-warning/10 p-3 text-xs text-warning space-y-2">
                 <p>
                   Sarvam's Instant Outbound API is not available for this workspace/agent, so a call cannot be placed
                   from Incline. Run the test from the Sarvam dashboard instead.
@@ -511,7 +511,7 @@ export default function SarvamVoiceCard() {
                   window, for do-not-contact numbers, past the daily cap, or while another call is live.
                 </p>
                 {!canTestCall && !readinessQuery.isLoading && (
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-warning">
                     Test calls are locked until Sarvam reports a working outbound deployment.{' '}
                     <button type="button" onClick={() => setBlockersOpen(true)} className="underline cursor-pointer">
                       Why is this disabled?
@@ -531,9 +531,9 @@ export default function SarvamVoiceCard() {
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-sm">Member Retention Calls — 7+ days absent</p>
                   {automation.enabled
-                    ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
+                    ? <Badge className="bg-success/10 text-success hover:bg-success/10">Active</Badge>
                     : canEnableRetention
-                      ? <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Ready</Badge>
+                      ? <Badge className="bg-info/10 text-info hover:bg-info/10">Ready</Badge>
                       : <Badge className="bg-muted text-muted-foreground hover:bg-muted">Blocked</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -561,10 +561,10 @@ export default function SarvamVoiceCard() {
                   ] as Array<[string, boolean]>).map(([label, done]) => (
                     <li key={label} className="flex items-center gap-2">
                       {done
-                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden="true" />
                         : <XCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
-                      <span className={done ? 'text-emerald-700' : 'text-muted-foreground'}>{label}</span>
-                    </li>
+                      <span className={done ? 'text-success' : 'text-muted-foreground'}>{label}</span>
+ </li>
                   ))}
                 </ul>
                 <Button
@@ -826,7 +826,7 @@ export default function SarvamVoiceCard() {
               <ul className="space-y-2 text-sm">
                 {readiness.blockers.map((b) => (
                   <li key={b} className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" aria-hidden="true" />
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" aria-hidden="true" />
                     <span>{b}</span>
                   </li>
                 ))}
@@ -834,7 +834,7 @@ export default function SarvamVoiceCard() {
             )
             : <p className="text-sm text-muted-foreground">No blockers reported.</p>}
           {readiness?.probe_error && (
-            <p className="text-xs text-red-600">Provider check failed: {readiness.probe_error}</p>
+            <p className="text-xs text-destructive">Provider check failed: {readiness.probe_error}</p>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel className="cursor-pointer">Close</AlertDialogCancel>

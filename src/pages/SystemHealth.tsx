@@ -377,7 +377,7 @@ export default function SystemHealth() {
               {stats.map((s) => (
                 <Card key={s.label} role="button" tabIndex={0} onClick={s.onClick}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); s.onClick(); } }}
-                  className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50 cursor-pointer hover:bg-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-2xl border-border/50 shadow-lg shadow-foreground/5 cursor-pointer hover:bg-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={`${s.label}: ${s.value}. View details`}>
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className={`p-2 rounded-xl bg-muted ${s.color}`}>

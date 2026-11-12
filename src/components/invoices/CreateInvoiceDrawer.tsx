@@ -398,11 +398,11 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           </div>
 
           {/* Quick Payment Settlement */}
-          <Card className="border-indigo-100 bg-indigo-50/30">
+          <Card className="border-primary/30 bg-primary/30">
             <CardContent className="pt-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
                   <div>

@@ -17,9 +17,9 @@ interface AttendanceHeatmapProps {
 function intensityClass(count: number, isFuture: boolean) {
   if (isFuture) return 'bg-muted/30';
   if (count <= 0) return 'bg-muted';
-  if (count === 1) return 'bg-emerald-300 text-emerald-950';
-  if (count === 2) return 'bg-emerald-500 text-white';
-  return 'bg-emerald-700 text-white';
+  if (count === 1) return 'bg-success/20 text-success';
+  if (count === 2) return 'bg-success text-white';
+  return 'bg-success text-white';
 }
 
 /** Visit heatmap — day grid for a month, week columns for quarter/year/all-time. */
@@ -70,7 +70,7 @@ export function AttendanceHeatmap({ start, end, visits, mode, title }: Attendanc
                     <TooltipTrigger asChild>
                       <div
                         className={cn(
-                          'flex aspect-square cursor-default items-center justify-center rounded-xl text-sm font-medium transition-colors duration-150',
+ 'flex aspect-square cursor-default items-center justify-center rounded-xl text-sm font-medium transition-colors duration-150',
                           intensityClass(count, isFuture),
                           isSameDay(day, today) && 'ring-2 ring-primary ring-offset-1',
                         )}
@@ -100,7 +100,7 @@ export function AttendanceHeatmap({ start, end, visits, mode, title }: Attendanc
                           <TooltipTrigger asChild>
                             <div
                               className={cn(
-                                'h-3.5 w-3.5 rounded-[4px] transition-colors duration-150',
+ 'h-3.5 w-3.5 rounded-[4px] transition-colors duration-150',
                                 inRange ? intensityClass(count, isFuture) : 'bg-transparent',
                                 isSameDay(day, today) && 'ring-1 ring-primary',
                               )}
@@ -124,9 +124,9 @@ export function AttendanceHeatmap({ start, end, visits, mode, title }: Attendanc
         <div className="mt-4 flex items-center justify-end gap-2 text-xs text-muted-foreground">
           <span>Less</span>
           <span className="h-3 w-3 rounded-[4px] bg-muted" />
-          <span className="h-3 w-3 rounded-[4px] bg-emerald-300" />
-          <span className="h-3 w-3 rounded-[4px] bg-emerald-500" />
-          <span className="h-3 w-3 rounded-[4px] bg-emerald-700" />
+          <span className="h-3 w-3 rounded-[4px] bg-success/20" />
+          <span className="h-3 w-3 rounded-[4px] bg-success" />
+          <span className="h-3 w-3 rounded-[4px] bg-success" />
           <span>More</span>
         </div>
       </CardContent>

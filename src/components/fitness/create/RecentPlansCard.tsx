@@ -26,7 +26,7 @@ export function RecentPlansCard() {
   if (isError) return null;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-border">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 ring-1 ring-border">
       <CardContent className="p-5 sm:p-6">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -63,7 +63,7 @@ export function RecentPlansCard() {
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                     r.plan_type === 'workout'
                       ? 'bg-primary/10 text-primary'
-                      : 'bg-emerald-500/10 text-emerald-600'
+                      : 'bg-success/10 text-success'
                   }`}
                   aria-hidden
                 >

@@ -43,8 +43,8 @@ type InventoryRow = Pick<Tables<'inventory'>, 'id' | 'product_id' | 'branch_id' 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
 const STOCK_BADGE: Record<StockStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
-  ok: { label: 'In stock', className: 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20', Icon: CheckCircle2 },
-  low: { label: 'Low stock', className: 'bg-amber-500/10 text-amber-500 border border-amber-500/20', Icon: AlertTriangle },
+  ok: { label: 'In stock', className: 'bg-success/10 text-success border border-success/20', Icon: CheckCircle2 },
+  low: { label: 'Low stock', className: 'bg-warning/10 text-warning border border-warning/20', Icon: AlertTriangle },
   out: { label: 'Out of stock', className: 'bg-destructive/10 text-destructive border border-destructive/20', Icon: XCircle },
   untracked: { label: 'Not counted', className: 'bg-muted text-muted-foreground border border-border', Icon: CircleDashed },
 };
@@ -263,7 +263,7 @@ export default function ProductsPage() {
             </Badge>
           )}
           {p.requires_lab_report && (
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 rounded-full text-[10px] px-2 py-0">
+            <Badge variant="outline" className="bg-success/10 text-success border-success/20 rounded-full text-[10px] px-2 py-0">
               <ShieldCheck className="h-3 w-3 mr-1" aria-hidden />CoA
             </Badge>
           )}
@@ -323,7 +323,7 @@ export default function ProductsPage() {
           {[
             { label: 'Products', value: String(products.length), Icon: Package, hint: `${categories.length} categories` },
             { label: 'Live on POS', value: String(liveCount), Icon: Store, hint: setupCount ? `${setupCount} not on sale` : 'All on sale' },
-            { label: 'Low / out of stock', value: String(lowCount), Icon: AlertTriangle, hint: 'At or below reorder level', tone: lowCount ? 'text-amber-500' : '' },
+            { label: 'Low / out of stock', value: String(lowCount), Icon: AlertTriangle, hint: 'At or below reorder level', tone: lowCount ? 'text-warning' : '' },
             { label: 'Stock value (cost)', value: inr(stockValue), Icon: TrendingUp, hint: 'Units in stock × cost price' },
           ].map((s) => (
             <Card key={s.label} className="col-span-6 lg:col-span-3 rounded-xl border border-border">
@@ -380,9 +380,9 @@ export default function ProductsPage() {
           </div>
 
           {lowCount > 0 && activeTab === 'products' && (
-            <Card className="rounded-xl border border-amber-500/20 bg-amber-500/5">
+            <Card className="rounded-xl border border-warning/20 bg-warning/5">
               <CardContent className="p-4 flex items-center gap-4">
-                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" aria-hidden />
+                <AlertTriangle className="h-5 w-5 text-warning shrink-0" aria-hidden />
                 <p className="flex-1 text-sm">
                   <span className="font-medium">{lowCount} product{lowCount > 1 ? 's are' : ' is'} low or out of stock.</span>{' '}
                   <span className="text-muted-foreground">Receive a batch or adjust the count.</span>
@@ -420,18 +420,18 @@ export default function ProductsPage() {
                               {p.product_categories?.name ? <Badge variant="secondary" className="font-normal">{p.product_categories.name}</Badge> : <span className="text-muted-foreground text-sm">{p.category || '—'}</span>}
                             </TableCell>
                             <TableCell className="text-right font-semibold tabular-nums">
-                              {Number(p.price) > 0 ? inr(Number(p.price)) : <span className="text-amber-500 text-sm font-medium whitespace-nowrap">Not set</span>}
+                              {Number(p.price) > 0 ? inr(Number(p.price)) : <span className="text-warning text-sm font-medium whitespace-nowrap">Not set</span>}
                             </TableCell>
                             <TableCell className="text-right text-muted-foreground tabular-nums">{p.cost_price ? inr(Number(p.cost_price)) : '—'}</TableCell>
                             <TableCell className="text-right">
                               {margin === null ? <span className="text-muted-foreground">—</span> : (
-                                <Badge variant="outline" className={`font-normal tabular-nums ${margin < 0 ? 'text-destructive border-destructive/20' : margin < 10 ? 'text-amber-500 border-amber-500/20' : 'text-emerald-500 border-emerald-500/20'}`}>
+                                <Badge variant="outline" className={`font-normal tabular-nums ${margin < 0 ? 'text-destructive border-destructive/20' : margin < 10 ? 'text-warning border-warning/20' : 'text-success border-success/20'}`}>
                                   {margin}%
                                 </Badge>
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <span className={`font-semibold tabular-nums ${statusOf(p) === 'out' ? 'text-destructive' : statusOf(p) === 'low' ? 'text-amber-500' : ''}`}>
+                              <span className={`font-semibold tabular-nums ${statusOf(p) === 'out' ? 'text-destructive' : statusOf(p) === 'low' ? 'text-warning' : ''}`}>
                                 {stock ? stock.qty : '—'}
                               </span>
                             </TableCell>

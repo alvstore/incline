@@ -26,7 +26,7 @@ function Stars({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`h-3.5 w-3.5 ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`}
+          className={`h-3.5 w-3.5 ${i <= rating ? 'fill-warning text-warning' : 'text-muted-foreground'}`}
           aria-hidden
         />
       ))}
@@ -81,10 +81,10 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
     (rated.length > 0 ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length : 0);
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Star className="h-5 w-5 text-amber-500" aria-hidden />
+          <Star className="h-5 w-5 text-warning" aria-hidden />
           Google Reviews
           {reviews.length > 0 && (
             <span className="ml-auto flex items-baseline gap-1">
@@ -135,7 +135,7 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
                     {r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy') : '—'}
                   </span>
                   {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                    <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
                       Needs reply
                     </span>
                   )}

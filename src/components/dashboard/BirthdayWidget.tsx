@@ -16,8 +16,8 @@ interface BirthdayWidgetProps {
 }
 
 const personTypeBadge: Record<string, { label: string; className: string }> = {
-  trainer: { label: 'Trainer', className: 'bg-violet-100 text-violet-700' },
-  staff: { label: 'Staff', className: 'bg-sky-100 text-sky-700' },
+  trainer: { label: 'Trainer', className: 'bg-primary/10 text-primary' },
+  staff: { label: 'Staff', className: 'bg-info/10 text-info' },
 };
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -37,7 +37,7 @@ function PersonTypeBadge({ type }: { type?: string }) {
   if (!cfg) return null;
   return (
     <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', cfg.className)}>
-      {cfg.label}
+ {cfg.label}
     </span>
   );
 }
@@ -112,7 +112,7 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
   return (
     <div
       className={cn(
-        'relative min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-card/90 to-card/50 backdrop-blur-xl ring-1 ring-border/60 shadow-lg shadow-primary/5 p-4 sm:p-5',
+ 'relative min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-card/90 to-card/50 backdrop-blur-xl ring-1 ring-border/60 shadow-lg shadow-primary/5 p-4 sm:p-5',
         className,
       )}
     >

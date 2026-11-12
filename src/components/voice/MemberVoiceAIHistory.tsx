@@ -38,7 +38,7 @@ export function MemberVoiceAIHistory({ memberId }: { memberId: string }) {
               >
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <PhoneCall className="h-4 w-4 text-indigo-600" aria-hidden />
+                    <PhoneCall className="h-4 w-4 text-primary" aria-hidden />
                     {call.call_started_at ? format(new Date(call.call_started_at), 'dd MMM yyyy, HH:mm') : '—'}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">

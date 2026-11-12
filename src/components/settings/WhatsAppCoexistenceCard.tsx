@@ -66,10 +66,10 @@ export function WhatsAppCoexistenceCard() {
   });
 
   return (
-    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
+    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 dark:shadow-none">
       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+          <span className="rounded-full bg-primary/10 p-2 text-primary">
             <Smartphone size={20} aria-hidden="true" />
           </span>
           <div>
@@ -82,7 +82,7 @@ export function WhatsAppCoexistenceCard() {
         <Button
           variant="outline"
           size="sm"
-          className="cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
           onClick={() => queryClient.invalidateQueries({ queryKey: ['whatsapp-coexistence', effectiveBranchId] })}
           aria-label="Refresh coexistence status"
         >
@@ -101,9 +101,9 @@ export function WhatsAppCoexistenceCard() {
         )}
 
         {isError && (
-          <div className="flex items-start gap-3 rounded-xl bg-red-50 p-4">
-            <AlertTriangle size={18} className="mt-0.5 text-red-600" aria-hidden="true" />
-            <p className="text-sm text-red-700">
+          <div className="flex items-start gap-3 rounded-xl bg-destructive/10 p-4">
+            <AlertTriangle size={18} className="mt-0.5 text-destructive" aria-hidden="true" />
+            <p className="text-sm text-destructive">
               {(error as Error)?.message || 'Could not read the WhatsApp number right now.'}
             </p>
           </div>
@@ -123,7 +123,7 @@ export function WhatsAppCoexistenceCard() {
                 <span
                   className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     data.coexistence_enabled
-                      ? 'bg-emerald-100 text-emerald-700'
+                      ? 'bg-success/10 text-success'
                       : 'bg-muted text-muted-foreground'
                   }`}
                 >
@@ -142,8 +142,8 @@ export function WhatsAppCoexistenceCard() {
             </div>
 
             {data.coexistence_enabled ? (
-              <div className="flex flex-col gap-3 rounded-xl bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-emerald-800">
+              <div className="flex flex-col gap-3 rounded-xl bg-success/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-success">
                   Messages typed on the phone now appear here, and messages sent here appear on the phone.
                   {data.history_sync?.requested_at
                     ? ` Last history import requested ${new Date(data.history_sync.requested_at).toLocaleString()}.`
@@ -152,7 +152,7 @@ export function WhatsAppCoexistenceCard() {
                 <Button
                   onClick={() => syncHistory.mutate()}
                   disabled={syncHistory.isPending}
-                  className="cursor-pointer rounded-xl bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="cursor-pointer rounded-xl bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   {syncHistory.isPending ? (
                     <Loader2 size={16} className="mr-2 animate-spin" aria-hidden="true" />
@@ -168,7 +168,7 @@ export function WhatsAppCoexistenceCard() {
                 <ol className="mt-3 space-y-2">
                   {STEPS.map((step, index) => (
                     <li key={step} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                         {index + 1}
                       </span>
                       {step}

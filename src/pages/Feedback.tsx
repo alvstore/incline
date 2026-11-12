@@ -160,7 +160,7 @@ export default function FeedbackPage() {
   const requestBadge = (s: string | null | undefined) => {
     const meta = REQUEST_STATUS_BADGE[(s as RequestStatus) || 'not_sent'];
     return <Badge className={meta.cls}>{meta.label}</Badge>;
-  };
+ };
 
   return (
     <AppLayout>
@@ -252,7 +252,7 @@ export default function FeedbackPage() {
         </div>
 
         {/* Feedback Table */}
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow-foreground/5">
           <CardHeader><CardTitle>All Feedback</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? (

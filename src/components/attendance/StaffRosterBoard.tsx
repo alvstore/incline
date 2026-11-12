@@ -51,10 +51,10 @@ const BLOCK_META: Record<string, { label: string; icon: typeof Sunrise }> = {
 };
 
 const STATE_STYLE: Record<string, string> = {
-  attended: 'bg-emerald-100 text-emerald-700',
-  missed: 'bg-red-100 text-red-700',
-  absent: 'bg-red-100 text-red-700',
-  leave: 'bg-blue-100 text-blue-700',
+  attended: 'bg-success/10 text-success',
+  missed: 'bg-destructive/10 text-destructive',
+  absent: 'bg-destructive/10 text-destructive',
+  leave: 'bg-info/10 text-info',
   pending: 'bg-muted text-muted-foreground',
 };
 
@@ -211,7 +211,7 @@ export function StaffRosterBoard({
               <CardContent className="p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{s.label}</p>
                 <p className={cn('text-2xl font-bold', s.tone)}>{s.value}</p>
-              </CardContent>
+ </CardContent>
             </Card>
           ))}
         </div>
@@ -318,7 +318,7 @@ export function StaffRosterBoard({
                         <div
                           key={key}
                           className={cn(
-                            'flex items-center gap-2 rounded-xl px-2.5 py-1.5',
+ 'flex items-center gap-2 rounded-xl px-2.5 py-1.5',
                             STATE_STYLE[b.state || 'pending'] || STATE_STYLE.pending,
                           )}
                         >

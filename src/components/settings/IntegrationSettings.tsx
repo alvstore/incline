@@ -217,13 +217,13 @@ export function IntegrationSettings() {
               onClick={() => setTab(t.tab)}
               aria-label={`${t.label} integrations: ${t.value} active`}
               className={cn(
-                'flex items-center gap-2 rounded-2xl border bg-card px-3 py-2.5 text-left shadow-sm transition-all duration-200',
+ 'flex items-center gap-2 rounded-2xl border bg-card px-3 py-2.5 text-left shadow-sm transition-all duration-200',
                 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/50',
                 active && 'border-primary/40 bg-primary/5',
               )}
             >
-              <span className={cn('rounded-full p-1.5', on ? 'bg-emerald-50 text-emerald-600' : 'bg-muted text-muted-foreground')}>
-                <Icon className="h-4 w-4" />
+              <span className={cn('rounded-full p-1.5', on ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground')}>
+ <Icon className="h-4 w-4" />
               </span>
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{t.label}</span>
               <span className="text-sm font-bold tabular-nums text-foreground">{t.value}</span>
@@ -275,7 +275,7 @@ export function IntegrationSettings() {
                   );
                   const webhook = getWebhookInfoForProvider('payment_gateway', provider.id, branchFilter);
                   return (
-                    <Card key={provider.id} className="relative rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+                    <Card key={provider.id} className="relative rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
@@ -385,7 +385,7 @@ export function IntegrationSettings() {
         </TabsContent>
 
         <TabsContent value="rcs" className="space-y-4">
-          <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
+          <Card className="rounded-2xl shadow-lg shadow-foreground/5 border-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Settings className="h-4 w-4" /> Provider credentials
@@ -401,11 +401,11 @@ export function IntegrationSettings() {
                   const isActive = !!config?.is_active && hasCreds;
                   const label = !hasCreds ? 'Not configured' : config?.is_active ? 'Connected' : 'Disabled';
                   return (
-                    <Card key={provider.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
+                    <Card key={provider.id} className="rounded-2xl shadow-md shadow-foreground/5 border-0 hover:shadow-xl hover:shadow-primary/10 transition-all">
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                            <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                               <Radio className="h-6 w-6" />
                             </div>
                             <div className="min-w-0">
@@ -413,13 +413,13 @@ export function IntegrationSettings() {
                               <p className="text-xs text-muted-foreground line-clamp-2">{provider.description}</p>
                             </div>
                           </div>
-                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : hasCreds ? 'bg-amber-100 text-amber-700' : 'bg-muted text-muted-foreground'}>
-                            {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                          <Badge className={isActive ? 'bg-success/10 text-success' : hasCreds ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground'}>
+ {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
                             {label}
                           </Badge>
                         </div>
                         {!hasCreds && config?.is_active && (
-                          <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          <p className="mt-3 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
                             Marked active but no credentials are saved — sending falls back to the other provider.
                           </p>
                         )}

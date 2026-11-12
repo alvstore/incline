@@ -20,16 +20,16 @@ interface TileProps {
 const Tile = ({ icon, label, value, hint, tone = "default", toneClass }: TileProps) => (
   <Card
     className={
-      tone === "hero"
-        ? "rounded-2xl border-none bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-xl"
-        : "rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+ tone === "hero"
+        ? "rounded-2xl border-none bg-gradient-to-br from-primary to-primary text-white shadow-lg shadow-primary/20 transition-all duration-200 hover:shadow-xl"
+        : "rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
     }
   >
     <CardContent className="p-4">
       <div className="flex items-start gap-3">
         <div
           className={
-            tone === "hero"
+ tone === "hero"
               ? "rounded-full bg-white/15 p-2.5 backdrop-blur-sm"
               : `rounded-full p-2.5 ${toneClass ?? "bg-primary/10 text-primary"}`
           }
@@ -118,7 +118,7 @@ const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
               ? "All terminals reachable"
               : `${total - online.length} offline`
         }
-        toneClass={online.length > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}
+        toneClass={online.length > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}
       />
       <Tile
         icon={<ScanFace className="h-5 w-5" />}
@@ -134,7 +134,7 @@ const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
             ? `Slowest gate is missing ${faceGap} photo(s)`
             : "Every gate matches the office list"
         }
-        toneClass={faceGap > 0 ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"}
+        toneClass={faceGap > 0 ? "bg-warning/10 text-warning" : "bg-primary/10 text-primary"}
       />
       <Tile
         icon={<Activity className="h-5 w-5" />}
@@ -147,7 +147,7 @@ const DeviceHealthStrip = ({ branchId }: DeviceHealthStripProps) => {
           )
         }
         hint={lastEvent?.result ? `Result: ${lastEvent.result}` : "Waiting for webhook traffic"}
-        toneClass="bg-violet-50 text-violet-600"
+        toneClass="bg-primary/10 text-primary"
       />
     </div>
   );

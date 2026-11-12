@@ -27,11 +27,11 @@ export default function EmployerSummaryCard({ branchId }: Props) {
   if (!p?.email) missing.push('Email');
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow-foreground/5">
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div>
           <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-indigo-600" /> Employer details
+            <Building2 className="h-4 w-4 text-primary" /> Employer details
           </CardTitle>
           <CardDescription>
             Used on contracts, payslips, GST invoices and policy headers. Pulled from your branch
@@ -54,7 +54,7 @@ export default function EmployerSummaryCard({ branchId }: Props) {
         <Row label="Email" value={p?.email} />
         <Row label="Address" value={p?.full_address} className="md:col-span-2" />
         {missing.length > 0 && (
-          <div className="md:col-span-2 mt-2 flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-amber-800 text-xs">
+          <div className="md:col-span-2 mt-2 flex items-start gap-2 rounded-xl bg-warning/10 border border-warning/30 p-3 text-warning text-xs">
             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div>
               <strong>Incomplete on branch:</strong> {missing.join(', ')}. Contracts and invoices
@@ -82,12 +82,12 @@ function Row({
 }) {
   return (
     <div className={className}>
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+ <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
         {label}
-        {hrm && <span className="text-[10px] font-normal text-indigo-500 normal-case">HR-only</span>}
+        {hrm && <span className="text-[10px] font-normal text-primary normal-case">HR-only</span>}
       </div>
-      <div className={`mt-0.5 ${mono ? 'font-mono' : ''} text-slate-900`}>
-        {value || <span className="text-slate-400 italic">—</span>}
+      <div className={`mt-0.5 ${mono ? 'font-mono' : ''} text-foreground`}>
+        {value || <span className="text-muted-foreground italic">—</span>}
       </div>
     </div>
   );

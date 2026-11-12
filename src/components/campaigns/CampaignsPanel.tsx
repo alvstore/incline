@@ -230,7 +230,7 @@ export function CampaignsPanel() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {c.approval_required && !c.approved_at && (
-                      <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 rounded-full text-[10px] uppercase">
+                      <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 rounded-full text-[10px] uppercase">
                         <ShieldAlert className="h-3 w-3 mr-1" /> Needs approval
                       </Badge>
                     )}

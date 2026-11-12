@@ -53,7 +53,7 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
 
   if (isError) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 dark:shadow-none">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 dark:shadow-none">
         <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
           <AlertCircle className="h-8 w-8 text-destructive" aria-hidden />
           <p className="text-sm font-medium">Could not load your PT billing</p>
@@ -65,7 +65,7 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
 
   if (!rows.length) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 dark:shadow-none">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 dark:shadow-none">
         <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
           <Receipt className="h-10 w-10 text-muted-foreground" aria-hidden />
           <p className="text-sm font-medium">No PT sales yet</p>
@@ -81,15 +81,15 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-primary-foreground shadow-lg">
+        <div className="rounded-2xl bg-gradient-to-r from-primary to-primary p-5 text-primary-foreground shadow-lg">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-80">
             <TrendingUp className="h-4 w-4" aria-hidden /> Sold by me
           </div>
           <p className="mt-2 text-2xl font-bold tabular-nums">{inr(totals.sold)}</p>
         </div>
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 dark:shadow-none">
           <CardContent className="flex items-center gap-3 p-5">
-            <span className="rounded-full bg-emerald-50 p-2 text-emerald-600" aria-hidden>
+            <span className="rounded-full bg-success/10 p-2 text-success" aria-hidden>
               <Wallet className="h-5 w-5" />
             </span>
             <div>
@@ -100,9 +100,9 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 dark:shadow-none">
           <CardContent className="flex items-center gap-3 p-5">
-            <span className="rounded-full bg-red-50 p-2 text-red-600" aria-hidden>
+            <span className="rounded-full bg-destructive/10 p-2 text-destructive" aria-hidden>
               <IndianRupee className="h-5 w-5" />
             </span>
             <div>
@@ -111,7 +111,7 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
               </p>
               <p className="text-2xl font-bold tabular-nums">{inr(totals.outstanding)}</p>
               {totals.overdue > 0 && (
-                <p className="text-xs font-medium text-red-600">{totals.overdue} overdue</p>
+                <p className="text-xs font-medium text-destructive">{totals.overdue} overdue</p>
               )}
             </div>
           </CardContent>
@@ -123,7 +123,7 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
           const meta = paymentStateMeta(row.payment_state);
           return (
             <li key={row.package_row_id}>
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 dark:shadow-none">
                 <CardContent className="flex flex-wrap items-center gap-4 p-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -152,7 +152,7 @@ export function TrainerBillingTab({ trainerId, enabled = true }: Props) {
                       {inr(row.price_paid)}
                     </p>
                     <p
-                      className={`text-xs tabular-nums ${row.balance_due > 0 ? 'text-red-600' : 'text-emerald-600'}`}
+                      className={`text-xs tabular-nums ${row.balance_due > 0 ? 'text-destructive' : 'text-success'}`}
                     >
                       {row.balance_due > 0 ? `${inr(row.balance_due)} due` : 'Fully paid'}
                     </p>

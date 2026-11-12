@@ -117,14 +117,14 @@ export function MealCatalogImportSheet({ open, onOpenChange, existingMeals, bran
         {rows.length > 0 && (
           <>
             <div className="flex flex-wrap gap-2">
-              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+              <Badge className="bg-success/10 text-success hover:bg-success/10">
                 <CheckCircle2 className="mr-1 h-3 w-3" /> {counts.created} new
               </Badge>
-              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+              <Badge className="bg-info/10 text-info hover:bg-info/10">
                 <RefreshCw className="mr-1 h-3 w-3" /> {counts.updated} updates
               </Badge>
               {counts.errors > 0 && (
-                <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
+                <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/10">
                   <AlertTriangle className="mr-1 h-3 w-3" /> {counts.errors} skipped
                 </Badge>
               )}
@@ -145,7 +145,7 @@ export function MealCatalogImportSheet({ open, onOpenChange, existingMeals, bran
                 <TableBody>
                   {rows.map(r => (
                     <TableRow key={r.rowNumber} className={r.status === 'error' ? 'bg-destructive/5' : undefined}>
-                      <TableCell className="text-xs text-muted-foreground">{r.rowNumber}</TableCell>
+ <TableCell className="text-xs text-muted-foreground">{r.rowNumber}</TableCell>
                       <TableCell className="font-medium">
                         {r.values.name || <span className="text-muted-foreground">(blank)</span>}
                         {r.errors.length > 0 && (
@@ -158,9 +158,9 @@ export function MealCatalogImportSheet({ open, onOpenChange, existingMeals, bran
                         {r.values.protein} / {r.values.carbs} / {r.values.fats}
                       </TableCell>
                       <TableCell>
-                        {r.status === 'new' && <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">New</Badge>}
-                        {r.status === 'update' && <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Update</Badge>}
-                        {r.status === 'error' && <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Skipped</Badge>}
+                        {r.status === 'new' && <Badge className="bg-success/10 text-success hover:bg-success/10">New</Badge>}
+                        {r.status === 'update' && <Badge className="bg-info/10 text-info hover:bg-info/10">Update</Badge>}
+                        {r.status === 'error' && <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/10">Skipped</Badge>}
                       </TableCell>
                     </TableRow>
                   ))}

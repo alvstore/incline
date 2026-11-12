@@ -43,9 +43,9 @@ export function PaymentNeededCard({ memberId }: { memberId?: string }) {
   const locked = [data.pt_locked && 'new PT bookings', data.store_locked && 'shop & add-on purchases'].filter(Boolean).join(' and ');
 
   return (
-    <section role="status" className="flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <section role="status" className="flex flex-col gap-3 rounded-xl border border-warning/20 bg-warning/10 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex gap-3">
-        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
         <div>
           <p className="font-semibold text-foreground">Payment needed</p>
           <p className="text-sm text-muted-foreground">

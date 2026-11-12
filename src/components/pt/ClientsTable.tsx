@@ -94,11 +94,11 @@ function ProgressRing({ pct }: { pct: number }) {
 function PaymentBadge({ pkg }: { pkg: PTMemberPackageRow }) {
   const due = pkg.due ?? 0;
   if (!pkg.invoice_id) return <Badge variant="outline" className="border-border bg-muted text-muted-foreground">No bill</Badge>;
-  if (due <= 0) return <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">Paid</Badge>;
+  if (due <= 0) return <Badge variant="outline" className="border-success/20 bg-success/10 text-success">Paid</Badge>;
   const partial = (pkg.invoice_paid ?? 0) > 0;
   return (
-    <Badge variant="outline" className={partial ? 'border-amber-500/20 bg-amber-500/10 text-amber-600' : 'border-destructive/20 bg-destructive/10 text-destructive'}>
-      {partial ? 'Part-paid' : 'Unpaid'} · {inr(due)} due
+    <Badge variant="outline" className={partial ? 'border-warning/20 bg-warning/10 text-warning' : 'border-destructive/20 bg-destructive/10 text-destructive'}>
+ {partial ? 'Part-paid' : 'Unpaid'} · {inr(due)} due
     </Badge>
   );
 }
@@ -186,7 +186,7 @@ export function ClientsTable(props: Props) {
     if (queued && (pkg.due ?? 0) <= 0 && !(pkg.trainer_active === false && canManage)) {
       const when = queued.start_date ? format(new Date(queued.start_date), 'dd MMM') : '';
       return (
-        <span className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 text-sm font-medium text-emerald-600"
+        <span className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-success/20 bg-success/10 px-3 text-sm font-medium text-success"
           aria-label={`Already renewed${when ? `, next package starts ${when}` : ''}`}>
           <CheckCircle2 className="h-4 w-4" aria-hidden />Renewed{when && ` · ${when}`}
         </span>
@@ -221,7 +221,7 @@ export function ClientsTable(props: Props) {
       <div className="text-sm">
         <p className="tabular-nums">{format(new Date(pkg.expiry_date), 'dd MMM yyyy')}</p>
         <p className={cn('text-xs', d < 0 ? 'text-destructive' : d <= 7 ? 'text-warning' : 'text-muted-foreground')}>
-          {d < 0 ? `${Math.abs(d)}d ago` : `${d}d left`}
+ {d < 0 ? `${Math.abs(d)}d ago` : `${d}d left`}
         </p>
       </div>
     );
@@ -232,7 +232,7 @@ export function ClientsTable(props: Props) {
       <Avatar className="h-8 w-8">
         {pkg.member_avatar_url && <AvatarImage src={pkg.member_avatar_url} alt={pkg.member_name || 'Member'} />}
         <AvatarFallback className={cn('text-xs font-semibold', avatarColor(pkg.member_name))}>{initialsOf(pkg.member_name)}</AvatarFallback>
-      </Avatar>
+ </Avatar>
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-foreground">{pkg.member_name || 'Member'}</p>
         <p className="text-xs text-muted-foreground">{pkg.member_code}</p>
@@ -240,19 +240,19 @@ export function ClientsTable(props: Props) {
     </div>
   );
 
-  const shell = 'overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50';
+  const shell = 'overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5';
 
   if (loading) {
     return (
       <Card className={cn(shell, 'p-5')}>
-        <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>
+ <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>
       </Card>
     );
   }
   if (isError) {
     return (
       <Card className={shell}>
-        <CardContent className="flex flex-col items-center py-14 text-center">
+ <CardContent className="flex flex-col items-center py-14 text-center">
           <AlertTriangle className="mb-3 h-6 w-6 text-destructive" aria-hidden />
           <p className="font-semibold">Could not load PT clients</p>
           {onRetry && <Button variant="outline" className="mt-4 min-h-11" onClick={onRetry}>Retry</Button>}
@@ -265,7 +265,7 @@ export function ClientsTable(props: Props) {
 
   return (
     <Card className={shell}>
-      <div className="space-y-3 p-4">
+ <div className="space-y-3 p-4">
         <div role="tablist" aria-label="Filter clients" className="flex flex-wrap gap-2">
           {FILTERS.map((f) => {
             const active = filter === f.key;
@@ -274,14 +274,14 @@ export function ClientsTable(props: Props) {
               <button key={f.key} role="tab" aria-selected={active} type="button" aria-label={`${f.label}: ${counts[f.key]}`}
                 onClick={() => { setFilter(f.key); setPage(0); }}
                 className={cn(
-                  'inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+ 'inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   active ? 'border-primary bg-primary text-primary-foreground'
                     : alert ? 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/20'
                       : 'border-border bg-card text-foreground hover:bg-secondary',
                 )}>
                 {f.label}
                 <span className={cn('rounded-full px-1.5 text-xs tabular-nums', active ? 'bg-primary-foreground/20' : 'bg-muted')}>{counts[f.key]}</span>
-              </button>
+ </button>
             );
           })}
         </div>
@@ -380,7 +380,7 @@ function SortButton({ label, active, onClick }: { label: string; active: boolean
   return (
     <button aria-pressed={active} type="button" onClick={onClick}
       className={cn('inline-flex min-h-11 items-center gap-1 text-xs font-semibold uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded', active ? 'text-foreground' : 'text-muted-foreground')}>
-      {label}<ArrowUpDown className="h-3 w-3" aria-hidden />
+ {label}<ArrowUpDown className="h-3 w-3" aria-hidden />
     </button>
   );
 }

@@ -42,7 +42,7 @@ export function PtTopUpPanel({ options, trainerName, trainerAvatar, remaining, h
     : 'No active coaching package';
 
   return (
-    <section className="rounded-2xl bg-card p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7">
+    <section className="rounded-2xl bg-card p-6 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Personal training</p>
       <h2 className="mt-2 text-xl font-bold text-foreground">{hasPackage ? 'Top up your sessions' : 'Start personal training'}</h2>
 

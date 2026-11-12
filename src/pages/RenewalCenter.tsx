@@ -85,16 +85,16 @@ const outcomes: Array<[string, string]> = [
 const STAGE_LOOK: Record<string, { label: string; className: string }> = {
   eligible: { label: 'Not contacted', className: 'bg-muted text-muted-foreground' },
   reminding: { label: 'Reminders sent', className: 'bg-primary/10 text-primary' },
-  voice_escalation: { label: 'AI call queued', className: 'bg-violet-100 text-violet-700' },
-  staff_followup: { label: 'Staff follow-up', className: 'bg-amber-100 text-amber-700' },
-  callback: { label: 'Callback booked', className: 'bg-blue-100 text-blue-700' },
-  lapsed: { label: 'Lapsed', className: 'bg-red-100 text-red-700' },
-  win_back: { label: 'Win-back', className: 'bg-emerald-100 text-emerald-700' },
-  renewed: { label: 'Renewed', className: 'bg-emerald-100 text-emerald-700' },
+  voice_escalation: { label: 'AI call queued', className: 'bg-primary/10 text-primary' },
+  staff_followup: { label: 'Staff follow-up', className: 'bg-warning/10 text-warning' },
+  callback: { label: 'Callback booked', className: 'bg-info/10 text-info' },
+  lapsed: { label: 'Lapsed', className: 'bg-destructive/10 text-destructive' },
+  win_back: { label: 'Win-back', className: 'bg-success/10 text-success' },
+  renewed: { label: 'Renewed', className: 'bg-success/10 text-success' },
   not_interested: { label: 'Not interested', className: 'bg-muted text-muted-foreground' },
-  frozen: { label: 'Frozen', className: 'bg-blue-100 text-blue-700' },
+  frozen: { label: 'Frozen', className: 'bg-info/10 text-info' },
   cancelled: { label: 'Cancelled', className: 'bg-muted text-muted-foreground' },
-  churned: { label: 'Churned', className: 'bg-red-100 text-red-700' },
+  churned: { label: 'Churned', className: 'bg-destructive/10 text-destructive' },
   suppressed: { label: 'Paused', className: 'bg-muted text-muted-foreground' },
 };
 
@@ -112,23 +112,23 @@ function dateTime(value: string | null | undefined) {
 
 /** "2 days ago" style wording for the last gym visit — the strongest renewal signal. */
 function sinceVisit(value: string | null | undefined) {
-  if (!value) return { text: 'Never checked in', tone: 'text-red-600' };
+  if (!value) return { text: 'Never checked in', tone: 'text-destructive' };
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return { text: 'Never checked in', tone: 'text-red-600' };
+  if (Number.isNaN(d.getTime())) return { text: 'Never checked in', tone: 'text-destructive' };
   const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days <= 0) return { text: 'Visited today', tone: 'text-emerald-600' };
-  if (days === 1) return { text: 'Visited yesterday', tone: 'text-emerald-600' };
-  if (days <= 7) return { text: `Visited ${days} days ago`, tone: 'text-emerald-600' };
-  if (days <= 21) return { text: `Away ${days} days`, tone: 'text-amber-600' };
-  return { text: `Away ${days} days`, tone: 'text-red-600' };
+  if (days <= 0) return { text: 'Visited today', tone: 'text-success' };
+  if (days === 1) return { text: 'Visited yesterday', tone: 'text-success' };
+  if (days <= 7) return { text: `Visited ${days} days ago`, tone: 'text-success' };
+  if (days <= 21) return { text: `Away ${days} days`, tone: 'text-warning' };
+  return { text: `Away ${days} days`, tone: 'text-destructive' };
 }
 
 /** Expiry urgency drives the colour of the card's headline pill. */
 function expiryLook(days: number) {
-  if (days < 0) return { label: `${Math.abs(days)} days lapsed`, className: 'bg-red-100 text-red-700' };
-  if (days === 0) return { label: 'Expires today', className: 'bg-red-100 text-red-700' };
-  if (days <= 7) return { label: `${days} days left`, className: 'bg-amber-100 text-amber-700' };
-  return { label: `${days} days left`, className: 'bg-emerald-100 text-emerald-700' };
+  if (days < 0) return { label: `${Math.abs(days)} days lapsed`, className: 'bg-destructive/10 text-destructive' };
+  if (days === 0) return { label: 'Expires today', className: 'bg-destructive/10 text-destructive' };
+  if (days <= 7) return { label: `${days} days left`, className: 'bg-warning/10 text-warning' };
+  return { label: `${days} days left`, className: 'bg-success/10 text-success' };
 }
 
 export default function RenewalCenter() {
@@ -187,11 +187,11 @@ export default function RenewalCenter() {
   const lapsed = Number(tabCounts.lapsed ?? 0);
 
   const statCards: Array<{ label: string; value: string | number; icon: LucideIcon; tint: string }> = [
-    { label: 'Open cases', value: Number(stats.open ?? 0), icon: Users, tint: 'bg-indigo-50 text-indigo-600' },
-    { label: 'Contacted', value: Number(stats.contacted ?? 0), icon: Headphones, tint: 'bg-blue-50 text-blue-600' },
-    { label: 'Renewed', value: Number(stats.renewed ?? 0), icon: CheckCircle2, tint: 'bg-emerald-50 text-emerald-600' },
-    { label: 'AI call queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-violet-50 text-violet-600' },
-    { label: 'Conversion', value: `${conversion}%`, icon: UserCheck, tint: 'bg-amber-50 text-amber-600' },
+    { label: 'Open cases', value: Number(stats.open ?? 0), icon: Users, tint: 'bg-primary/10 text-primary' },
+    { label: 'Contacted', value: Number(stats.contacted ?? 0), icon: Headphones, tint: 'bg-info/10 text-info' },
+    { label: 'Renewed', value: Number(stats.renewed ?? 0), icon: CheckCircle2, tint: 'bg-success/10 text-success' },
+    { label: 'AI call queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-primary/10 text-primary' },
+    { label: 'Conversion', value: `${conversion}%`, icon: UserCheck, tint: 'bg-warning/10 text-warning' },
   ];
 
   async function run(input: Parameters<typeof action.mutateAsync>[0], message: string) {
@@ -228,15 +228,15 @@ export default function RenewalCenter() {
     <AppLayout>
       <div className="space-y-6">
         {/* Hero — what needs attention right now, in one glance. */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white shadow-lg shadow-indigo-500/20">
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary p-6 text-white shadow-lg shadow-primary/20">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-100">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground">
                 <ShieldCheck className="h-4 w-4" />Retention operations
               </p>
               <h1 className="mt-2 text-3xl font-bold tracking-tight">Renewal Center</h1>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-indigo-100">
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-primary-foreground">
                 {urgentToday > 0
                   ? `${urgentToday} membership${urgentToday === 1 ? '' : 's'} expire today. Start there.`
                   : lapsed > 0
@@ -251,7 +251,7 @@ export default function RenewalCenter() {
                   <Flame className="h-3.5 w-3.5" />Lapsed: {lapsed}
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium backdrop-blur">
-                  <span className={`h-2 w-2 rounded-full ${voiceLive ? 'bg-emerald-300' : 'bg-white/60'}`} />
+                  <span className={`h-2 w-2 rounded-full ${voiceLive ? 'bg-success/20' : 'bg-white/60'}`} />
                   {voiceLive ? `Voice AI live · ${callingWindow}` : 'Voice AI not configured'}
                 </span>
               </div>
@@ -275,11 +275,11 @@ export default function RenewalCenter() {
 
         <div
           className={`flex flex-col gap-4 rounded-2xl p-4 text-sm shadow-lg lg:flex-row lg:items-center lg:justify-between ${
-            engineOff ? 'bg-amber-50 shadow-amber-200/40' : 'bg-emerald-50 shadow-emerald-200/40'
+            engineOff ? 'bg-warning/10 shadow-warning/40' : 'bg-success/10 shadow-success/40'
           }`}
         >
           <div className="flex gap-3">
-            <ShieldCheck className={`mt-0.5 h-5 w-5 shrink-0 ${engineOff ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <ShieldCheck className={`mt-0.5 h-5 w-5 shrink-0 ${engineOff ? 'text-warning' : 'text-success'}`} />
             <div>
               <p className="font-semibold text-foreground">
                 {engineOff ? 'Staff-led mode' : 'Automatic renewal follow-up is on'}
@@ -325,7 +325,7 @@ export default function RenewalCenter() {
           {statCards.map((card) => (
             <Card
               key={card.label}
-              className="rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+              className="rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
             >
               <CardContent className="flex items-center gap-3 p-4">
                 <div className={`rounded-full p-2 ${card.tint}`}><card.icon className="h-5 w-5" /></div>
@@ -365,7 +365,7 @@ export default function RenewalCenter() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Member name or code"
-              className="rounded-xl pl-9 focus:ring-2 focus:ring-indigo-500"
+              className="rounded-xl pl-9 focus:ring-2 focus:ring-primary"
             />
           </div>
         </div>
@@ -375,7 +375,7 @@ export default function RenewalCenter() {
         ) : cases.isError ? (
           <Card className="rounded-2xl border-0 shadow-lg shadow-muted/30">
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <div className="rounded-full bg-red-50 p-3 text-red-600"><XCircle className="h-6 w-6" /></div>
+              <div className="rounded-full bg-destructive/10 p-3 text-destructive"><XCircle className="h-6 w-6" /></div>
               <p className="font-semibold text-foreground">Could not load renewal cases</p>
               <p className="max-w-sm text-sm text-muted-foreground">Check your connection, then try again.</p>
               <Button variant="outline" className="cursor-pointer rounded-xl" onClick={() => cases.refetch()}>Try again</Button>
@@ -384,7 +384,7 @@ export default function RenewalCenter() {
         ) : rows.length === 0 ? (
           <Card className="rounded-2xl border-0 shadow-lg shadow-muted/30">
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-              <div className="rounded-full bg-emerald-50 p-3 text-emerald-600"><CheckCircle2 className="h-6 w-6" /></div>
+              <div className="rounded-full bg-success/10 p-3 text-success"><CheckCircle2 className="h-6 w-6" /></div>
               <p className="font-semibold text-foreground">This queue is clear</p>
               <p className="max-w-sm text-sm text-muted-foreground">No renewal cases match these filters right now.</p>
               {queue !== 'all' && (
@@ -401,11 +401,11 @@ export default function RenewalCenter() {
               return (
                 <Card
                   key={row.case_id}
-                  className="rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+                  className="rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
                 >
                   <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] lg:items-center">
                     <div className="flex min-w-0 gap-3">
-                      <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 sm:flex">
+                      <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex">
                         <UserRound className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
@@ -425,7 +425,7 @@ export default function RenewalCenter() {
                       <p className="text-xs text-muted-foreground">
                         {row.claimed_name ? `Owned by ${row.claimed_name}` : 'Unassigned'} · {row.attempts_count} contact{row.attempts_count === 1 ? '' : 's'}
                       </p>
-                      <p className={`text-xs font-medium ${row.voice_attempts_count >= VOICE_CALL_LIMIT ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                      <p className={`text-xs font-medium ${row.voice_attempts_count >= VOICE_CALL_LIMIT ? 'text-warning' : 'text-muted-foreground'}`}>
                         {row.voice_attempts_count >= VOICE_CALL_LIMIT
                           ? 'AI call budget used — follow up in person'
                           : `AI calls used: ${row.voice_attempts_count} of ${VOICE_CALL_LIMIT}`}
@@ -435,7 +435,7 @@ export default function RenewalCenter() {
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
-                        className="cursor-pointer gap-2 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        className="cursor-pointer gap-2 rounded-xl focus:ring-2 focus:ring-primary"
                         disabled={!voiceLive || voiceCall.isPending || !!renewalVoiceBlockReason(row)}
                         title={
                           renewalVoiceBlockReason(row) ?? (voiceLive ? 'Place a Voice AI renewal call now' : 'Voice AI is not configured yet')
@@ -450,7 +450,7 @@ export default function RenewalCenter() {
                         </Link>
                       </Button>
                       <Button
-                        className="cursor-pointer rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        className="cursor-pointer rounded-xl focus:ring-2 focus:ring-primary"
                         onClick={() => setSelected(row)}
                       >
                         Manage
@@ -544,7 +544,7 @@ export default function RenewalCenter() {
             <section className="space-y-3 rounded-xl bg-card p-4 shadow-lg shadow-muted/30">
               <div className="flex items-center justify-between gap-2">
                 <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="rounded-full bg-indigo-50 p-1.5 text-indigo-600"><PhoneCall className="h-4 w-4" /></span>
+                  <span className="rounded-full bg-primary/10 p-1.5 text-primary"><PhoneCall className="h-4 w-4" /></span>
                   Voice AI calls · {selected?.voice_attempts_count ?? 0} of {VOICE_CALL_LIMIT} used
                 </p>
                 <Button
@@ -559,21 +559,21 @@ export default function RenewalCenter() {
                 </Button>
               </div>
               {(selected?.voice_attempts_count ?? 0) >= VOICE_CALL_LIMIT && (
-                <p className="flex items-start gap-2 text-xs text-amber-700">
+                <p className="flex items-start gap-2 text-xs text-warning">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   Automatic calling has stopped for this member after 3 attempts to save calling cost. Reach out in person or record an outcome below.
                 </p>
               )}
               {!voiceLive && (
                 <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
                   Voice calling is not active yet. Finish the Sarvam setup in the Voice AI console to enable it.
                 </p>
               )}
               {caseCalls.isLoading ? (
                 <Skeleton className="h-14 rounded-xl" />
               ) : caseCalls.isError ? (
-                <p className="text-xs text-red-600">Could not load the call history for this member.</p>
+                <p className="text-xs text-destructive">Could not load the call history for this member.</p>
               ) : (caseCalls.data ?? []).length === 0 ? (
                 <p className="text-xs text-muted-foreground">No Voice AI call has been placed for this renewal yet.</p>
               ) : (
@@ -591,7 +591,7 @@ export default function RenewalCenter() {
                         {call.call_summary && <p className="mt-2 text-muted-foreground">{call.call_summary}</p>}
                         {call.next_step_agreed && <p className="mt-1 text-muted-foreground">Next step: {call.next_step_agreed}</p>}
                         {call.callback_datetime && <p className="mt-1 text-muted-foreground">Callback asked for: {call.callback_datetime}</p>}
-                        {call.error_message && <p className="mt-1 text-red-600">Call did not connect: {call.error_message}</p>}
+                        {call.error_message && <p className="mt-1 text-destructive">Call did not connect: {call.error_message}</p>}
                       </li>
                     );
                   })}

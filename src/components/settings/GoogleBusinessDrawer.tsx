@@ -61,9 +61,9 @@ type Row = {
 
 function Chip({ ok, label, warn }: { ok: boolean; label: string; warn?: boolean }) {
   const cls = ok
-    ? 'bg-emerald-100 text-emerald-700'
+    ? 'bg-success/10 text-success'
     : warn
-      ? 'bg-amber-100 text-amber-700'
+      ? 'bg-warning/10 text-warning'
       : 'bg-muted text-muted-foreground';
   const Icon = ok ? CheckCircle2 : warn ? AlertTriangle : XCircle;
   return (
@@ -319,8 +319,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                   <Chip ok={hasOAuth} label={hasOAuth ? 'OAuth connected' : 'OAuth pending'} />
                   <Chip ok={hasLocation} label={hasLocation ? 'Location mapped' : 'Location not mapped'} />
                   {cfg.place_rating != null && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
+                      <Star className="h-3.5 w-3.5 fill-warning text-warning" aria-hidden />
                       {Number(cfg.place_rating).toFixed(1)} · {cfg.place_rating_count ?? 0} ratings
                     </span>
                   )}
@@ -335,9 +335,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                 </div>
 
                 {/* Step 1 — Places */}
-                <section className="space-y-4 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
+                <section className="space-y-4 rounded-2xl bg-card p-4 shadow-lg shadow-foreground/5">
                   <div className="flex items-start gap-2">
-                    <span className="mt-0.5 rounded-full bg-indigo-50 p-2 text-indigo-600"><MapPin className="h-4 w-4" aria-hidden /></span>
+                    <span className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary"><MapPin className="h-4 w-4" aria-hidden /></span>
                     <div>
                       <h3 className="text-sm font-bold text-foreground">Step 1 · Quick connect (recommended)</h3>
                       <p className="text-xs leading-relaxed text-muted-foreground">
@@ -391,8 +391,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                               <div className="flex items-center justify-between gap-2">
                                 <span className="truncate text-sm font-semibold text-foreground">{p.name}</span>
                                 {p.rating != null && (
-                                  <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600">
-                                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                                  <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-warning">
+                                    <Star className="h-3.5 w-3.5 fill-warning text-warning" aria-hidden />
                                     {p.rating} ({p.total_ratings ?? 0})
                                   </span>
                                 )}
@@ -429,9 +429,9 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                 </section>
 
                 {/* Step 2 — Business Profile */}
-                <section className="space-y-4 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
+                <section className="space-y-4 rounded-2xl bg-card p-4 shadow-lg shadow-foreground/5">
                   <div className="flex items-start gap-2">
-                    <span className="mt-0.5 rounded-full bg-emerald-50 p-2 text-emerald-600"><ShieldCheck className="h-4 w-4" aria-hidden /></span>
+                    <span className="mt-0.5 rounded-full bg-success/10 p-2 text-success"><ShieldCheck className="h-4 w-4" aria-hidden /></span>
                     <div>
                       <h3 className="text-sm font-bold text-foreground">Step 2 · Full access (optional)</h3>
                       <p className="text-xs leading-relaxed text-muted-foreground">
@@ -457,7 +457,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     />
                   </div>
 
-                  <div className="space-y-1.5 rounded-xl bg-indigo-50/60 p-3">
+                  <div className="space-y-1.5 rounded-xl bg-primary/60 p-3">
                     <p className="text-xs font-semibold text-foreground">Authorized redirect URI</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 break-all rounded bg-card px-2 py-1.5 font-mono text-[11px] text-muted-foreground">{callbackUrl}</code>
@@ -480,7 +480,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     <div className="space-y-3 rounded-xl bg-muted p-3">
                       {hasLocation ? (
                         <div className="flex items-start gap-2">
-                          <span className="mt-0.5 rounded-full bg-emerald-50 p-2 text-emerald-600">
+                          <span className="mt-0.5 rounded-full bg-success/10 p-2 text-success">
                             <CheckCircle2 className="h-4 w-4" aria-hidden />
                           </span>
                           <div className="min-w-0">
@@ -544,15 +544,15 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                   )}
 
                   {activationUrl && (
-                    <div className="space-y-2 rounded-xl bg-amber-50 p-3">
-                      <p className="text-xs font-semibold text-amber-800">One step left in Google Cloud</p>
-                      <p className="text-xs leading-relaxed text-amber-700">
+                    <div className="space-y-2 rounded-xl bg-warning/10 p-3">
+                      <p className="text-xs font-semibold text-warning">One step left in Google Cloud</p>
+                      <p className="text-xs leading-relaxed text-warning">
                         Google approved your access, but the Business Profile API is still switched off on your Cloud
                         project. Turn it on, wait a minute, then run the checks again.
                       </p>
                       <Button
                         asChild size="sm" variant="outline"
-                        className="h-11 cursor-pointer rounded-xl border-amber-300 bg-card"
+                        className="h-11 cursor-pointer rounded-xl border-warning/30 bg-card"
                       >
                         <a href={activationUrl} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -566,7 +566,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                 </section>
 
                 {/* Diagnostics */}
-                <section className="space-y-3 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50">
+                <section className="space-y-3 rounded-2xl bg-card p-4 shadow-lg shadow-foreground/5">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-foreground">Diagnostics</h3>
                     <Button type="button" size="sm" variant="outline" className="cursor-pointer rounded-xl" onClick={runDiagnose} disabled={diagRunning}>
@@ -583,8 +583,8 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                           {list.map((c) => (
                             <div key={c.key} className="flex items-start gap-2 rounded-xl px-2 py-1.5 hover:bg-muted">
                               {c.ok
-                                ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                                : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />}
+                                ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                                : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />}
                               <div className="min-w-0">
                                 <p className="text-sm text-foreground">{c.label}</p>
                                 {(!c.ok || c.key === 'location') && c.hint && (
@@ -595,7 +595,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                     href={c.action_url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-lg text-xs font-semibold text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-lg text-xs font-semibold text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary"
                                   >
                                     <ExternalLink className="h-3 w-3" aria-hidden />
                                     {c.action_label ?? 'Fix in Google Cloud'}

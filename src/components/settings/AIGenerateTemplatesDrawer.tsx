@@ -306,7 +306,7 @@ export function AIGenerateTemplatesDrawer({
       <SheetContent className="sm:max-w-2xl p-0 flex flex-col h-full gap-0">
         <SheetHeader className="px-6 py-5 border-b border-border shrink-0 space-y-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary">
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="text-left">
@@ -338,14 +338,14 @@ export function AIGenerateTemplatesDrawer({
               )}
 
               {brokenTemplates.length > 0 && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 space-y-2">
+                <div className="rounded-2xl border border-warning/30 bg-warning/60 px-4 py-3 space-y-2">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm font-bold text-amber-900">
+                    <AlertCircle className="h-4 w-4 text-warning" />
+                    <span className="text-sm font-bold text-warning">
                       Missing in Meta — needs recreating
                     </span>
                   </div>
-                  <p className="text-xs text-amber-800">
+                  <p className="text-xs text-warning">
                     These events have a CRM template, but Meta dropped the approved template. Select
                     the event below to generate fresh copy, or re-submit the existing template from the
                     Templates list (filter “Missing / Stale”).
@@ -354,10 +354,10 @@ export function AIGenerateTemplatesDrawer({
                     {brokenTemplates.map((b) => (
                       <li
                         key={`${b.metaName}-${b.event}`}
-                        className="text-xs text-amber-900 bg-white/70 rounded-lg px-2.5 py-1.5"
+                        className="text-xs text-warning bg-white/70 rounded-lg px-2.5 py-1.5"
                       >
                         <span className="font-semibold">{b.templateName}</span>
-                        <span className="text-amber-700"> · {b.metaName} · {b.event}</span>
+                        <span className="text-warning"> · {b.metaName} · {b.event}</span>
                       </li>
                     ))}
                   </ul>
@@ -374,7 +374,7 @@ export function AIGenerateTemplatesDrawer({
                     variant="ghost"
                     size="sm"
                     onClick={pickAll}
-                    className="text-indigo-600 hover:text-indigo-700"
+                    className="text-primary hover:text-primary"
                   >
                     Select all
                   </Button>
@@ -394,7 +394,7 @@ export function AIGenerateTemplatesDrawer({
                 </div>
               ) : uncovered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="p-3 rounded-full bg-emerald-50 text-emerald-600 mb-3">
+                  <div className="p-3 rounded-full bg-success/10 text-success mb-3">
                     <ShieldCheck className="h-6 w-6" />
                   </div>
                   <p className="font-semibold text-foreground">Every system event is covered</p>
@@ -442,30 +442,30 @@ export function AIGenerateTemplatesDrawer({
                   key={`${p.name}-${i}`}
                   className={`p-4 rounded-2xl border space-y-3 transition-colors ${
                     p.state === 'failed'
-                      ? 'border-red-200 bg-red-50/50'
+                      ? 'border-destructive/30 bg-destructive/50'
                       : p.state === 'done'
-                      ? 'border-emerald-200 bg-emerald-50/40'
+                      ? 'border-success/30 bg-success/40'
                       : 'border-border bg-muted/50'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <Badge className="bg-indigo-600 truncate max-w-[200px]">{p.name}</Badge>
+                    <Badge className="bg-primary truncate max-w-[200px]">{p.name}</Badge>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="bg-card capitalize text-[10px]">
                         {p.category}
                       </Badge>
                       {p.state === 'submitting' && (
-                        <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       )}
-                      {p.state === 'done' && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
-                      {p.state === 'failed' && <AlertCircle className="h-4 w-4 text-red-600" />}
+                      {p.state === 'done' && <CheckCircle2 className="h-4 w-4 text-success" />}
+                      {p.state === 'failed' && <AlertCircle className="h-4 w-4 text-destructive" />}
                       {p.state === 'pending' && !submitting && (
                         <Button
                           variant="ghost"
                           size="icon"
                           aria-label={`Remove ${p.name}`}
                           onClick={() => removeProposal(i)}
-                          className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -496,7 +496,7 @@ export function AIGenerateTemplatesDrawer({
                   )}
                   {p.footer && <div className="text-[10px] text-muted-foreground px-1">Footer: {p.footer}</div>}
                   {p.error && (
-                    <p className="text-xs text-red-600 leading-relaxed px-1">{p.error}</p>
+                    <p className="text-xs text-destructive leading-relaxed px-1">{p.error}</p>
                   )}
                 </div>
               ))}
@@ -535,7 +535,7 @@ export function AIGenerateTemplatesDrawer({
                 <Button
                   onClick={generate}
                   disabled={generating || picked.size === 0}
-                  className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-6 shadow-lg shadow-indigo-200"
+                  className="rounded-xl bg-primary hover:bg-primary text-white font-bold h-11 px-6 shadow-lg shadow-primary/20"
                 >
                   {generating ? (
                     <>
@@ -571,7 +571,7 @@ export function AIGenerateTemplatesDrawer({
                 <Button
                   onClick={submitAll}
                   disabled={submitting || pendingCount === 0}
-                  className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-6 shadow-lg shadow-indigo-200"
+                  className="rounded-xl bg-primary hover:bg-primary text-white font-bold h-11 px-6 shadow-lg shadow-primary/20"
                 >
                   {submitting ? (
                     <>

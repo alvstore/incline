@@ -100,7 +100,7 @@ export default function FirebasePushCard() {
             {test.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <FlaskConical className="mr-2 h-4 w-4" aria-hidden />}Test connection
           </Button>
           <span className="flex items-center gap-1.5 text-sm" aria-live="polite">
-            {s?.last_test_ok === true && <><CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />Test passed · {fmt(s.last_test_at)}</>}
+            {s?.last_test_ok === true && <><CheckCircle2 className="h-4 w-4 text-success" aria-hidden />Test passed · {fmt(s.last_test_at)}</>}
             {s?.last_test_ok === false && <><XCircle className="h-4 w-4 text-destructive" aria-hidden />Test failed: {s.last_test_error}</>}
             {s?.last_test_ok == null && configured && <span className="text-muted-foreground">Not tested yet</span>}
           </span>

@@ -84,15 +84,15 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
   ];
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><Globe className="h-4 w-4" aria-hidden /></span>
+              <span className="rounded-full bg-primary/10 p-2 text-primary"><Globe className="h-4 w-4" aria-hidden /></span>
               Google Business Profile
-              <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}>
-                {isActive ? 'Active' : 'Inactive'}
+              <Badge className={isActive ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}>
+ {isActive ? 'Active' : 'Inactive'}
               </Badge>
             </CardTitle>
             <CardDescription className="mt-1">
@@ -126,14 +126,14 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
 
       <CardContent className="space-y-4">
         {!branchId && (
-          <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
             Select a single branch above — the Google listing is linked per branch.
           </div>
         )}
 
         {/* Listing summary */}
         <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-muted px-4 py-3">
-          <span className="rounded-full bg-card p-2 text-indigo-600 shadow-sm"><MapPin className="h-4 w-4" aria-hidden /></span>
+          <span className="rounded-full bg-card p-2 text-primary shadow-sm"><MapPin className="h-4 w-4" aria-hidden /></span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-foreground">
               {cfg.place_name || (linked ? 'Listing linked' : 'No Google listing linked yet')}
@@ -141,10 +141,10 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
             <p className="text-xs text-muted-foreground">Last synced {fmtWhen(cfg.last_places_sync)}</p>
           </div>
           {cfg.place_rating != null && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-3 py-1 text-sm font-bold text-warning">
+              <Star className="h-4 w-4 fill-warning text-warning" aria-hidden />
               {Number(cfg.place_rating).toFixed(1)}
-              <span className="text-xs font-medium text-amber-600">({cfg.place_rating_count ?? 0})</span>
+              <span className="text-xs font-medium text-warning">({cfg.place_rating_count ?? 0})</span>
             </span>
           )}
           {cfg.place_uri && (
@@ -162,8 +162,8 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
             <li key={s.label} className="rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
               <div className="flex items-center gap-2">
                 {s.ok
-                  ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />}
+                  ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
+                  : <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden />}
                 <p className="text-sm font-semibold text-foreground">{i + 1}. {s.label}</p>
               </div>
               {!s.ok && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.hint}</p>}
@@ -178,8 +178,8 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
             {checks.map((c) => (
               <div key={c.key} className="flex items-start gap-2">
                 {c.ok
-                  ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden />}
+                  ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                  : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />}
                 <div className="min-w-0">
                   <p className="text-sm text-foreground">{c.label}</p>
                   {!c.ok && c.hint && <p className="text-xs leading-relaxed text-muted-foreground">{c.hint}</p>}

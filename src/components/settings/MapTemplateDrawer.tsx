@@ -133,7 +133,7 @@ export function MapTemplateDrawer({
       <SheetContent className="sm:max-w-xl p-0 flex flex-col">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
           <SheetTitle className="flex items-center gap-2 text-foreground">
-            <span className="bg-indigo-50 text-indigo-600 p-2 rounded-full">
+            <span className="bg-primary/10 text-primary p-2 rounded-full">
               <Link2 className="h-4 w-4" />
             </span>
             Map template
@@ -157,7 +157,7 @@ export function MapTemplateDrawer({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Name or message text"
-              className="pl-9 rounded-xl focus:ring-2 focus:ring-indigo-500"
+              className="pl-9 rounded-xl focus:ring-2 focus:ring-primary"
             />
           </div>
         </div>
@@ -172,7 +172,7 @@ export function MapTemplateDrawer({
               </>
             )}
             {isError && (
-              <p className="text-sm text-red-600">Could not load templates. Please try again.</p>
+              <p className="text-sm text-destructive">Could not load templates. Please try again.</p>
             )}
             {!isLoading && !isError && eligible.length === 0 && (
               <div className="text-center py-12">
@@ -202,7 +202,7 @@ export function MapTemplateDrawer({
                         {t.content || 'No preview available'}
                       </p>
                     </div>
-                    {active && <CheckCircle2 className="h-5 w-5 text-indigo-600 shrink-0" />}
+                    {active && <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-3">
                     {t.trigger_event && (
@@ -211,12 +211,12 @@ export function MapTemplateDrawer({
                       </Badge>
                     )}
                     {currentTemplateId === t.id && (
-                      <Badge className="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
+                      <Badge className="bg-success/10 text-success rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
                         Currently mapped
                       </Badge>
                     )}
                     {t.is_active === false && (
-                      <Badge className="bg-amber-100 text-amber-700 rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
+                      <Badge className="bg-warning/10 text-warning rounded-full px-2.5 py-0.5 text-[10px] font-medium border-0">
                         Inactive — will be switched on
                       </Badge>
                     )}
@@ -232,7 +232,7 @@ export function MapTemplateDrawer({
             Cancel
           </Button>
           <Button
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+            className="rounded-xl bg-primary hover:bg-primary text-white gap-2"
             disabled={!selected || save.isPending}
             onClick={() => save.mutate()}
           >

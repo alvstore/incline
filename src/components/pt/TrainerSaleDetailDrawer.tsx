@@ -28,7 +28,7 @@ export function TrainerSaleDetailDrawer({ row, open, onOpenChange }: Props) {
 
         {row && (
           <div className="mt-6 space-y-5">
-            <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-primary-foreground shadow-lg">
+            <div className="rounded-2xl bg-gradient-to-r from-primary to-primary p-5 text-primary-foreground shadow-lg">
               <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
                 Balance due
               </p>
@@ -38,7 +38,7 @@ export function TrainerSaleDetailDrawer({ row, open, onOpenChange }: Props) {
               </p>
             </div>
 
-            <div className="rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 dark:shadow-none">
+            <div className="rounded-2xl bg-card p-4 shadow-lg shadow-foreground/5 dark:shadow-none">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -99,7 +99,7 @@ export function TrainerSaleDetailDrawer({ row, open, onOpenChange }: Props) {
             </div>
 
             {row.balance_due > 0 && (
-              <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+              <p className="rounded-xl bg-warning/10 p-3 text-xs text-warning ">
                 This client still owes {inr(row.balance_due)}. Please ask them to settle at the front
                 desk — trainers cannot collect payments in the app.
               </p>

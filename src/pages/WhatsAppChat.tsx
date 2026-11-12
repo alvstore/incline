@@ -182,12 +182,12 @@ function IgCommentMediaCard({ meta, mediaUrl, outbound }: { meta?: MessageMediaM
   const wrapperProps = permalink ? { href: permalink, target: '_blank', rel: 'noopener noreferrer' } : {};
   return (
     <Wrapper {...wrapperProps} className={cardCls + (permalink ? ' hover:opacity-95 cursor-pointer' : '')}>
-      <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-foreground/20 flex items-center justify-center">
+ <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-foreground/20 flex items-center justify-center">
         {thumb ? (
           <img src={thumb} alt="post" className="h-full w-full object-cover" loading="lazy" />
         ) : (
           <MessageCircle className={outbound ? 'h-5 w-5 text-primary-foreground/70' : 'h-5 w-5 text-muted-foreground'} />
-        )}
+ )}
         {kind === 'reels' || kind === 'video' ? (
           <span className="absolute inset-0 flex items-center justify-center bg-foreground/25">
             <Play className="h-4 w-4 text-primary-foreground fill-white" />
@@ -201,12 +201,12 @@ function IgCommentMediaCard({ meta, mediaUrl, outbound }: { meta?: MessageMediaM
       </div>
       <div className="min-w-0 flex-1">
         <div className={titleCls + ' flex items-center gap-1'}>
-          <Instagram className="h-3 w-3" /> {label}
+ <Instagram className="h-3 w-3" /> {label}
         </div>
         {caption ? <div className={subCls + ' truncate'}>{caption}</div> : null}
-        {permalink ? (
+ {permalink ? (
           <div className={subCls + ' flex items-center gap-1 mt-0.5'}>
-            <ExternalLink className="h-3 w-3" /> Open on Instagram
+ <ExternalLink className="h-3 w-3" /> Open on Instagram
           </div>
         ) : null}
       </div>
@@ -852,7 +852,7 @@ export default function WhatsAppChatPage() {
       case 'read': return <CheckCheck className="h-3.5 w-3.5 text-info" />;
       case 'delivered': return <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/50" />;
       case 'sent': return <Check className="h-3.5 w-3.5 text-primary-foreground/50" />;
-      case 'failed': return <AlertTriangle className="h-3.5 w-3.5 text-red-500" aria-label="Failed to send" />;
+      case 'failed': return <AlertTriangle className="h-3.5 w-3.5 text-destructive" aria-label="Failed to send" />;
       default: return <Clock className="h-3.5 w-3.5 text-primary-foreground/40" />;
     }
   };
@@ -1037,7 +1037,7 @@ export default function WhatsAppChatPage() {
                     }`}
                   >
                     <span className={chatFilter === tab.key ? '' : tab.color}>{tab.icon}</span>
-                    {tab.label}
+ {tab.label}
                   </button>
                 ))}
               </div>
@@ -1278,12 +1278,12 @@ export default function WhatsAppChatPage() {
                       }
 
                       const pillTone = effectivelyPaused
-                        ? 'bg-amber-100 ring-1 ring-amber-300'
+                        ? 'bg-warning/10 ring-1 ring-warning/30'
                         : masterMisaligned
                           ? 'bg-warning/10 ring-1 ring-warning/40'
-                          : 'bg-emerald-50 ring-1 ring-emerald-200';
-                      const iconTone = effectivelyPaused ? 'text-amber-700' : masterMisaligned ? 'text-warning' : 'text-emerald-700';
-                      const labelTone = effectivelyPaused ? 'text-amber-800 font-medium' : masterMisaligned ? 'text-warning font-medium' : 'text-emerald-800 font-medium';
+                          : 'bg-success/10 ring-1 ring-success/30';
+                      const iconTone = effectivelyPaused ? 'text-warning' : masterMisaligned ? 'text-warning' : 'text-success';
+                      const labelTone = effectivelyPaused ? 'text-warning font-medium' : masterMisaligned ? 'text-warning font-medium' : 'text-success font-medium';
 
                       const applyPause = async (hours: number | null) => {
                         if (!selectedContact || !selectedBranch || selectedBranch === 'all') return;
@@ -1438,8 +1438,8 @@ export default function WhatsAppChatPage() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          className={selectedContact.do_not_contact ? 'text-emerald-600' : 'text-destructive'}
-                          onClick={() => setBlockConfirmOpen(true)}
+                          className={selectedContact.do_not_contact ? 'text-success' : 'text-destructive'}
+ onClick={() => setBlockConfirmOpen(true)}
                         >
                           <Ban className="h-4 w-4 mr-2" />
                           {selectedContact.do_not_contact ? 'Unblock Contact' : 'Block Contact'}
@@ -2041,7 +2041,7 @@ export default function WhatsAppChatPage() {
       <Dialog open={blockConfirmOpen} onOpenChange={setBlockConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className={`flex items-center gap-2 ${selectedContact?.do_not_contact ? 'text-emerald-600' : 'text-destructive'}`}>
+            <DialogTitle className={`flex items-center gap-2 ${selectedContact?.do_not_contact ? 'text-success' : 'text-destructive'}`}>
               <Ban className="h-5 w-5" />
               {selectedContact?.do_not_contact ? 'Unblock contact' : 'Block contact'}
             </DialogTitle>

@@ -88,15 +88,15 @@ const statusBadgeClass = (s: MergedRecipient['final']) => {
 const StatusIcon = ({ s }: { s: MergedRecipient['final'] }) => {
   const cls = 'h-3 w-3';
   if (s === 'read') return <Eye className={cls} />;
-  if (s === 'delivered') return <CheckCircle2 className={cls} />;
-  if (s === 'sent') return <Send className={cls} />;
-  if (s === 'failed') return <XCircle className={cls} />;
-  if (s === 'skipped') return <AlertTriangle className={cls} />;
-  return <Clock className={cls} />;
+ if (s === 'delivered') return <CheckCircle2 className={cls} />;
+ if (s === 'sent') return <Send className={cls} />;
+ if (s === 'failed') return <XCircle className={cls} />;
+ if (s === 'skipped') return <AlertTriangle className={cls} />;
+ return <Clock className={cls} />;
 };
 
 const channelIcon = (channel: string) => {
-  if (channel === 'email') return Mail;
+ if (channel === 'email') return Mail;
   if (channel === 'sms') return Phone;
   return MessageSquare;
 };
@@ -358,7 +358,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
           {isStalled && (
             <Button
               size="sm" variant="outline"
-              className="rounded-xl gap-2 border-amber-500/50 text-amber-700 dark:text-amber-300"
+              className="rounded-xl gap-2 border-warning/50 text-warning "
               onClick={() => resumeMut.mutate()}
               disabled={resumeMut.isPending}
               title="Resume the stalled send from where it stopped"
@@ -390,7 +390,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
         </div>
 
         {isZombieSending && (
-          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+          <div className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs text-warning ">
             <strong>Stuck in "sending":</strong> no recipients were dispatched. The wizard call
             to <code>send-broadcast</code> aborted before any messages went out — usually because
             the browser tab was closed or the audience resolver failed. Click <em>Reset to Draft</em>,
@@ -399,7 +399,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
         )}
 
         {isStalled && (
-          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+          <div className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs text-warning ">
             <strong>Send stalled:</strong> {counts.pending} recipient(s) still queued with no
             progress for 5+ minutes — the background worker isolate stopped. The watchdog retries
             automatically every minute; click <em>Resume sending</em> to restart it right now.
@@ -515,7 +515,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
                             {(r as any).fallback_used && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="text-[9px] rounded-full px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-700">
+                                  <Badge variant="outline" className="text-[9px] rounded-full px-1.5 py-0 border-warning/30 bg-warning/10 text-warning">
                                     paced → {(r as any).fallback_channel || 'sms'}
                                   </Badge>
                                 </TooltipTrigger>

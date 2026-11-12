@@ -175,7 +175,7 @@ export default function GateRulesTab({ branchId }: { branchId?: string }) {
           {drift.isLoading ? <Skeleton className="h-24 w-full" /> : drift.isError ? (
             <p className="text-sm text-destructive">Could not load the list.</p>
           ) : rows.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Every gate matches the rule.</div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-success" /> Every gate matches the rule.</div>
           ) : (
             <ul className="divide-y divide-border">
               {rows.map((r) => (
@@ -185,7 +185,7 @@ export default function GateRulesTab({ branchId }: { branchId?: string }) {
                     <p className="text-xs text-muted-foreground">Membership due {inr(r.base_due)} · PT/store/add-on due {inr(r.other_due)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={r.expected === "open" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500" : "border-destructive/20 bg-destructive/10 text-destructive"}>
+                    <Badge variant="outline" className={r.expected === "open" ? "border-success/20 bg-success/10 text-success" : "border-destructive/20 bg-destructive/10 text-destructive"}>
                       Should be {r.expected === "open" ? "open" : "locked"}
                     </Badge>
                     <Button size="sm" variant="outline" className="min-h-11 rounded-xl" disabled={fixOne.isPending}

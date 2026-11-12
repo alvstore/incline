@@ -21,14 +21,14 @@ import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 const inr = (n: number) => `₹${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
 const STATE_UI: Record<InstallmentState, { label: string; cls: string; icon: typeof CheckCircle }> = {
-  paid: { label: 'Paid', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20', icon: CheckCircle },
+  paid: { label: 'Paid', cls: 'bg-success/10 text-success border border-success/20', icon: CheckCircle },
   payable: { label: 'Payable', cls: 'bg-primary/10 text-primary border border-primary/20', icon: Wallet },
-  on_hold: { label: 'On hold', cls: 'bg-amber-500/10 text-amber-500 border border-amber-500/20', icon: Lock },
+  on_hold: { label: 'On hold', cls: 'bg-warning/10 text-warning border border-warning/20', icon: Lock },
   upcoming: { label: 'Upcoming', cls: 'bg-muted text-muted-foreground border border-border', icon: CalendarClock },
 };
 
 const STAGE_UI = {
-  paid: { label: 'Paid', hint: 'Paid by management', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' },
+  paid: { label: 'Paid', hint: 'Paid by management', cls: 'bg-success/10 text-success border border-success/20' },
   approved: { label: 'Approved', hint: 'Approved, payment pending', cls: 'bg-primary/10 text-primary border border-primary/20' },
   draft: { label: 'Draft', hint: 'Being prepared by management — may still change', cls: 'bg-muted text-muted-foreground border border-border' },
   none: { label: '', hint: 'From the payroll prepared by management', cls: '' },

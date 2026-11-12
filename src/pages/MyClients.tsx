@@ -105,7 +105,7 @@ export default function MyClients() {
     return (
       <AppLayout>
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
-          <AlertCircle className="h-10 w-10 text-amber-500" aria-hidden />
+          <AlertCircle className="h-10 w-10 text-warning" aria-hidden />
           <h1 className="text-xl font-bold">No trainer profile found</h1>
           <p className="text-sm text-muted-foreground">Your account is not linked to a trainer record.</p>
         </div>
@@ -168,7 +168,7 @@ export default function MyClients() {
           <TabsContent value="general" className="mt-4">
             {generalClients.length === 0 ? (
               <Card className={cardShell}>
-                <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
+ <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
                   <Users className="h-10 w-10 text-muted-foreground" aria-hidden />
                   <p className="text-sm font-medium">No general training clients assigned</p>
                   <p className="text-xs text-muted-foreground">
@@ -183,7 +183,7 @@ export default function MyClients() {
                   const phone: string | undefined = client.profile?.phone;
                   return (
                     <Card key={client.id} className={cardShell}>
-                      <CardContent className="p-5">
+ <CardContent className="p-5">
                         <div className="flex items-start gap-3">
                           <Avatar className="h-12 w-12 shrink-0">
                             <AvatarImage src={client.profile?.avatar_url} alt="" />
@@ -283,7 +283,7 @@ export default function MyClients() {
           <TabsContent value="pt" className="mt-4">
             {ptClients.length === 0 ? (
               <Card className={cardShell}>
-                <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
+ <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
                   <Dumbbell className="h-10 w-10 text-muted-foreground" aria-hidden />
                   <p className="text-sm font-medium">No active PT clients</p>
                 </CardContent>
@@ -307,7 +307,7 @@ export default function MyClients() {
 
                   return (
                     <Card key={client.id} className={cardShell}>
-                      <CardContent className="p-5">
+ <CardContent className="p-5">
                         <div className="flex items-start gap-3">
                           <Avatar className="h-12 w-12 shrink-0">
                             <AvatarImage src={client.member?.profile?.avatar_url} alt="" />

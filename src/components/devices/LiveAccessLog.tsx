@@ -57,10 +57,10 @@ type FilterKey = "inside" | "all" | "members" | "team" | "denied" | "unmatched";
 
 const kindBadge: Record<PersonSession["kind"], { label: string; className: string }> = {
   member: { label: "Member", className: "bg-primary/10 text-primary" },
-  trainer: { label: "Trainer", className: "bg-violet-100 text-violet-700" },
-  staff: { label: "Staff", className: "bg-sky-100 text-sky-700" },
-  denied: { label: "Denied", className: "bg-red-100 text-red-700" },
-  unmatched: { label: "Not in CRM", className: "bg-amber-100 text-amber-700" },
+  trainer: { label: "Trainer", className: "bg-primary/10 text-primary" },
+  staff: { label: "Staff", className: "bg-info/10 text-info" },
+  denied: { label: "Denied", className: "bg-destructive/10 text-destructive" },
+  unmatched: { label: "Not in CRM", className: "bg-warning/10 text-warning" },
 };
 
 function getBillingBadge(memberships: Array<{ status: string; end_date: string }> | undefined) {
@@ -69,15 +69,15 @@ function getBillingBadge(memberships: Array<{ status: string; end_date: string }
   if (!active) {
     const frozen = memberships.find((m) => m.status === "frozen");
     if (frozen)
-      return <Badge variant="outline" className="rounded-full text-[10px] bg-blue-50 text-blue-700 border-blue-200">Frozen</Badge>;
-    return <Badge variant="outline" className="rounded-full text-[10px] bg-red-50 text-red-700 border-red-200">No active plan</Badge>;
+      return <Badge variant="outline" className="rounded-full text-[10px] bg-info/10 text-info border-info/30">Frozen</Badge>;
+    return <Badge variant="outline" className="rounded-full text-[10px] bg-destructive/10 text-destructive border-destructive/30">No active plan</Badge>;
   }
   const daysLeft = differenceInDays(new Date(active.end_date), new Date());
   if (daysLeft < 0)
-    return <Badge variant="outline" className="rounded-full text-[10px] bg-red-50 text-red-700 border-red-200">Overdue</Badge>;
+    return <Badge variant="outline" className="rounded-full text-[10px] bg-destructive/10 text-destructive border-destructive/30">Overdue</Badge>;
   if (daysLeft <= 7)
-    return <Badge variant="outline" className="rounded-full text-[10px] bg-amber-50 text-amber-700 border-amber-200">Due in {daysLeft}d</Badge>;
-  return <Badge variant="outline" className="rounded-full text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">{daysLeft}d left</Badge>;
+    return <Badge variant="outline" className="rounded-full text-[10px] bg-warning/10 text-warning border-warning/30">Due in {daysLeft}d</Badge>;
+  return <Badge variant="outline" className="rounded-full text-[10px] bg-success/10 text-success border-success/30">{daysLeft}d left</Badge>;
 }
 
 function istDayStartIso(): string {
@@ -347,27 +347,27 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
             <CardTitle className="text-base">Access Presence</CardTitle>
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
+ "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
                 rtStatus === "live"
-                  ? "bg-emerald-100 text-emerald-700"
+                  ? "bg-success/10 text-success"
                   : rtStatus === "error"
-                    ? "bg-red-100 text-red-700"
+                    ? "bg-destructive/10 text-destructive"
                     : "bg-muted text-muted-foreground",
               )}
               title={`Realtime: ${rtStatus}`}
             >
               <span
                 className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  rtStatus === "live" ? "bg-emerald-500 animate-pulse" : rtStatus === "error" ? "bg-red-500" : "bg-muted-foreground",
+ "h-1.5 w-1.5 rounded-full",
+                  rtStatus === "live" ? "bg-success animate-pulse" : rtStatus === "error" ? "bg-destructive" : "bg-muted-foreground",
                 )}
               />
               {rtStatus === "live" ? "Live" : rtStatus === "error" ? "Offline" : "Connecting"}
             </span>
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                mipsError ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary",
+ "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                mipsError ? "bg-warning/10 text-warning" : "bg-primary/10 text-primary",
               )}
               title={
                 mipsError
@@ -413,7 +413,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
 
       <CardContent className="space-y-4">
         {/* In-gym-now strip */}
-        <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-4 text-white">
+        <div className="rounded-2xl bg-gradient-to-r from-primary to-primary p-4 text-white">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-white/15 p-2">
@@ -451,7 +451,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
               aria-pressed={filter === f.key}
               onClick={() => setFilter(f.key)}
               className={cn(
-                "cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
+ "cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
                 filter === f.key
                   ? "bg-primary text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:bg-muted/70",
@@ -494,9 +494,9 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                   <div
                     key={p.key}
                     className={cn(
-                      "rounded-2xl bg-muted/40 p-3 transition-all duration-200 hover:bg-muted/70",
-                      p.isInside && "ring-1 ring-emerald-300/70",
-                      p.denied && "ring-1 ring-red-300/70",
+ "rounded-2xl bg-muted/40 p-3 transition-all duration-200 hover:bg-muted/70",
+                      p.isInside && "ring-1 ring-success/70",
+                      p.denied && "ring-1 ring-destructive/70",
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -508,7 +508,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                           </AvatarFallback>
                         </Avatar>
                         {p.isInside && (
-                          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
+                          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-success" />
                         )}
                       </div>
 
@@ -523,7 +523,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                           </Badge>
                           {getBillingBadge(p.memberships)}
                           {p.isInside && (
-                            <Badge className="rounded-full bg-emerald-100 px-2 py-0 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100">
+                            <Badge className="rounded-full bg-success/10 px-2 py-0 text-[10px] font-medium text-success hover:bg-success/10">
                               In gym
                             </Badge>
                           )}
@@ -536,9 +536,9 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                               key={punch.id}
                               title={`${punch.gate} · ${punch.message ?? ""}`}
                               className={cn(
-                                "inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-medium",
+ "inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-medium",
                                 punch.result === "member_denied" || punch.result === "stranger" || punch.result === "not_found"
-                                  ? "bg-red-50 text-red-700"
+                                  ? "bg-destructive/10 text-destructive"
                                   : "bg-background text-muted-foreground dark:text-foreground",
                               )}
                             >
@@ -557,7 +557,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                         </p>
 
                         {p.denied && p.notes[0] && (
-                          <p className="mt-1 text-[11px] font-medium text-red-600">{p.notes[0]}</p>
+                          <p className="mt-1 text-[11px] font-medium text-destructive">{p.notes[0]}</p>
                         )}
 
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -565,7 +565,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 gap-1 px-2 text-[10px] text-amber-600 hover:text-amber-700"
+                              className="h-6 gap-1 px-2 text-[10px] text-warning hover:text-warning"
                               onClick={handleManualOverride}
                               disabled={openingDoor}
                             >
@@ -601,7 +601,7 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 gap-1 px-2 text-[10px] text-amber-700 hover:text-amber-800"
+                              className="h-6 gap-1 px-2 text-[10px] text-warning hover:text-warning"
                               onClick={() => {
                                 if (p.code) {
                                   navigator.clipboard?.writeText(p.code);
@@ -658,8 +658,8 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
                   <li key={a.id} className="flex items-start gap-2 rounded-lg px-2 py-1 text-[11px]">
                     <span
                       className={cn(
-                        "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
-                        a.eventType === "hardware_restore" ? "bg-emerald-500" : "bg-red-500",
+ "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
+                        a.eventType === "hardware_restore" ? "bg-success" : "bg-destructive",
                       )}
                     />
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">{a.message}</span>

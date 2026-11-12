@@ -20,10 +20,10 @@ interface Props {
 }
 
 const groupClass: Record<string, string> = {
-  'Add-on / Facility': 'bg-emerald-100 text-emerald-700',
-  'PT Package': 'bg-indigo-100 text-indigo-700',
-  Membership: 'bg-violet-100 text-violet-700',
-  Product: 'bg-amber-100 text-amber-700',
+  'Add-on / Facility': 'bg-success/10 text-success',
+  'PT Package': 'bg-primary/10 text-primary',
+  Membership: 'bg-primary/10 text-primary',
+  Product: 'bg-warning/10 text-warning',
 };
 
 export function InvoiceCatalogPicker({ branchId, onPick, placeholder = 'Search sauna, ice bath, PT package, product…' }: Props) {

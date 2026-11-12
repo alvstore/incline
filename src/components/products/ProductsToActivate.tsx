@@ -80,7 +80,7 @@ function ActivateCard({ p }: { p: Row }) {
         <div className="space-y-1">
           <Label htmlFor={`price-${p.id}`}>Selling price (₹)</Label>
           <Input id={`price-${p.id}`} type="number" min={0} step="0.01" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} aria-describedby={`hint-${p.id}`} />
-          <p id={`hint-${p.id}`} className={`text-xs flex items-center gap-1 ${belowCost ? 'text-amber-500' : ready ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+          <p id={`hint-${p.id}`} className={`text-xs flex items-center gap-1 ${belowCost ? 'text-warning' : ready ? 'text-success' : 'text-muted-foreground'}`}>
             {belowCost ? <AlertTriangle className="h-3 w-3" aria-hidden /> : ready ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : null}
             {belowCost ? 'Below cost — you would sell at a loss' : hint}
             {margin !== null && !belowCost ? ` · ${margin}% margin` : ''}

@@ -131,7 +131,7 @@ export default function ScheduleSession() {
     return (
       <AppLayout>
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
-          <AlertCircle className="h-10 w-10 text-amber-500" aria-hidden />
+          <AlertCircle className="h-10 w-10 text-warning" aria-hidden />
           <h1 className="text-xl font-bold">No trainer profile found</h1>
           <p className="text-sm text-muted-foreground">Your account is not linked to a trainer record.</p>
         </div>
@@ -157,7 +157,7 @@ export default function ScheduleSession() {
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           {/* Composer */}
           <Card className={cardShell}>
-            <CardContent className="space-y-6 p-6">
+ <CardContent className="space-y-6 p-6">
               <div>
                 <h2 className="text-lg font-bold text-foreground">Session details</h2>
                 <p className="text-sm text-muted-foreground">Fill in the session information</p>
@@ -265,7 +265,7 @@ export default function ScheduleSession() {
               </div>
 
               {blocked && (
-                <p className="rounded-xl bg-red-50 p-3 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">
+                <p className="rounded-xl bg-destructive/10 p-3 text-xs text-destructive ">
                   {clientName(activeClient)} has no sessions left on this package. Ask the front desk
                   to renew or top up before booking.
                 </p>
@@ -311,7 +311,7 @@ export default function ScheduleSession() {
             )}
 
             <Card className={cardShell}>
-              <CardContent className="p-5">
+ <CardContent className="p-5">
                 <div className="mb-4">
                   <h2 className="text-lg font-bold text-foreground">Your PT clients</h2>
                   <p className="text-xs text-muted-foreground">
@@ -361,7 +361,7 @@ export default function ScheduleSession() {
                                   {payMeta.label}
                                 </Badge>
                                 {billing!.balance_due > 0 && (
-                                  <span className="text-xs font-medium text-red-600">
+                                  <span className="text-xs font-medium text-destructive">
                                     {inr(billing!.balance_due)} due
                                     {billing!.payment_due_date
                                       ? ` · ${format(new Date(billing!.payment_due_date), 'dd MMM')}`

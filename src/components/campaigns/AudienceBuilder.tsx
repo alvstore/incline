@@ -400,7 +400,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
       </div>
 
       {/* Live audience breakdown */}
-      <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-5 shadow-lg shadow-primary/20 text-primary-foreground">
+      <div className="rounded-2xl bg-gradient-to-r from-primary to-primary p-5 shadow-lg shadow-primary/20 text-primary-foreground">
         <div className="flex items-center gap-3">
           <div className="h-11 w-11 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
             <Users className="h-5 w-5 text-white" />
@@ -433,8 +433,8 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
           <>
             <div className="grid grid-cols-2 gap-2 mt-4">
               <div className="rounded-xl bg-white/12 backdrop-blur p-3 flex items-center gap-2.5">
-                <span className="h-8 w-8 rounded-full bg-emerald-400/25 flex items-center justify-center shrink-0">
-                  <MessageCircle className="h-4 w-4 text-emerald-100" />
+                <span className="h-8 w-8 rounded-full bg-success/25 flex items-center justify-center shrink-0">
+                  <MessageCircle className="h-4 w-4 text-success-foreground" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-lg font-bold text-white leading-none">{breakdown.in_window}</p>
@@ -442,8 +442,8 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
                 </div>
               </div>
               <div className="rounded-xl bg-white/12 backdrop-blur p-3 flex items-center gap-2.5">
-                <span className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${breakdown.cold > 0 ? 'bg-amber-400/30' : 'bg-white/15'}`}>
-                  <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-amber-100' : 'text-white/70'}`} />
+                <span className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${breakdown.cold > 0 ? 'bg-warning/30' : 'bg-white/15'}`}>
+                  <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-warning-foreground' : 'text-white/70'}`} />
                 </span>
                 <div className="min-w-0">
                   <p className="text-lg font-bold text-white leading-none">{breakdown.cold}</p>
