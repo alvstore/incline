@@ -31,6 +31,7 @@ import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { LivePill } from "@/components/ui/live-pill";
 import { formatIST, formatISTDate, formatISTTime } from "@/lib/utils/datetime";
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type TimeFilter = "upcoming" | "past" | "all";
 
 type PageTab = "schedule" | "calendar" | "rules" | "attendance";
@@ -484,9 +485,9 @@ export default function ClassesPage() {
                   const venue = (cls as any).venue as string | null;
 
                   return (
-                    <Card
+                    <Card tabIndex={0} onKeyDown={clickOnActivateKey}
                       key={cls.id}
-                      className={`cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 group ${
+                      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 group ${
                         selectedClass === cls.id ? "border-primary ring-2 ring-primary/20" : ""
                       } ${!cls.is_active ? "opacity-60" : ""}`}
                       onClick={() => setSelectedClass(cls.id)}

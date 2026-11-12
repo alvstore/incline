@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
+import { useLogoTone } from '@/hooks/useLogoTone';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import { supabase } from '@/integrations/supabase/client';
 import { SessionTimeoutWarning } from '@/components/auth/SessionTimeoutWarning';
@@ -100,6 +101,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [moduleGroups, location.pathname]);
 
   const { data: org } = useOrgBranding();
+  const logoTone = useLogoTone(org?.logo_url);
+  // Header surfaces are dark only in dark mode; flip a dark logo to white there.
+  const headerLogoFilter = logoTone === 'dark' ? ' dark:brightness-0 dark:invert' : '';
 
   // Phone top bar: pinned, notch-aware, shared by every nav mode.
   const renderMobileTopBar = () => (
@@ -107,7 +111,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <MobileNav />
       <h1 className="text-xl font-bold min-w-0 truncate">
         {org?.logo_url ? (
-          <img src={org.logo_url} alt={org.name || 'Logo'} className="max-h-7 object-contain" />
+          <img src={org.logo_url} alt={org.name || 'Logo'} className={`max-h-7 object-contain${headerLogoFilter}`} />
         ) : (
           <span className="text-accent">{org?.name || 'Incline'}</span>
         )}
@@ -214,7 +218,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <img
                 src={org.logo_url}
                 alt={org.name || 'Logo'}
-                className="max-h-8 object-contain object-left"
+                className={`max-h-8 object-contain object-left${headerLogoFilter}`}
               />
             ) : (
               <span className="text-lg font-bold text-foreground">

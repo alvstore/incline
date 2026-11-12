@@ -1,1 +1,3 @@
 - App screens: shadcn primitives + semantic tokens only (no bg-white/slate-*), since hardcoded colours break dark mode; public site exempt.
+- Clickable cards/rows that can't be a `<button>` get `tabIndex={0}` + `onKeyDown={clickOnActivateKey}` (`src/lib/a11y/clickable.ts`) and `role="button"` unless they are table rows or contain other controls, so keyboard users can reach every action.
+- Themes whose primary is unreadable on a dark page declare `darkVars` in ThemeContext; inline theme vars override `.dark`, so dark-mode fixes belong there, not in index.css.

@@ -15,7 +15,7 @@ export function OnlinePresencePill({ compact = false }: { compact?: boolean }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <button type="button"
           aria-label={`${count} users online`}
           className="inline-flex items-center gap-2 rounded-full border border-success/20 bg-success/10 px-3 py-1.5 text-xs font-medium text-success transition hover:bg-success/15 focus:outline-none focus:ring-2 focus:ring-success"
         >

@@ -34,7 +34,7 @@ export function MemberVoiceAIHistory({ memberId }: { memberId: string }) {
               <button
                 type="button"
                 onClick={() => setOpenCallId(call.id)}
-                className="flex w-full cursor-pointer items-start justify-between gap-3 rounded-2xl bg-muted/40 p-3 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex w-full cursor-pointer items-start justify-between gap-3 rounded-2xl bg-muted/40 p-3 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium text-foreground">

@@ -14,6 +14,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 import { useOrgBranding } from '@/hooks/useOrgBranding';
+import { useLogoTone } from '@/hooks/useLogoTone';
+import { useTheme } from '@/contexts/ThemeContext';
 import { track } from '@/lib/analytics';
 
 const SIDEBAR_SCROLL_KEY = 'incline:sidebar-scroll';
@@ -71,17 +73,21 @@ function useWhatsAppUnreadCount() {
 function BrandLogo({ collapsed = false, mobile = false }: { collapsed?: boolean; mobile?: boolean }) {
   const { data: org } = useOrgBranding();
   const logoContainerClass = cn('flex items-center', mobile ? 'h-16 max-w-[220px]' : 'h-14 max-w-[190px]');
+  const { sidebarMode } = useTheme();
+  const logoTone = useLogoTone(org?.logo_url);
+  // A dark logo vanishes on the dark sidebar; show it as a white silhouette there.
+  const logoFilter = sidebarMode === 'dark' && logoTone === 'dark' ? 'brightness-0 invert' : '';
   
   if (org?.logo_url) {
     if (collapsed) {
-      return <img src={org.logo_url} alt={org.name || 'Logo'} className="h-9 w-9 object-contain rounded-md" />;
+      return <img src={org.logo_url} alt={org.name || 'Logo'} className={cn('h-9 w-9 object-contain rounded-md', logoFilter)} />;
     }
     return (
       <div className={logoContainerClass}>
         <img
           src={org.logo_url}
           alt={org.name || 'Logo'}
-          className="h-full w-full object-contain object-left"
+          className={cn('h-full w-full object-contain object-left', logoFilter)}
         />
       </div>
     );

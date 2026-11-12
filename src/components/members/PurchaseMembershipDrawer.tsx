@@ -768,9 +768,9 @@ export function PurchaseMembershipDrawer({
                                   type="button"
                                   onClick={() => setPaymentDueDate(value)}
                                   aria-pressed={active}
-                                  className={`min-h-[44px] cursor-pointer rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                                  className={`min-h-[44px] cursor-pointer rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                                     active
-                                      ? 'bg-indigo-600 text-white'
+                                      ? 'bg-primary text-primary-foreground'
                                       : 'bg-muted text-muted-foreground hover:bg-muted dark:bg-muted dark:text-muted-foreground'
                                   }`}
                                 >

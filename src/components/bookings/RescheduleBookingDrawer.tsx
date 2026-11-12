@@ -269,7 +269,7 @@ export function RescheduleBookingDrawer({ booking, branchId, onOpenChange }: Pro
                         const full = (s.booked_count ?? 0) >= (s.capacity ?? 0);
                         const selected = newSlotId === s.id;
                         return (
-                          <button
+                          <button aria-pressed={selected}
                             key={s.id}
                             type="button"
                             disabled={full}

@@ -21,6 +21,8 @@ export interface ThemeDefinition {
   gradient: [string, string];
   vars: Record<string, string>;
   lightSidebarVars: Record<string, string>;
+  /** Overrides applied only in dark mode, for themes whose primary is too dark to read on a dark page. */
+  darkVars?: Record<string, string>;
 }
 
 const THEMES: ThemeDefinition[] = [
@@ -52,6 +54,10 @@ const THEMES: ThemeDefinition[] = [
       '--sidebar-accent-foreground': '222 47% 11%',
       '--sidebar-border': '214 32% 91%',
       '--sidebar-ring': '24 95% 53%',
+    },
+    darkVars: {
+      '--primary': '24 95% 53%',
+      '--primary-foreground': '0 0% 100%',
     },
   },
   {
@@ -203,6 +209,11 @@ const THEMES: ThemeDefinition[] = [
       '--sidebar-border': '215 10% 90%',
       '--sidebar-ring': '215 20% 40%',
     },
+    darkVars: {
+      '--primary': '215 20% 65%',
+      '--primary-foreground': '222 47% 8%',
+      '--ring': '215 20% 65%',
+    },
   },
   {
     id: 'violet',
@@ -323,6 +334,11 @@ const THEMES: ThemeDefinition[] = [
       '--sidebar-border': '220 8% 90%',
       '--sidebar-ring': '220 9% 46%',
     },
+    darkVars: {
+      '--primary': '220 9% 65%',
+      '--primary-foreground': '222 47% 8%',
+      '--ring': '220 9% 65%',
+    },
   },
 ];
 
@@ -356,6 +372,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [darkMode, setDarkModeState] = useState<DarkMode>(() => {
     return (localStorage.getItem('incline-dark-mode') as DarkMode) || 'light';
   });
+  // The page's actual light/dark state ('system' resolved), so theme colours can adapt.
+  const [isDarkResolved, setIsDarkResolved] = useState<boolean>(() =>
+    document.documentElement.classList.contains('dark'),
+  );
 
   // Apply dark mode class
   useEffect(() => {
@@ -366,6 +386,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       } else {
         root.classList.remove('dark');
       }
+      setIsDarkResolved(isDark);
     };
 
     if (darkMode === 'system') {
@@ -389,7 +410,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--theme-grad-from', theme.gradient[0]);
     root.style.setProperty('--theme-grad-to', theme.gradient[1]);
 
-    Object.entries(theme.vars).forEach(([key, value]) => {
+    const pageVars = isDarkResolved && theme.darkVars ? { ...theme.vars, ...theme.darkVars } : theme.vars;
+    Object.entries(pageVars).forEach(([key, value]) => {
       if (!key.startsWith('--sidebar-')) {
         root.style.setProperty(key, value);
       }
@@ -404,7 +426,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     localStorage.setItem('incline-theme', currentTheme);
     localStorage.setItem('incline-sidebar-mode', sidebarMode);
-  }, [currentTheme, sidebarMode]);
+  }, [currentTheme, sidebarMode, isDarkResolved]);
 
   const setSidebarMode = (mode: SidebarMode) => setSidebarModeState(mode);
 

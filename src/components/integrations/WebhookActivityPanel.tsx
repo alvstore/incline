@@ -13,6 +13,7 @@ import { CheckCircle2, XCircle, AlertCircle, ChevronDown, RefreshCw, Search, Shi
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from 'sonner';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const GATEWAY_LABEL: Record<string, string> = {
   razorpay: 'Razorpay', phonepe: 'PhonePe', payu: 'PayU', ccavenue: 'CCAvenue', unknown: 'Unknown',
 };
@@ -383,8 +384,8 @@ export function WebhookActivityPanel() {
                 return (
                   <Collapsible key={r.id} open={expandedId === r.id} onOpenChange={(o) => setExpandedId(o ? r.id : null)} asChild>
                     <>
-                      <TableRow
-                        className={`hover:bg-muted/30 ${r.invoice_id || r.invoice?.member_id || r.member_id ? 'cursor-pointer' : ''}`}
+                      <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
+                        className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-muted/30 ${r.invoice_id || r.invoice?.member_id || r.member_id ? 'cursor-pointer' : ''}`}
                         onClick={() => {
                           const memberId = r.invoice?.member_id || r.member_id;
                           if (r.invoice_id) {

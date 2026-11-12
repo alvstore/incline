@@ -480,7 +480,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                     const Icon = g.icon;
                     const active = fitnessGoals === g.key;
                     return (
-                      <button
+                      <button aria-pressed={active}
                         key={g.key}
                         type="button"
                         onClick={() => setFitnessGoals(active ? '' : g.key)}
@@ -511,7 +511,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                     {MORE_GOALS.map((g) => {
                       const active = fitnessGoals === g;
                       return (
-                        <button
+                        <button aria-pressed={active}
                           key={g}
                           type="button"
                           onClick={() => setFitnessGoals(active ? '' : g)}
@@ -533,7 +533,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                   {HEALTH_CONDITION_OPTIONS.map((opt) => {
                     const checked = healthChips.includes(opt);
                     return (
-                      <button
+                      <button aria-pressed={checked}
                         key={opt}
                         type="button"
                         onClick={() =>
@@ -578,7 +578,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                     {(['no', 'yes'] as const).map((v) => {
                       const active = parq[`q${i}`] === v;
                       return (
-                        <button
+                        <button aria-pressed={v === 'yes'}
                           key={v}
                           type="button"
                           onClick={() => setParq((p) => ({ ...p, [`q${i}`]: v }))}

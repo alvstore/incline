@@ -112,16 +112,16 @@ export function InsightsPanel({
             ) : (
               <div className="flex flex-col items-center py-6 text-center">
                 <span
-                  className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/10"
+                  className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary-foreground/10"
                   aria-hidden
                 >
                   <Crown className="h-5 w-5 text-primary-foreground/70" />
                 </span>
                 <p className="text-sm font-medium">No active packages yet</p>
                 {canManage && (
-                  <button
+                  <button type="button"
                     onClick={onCreatePackage}
-                    className="mt-3 cursor-pointer rounded text-xs font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    className="mt-3 cursor-pointer rounded text-xs font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground/40"
                   >
                     Create your first package
                   </button>

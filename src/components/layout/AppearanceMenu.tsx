@@ -63,7 +63,7 @@ export function AppearanceMenu() {
               {themes.map((t) => {
                 const isActive = currentTheme === t.id;
                 return (
-                  <button
+                  <button aria-pressed={isActive} type="button"
                     key={t.id}
                     onClick={() => setTheme(t.id as ThemeId)}
                     title={t.name}
@@ -99,7 +99,7 @@ export function AppearanceMenu() {
               {DARK_OPTIONS.map(({ value, label, icon: Icon }) => {
                 const isActive = darkMode === value;
                 return (
-                  <button
+                  <button aria-pressed={isActive} type="button"
                     key={value}
                     onClick={() => setDarkMode(value)}
                     data-testid={`appearance-dark-${value}`}
@@ -129,7 +129,7 @@ export function AppearanceMenu() {
               {SIDEBAR_OPTIONS.map(({ value, label, icon: Icon }) => {
                 const isActive = sidebarMode === value;
                 return (
-                  <button
+                  <button aria-pressed={isActive} type="button"
                     key={value}
                     onClick={() => setSidebarMode(value)}
                     data-testid={`appearance-sidebar-${value}`}

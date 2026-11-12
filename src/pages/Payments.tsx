@@ -40,6 +40,7 @@ import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export default function PaymentsPage() {
   const { branchFilter } = useBranchContext();
   const { user, roles } = useAuth();
@@ -811,7 +812,7 @@ export default function PaymentsPage() {
               {!selectedMember && memberSearchResults.length > 0 && paymentForm.member_search.length >= 2 && (
                 <div className="border rounded-lg mt-1 max-h-40 overflow-y-auto">
                   {memberSearchResults.map((m: any) => (
-                    <div key={m.id} className="p-2 hover:bg-muted cursor-pointer text-sm" onClick={() => { setSelectedMember(m); setPaymentForm(f => ({ ...f, member_search: '' })); setSelectedInvoice(null); }}>
+                    <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey} key={m.id} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring p-2 hover:bg-muted cursor-pointer text-sm" onClick={() => { setSelectedMember(m); setPaymentForm(f => ({ ...f, member_search: '' })); setSelectedInvoice(null); }}>
                       <span className="font-medium">{m.full_name}</span> <span className="text-muted-foreground">({m.member_code})</span>
                     </div>
                   ))}
@@ -831,9 +832,9 @@ export default function PaymentsPage() {
                     const dueAmount = (inv.total_amount || 0) - (inv.amount_paid || 0);
                     const isSelected = selectedInvoice?.id === inv.id;
                     return (
-                      <div
+                      <div role="button" tabIndex={0} aria-pressed={isSelected} onKeyDown={clickOnActivateKey}
                         key={inv.id}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring p-3 border rounded-lg cursor-pointer transition-colors ${
                           isSelected ? 'border-accent bg-accent/5 ring-1 ring-accent' : 'hover:bg-muted/50'
                         }`}
                         onClick={() => {

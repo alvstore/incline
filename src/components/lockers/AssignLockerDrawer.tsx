@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Search, Receipt, Gift, CheckCircle, CreditCard, Link2 } from 'lucide-react';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface AssignLockerDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -290,10 +291,10 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
                 {searchResults.map((member) => {
                   const profile = member.profiles as any;
                   return (
-                    <div
+                    <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                       key={member.id}
                       onClick={() => setSelectedMember(member)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring p-3 rounded-lg border cursor-pointer transition-colors ${
                         selectedMember?.id === member.id ? 'border-accent bg-accent/10' : 'hover:bg-muted/50'
                       }`}
                     >

@@ -15,6 +15,7 @@ import { useUnifiedStaff } from '@/hooks/useUnifiedStaff';
 import { recordExpense, EXPENSE_METHODS, type ExpenseKind } from '@/services/expenseService';
 import type { PaymentMethodEnum } from '@/lib/payments/normalizePaymentMethod';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface AddExpenseDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -188,8 +189,8 @@ export function AddExpenseDrawer({ open, onOpenChange, branchId, defaultType = '
           {/* Receipt Upload */}
           <div className="space-y-2">
             <Label>Receipt (optional)</Label>
-            <div
-              className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-primary transition-colors"
+            <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-primary transition-colors"
               onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? (

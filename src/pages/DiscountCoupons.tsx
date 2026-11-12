@@ -17,6 +17,7 @@ import { EditCouponDrawer } from '@/components/coupons/EditCouponDrawer';
 import { CouponDetailDrawer } from '@/components/coupons/CouponDetailDrawer';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export default function DiscountCouponsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -178,7 +179,7 @@ export default function DiscountCouponsPage() {
                     const status = getCouponStatus(c);
                     const daysLeft = c.valid_until ? differenceInDays(new Date(c.valid_until), new Date()) : null;
                     return (
-                      <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedCoupon(c); setDetailOpen(true); }}>
+                      <TableRow tabIndex={0} onKeyDown={clickOnActivateKey} key={c.id} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedCoupon(c); setDetailOpen(true); }}>
                         <TableCell>
                           <span className="font-mono font-bold text-foreground tracking-wider">{c.code}</span>
                         </TableCell>

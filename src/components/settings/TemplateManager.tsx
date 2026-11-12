@@ -826,7 +826,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   { v: 'rejected', label: 'Rejected', cls: 'bg-destructive/10 text-destructive border-destructive/25' },
                   { v: 'draft', label: 'Draft', cls: 'bg-muted text-foreground border-border' },
                 ] as const).map((s) => (
-                  <button
+                  <button aria-pressed={statusFilter === s.v}
                     key={s.v}
                     type="button"
                     onClick={() => setStatusFilter(s.v as any)}

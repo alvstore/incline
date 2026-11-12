@@ -186,7 +186,7 @@ export function EditTemplateTargetingDrawer({ open, onOpenChange, template }: Pr
                   {EXPERIENCE.map((e) => {
                     const active = experience.includes(e);
                     return (
-                      <button
+                      <button aria-pressed={active}
                         type="button"
                         key={e}
                         onClick={() => toggleExperience(e)}

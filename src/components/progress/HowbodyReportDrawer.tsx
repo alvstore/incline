@@ -258,7 +258,7 @@ function PostureMetrics({ r, onZoom }: { r: AnyReport | null; onZoom: (u: string
                 type="button"
                 onClick={() => onZoom(String(p.url))}
                 aria-label={`Open ${p.label} view`}
-                className="group overflow-hidden rounded-2xl bg-muted shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="group overflow-hidden rounded-2xl bg-muted shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <img
                   src={String(p.url)}

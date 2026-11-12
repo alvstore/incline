@@ -26,6 +26,7 @@ import type { MembershipPlanWithBenefits } from '@/types/membership';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { format } from 'date-fns';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const accentColors = [
   { border: 'border-l-primary', gradient: 'from-primary to-primary', bg: 'bg-primary' },
   { border: 'border-l-success', gradient: 'from-success to-success', bg: 'bg-success' },
@@ -71,10 +72,10 @@ function PlanListItem({
   }, [animationDelay]);
 
   return (
-    <div
+    <div tabIndex={0} onKeyDown={clickOnActivateKey}
       data-testid={`plan-list-item-${plan.id}`}
       onClick={onClick}
-      className={`
+      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring 
         relative flex items-center gap-3 px-4 py-3.5 cursor-pointer border-l-4 transition-all duration-150
         ${accent.border}
         ${isSelected
@@ -250,7 +251,7 @@ function PlanDetailPanel({
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="rounded-xl bg-muted/40 px-2 sm:px-4 py-3 text-center">
-          <button
+          <button type="button"
             data-testid={`btn-members-${plan.id}`}
             onClick={() => onMemberCountClick(plan.id, plan.name)}
             className={`w-full transition-colors ${memberCount > 0 ? 'cursor-pointer' : 'cursor-default'}`}
@@ -595,8 +596,9 @@ export default function PlansPage() {
                     className="pl-8 h-8 text-sm rounded-lg"
                   />
                   {planSearch && (
-                    <button
+                    <button type="button"
                       onClick={() => setPlanSearch('')}
+                      aria-label="Clear plan search"
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       <X className="h-3.5 w-3.5" />

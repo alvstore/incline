@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { buildSuccessorMap, queuedRenewalOf } from './ptContinuation';
 import { avatarColor, initialsOf, type PTMemberPackageRow } from './ptTypes';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type SortKey = 'member' | 'progress' | 'expiry';
 export type ClientFilter = 'all' | 'needs_trainer' | 'payment_due' | 'expiring' | 'low_sessions' | 'expired';
 
@@ -275,7 +276,7 @@ export function ClientsTable(props: Props) {
                 className={cn(
                   'inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   active ? 'border-primary bg-primary text-primary-foreground'
-                    : alert ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20'
+                    : alert ? 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/20'
                       : 'border-border bg-card text-foreground hover:bg-secondary',
                 )}>
                 {f.label}
@@ -348,7 +349,7 @@ export function ClientsTable(props: Props) {
             {visible.map((pkg) => {
               const p = progressOf(pkg);
               return (
-                <li key={pkg.id} className="rounded-2xl border border-border p-4" onClick={() => onView(pkg)}>
+                <li role="button" tabIndex={0} onKeyDown={clickOnActivateKey} key={pkg.id} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-2xl border border-border p-4" onClick={() => onView(pkg)}>
                   <div className="flex items-start justify-between gap-2"><MemberCell pkg={pkg} /><RowMenu pkg={pkg} /></div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div><p className="text-xs text-muted-foreground">Package</p>{pkg.package_name || '—'}</div>
@@ -377,7 +378,7 @@ export function ClientsTable(props: Props) {
 
 function SortButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
+    <button aria-pressed={active} type="button" onClick={onClick}
       className={cn('inline-flex min-h-11 items-center gap-1 text-xs font-semibold uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded', active ? 'text-foreground' : 'text-muted-foreground')}>
       {label}<ArrowUpDown className="h-3 w-3" aria-hidden />
     </button>

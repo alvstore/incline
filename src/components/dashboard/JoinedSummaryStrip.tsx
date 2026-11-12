@@ -146,7 +146,7 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
 
         <div className="inline-flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
           {PERIODS.map((p) => (
-            <button
+            <button aria-pressed={period === p.key} type="button"
               key={p.key}
               onClick={() => setPeriod(p.key)}
               className={cn(
@@ -221,7 +221,7 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
         {PERIODS.map((p) => {
           const active = p.key === period;
           return (
-            <button
+            <button aria-pressed={active} type="button"
               key={p.key}
               onClick={() => setPeriod(p.key)}
               className={cn(

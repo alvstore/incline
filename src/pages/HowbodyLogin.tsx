@@ -350,7 +350,7 @@ export default function HowbodyLogin() {
 
             <div className="max-h-72 space-y-2 overflow-y-auto pt-2">
               {results.map((m) => (
-                <button
+                <button type="button"
                   key={m.id}
                   onClick={() => bindMember(m.id)}
                   disabled={status === "binding" || !isValidHeightCm(Number.parseFloat(height))}

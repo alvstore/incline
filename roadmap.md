@@ -1,3 +1,15 @@
+# UI unification — remaining buttons (12 Nov 2026)
+- [x] Mark every remaining raw action button as a plain button so it never submits a form by accident (46 spots).
+- [x] Announce selected/open state on every chip, tab-like and toggle button still missing it (~36 spots).
+- [x] Replace fixed colours inside buttons with theme colours (21 spots) so dark mode works.
+- [x] Give the 6 icon-only buttons a readable name.
+- [x] Re-scan, compile, run tests, and browser-check light/dark/phone on a sample of changed screens.
+- [x] Make 37 clickable cards/rows usable with the keyboard; campaign re-trigger confirm uses the shared confirmation box.
+- [x] Dark mode: default, Slate and Graphite themes now use a readable highlight colour (was near-black on dark).
+- [x] Dark logos now show as a white silhouette on the dark sidebar and dark-mode header (auto-detected).
+- [x] AI flow step colours use theme roles.
+- [ ] Next sweep: fixed colours outside buttons (badges, status chips, cards) in the remaining ~10 files that still use darker slate shades.
+
 # Lovable AI credential cleanup (11 Nov 2026)
 - [x] Audit source, saved provider/purpose routing, settings and live database functions: Lovable already serves all active AI features; Google provider has no purpose references.
 - [x] Remove Google-direct preset and obsolete key example; preserve existing models, prompts, limits and generation behavior.

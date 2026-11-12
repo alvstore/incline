@@ -331,7 +331,7 @@ export default function BenefitTracking() {
             {searchQuery.length >= 2 && searchResults && searchResults.length > 0 && (
               <div className="mt-3 divide-y overflow-hidden rounded-xl border">
                 {searchResults.map((member) => (
-                  <button
+                  <button type="button"
                     key={member.id}
                     onClick={() => {
                       setSelectedMember(member);

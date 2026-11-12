@@ -84,7 +84,7 @@ export default function MembersCountingChart({ branchFilter }: Props) {
         <CardTitle className="text-lg">Members Counting</CardTitle>
         <div className="inline-flex bg-muted rounded-full p-1" role="group" aria-label="Select time period">
           {(['weekly', 'monthly', 'yearly'] as Period[]).map((p) => (
-            <button
+            <button aria-pressed={period === p}
               key={p}
               type="button"
               onClick={() => setPeriod(p)}

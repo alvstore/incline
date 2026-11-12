@@ -279,7 +279,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             {['new','contacted','qualified','trial_scheduled','negotiation','converted'].map(s => {
               const selected = (filter.lead_status || []).includes(s);
               return (
-                <button
+                <button aria-pressed={selected}
                   key={s}
                   type="button"
                   onClick={() => {
@@ -316,7 +316,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreak
             {STAFF_ROLES.map(r => {
               const selected = (filter.staff_roles || []).includes(r.id);
               return (
-                <button
+                <button aria-pressed={selected}
                   key={r.id}
                   type="button"
                   onClick={() => {

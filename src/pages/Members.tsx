@@ -36,6 +36,7 @@ import { differenceInDays, format, startOfDay, startOfMonth, subDays } from 'dat
 import { CalendarDays } from 'lucide-react';
 import { membershipValidity, type ValidityTone } from '@/lib/memberships/validityDisplay';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const PAGE_SIZE = 20;
 
 interface MemberRow {
@@ -730,9 +731,9 @@ export default function MembersPage() {
                     </TableHeader>
                     <TableBody>
                       {members.map((member: any) => (
-                        <TableRow
+                        <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
                           key={member.id}
-                          className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer hover:bg-muted/50 transition-colors group"
                           onClick={() => handleViewProfile(member)}
                         >
                           <TableCell>

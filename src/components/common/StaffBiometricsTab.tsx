@@ -130,7 +130,7 @@ export function StaffBiometricsTab({
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div className="border rounded-lg">
         <CollapsibleTrigger asChild>
-          <button className="flex items-center justify-between w-full p-4 hover:bg-muted/30 transition-colors text-left">
+          <button type="button" className="flex items-center justify-between w-full p-4 hover:bg-muted/30 transition-colors text-left">
             <div className="flex items-center gap-2">
               <Fingerprint className="h-4 w-4 text-accent" />
               <span className="font-medium text-sm">Hardware & Biometrics</span>

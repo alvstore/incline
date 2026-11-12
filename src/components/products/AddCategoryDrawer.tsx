@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Upload, Loader2 } from 'lucide-react';
 import { createCategory, updateCategory, uploadProductImage } from '@/services/productService';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface AddCategoryDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -110,8 +111,8 @@ export function AddCategoryDrawer({ open, onOpenChange, category, onCreated }: A
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
           <div className="space-y-2">
             <Label>Category Image</Label>
-            <div
-              className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
+            <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
               onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? (

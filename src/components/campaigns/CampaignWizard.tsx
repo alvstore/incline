@@ -1417,7 +1417,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
             <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-1 block">What kind of campaign?</Label>
             <div className="grid grid-cols-2 gap-3">
               {CAMPAIGN_TYPES.map((t) => (
-                <button
+                <button aria-pressed={campaignType === t.id}
                   key={t.id}
                   type="button"
                   onClick={() => setCampaignType(t.id)}
@@ -1583,7 +1583,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                       const draft = c === channel ? { message, subject } : (channelDrafts[c] || { message: '', subject: '' });
                       const ready = c === 'rcs' ? !!rcsTemplateId : !!draft.message.trim() && (c !== 'email' || !!draft.subject.trim());
                       return (
-                        <button key={c} type="button" onClick={() => switchChannel(c)}
+                        <button aria-pressed={c === channel} key={c} type="button" onClick={() => switchChannel(c)}
                           className={`cursor-pointer text-[11px] px-2 py-1 rounded-full border ${
                             c === channel ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground'
                           }`}>
@@ -2252,7 +2252,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign, 
                     { id: 'monthly_1st',  label: '1st of month' },
                     { id: 'custom',       label: 'Custom cron' },
                   ] as const).map((p) => (
-                    <button key={p.id} type="button" onClick={() => setRecurrence(p.id as RecurrencePreset)}
+                    <button aria-pressed={recurrence === p.id} key={p.id} type="button" onClick={() => setRecurrence(p.id as RecurrencePreset)}
                       className={`text-left rounded-xl px-3 py-2 text-sm border-2 transition-all ${
                         recurrence === p.id ? 'border-info bg-card text-info font-medium' : 'border-transparent bg-card/60 text-info hover:border-info/40'
                       }`}>

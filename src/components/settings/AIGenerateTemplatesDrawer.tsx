@@ -411,9 +411,9 @@ export function AIGenerateTemplatesDrawer({
                       key={event.event}
                       onClick={() => togglePick(event.event)}
                       aria-pressed={picked.has(event.event)}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      className={`flex items-center gap-3 p-4 rounded-2xl border text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
                         picked.has(event.event)
-                          ? 'border-indigo-200 bg-indigo-50/50 shadow-sm'
+                          ? 'border-primary/30 bg-primary/5 shadow-sm'
                           : 'border-border bg-card hover:border-border'
                       }`}
                     >

@@ -318,7 +318,7 @@ function BuilderInner() {
                     disabled={!canEdit}
                     onClick={() => addNode(item.kind)}
                     aria-label={`Add ${item.label}`}
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 ${tone.card}`}
+                    className={`flex w-full cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${tone.card}`}
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0">

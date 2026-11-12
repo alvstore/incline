@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export default function LeadsPage() {
   const { user } = useAuth();
   const { effectiveBranchId, branchFilter } = useBranchContext();
@@ -282,7 +283,7 @@ export default function LeadsPage() {
                 <PopoverContent className="w-56 p-2">
                   {savedViews.map((v: any) => (
                     <div key={v.id} className="flex items-center justify-between py-1 px-2 hover:bg-muted rounded-lg">
-                      <button className="text-sm text-left flex-1" onClick={() => loadView(v)}>{v.name}</button>
+                      <button type="button" className="text-sm text-left flex-1" onClick={() => loadView(v)}>{v.name}</button>
                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => deleteViewMutation.mutate(v.id)}>
                         <X className="h-3 w-3" />
                       </Button>
@@ -418,7 +419,7 @@ export default function LeadsPage() {
                         {format(day, 'd')}
                       </p>
                       {dayLeads.slice(0, 3).map((lead: any) => (
-                        <div key={lead.id} className={`text-xs px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer ${STATUS_CONFIG[lead.status]?.color || 'bg-muted'}`} onClick={() => openProfile(lead)}>
+                        <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey} key={lead.id} className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring text-xs px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer ${STATUS_CONFIG[lead.status]?.color || 'bg-muted'}`} onClick={() => openProfile(lead)}>
                           {lead.full_name}
                         </div>
                       ))}

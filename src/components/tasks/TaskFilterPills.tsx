@@ -24,14 +24,14 @@ export function TaskFilterPills({ value, onChange, counts }: Props) {
         const active = value === f.id;
         const count = counts?.[f.id];
         return (
-          <button
+          <button aria-pressed={active} type="button"
             key={f.id}
             onClick={() => onChange(f.id)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150',
               'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
               active
-                ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-md shadow-md'
+                ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20'
                 : 'bg-card text-muted-foreground ring-1 ring-border hover:ring-primary/40 hover:text-primary',
             )}
           >

@@ -166,10 +166,10 @@ export function CommunicationTemplatesHub() {
                 type="button"
                 onClick={() => switchChannel(value)}
                 aria-pressed={channel === value}
-                className={`cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                className={`cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-ring ${
                   channel === value
-                    ? 'bg-card text-indigo-700 shadow-lg shadow-indigo-100 border border-border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
+                    ? 'bg-card text-primary shadow-lg shadow-primary/10 border border-border'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
                 }`}
               >
                 <Icon className={`h-4.5 w-4.5 ${channel === value ? 'text-indigo-600' : 'text-muted-foreground'}`} /> {label}
@@ -198,9 +198,9 @@ export function CommunicationTemplatesHub() {
                     type="button"
                     onClick={() => setSection(id)}
                     aria-current={section === id ? 'page' : undefined}
-                    className={`cursor-pointer w-full text-left rounded-xl px-4 py-3 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-1 group ${
+                    className={`cursor-pointer w-full text-left rounded-xl px-4 py-3 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-ring mb-1 group ${
                       section === id
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/10 scale-[1.02]'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >

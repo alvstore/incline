@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useBranchContext } from '@/contexts/BranchContext';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const ALLOWED_LOGO_MIME_TYPES = [
   'image/svg+xml',
   'image/png',
@@ -257,7 +258,7 @@ export function OrganizationSettings() {
                       }`}
                     />
                     {!previewLogo.inherited && scopeSettings?.logo_url && (
-                      <button
+                      <button type="button"
                         onClick={() => removeLogoMutation.mutate()}
                         aria-label="Remove logo"
                         className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -289,14 +290,14 @@ export function OrganizationSettings() {
               )}
             </div>
 
-            <div
+            <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragActive(true);
               }}
               onDragLeave={() => setDragActive(false)}
               onDrop={handleDrop}
-              className={`flex-1 w-full border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+              className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex-1 w-full border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
                 dragActive
                   ? 'border-primary bg-primary/5'
                   : 'border-muted-foreground/25 hover:border-primary/50'

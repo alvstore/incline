@@ -7,6 +7,7 @@ import { MessageSquare, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranchContext } from '@/contexts/BranchContext';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export function MemberVoiceWidget() {
   const navigate = useNavigate();
   const { branchFilter } = useBranchContext();
@@ -71,7 +72,7 @@ export function MemberVoiceWidget() {
             <MessageSquare className="h-5 w-5 text-primary" />
             Member Voice
           </CardTitle>
-          <button
+          <button type="button"
             onClick={() => navigate('/feedback')}
             className="text-xs text-primary hover:underline font-medium"
           >
@@ -85,9 +86,9 @@ export function MemberVoiceWidget() {
         ) : (
           <div className="space-y-3">
             {feedbackItems.map((item: any) => (
-              <div
+              <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                 key={item.id}
-                className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                 onClick={() => navigate('/feedback')}
               >
                 <Avatar className="h-8 w-8 shrink-0">

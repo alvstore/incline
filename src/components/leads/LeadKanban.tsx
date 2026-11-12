@@ -18,6 +18,7 @@ import { STATUS_CONFIG, LEAD_STATUSES } from './LeadFilters';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { LeadSourceBadge } from './LeadSourceBadge';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface LeadKanbanProps {
   leads: any[];
   onSelectLead: (lead: any) => void;
@@ -128,11 +129,11 @@ export function LeadKanban({ leads, onSelectLead, onFollowup, onConvert }: LeadK
                       return (
                         <Draggable key={lead.id} draggableId={lead.id} index={index}>
                           {(dragProvided, dragSnapshot) => (
-                            <Card
+                            <Card tabIndex={0} onKeyDown={clickOnActivateKey}
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                               {...dragProvided.dragHandleProps}
-                              className={`rounded-xl border-border/50 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${
+                              className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl border-border/50 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${
                                 isOverdue ? 'ring-1 ring-destructive/30' : ''
                               } ${dragSnapshot.isDragging ? 'shadow-lg ring-2 ring-primary/30 rotate-2' : ''}`}
                               onClick={() => onSelectLead(lead)}

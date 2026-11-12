@@ -36,9 +36,10 @@ export function SessionTimeoutWarning() {
         >
           Stay Signed In
         </Button>
-        <button
+        <button type="button"
           onClick={() => setDismissed(true)}
-          className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label="Dismiss session warning"
+          className="flex-shrink-0 rounded text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-4 w-4" />
         </button>

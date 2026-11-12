@@ -17,6 +17,7 @@ import { AddTrainerDrawer } from '@/components/trainers/AddTrainerDrawer';
 import { TrainerProfileDrawer } from '@/components/trainers/TrainerProfileDrawer';
 import { EditTrainerDrawer } from '@/components/trainers/EditTrainerDrawer';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export default function TrainersPage() {
   const { effectiveBranchId, branchFilter } = useBranchContext();
   // When branchFilter is empty (All Branches), pass '' to fetch all trainers
@@ -196,7 +197,7 @@ export default function TrainersPage() {
               const maxClients = (trainer as any).max_clients || 10;
               const ptUtil = Math.min((ptClients / maxClients) * 100, 100);
               return (
-                <Card key={trainer.id} className={`group cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 rounded-2xl border-border/50 shadow-lg overflow-hidden ${!trainer.is_active ? "opacity-50" : ""}`} onClick={() => openTrainerProfile(trainer)}>
+                <Card tabIndex={0} onKeyDown={clickOnActivateKey} key={trainer.id} className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring group cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 rounded-2xl border-border/50 shadow-lg overflow-hidden ${!trainer.is_active ? "opacity-50" : ""}`} onClick={() => openTrainerProfile(trainer)}>
                   <div className="h-1.5 bg-gradient-to-r from-primary to-primary/90" />
                   <CardContent className="p-5 space-y-4">
                     <div className="flex items-center gap-4">

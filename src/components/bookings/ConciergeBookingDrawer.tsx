@@ -408,7 +408,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
               {searchLoading && <p className="text-sm text-muted-foreground">Searching...</p>}
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {members.map((m) => (
-                  <button
+                  <button type="button"
                     key={m.id}
                     onClick={() => setSelectedMember(m)}
                     className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors text-left"

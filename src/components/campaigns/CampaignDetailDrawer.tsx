@@ -5,6 +5,10 @@ import {
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -441,7 +445,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
               ['pending', counts.pending],
               ...(counts.skipped > 0 ? [['skipped', counts.skipped] as const] : []),
             ] as [CampaignDeliveryFilter, number][]).map(([k, n]) => (
-              <button
+              <button type="button"
                 key={k}
                 onClick={() => setFilter(k)}
                 aria-pressed={filter === k}
@@ -561,24 +565,27 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
         </div>
 
         {/* Re-trigger confirmation */}
-        {confirmRetrigger && (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmRetrigger(false)}>
-            <div className="bg-card rounded-2xl p-5 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-semibold text-foreground mb-1">Re-trigger campaign?</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+        <AlertDialog
+          open={confirmRetrigger}
+          onOpenChange={(open) => { if (!retriggerMut.isPending) setConfirmRetrigger(open); }}
+        >
+          <AlertDialogContent className="max-w-sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Re-trigger campaign?</AlertDialogTitle>
+              <AlertDialogDescription>
                 This will re-resolve the saved audience and re-send to <strong>all</strong> matching recipients — including those already delivered. Use <em>Retry failed</em> to re-send only failures.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" className="rounded-xl" onClick={() => setConfirmRetrigger(false)} disabled={retriggerMut.isPending}>
-                  Cancel
-                </Button>
-                <Button className="rounded-xl bg-primary hover:bg-primary text-primary-foreground" onClick={() => retriggerMut.mutate()} disabled={retriggerMut.isPending}>
-                  {retriggerMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Re-trigger'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="rounded-xl" disabled={retriggerMut.isPending}>
+                Cancel
+              </AlertDialogCancel>
+              <Button className="rounded-xl" onClick={() => retriggerMut.mutate()} disabled={retriggerMut.isPending}>
+                {retriggerMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-label="Re-triggering" /> : 'Re-trigger'}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );

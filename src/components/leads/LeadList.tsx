@@ -19,6 +19,7 @@ import { STATUS_CONFIG, LEAD_STATUSES } from './LeadFilters';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LeadSourceBadge } from './LeadSourceBadge';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const PAGE_SIZE = 50;
 
 interface LeadListProps {
@@ -173,9 +174,9 @@ export function LeadList({ leads, isLoading, page, onPageChange, onSelectLead, o
                   const isSelected = selectedIds.has(lead.id);
 
                   return (
-                    <TableRow
+                    <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
                       key={lead.id}
-                      className={`cursor-pointer hover:bg-muted/50 ${isOverdue ? 'bg-destructive/5' : ''} ${isSelected ? 'bg-primary/5' : ''}`}
+                      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer hover:bg-muted/50 ${isOverdue ? 'bg-destructive/5' : ''} ${isSelected ? 'bg-primary/5' : ''}`}
                       onClick={() => onSelectLead(lead)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>

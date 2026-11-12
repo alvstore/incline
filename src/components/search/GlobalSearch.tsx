@@ -152,7 +152,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
 
   return (
     <>
-      <button
+      <button type="button"
         onClick={() => setOpen(true)}
         className={cn(
           'flex items-center gap-2 h-9 w-full max-w-sm rounded-lg border border-input bg-background px-3 py-1 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',

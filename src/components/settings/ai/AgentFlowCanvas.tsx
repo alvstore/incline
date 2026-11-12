@@ -26,14 +26,15 @@ const JOURNEYS: { id: Journey; label: string; icon: React.ElementType; blurb: st
 
 type NodeTone = 'entry' | 'check' | 'agent' | 'tool' | 'human' | 'end' | 'stop';
 
+// Step categories map to theme roles so the flow stays legible in light and dark mode.
 const TONES: Record<NodeTone, { ring: string; chip: string }> = {
-  entry: { ring: 'border-indigo-200 bg-indigo-50/70', chip: 'bg-indigo-100 text-indigo-700' },
+  entry: { ring: 'border-primary/30 bg-primary/5', chip: 'bg-primary/15 text-primary' },
   check: { ring: 'border-border bg-card', chip: 'bg-muted text-muted-foreground' },
-  agent: { ring: 'border-violet-200 bg-violet-50/70', chip: 'bg-violet-100 text-violet-700' },
-  tool: { ring: 'border-sky-200 bg-sky-50/70', chip: 'bg-sky-100 text-sky-700' },
-  human: { ring: 'border-amber-200 bg-amber-50/70', chip: 'bg-amber-100 text-amber-700' },
-  end: { ring: 'border-emerald-200 bg-emerald-50/70', chip: 'bg-emerald-100 text-emerald-700' },
-  stop: { ring: 'border-red-200 bg-red-50/70', chip: 'bg-red-100 text-red-700' },
+  agent: { ring: 'border-accent/30 bg-accent/5', chip: 'bg-accent/15 text-accent' },
+  tool: { ring: 'border-info/30 bg-info/5', chip: 'bg-info/15 text-info' },
+  human: { ring: 'border-warning/30 bg-warning/5', chip: 'bg-warning/15 text-warning' },
+  end: { ring: 'border-success/30 bg-success/5', chip: 'bg-success/15 text-success' },
+  stop: { ring: 'border-destructive/30 bg-destructive/5', chip: 'bg-destructive/15 text-destructive' },
 };
 
 interface FlowNode {
@@ -305,10 +306,10 @@ export function AgentFlowCanvas() {
 
   return (
     <div className="space-y-5">
-      <Card className="rounded-2xl border-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20">
+      <Card className="rounded-2xl border-0 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-bold text-white">How the assistant handles a conversation</CardTitle>
-          <CardDescription className="text-indigo-100">
+          <CardTitle className="text-lg font-bold text-primary-foreground">How the assistant handles a conversation</CardTitle>
+          <CardDescription className="text-primary-foreground/80">
             Pick a journey to see exactly what happens, step by step, with your current settings applied.
           </CardDescription>
         </CardHeader>
@@ -323,16 +324,16 @@ export function AgentFlowCanvas() {
                   type="button"
                   onClick={() => setJourney(j.id)}
                   aria-pressed={active}
-                  className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl p-3 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/70 ${
-                    active ? 'bg-card text-foreground shadow-lg' : 'bg-white/10 text-white hover:bg-white/20'
+                  className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl p-3 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-foreground/70 ${
+                    active ? 'bg-card text-foreground shadow-lg' : 'bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20'
                   }`}
                 >
-                  <span className={`rounded-full p-2 ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-white/15 text-white'}`}>
+                  <span className={`rounded-full p-2 ${active ? 'bg-primary/10 text-primary' : 'bg-primary-foreground/15 text-primary-foreground'}`}>
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold">{j.label}</span>
-                    <span className={`block text-xs ${active ? 'text-muted-foreground' : 'text-indigo-100'}`}>{j.blurb}</span>
+                    <span className={`block text-xs ${active ? 'text-muted-foreground' : 'text-primary-foreground/80'}`}>{j.blurb}</span>
                   </span>
                 </button>
               );
@@ -347,7 +348,7 @@ export function AgentFlowCanvas() {
           const tone = TONES[node.tone];
           return (
             <div key={node.id}>
-              <Card className={`rounded-2xl border ${tone.ring} shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10`}>
+              <Card className={`rounded-2xl border ${tone.ring} shadow-lg shadow-primary/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10`}>
                 <CardContent className="flex gap-4 p-4">
                   <div className="flex flex-col items-center">
                     <span className={`rounded-full p-2.5 ${tone.chip}`}>

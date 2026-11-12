@@ -119,7 +119,7 @@ export function ProductBatchesTab({ product }: Props) {
                   <TableCell>{statusBadge(b.status)}</TableCell>
                   <TableCell>
                     {b.lab_report_url ? (
-                      <button
+                      <button type="button"
                         onClick={() => openLab(b.lab_report_url!)}
                         className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
                       >

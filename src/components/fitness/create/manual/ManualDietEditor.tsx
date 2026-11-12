@@ -1002,7 +1002,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
               {weekly && days.length > 1 && (
                 <div className="flex rounded-lg bg-muted p-0.5">
                   {(['day', 'week'] as const).map((s) => (
-                    <button
+                    <button aria-pressed={macroScope === s}
                       key={s}
                       type="button"
                       onClick={() => setMacroScope(s)}

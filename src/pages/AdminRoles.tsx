@@ -62,6 +62,7 @@ import { CreateMemberLoginDrawer, type MemberWithoutLogin } from '@/components/m
 import { provisionMemberLogin } from '@/services/memberLoginService';
 
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type AppRole = Database['public']['Enums']['app_role'];
 
 const ROLE_OPTIONS: AppRole[] = ['owner', 'admin', 'manager', 'staff', 'trainer', 'member'];
@@ -310,9 +311,9 @@ export default function AdminRoles() {
           {ROLE_OPTIONS.map((role) => {
             const count = usersWithRoles.filter(u => u.roles.includes(role)).length;
             return (
-              <Card
+              <Card role="button" tabIndex={0} aria-pressed={activeTab === role} onKeyDown={clickOnActivateKey}
                 key={role}
-                className={`rounded-xl shadow-md cursor-pointer transition-all hover:shadow-lg ${activeTab === role ? 'ring-2 ring-primary' : ''}`}
+                className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl shadow-md cursor-pointer transition-all hover:shadow-lg ${activeTab === role ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => setActiveTab(activeTab === role ? 'all' : role)}
               >
                 <CardContent className="pt-4 pb-4 text-center">

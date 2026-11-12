@@ -326,7 +326,7 @@ function ProviderDrawer({
             <div className="flex items-center justify-between mb-1.5">
               <Label>Default Model</Label>
               {presetModels.length > 0 && (
-                <button
+                <button aria-pressed={modelMode === 'preset'}
                   type="button"
                   onClick={() => setModelMode(modelMode === 'preset' ? 'custom' : 'preset')}
                   className="text-xs text-primary hover:underline inline-flex items-center gap-1"

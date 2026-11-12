@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 import { can } from '@/lib/auth/permissions';
 import { voiceTime } from '@/lib/voice/automationStatus';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const PAGE_SIZE = 25;
 const ALL = '__all__';
 
@@ -147,9 +148,9 @@ function CallsTable({
             const disposition = dispositionLook(r.disposition);
             const action = actionStateLook(r.action_state);
             return (
-              <TableRow
+              <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
                 key={r.id}
-                className="cursor-pointer transition-colors duration-150 hover:bg-muted/50"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer transition-colors duration-150 hover:bg-muted/50"
                 onClick={() => onOpen(r.id)}
               >
                 <TableCell>
@@ -530,9 +531,9 @@ export default function VoiceAIPage() {
                           const disp = dispositionLook(q.last_disposition);
                           const clickable = !!q.last_call_id;
                           return (
-                            <TableRow
+                            <TableRow tabIndex={clickable ? 0 : undefined} onKeyDown={clickable ? clickOnActivateKey : undefined}
                               key={q.member_id}
-                              className={clickable ? 'cursor-pointer transition-colors duration-150 hover:bg-muted/50' : ''}
+                              className={clickable ? 'cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}
                               onClick={() => q.last_call_id && setOpenCallId(q.last_call_id)}
                             >
                               <TableCell>
