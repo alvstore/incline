@@ -45,10 +45,11 @@ interface BucketDelta {
 }
 
 export interface VerifyReport {
-  schema?: { differences: number; summary: Record<string, number>; sample: string[] };
-  tables?: { total: number; matched: number; mismatched: Array<{ table: string; primary: string; standby: string }> };
+  schema?: { differences: number; summary: Record<string, number>; sample: string[]; reasons?: Record<string, number> };
+  tables?: { total: number; matched: number; mismatched: Array<{ table: string; primary: string; standby: string; reason?: string }> };
   storage?: { buckets: BucketDelta[]; objects: number; bytes: number; missing: number; different: number; extra: number; metadata: number };
-  jobs?: { activeOnStandby: number; missing: number; extra: number };
+  jobs?: { activeOnStandby: number; missing: number; extra: number; error?: string };
+  access?: Record<string, unknown> | null;
   allInSync?: boolean;
   checkedAt?: string;
 }
@@ -175,6 +176,12 @@ async function rowsStep(env: Env, run: Run, deadline: number, key: "rows" | "cat
   return st.idx >= specs.length;
 }
 
+/** Why a table didn't match: the copy error recorded for it, if any. */
+function tableReasons(run: Run, mm: Record<string, { primary: string; standby: string }>) {
+  const fails = { ...(run.report.rows?.failures ?? {}), ...(run.report.catchup?.failures ?? {}) };
+  return Object.entries(mm).map(([table, h]) => ({ table, ...h, ...(fails[table] ? { reason: fails[table] } : {}) }));
+}
+
 async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean> {
   const v = (run.state.verify ??= { phase: "schema", idx: 0, mismatches: {} });
   const rep: VerifyReport = (run.report.verify ??= {});
@@ -186,7 +193,13 @@ async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean
     if (v.phase === "schema") {
       const { p, s } = await snapshots(env);
       const plan = planSchema(p, s, { includeDeferred: true });
-      rep.schema = { differences: plan.length, summary: summarizePlan(plan), sample: plan.slice(0, 40).map((x) => x.key) };
+      // A link that couldn't be created also shows up as "not validated": count each object once.
+      const objects = new Set(plan.map((x) => x.key.replace(/^validate:/, "constraint:")));
+      const reasons: Record<string, number> = {};
+      for (const f of [...(run.report.schemaFinal?.failures ?? []), ...(run.report.schema?.failures ?? [])]) {
+        reasons[f.error.slice(0, 120)] = (reasons[f.error.slice(0, 120)] ?? 0) + 1;
+      }
+      rep.schema = { differences: objects.size, summary: summarizePlan(plan), sample: [...objects].slice(0, 40), reasons };
       v.phase = "tables";
       v.idx = 0;
       v.mismatches = {};
@@ -197,7 +210,7 @@ async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean
       rep.tables = {
         total: specs.length,
         matched: specs.length - Object.keys(v.mismatches).length,
-        mismatched: Object.entries(v.mismatches).map(([table, h]) => ({ table, ...h })),
+        mismatched: tableReasons(run, v.mismatches),
       };
       v.phase = run.kind === "full" && Object.keys(v.mismatches).length ? "catchup" : "storage";
     } else if (v.phase === "catchup") {
@@ -213,7 +226,7 @@ async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean
       rep.tables = {
         total,
         matched: total - Object.keys(v.mismatches).length,
-        mismatched: Object.entries(v.mismatches).map(([table, h]) => ({ table, ...h })),
+        mismatched: tableReasons(run, v.mismatches),
       };
       // Busy tables can change again while being re-copied: up to 3 catch-up rounds.
       v.phase = Object.keys(v.mismatches).length && v.rounds < 3 ? "catchup" : "storage";
@@ -247,10 +260,16 @@ async function verifyStep(env: Env, run: Run, deadline: number): Promise<boolean
       };
       v.phase = "jobs";
     } else if (v.phase === "jobs") {
-      const sj = await standbyJobs(env.standby);
       const pj = await readJson<Parameters<typeof planJobs>[0]>(env.primary, JOBS_SQL);
-      const plan = planJobs(pj, sj);
-      rep.jobs = { activeOnStandby: sj.filter((j) => j.active).length, missing: plan.schedule.length, extra: plan.unschedule.length };
+      try {
+        const sj = await standbyJobs(env.standby);
+        const plan = planJobs(pj, sj);
+        rep.jobs = { activeOnStandby: sj.filter((j) => j.active).length, missing: plan.schedule.length, extra: plan.unschedule.length };
+      } catch (e) {
+        rep.jobs = { activeOnStandby: 0, missing: pj.length, extra: 0, error: (e as Error).message.slice(0, 200) };
+      }
+      if (run.report.jobs?.schedulerMissing && rep.jobs.missing) rep.jobs.error ??= "scheduler not reachable on the standby";
+      rep.access = await env.standby.one(STANDBY_ACCESS_SQL).then((x) => JSON.parse(x ?? "null")).catch(() => null);
       v.phase = "done";
     } else {
       rep.allInSync =

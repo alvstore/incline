@@ -9,7 +9,7 @@
 
 import { type Sql, readJson, readOne } from "./primary.ts";
 import { type PkCol, qi, qn, rangePredicate, rowHashExpr, textArray } from "./sqlText.ts";
-import type { Standby } from "./standby.ts";
+import { type Standby, StandbyError } from "./standby.ts";
 
 export interface TableSpec {
   schema: string;
