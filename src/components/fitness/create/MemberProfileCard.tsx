@@ -338,7 +338,7 @@ export function MemberProfileCard({ memberId, value, onChange, planType = 'worko
                   {WORKOUT_ACTIVITY_OPTIONS.map((opt) => {
                     const active = (value.workout_activities || []).includes(opt);
                     return (
-                      <button
+                      <button aria-pressed={active}
                         type="button"
                         key={opt}
                         onClick={() => toggleActivity(opt)}

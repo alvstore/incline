@@ -165,7 +165,7 @@ function ReviewCard({
         <div className="mt-3 rounded-xl bg-destructive/10 p-3 ring-1 ring-destructive/15">
           <div className="flex flex-wrap gap-1.5">
             {REJECT_REASONS.map((r) => (
-              <button
+              <button aria-pressed={reasonChip === r}
                 key={r}
                 type="button"
                 onClick={() => setReasonChip(r)}

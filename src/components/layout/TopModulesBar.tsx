@@ -52,7 +52,7 @@ export function TopModulesBar({ groups, activeModuleId, onSelect, bare = false }
             const hasChildren = g.items.length > 1;
 
             const trigger = (
-              <button
+              <button aria-current={isActive ? 'page' : undefined}
                 type="button"
                 onClick={() => handleModuleClick(g)}
                 data-testid={`top-module-${g.module.id}`}

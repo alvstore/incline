@@ -235,7 +235,7 @@ export function AddEquipmentDrawer({ open, onOpenChange, branchId, equipmentToEd
               {MUSCLE_GROUPS.map((mg) => {
                 const active = formData.muscleGroups.includes(mg.value);
                 return (
-                  <button
+                  <button aria-pressed={active}
                     type="button"
                     key={mg.value}
                     onClick={() =>

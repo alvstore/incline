@@ -377,7 +377,7 @@ export function ClientsTable(props: Props) {
 
 function SortButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
+    <button aria-pressed={active} type="button" onClick={onClick}
       className={cn('inline-flex min-h-11 items-center gap-1 text-xs font-semibold uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded', active ? 'text-foreground' : 'text-muted-foreground')}>
       {label}<ArrowUpDown className="h-3 w-3" aria-hidden />
     </button>

@@ -642,7 +642,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 rounded-lg bg-background border border-border/60 p-0.5">
                   {PAGE_SIZES.map((sz) => (
-                    <button type="button"
+                    <button aria-pressed={pageSize === sz} type="button"
                       key={sz}
                       onClick={() => setPageSize(sz)}
                       className={cn(

@@ -24,7 +24,7 @@ export function TaskFilterPills({ value, onChange, counts }: Props) {
         const active = value === f.id;
         const count = counts?.[f.id];
         return (
-          <button type="button"
+          <button aria-pressed={active} type="button"
             key={f.id}
             onClick={() => onChange(f.id)}
             className={cn(

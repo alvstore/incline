@@ -997,7 +997,7 @@ export default function WhatsAppChatPage() {
                   { key: 'unread' as ChatFilter, label: 'Unread', count: unreadCount },
                   { key: 'needs_human' as ChatFilter, label: 'Human', count: needsHumanCount },
                 ]).map(tab => (
-                  <button type="button"
+                  <button aria-pressed={chatFilter === tab.key} type="button"
                     key={tab.key}
                     onClick={() => setChatFilter(tab.key)}
                     className={`flex-1 text-xs font-medium px-2 py-1.5 rounded-lg transition-colors ${

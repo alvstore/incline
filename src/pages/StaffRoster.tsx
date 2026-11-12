@@ -1880,7 +1880,7 @@ function SundayAssignSheet({
               Apply to
             </Label>
             <div className="grid grid-cols-2 gap-2">
-              <button
+              <button aria-pressed={scope === 'one_off'}
                 type="button"
                 onClick={() => setScope('one_off')}
                 className={cn(
@@ -1896,7 +1896,7 @@ function SundayAssignSheet({
                   <div className="text-[10px] text-muted-foreground leading-tight">One-off for {format(sundayDate, 'dd MMM')}. Their weekly schedule stays unchanged.</div>
                 </div>
               </button>
-              <button
+              <button aria-pressed={scope === 'recurring'}
                 type="button"
                 onClick={() => setScope('recurring')}
                 className={cn(

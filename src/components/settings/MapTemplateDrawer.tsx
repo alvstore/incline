@@ -185,7 +185,7 @@ export function MapTemplateDrawer({
             {eligible.map((t) => {
               const active = selected === t.id;
               return (
-                <button
+                <button aria-pressed={active}
                   key={t.id}
                   type="button"
                   onClick={() => setSelected(t.id)}
