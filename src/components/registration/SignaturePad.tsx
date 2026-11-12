@@ -132,7 +132,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
                 onClick={undo}
                 disabled={empty}
                 aria-label="Undo last stroke"
-                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-muted-foreground transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-muted-foreground transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Undo2 className="h-4 w-4" /> Undo
               </button>
@@ -141,7 +141,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
                 onClick={clear}
                 disabled={empty}
                 aria-label="Clear signature"
-                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-red-50 px-3 text-xs font-semibold text-red-600 transition-colors duration-150 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg bg-destructive/10 px-3 text-xs font-semibold text-destructive transition-colors duration-150 hover:bg-destructive/15 focus:outline-none focus:ring-2 focus:ring-destructive disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Eraser className="h-4 w-4" /> Clear
               </button>

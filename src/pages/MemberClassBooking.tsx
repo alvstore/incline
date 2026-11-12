@@ -1207,7 +1207,7 @@ function RecoveryTimeGrid({
                   disabled
                     ? 'bg-muted text-muted-foreground cursor-not-allowed'
                     : slot.locked
-                      ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 cursor-pointer hover:bg-amber-100'
+                      ? 'bg-warning/10 text-warning ring-1 ring-warning/30 cursor-pointer hover:bg-warning/15'
                       : 'bg-card text-foreground ring-1 ring-border cursor-pointer hover:bg-primary hover:text-primary-foreground hover:ring-primary'
                 }`}
               >

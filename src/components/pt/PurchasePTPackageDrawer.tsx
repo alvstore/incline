@@ -778,8 +778,8 @@ export function PurchasePTPackageDrawer({
                           type="button"
                           onClick={() => setSelected(pkg.id)}
                           aria-pressed={isSel}
-                          className={`w-full cursor-pointer rounded-2xl bg-card p-4 text-left shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                            isSel ? 'ring-2 ring-primary shadow-md shadow-primary/10' : 'hover:shadow-md hover:shadow-indigo-500/10'
+                          className={`w-full cursor-pointer rounded-2xl bg-card p-4 text-left shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring ${
+                            isSel ? 'ring-2 ring-primary shadow-md shadow-primary/10' : 'hover:shadow-md hover:shadow-primary/10'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">

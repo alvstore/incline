@@ -77,8 +77,8 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
                   setIsOpen(false);
                 }}
                 className={cn(
-                  "w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-150 text-left hover:bg-indigo-50/50 group",
-                  selectedMemberId === member.id && "bg-indigo-50"
+                  "w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-150 text-left hover:bg-primary/5 group",
+                  selectedMemberId === member.id && "bg-primary/10"
                 )}
               >
                 <Avatar className="h-10 w-10 border border-indigo-50">

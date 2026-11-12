@@ -275,7 +275,7 @@ export function ClientsTable(props: Props) {
                 className={cn(
                   'inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   active ? 'border-primary bg-primary text-primary-foreground'
-                    : alert ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20'
+                    : alert ? 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/20'
                       : 'border-border bg-card text-foreground hover:bg-secondary',
                 )}>
                 {f.label}

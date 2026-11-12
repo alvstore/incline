@@ -386,7 +386,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                             <button
                               type="button"
                               onClick={() => { setPlaceId(p.place_id); setPlaceName(p.name); setResults([]); }}
-                              className="w-full cursor-pointer rounded-xl border border-border px-3 py-2 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="w-full cursor-pointer rounded-xl border border-border px-3 py-2 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <span className="truncate text-sm font-semibold text-foreground">{p.name}</span>
@@ -531,7 +531,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                                 type="button"
                                 onClick={() => selectLocation.mutate(l)}
                                 disabled={selectLocation.isPending}
-                                className="w-full cursor-pointer rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full cursor-pointer rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                               >
                                 <p className="truncate text-sm font-semibold text-foreground">{l.title}</p>
                                 <p className="truncate text-xs text-muted-foreground">{l.address ?? l.account_name}</p>

@@ -305,10 +305,10 @@ export function AgentFlowCanvas() {
 
   return (
     <div className="space-y-5">
-      <Card className="rounded-2xl border-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20">
+      <Card className="rounded-2xl border-0 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-bold text-white">How the assistant handles a conversation</CardTitle>
-          <CardDescription className="text-indigo-100">
+          <CardTitle className="text-lg font-bold text-primary-foreground">How the assistant handles a conversation</CardTitle>
+          <CardDescription className="text-primary-foreground/80">
             Pick a journey to see exactly what happens, step by step, with your current settings applied.
           </CardDescription>
         </CardHeader>
@@ -323,8 +323,8 @@ export function AgentFlowCanvas() {
                   type="button"
                   onClick={() => setJourney(j.id)}
                   aria-pressed={active}
-                  className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl p-3 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/70 ${
-                    active ? 'bg-card text-foreground shadow-lg' : 'bg-white/10 text-white hover:bg-white/20'
+                  className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl p-3 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-foreground/70 ${
+                    active ? 'bg-card text-foreground shadow-lg' : 'bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20'
                   }`}
                 >
                   <span className={`rounded-full p-2 ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-white/15 text-white'}`}>

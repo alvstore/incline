@@ -74,7 +74,7 @@ export function TasksHeader({ view, onViewChange, search, onSearchChange, subtit
                   'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150',
                   'focus:outline-none focus:ring-2 focus:ring-ring',
                   active
-                    ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-md shadow-md'
+                    ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20'
                     : 'text-muted-foreground hover:text-primary hover:bg-muted/50',
                 )}
                 aria-pressed={active}

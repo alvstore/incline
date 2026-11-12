@@ -189,10 +189,10 @@ export function MapTemplateDrawer({
                   key={t.id}
                   type="button"
                   onClick={() => setSelected(t.id)}
-                  className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
                     active
-                      ? 'border-indigo-300 bg-indigo-50/60 shadow-lg shadow-indigo-500/10'
-                      : 'border-border bg-card hover:shadow-lg hover:shadow-slate-200/50'
+                      ? 'border-primary/30 bg-primary/10 shadow-lg shadow-primary/10'
+                      : 'border-border bg-card hover:shadow-lg hover:shadow-primary/5'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
