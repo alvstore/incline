@@ -531,9 +531,9 @@ export default function VoiceAIPage() {
                           const disp = dispositionLook(q.last_disposition);
                           const clickable = !!q.last_call_id;
                           return (
-                            <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
+                            <TableRow tabIndex={clickable ? 0 : undefined} onKeyDown={clickable ? clickOnActivateKey : undefined}
                               key={q.member_id}
-                              className={clickable ? 'cursor-pointer transition-colors duration-150 hover:bg-muted/50' : ''}
+                              className={clickable ? 'cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}
                               onClick={() => q.last_call_id && setOpenCallId(q.last_call_id)}
                             >
                               <TableCell>

@@ -117,9 +117,9 @@ export function HowbodyDevicesCard() {
               </TableRow>
             )}
             {filtered.map((d) => (
-              <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
+              <TableRow tabIndex={canManage ? 0 : undefined} onKeyDown={canManage ? clickOnActivateKey : undefined}
                 key={d.id}
-                className={canManage ? "cursor-pointer hover:bg-muted" : ""}
+                className={canManage ? "cursor-pointer hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""}
                 onClick={() => openEdit(d)}
               >
                 <TableCell className="font-mono text-xs">

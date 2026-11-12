@@ -676,7 +676,7 @@ export default function POSPage() {
                   const isLowStock = stock !== null && stock > 0 && stock < getMinStock(product);
 
                   return (
-                    <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+                    <Card role="button" tabIndex={isOutOfStock ? -1 : 0} aria-disabled={isOutOfStock || undefined} onKeyDown={clickOnActivateKey}
                       key={product.id}
                       className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary'} ${isLowStock ? 'border-warning/50' : ''}`}
                       onClick={() => !isOutOfStock && addToCart(product)}

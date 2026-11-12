@@ -311,7 +311,7 @@ export default function AdminRoles() {
           {ROLE_OPTIONS.map((role) => {
             const count = usersWithRoles.filter(u => u.roles.includes(role)).length;
             return (
-              <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+              <Card role="button" tabIndex={0} aria-pressed={activeTab === role} onKeyDown={clickOnActivateKey}
                 key={role}
                 className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl shadow-md cursor-pointer transition-all hover:shadow-lg ${activeTab === role ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => setActiveTab(activeTab === role ? 'all' : role)}
