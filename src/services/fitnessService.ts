@@ -334,6 +334,13 @@ export async function getPlanTemplate(id: string): Promise<FitnessPlanTemplate |
 }
 
 // Assign plan to member
+function friendlyAssignError(error: any): Error {
+  if (error?.code === '42501' || /row-level security|permission denied/i.test(error?.message || '')) {
+    return new Error('You can only assign plans to your own clients');
+  }
+  return error;
+}
+
 export async function assignPlanToMember(params: {
   member_id: string;
   plan_name: string;
@@ -365,7 +372,7 @@ export async function assignPlanToMember(params: {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw friendlyAssignError(error);
   return data;
 }
 
@@ -589,7 +596,7 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
     .from('member_fitness_plans')
     .insert(rows)
     .select('id, member_id');
-  if (error) throw error;
+  if (error) throw friendlyAssignError(error);
 
   const planIdByMember = new Map<string, string>();
   for (const row of inserted || []) {
@@ -642,7 +649,31 @@ export async function searchMembersForAssignment(searchTerm: string, branchId?: 
     return [];
   }
 
-  return (data || []).map((m: any) => ({
+  let rows: any[] = data || [];
+  // Trainers may only assign plans to their own clients (matches the server rule).
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user && rows.length) {
+    const { data: roleRows } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
+    const roles = (roleRows || []).map((r: any) => r.role);
+    const isTrainerOnly = roles.includes('trainer') && !roles.some((r: string) => ['owner', 'admin', 'manager'].includes(r));
+    if (isTrainerOnly) {
+      const ids = rows.map((m) => m.id);
+      const { data: trainerRows } = await supabase.from('trainers').select('id').eq('user_id', user.id);
+      const tIds = (trainerRows || []).map((t: any) => t.id);
+      if (!tIds.length) return [];
+      const [assigned, pt] = await Promise.all([
+        supabase.from('members').select('id').in('id', ids).in('assigned_trainer_id', tIds),
+        supabase.from('member_pt_packages').select('member_id').in('member_id', ids).in('trainer_id', tIds).eq('status', 'active'),
+      ]);
+      const allowed = new Set<string>([
+        ...((assigned.data || []).map((r: any) => r.id)),
+        ...((pt.data || []).map((r: any) => r.member_id)),
+      ]);
+      rows = rows.filter((m) => allowed.has(m.id));
+    }
+  }
+
+  return rows.map((m: any) => ({
     id: m.id,
     member_code: m.member_code,
     full_name: m.full_name,

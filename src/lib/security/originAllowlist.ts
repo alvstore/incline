@@ -6,6 +6,7 @@ export const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
   /^https:\/\/([a-z0-9-]+\.)*razorpay\.com$/,
   /^https:\/\/storage\.googleapis\.com$/,
   /^https:\/\/([a-z0-9-]+\.)*(lovable\.app|lovableproject\.com|lovable\.dev)$/,
+  /^https:\/\/([a-z0-9-]+\.)*gpteng\.co$/,
   /^https:\/\/([a-z0-9-]+\.)*(google\.com|gstatic\.com|googleapis\.com|youtube\.com|ytimg\.com)$/,
   /^https:\/\/([a-z0-9-]+\.)*(instagram\.com|facebook\.com|fbcdn\.net)$/,
 ];

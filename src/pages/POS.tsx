@@ -369,7 +369,8 @@ export default function POSPage() {
       const raw: string = error?.message || 'Unknown error';
       const outOfStock = /OUT_OF_STOCK:/i.test(raw);
       const msg = raw.replace(/^.*OUT_OF_STOCK:\s*/i, '').replace(/^only/, 'Only');
-      console.error('[POS] create sale failed:', error);
+      const isValidation = /^(Choose a reason|Salary deduction is only)/.test(raw);
+      if (!isValidation) console.error('[POS] create sale failed:', error);
       if (outOfStock) {
         // Someone else sold it or stock was adjusted — refresh counts so the cart can be fixed.
         queryClient.invalidateQueries({ queryKey: ['pos-products'] });
@@ -1044,6 +1045,9 @@ export default function POSPage() {
                             {discountReason === 'Other' && (
                               <Input placeholder="Describe the reason" value={discountNote} onChange={(e) => setDiscountNote(e.target.value)} className="h-9" />
                             )}
+                            {manualDiscount > 0 && !(discountReason === 'Other' ? discountNote.trim() : discountReason) && (
+                              <p className="text-xs text-destructive">Choose a reason for the manual discount to complete the sale.</p>
+                            )}
                             {belowCost && <p className="text-xs text-destructive">This price is below the purchase cost of at least one item.</p>}
                             <p className="text-[11px] text-muted-foreground">Recorded with your name, the reason and the payment mode.</p>
                           </>
@@ -1162,7 +1166,7 @@ export default function POSPage() {
                         className="w-full" 
                         size="lg"
                         onClick={() => checkoutMutation.mutate()}
-                        disabled={checkoutMutation.isPending}
+                        disabled={checkoutMutation.isPending || (manualDiscount > 0 && !(discountReason === 'Other' ? discountNote.trim() : discountReason))}
                       >
                         <CreditCard className="mr-2 h-5 w-5" />
                         {checkoutMutation.isPending ? 'Processing...' : 'Complete Sale'}
