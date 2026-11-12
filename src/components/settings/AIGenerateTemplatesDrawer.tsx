@@ -304,7 +304,7 @@ export function AIGenerateTemplatesDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-2xl p-0 flex flex-col h-full gap-0">
-        <SheetHeader className="px-6 py-5 border-b border-slate-100 shrink-0 space-y-0">
+        <SheetHeader className="px-6 py-5 border-b border-border shrink-0 space-y-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
               <Sparkles className="h-5 w-5" />
@@ -324,12 +324,12 @@ export function AIGenerateTemplatesDrawer({
           {step === 'pick' ? (
             <div className="space-y-4">
               {!matrixLoading && (
-                <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">
+                <div className="rounded-2xl bg-muted border border-border px-4 py-3">
+                  <p className="text-sm font-semibold text-foreground">
                     {channelEvents.length - uncovered.length} of {channelEvents.length} system events
                     covered
                   </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {brokenTemplates.length > 0
                       ? `${brokenTemplates.length} approved template(s) no longer exist in Meta — listed below.`
                       : 'Coverage counts only templates Meta still has approved and live.'}
@@ -366,7 +366,7 @@ export function AIGenerateTemplatesDrawer({
 
               <div className="flex items-center justify-between gap-3">
 
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Select events to cover ({uncovered.length} gaps)
                 </h3>
                 <div className="flex items-center gap-1">
@@ -379,7 +379,7 @@ export function AIGenerateTemplatesDrawer({
                     Select all
                   </Button>
                   {picked.size > 0 && (
-                    <Button variant="ghost" size="sm" onClick={clearAll} className="text-slate-500">
+                    <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground">
                       Clear
                     </Button>
                   )}
@@ -397,8 +397,8 @@ export function AIGenerateTemplatesDrawer({
                   <div className="p-3 rounded-full bg-emerald-50 text-emerald-600 mb-3">
                     <ShieldCheck className="h-6 w-6" />
                   </div>
-                  <p className="font-semibold text-slate-900">Every system event is covered</p>
-                  <p className="text-sm text-slate-500 mt-1 max-w-sm">
+                  <p className="font-semibold text-foreground">Every system event is covered</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-sm">
                     All {channel} events already have an approved template. Sync from Meta if you
                     think this is out of date.
                   </p>
@@ -414,18 +414,18 @@ export function AIGenerateTemplatesDrawer({
                       className={`flex items-center gap-3 p-4 rounded-2xl border text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                         picked.has(event.event)
                           ? 'border-indigo-200 bg-indigo-50/50 shadow-sm'
-                          : 'border-slate-100 bg-white hover:border-slate-200'
+                          : 'border-border bg-card hover:border-border'
                       }`}
                     >
                       <Checkbox checked={picked.has(event.event)} className="rounded-full pointer-events-none" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm">{event.label}</span>
+                          <span className="font-bold text-foreground text-sm">{event.label}</span>
                           <Badge variant="outline" className="text-[10px] uppercase">
                             {event.category}
                           </Badge>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">{event.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{event.description}</p>
                       </div>
                     </button>
                   ))}
@@ -434,7 +434,7 @@ export function AIGenerateTemplatesDrawer({
             </div>
           ) : (
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Review generated proposals ({proposals.length})
               </h3>
               {proposals.map((p, i) => (
@@ -445,13 +445,13 @@ export function AIGenerateTemplatesDrawer({
                       ? 'border-red-200 bg-red-50/50'
                       : p.state === 'done'
                       ? 'border-emerald-200 bg-emerald-50/40'
-                      : 'border-slate-100 bg-slate-50/50'
+                      : 'border-border bg-muted/50'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <Badge className="bg-indigo-600 truncate max-w-[200px]">{p.name}</Badge>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className="bg-white capitalize text-[10px]">
+                      <Badge variant="outline" className="bg-card capitalize text-[10px]">
                         {p.category}
                       </Badge>
                       {p.state === 'submitting' && (
@@ -465,7 +465,7 @@ export function AIGenerateTemplatesDrawer({
                           size="icon"
                           aria-label={`Remove ${p.name}`}
                           onClick={() => removeProposal(i)}
-                          className="h-7 w-7 text-slate-400 hover:text-red-600"
+                          className="h-7 w-7 text-muted-foreground hover:text-red-600"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -490,11 +490,11 @@ export function AIGenerateTemplatesDrawer({
                       <DltSmsPanel name={p.name} content={p.body_text || p.body || ''} eventId={p.trigger_event || p.event} compact />
                     </>
                   ) : (
-                    <div className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100 whitespace-pre-wrap font-medium leading-relaxed">
+                    <div className="text-sm text-foreground bg-card p-3 rounded-xl border border-border whitespace-pre-wrap font-medium leading-relaxed">
                       {p.body_text || p.body}
                     </div>
                   )}
-                  {p.footer && <div className="text-[10px] text-slate-400 px-1">Footer: {p.footer}</div>}
+                  {p.footer && <div className="text-[10px] text-muted-foreground px-1">Footer: {p.footer}</div>}
                   {p.error && (
                     <p className="text-xs text-red-600 leading-relaxed px-1">{p.error}</p>
                   )}
@@ -504,20 +504,20 @@ export function AIGenerateTemplatesDrawer({
           )}
         </div>
 
-        <div className="shrink-0 border-t border-slate-100 bg-white px-6 py-4 flex items-center justify-between gap-3">
+        <div className="shrink-0 border-t border-border bg-card px-6 py-4 flex items-center justify-between gap-3">
           {step === 'pick' ? (
             <>
               <Button
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
-                className="rounded-xl text-slate-500 font-semibold"
+                className="rounded-xl text-muted-foreground font-semibold"
               >
                 Cancel
               </Button>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
-                  className="rounded-xl border-slate-200 text-slate-600 font-semibold h-11"
+                  className="rounded-xl border-border text-muted-foreground font-semibold h-11"
                   onClick={() => {
                     supabase.functions
                       .invoke('manage-whatsapp-templates', {
@@ -555,7 +555,7 @@ export function AIGenerateTemplatesDrawer({
                 variant="ghost"
                 onClick={() => setStep('pick')}
                 disabled={submitting}
-                className="rounded-xl text-slate-600 font-semibold"
+                className="rounded-xl text-muted-foreground font-semibold"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to events
               </Button>
@@ -564,7 +564,7 @@ export function AIGenerateTemplatesDrawer({
                   variant="ghost"
                   onClick={() => onOpenChange(false)}
                   disabled={submitting}
-                  className="rounded-xl text-slate-500 font-semibold"
+                  className="rounded-xl text-muted-foreground font-semibold"
                 >
                   Cancel
                 </Button>

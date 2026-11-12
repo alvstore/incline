@@ -91,7 +91,7 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
             <CardTitle className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><Globe className="h-4 w-4" aria-hidden /></span>
               Google Business Profile
-              <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
+              <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}>
                 {isActive ? 'Active' : 'Inactive'}
               </Badge>
             </CardTitle>
@@ -132,13 +132,13 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
         )}
 
         {/* Listing summary */}
-        <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-slate-50 px-4 py-3">
-          <span className="rounded-full bg-white p-2 text-indigo-600 shadow-sm"><MapPin className="h-4 w-4" aria-hidden /></span>
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-muted px-4 py-3">
+          <span className="rounded-full bg-card p-2 text-indigo-600 shadow-sm"><MapPin className="h-4 w-4" aria-hidden /></span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-900">
+            <p className="truncate text-sm font-semibold text-foreground">
               {cfg.place_name || (linked ? 'Listing linked' : 'No Google listing linked yet')}
             </p>
-            <p className="text-xs text-slate-500">Last synced {fmtWhen(cfg.last_places_sync)}</p>
+            <p className="text-xs text-muted-foreground">Last synced {fmtWhen(cfg.last_places_sync)}</p>
           </div>
           {cfg.place_rating != null && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
@@ -159,14 +159,14 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
         {/* 3-step tracker */}
         <ol className="grid gap-2 sm:grid-cols-3">
           {steps.map((s, i) => (
-            <li key={s.label} className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+            <li key={s.label} className="rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
               <div className="flex items-center gap-2">
                 {s.ok
                   ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
                   : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />}
-                <p className="text-sm font-semibold text-slate-900">{i + 1}. {s.label}</p>
+                <p className="text-sm font-semibold text-foreground">{i + 1}. {s.label}</p>
               </div>
-              {!s.ok && <p className="mt-1 text-xs leading-relaxed text-slate-500">{s.hint}</p>}
+              {!s.ok && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.hint}</p>}
             </li>
           ))}
         </ol>
@@ -174,15 +174,15 @@ export default function GoogleListingCard({ branchId, integration, onConfigure }
         {diagnose.isPending && <Skeleton className="h-24 w-full rounded-2xl" />}
 
         {!diagnose.isPending && checks && (
-          <div className="space-y-1.5 rounded-2xl bg-slate-50 p-3">
+          <div className="space-y-1.5 rounded-2xl bg-muted p-3">
             {checks.map((c) => (
               <div key={c.key} className="flex items-start gap-2">
                 {c.ok
                   ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
                   : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden />}
                 <div className="min-w-0">
-                  <p className="text-sm text-slate-800">{c.label}</p>
-                  {!c.ok && c.hint && <p className="text-xs leading-relaxed text-slate-500">{c.hint}</p>}
+                  <p className="text-sm text-foreground">{c.label}</p>
+                  {!c.ok && c.hint && <p className="text-xs leading-relaxed text-muted-foreground">{c.hint}</p>}
                 </div>
               </div>
             ))}

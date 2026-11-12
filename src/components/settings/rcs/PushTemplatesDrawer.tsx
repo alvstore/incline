@@ -111,10 +111,10 @@ export function PushTemplatesDrawer({
           {isLoading ? (
             <Skeleton className="h-32 w-full rounded-2xl" />
           ) : !templates || templates.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+            <div className="rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center">
               <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-900">All templates are already on {providerLabel}.</p>
-              <p className="text-xs text-slate-500 mt-1">Nothing left to push.</p>
+              <p className="text-sm font-semibold text-foreground">All templates are already on {providerLabel}.</p>
+              <p className="text-xs text-muted-foreground mt-1">Nothing left to push.</p>
             </div>
           ) : (
             <>
@@ -124,7 +124,7 @@ export function PushTemplatesDrawer({
                   onCheckedChange={(v) => toggleAll(!!v)}
                   id="push-all"
                 />
-                <label htmlFor="push-all" className="text-xs font-semibold uppercase tracking-wider text-slate-500 cursor-pointer">
+                <label htmlFor="push-all" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer">
                   Select all ({templates.length})
                 </label>
               </div>
@@ -137,8 +137,8 @@ export function PushTemplatesDrawer({
                   <label
                     key={t.id}
                     className={`flex gap-3 rounded-2xl border p-3 transition ${
-                      selected[t.id] ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 bg-white'
-                    } ${blocked ? 'opacity-60' : 'cursor-pointer hover:border-slate-300'}`}
+                      selected[t.id] ? 'border-indigo-300 bg-indigo-50/40' : 'border-border bg-card'
+                    } ${blocked ? 'opacity-60' : 'cursor-pointer hover:border-border'}`}
                   >
                     <Checkbox
                       checked={!!selected[t.id]}
@@ -153,10 +153,10 @@ export function PushTemplatesDrawer({
                         ) : (
                           <Badge variant="outline" className="text-[10px]"><MessageSquare className="h-2.5 w-2.5 mr-0.5" />Basic</Badge>
                         )}
-                        <span className="font-semibold text-slate-900 truncate">{t.template_name}</span>
+                        <span className="font-semibold text-foreground truncate">{t.template_name}</span>
                       </div>
                       {t.body_preview && (
-                        <p className="text-xs text-slate-600 line-clamp-2 mt-1">{t.body_preview}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{t.body_preview}</p>
                       )}
                       {blocked && (
                         <p className="text-xs text-amber-700 flex items-start gap-1 mt-1.5">

@@ -534,7 +534,7 @@ export default function SarvamVoiceCard() {
                     ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Active</Badge>
                     : canEnableRetention
                       ? <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Ready</Badge>
-                      : <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">Blocked</Badge>}
+                      : <Badge className="bg-muted text-muted-foreground hover:bg-muted">Blocked</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Foundation only. Nothing is dialled automatically while this is off.

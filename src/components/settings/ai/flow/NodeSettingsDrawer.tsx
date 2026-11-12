@@ -46,7 +46,7 @@ function CheckList({
   return (
     <div className="space-y-2">
       {options.map((opt) => (
-        <label key={opt.id} className="flex cursor-pointer items-center gap-2.5 text-sm text-slate-700">
+        <label key={opt.id} className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
           <Checkbox
             checked={value.includes(opt.id)}
             disabled={disabled}
@@ -75,8 +75,8 @@ export function NodeSettingsDrawer({ node, readOnly, open, onOpenChange, onSave,
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-slate-200 px-6 py-4">
-          <SheetTitle className="text-slate-900">Edit step</SheetTitle>
+        <SheetHeader className="border-b border-border px-6 py-4">
+          <SheetTitle className="text-foreground">Edit step</SheetTitle>
           <SheetDescription>Change how this part of the conversation behaves.</SheetDescription>
         </SheetHeader>
 
@@ -138,7 +138,7 @@ export function NodeSettingsDrawer({ node, readOnly, open, onOpenChange, onSave,
                 disabled={readOnly}
                 onChange={(e) => set({ tools: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })}
               />
-              <p className="text-xs text-slate-500">Separate names with commas. Role limits always apply on top of this.</p>
+              <p className="text-xs text-muted-foreground">Separate names with commas. Role limits always apply on top of this.</p>
             </div>
           )}
 
@@ -219,7 +219,7 @@ export function NodeSettingsDrawer({ node, readOnly, open, onOpenChange, onSave,
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
           <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             className="rounded-xl"

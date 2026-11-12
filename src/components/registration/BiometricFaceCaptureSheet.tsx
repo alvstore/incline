@@ -148,7 +148,7 @@ export function BiometricFaceCaptureSheet({ open, onOpenChange, onCapture, busy 
           <ul className="mx-auto mt-5 grid max-w-sm grid-cols-3 gap-2 text-center text-[11px] text-muted-foreground">
             <li className="rounded-xl bg-muted p-2.5"><Sun className="mx-auto mb-1 h-4 w-4 text-amber-500" />Good light on face</li>
             <li className="rounded-xl bg-muted p-2.5"><ScanFace className="mx-auto mb-1 h-4 w-4 text-primary" />Face fills the oval</li>
-            <li className="rounded-xl bg-muted p-2.5"><Glasses className="mx-auto mb-1 h-4 w-4 text-slate-500" />No cap, mask or shades</li>
+            <li className="rounded-xl bg-muted p-2.5"><Glasses className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />No cap, mask or shades</li>
           </ul>
 
           <input

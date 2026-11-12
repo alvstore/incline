@@ -135,18 +135,18 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
         </SheetHeader>
 
         <div className="mt-6 space-y-4">
-          <Card className="bg-slate-50">
+          <Card className="bg-muted">
             <CardContent className="pt-4 text-sm space-y-1">
               <div className="flex justify-between">
-                <span className="text-slate-500">Current total</span>
+                <span className="text-muted-foreground">Current total</span>
                 <span className="font-medium">₹{Number(invoice.total_amount || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Currently paid</span>
+                <span className="text-muted-foreground">Currently paid</span>
                 <span className="font-medium">₹{currentPaid.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Status</span>
+                <span className="text-muted-foreground">Status</span>
                 <span className="font-medium capitalize">{invoice.status}</span>
               </div>
             </CardContent>
@@ -155,7 +155,7 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
           <div className="space-y-2">
             <Label htmlFor="new-total">New total (₹, inclusive of GST)</Label>
             <div className="relative">
-              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="new-total"
                 type="number"
@@ -197,18 +197,18 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
           <Card className="bg-indigo-50/50 border-indigo-100">
             <CardContent className="pt-4 text-xs space-y-1">
               <div className="flex justify-between">
-                <span className="text-slate-600">Derived subtotal</span>
+                <span className="text-muted-foreground">Derived subtotal</span>
                 <span className="font-mono">₹{subtotalDerived.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Derived GST</span>
+                <span className="text-muted-foreground">Derived GST</span>
                 <span className="font-mono">₹{taxDerived.toLocaleString()}</span>
               </div>
               <div className="flex justify-between border-t pt-1 mt-1">
-                <span className="text-slate-700 font-semibold">New total</span>
+                <span className="text-foreground font-semibold">New total</span>
                 <span className="font-mono font-semibold">₹{totalNum.toLocaleString()}</span>
               </div>
-              <div className={`flex justify-between pt-1 ${overpaid ? 'text-emerald-700' : underpaid ? 'text-red-700' : 'text-slate-500'}`}>
+              <div className={`flex justify-between pt-1 ${overpaid ? 'text-emerald-700' : underpaid ? 'text-red-700' : 'text-muted-foreground'}`}>
                 <span>
                   {overpaid ? 'Overpayment to settle' : underpaid ? 'Additional due' : 'No balance change'}
                 </span>
@@ -258,10 +258,10 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
-            <p className="text-xs text-slate-500">Minimum 6 characters. This is written to the audit log.</p>
+            <p className="text-xs text-muted-foreground">Minimum 6 characters. This is written to the audit log.</p>
           </div>
 
-          <div className="sticky bottom-0 -mx-6 px-6 pt-4 pb-2 bg-white border-t flex gap-2">
+          <div className="sticky bottom-0 -mx-6 px-6 pt-4 pb-2 bg-card border-t flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

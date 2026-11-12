@@ -32,9 +32,9 @@ const statusClass = (status: string) => {
       return 'bg-red-100 text-red-700';
     case 'cancelled':
     case 'refunded':
-      return 'bg-slate-200 text-slate-600';
+      return 'bg-muted text-muted-foreground';
     default:
-      return 'bg-slate-100 text-slate-600';
+      return 'bg-muted text-muted-foreground';
   }
 };
 
@@ -88,8 +88,8 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
 
             {!isLoading && invoices.length === 0 && (
               <Card>
-                <CardContent className="pt-6 text-center text-sm text-slate-500">
-                  <FileText className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                <CardContent className="pt-6 text-center text-sm text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   No invoices for this member yet.
                 </CardContent>
               </Card>
@@ -103,8 +103,8 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
                   <CardContent className="pt-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{inv.invoice_number}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm font-semibold text-foreground">{inv.invoice_number}</p>
+                        <p className="text-xs text-muted-foreground">
                           {inv.created_at ? format(new Date(inv.created_at), 'dd MMM yyyy') : ''}
                           {inv.invoice_type ? ` · ${inv.invoice_type}` : ''}
                         </p>
@@ -116,15 +116,15 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
 
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div>
-                        <p className="text-slate-500">Total</p>
-                        <p className="font-semibold text-slate-900">₹{Number(inv.total_amount || 0).toLocaleString('en-IN')}</p>
+                        <p className="text-muted-foreground">Total</p>
+                        <p className="font-semibold text-foreground">₹{Number(inv.total_amount || 0).toLocaleString('en-IN')}</p>
                       </div>
                       <div>
-                        <p className="text-slate-500">Paid</p>
-                        <p className="font-semibold text-slate-900">₹{Number(inv.amount_paid || 0).toLocaleString('en-IN')}</p>
+                        <p className="text-muted-foreground">Paid</p>
+                        <p className="font-semibold text-foreground">₹{Number(inv.amount_paid || 0).toLocaleString('en-IN')}</p>
                       </div>
                       <div>
-                        <p className="text-slate-500">Balance</p>
+                        <p className="text-muted-foreground">Balance</p>
                         <p className={`font-semibold ${due > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                           ₹{Math.abs(due).toLocaleString('en-IN')}
                         </p>

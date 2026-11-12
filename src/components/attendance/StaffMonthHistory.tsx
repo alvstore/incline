@@ -35,9 +35,9 @@ const STATUS_BADGE: Record<string, string> = {
   half_day: 'bg-amber-100 text-amber-700',
   absent: 'bg-red-100 text-red-700',
   leave: 'bg-blue-100 text-blue-700',
-  weekly_off: 'bg-slate-100 text-slate-600',
+  weekly_off: 'bg-muted text-muted-foreground',
   holiday: 'bg-violet-100 text-violet-700',
-  scheduled: 'bg-slate-100 text-slate-600',
+  scheduled: 'bg-muted text-muted-foreground',
   unrostered: 'bg-orange-100 text-orange-700',
 };
 
@@ -214,7 +214,7 @@ export function StaffMonthHistory({ branchId }: { branchId: string | undefined }
                     >
                       <TableCell className="text-sm">{format(new Date(String(d.work_date)), 'd MMM (EEE)')}</TableCell>
                       <TableCell>
-                        <Badge className={`rounded-full border-0 text-[11px] capitalize ${STATUS_BADGE[String(d.status)] || 'bg-slate-100 text-slate-600'}`}>
+                        <Badge className={`rounded-full border-0 text-[11px] capitalize ${STATUS_BADGE[String(d.status)] || 'bg-muted text-muted-foreground'}`}>
                           {String(d.status).replace('_', ' ')}
                         </Badge>
                       </TableCell>

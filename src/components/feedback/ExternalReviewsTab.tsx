@@ -608,7 +608,7 @@ export default function ExternalReviewsTab() {
                         <Badge className="bg-destructive/10 text-destructive border border-destructive/20">Removed by reviewer</Badge>
                       )}
                       {r.source === 'places' && (
-                        <Badge className="bg-slate-100 text-slate-600">Places · read-only</Badge>
+                        <Badge className="bg-muted text-muted-foreground">Places · read-only</Badge>
                       )}
                     </div>
                   </div>

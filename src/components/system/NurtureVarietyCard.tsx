@@ -59,13 +59,13 @@ export function NurtureVarietyCard() {
       </CardHeader>
       <CardContent>
         {loading ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : stats.total === 0 ? (
-          <p className="text-sm text-slate-500">No nurture sends yet in the last 7 days.</p>
+          <p className="text-sm text-muted-foreground">No nurture sends yet in the last 7 days.</p>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-3 text-sm">
-              <span className="text-slate-600">{stats.total} sends</span>
+              <span className="text-muted-foreground">{stats.total} sends</span>
               <Badge variant={stats.fallback / stats.total > 0.3 ? 'destructive' : 'secondary'}>
                 {stats.fallback} fallbacks
               </Badge>
@@ -78,14 +78,14 @@ export function NurtureVarietyCard() {
                 const pct = Math.round((n / stats.total) * 100);
                 return (
                   <div key={angle} className="flex items-center gap-2 text-sm">
-                    <span className="w-40 truncate text-slate-700">{angle}</span>
-                    <div className="h-2 flex-1 rounded-full bg-slate-100">
+                    <span className="w-40 truncate text-foreground">{angle}</span>
+                    <div className="h-2 flex-1 rounded-full bg-muted">
                       <div
                         className="h-2 rounded-full bg-indigo-500"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="w-12 text-right text-xs text-slate-500">{n} · {pct}%</span>
+                    <span className="w-12 text-right text-xs text-muted-foreground">{n} · {pct}%</span>
                   </div>
                 );
               })}

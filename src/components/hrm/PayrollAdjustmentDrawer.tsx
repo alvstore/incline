@@ -102,7 +102,7 @@ export function PayrollAdjustmentDrawer({ open, onOpenChange, item }: PayrollAdj
                 type="button"
                 size="sm"
                 variant="outline"
-                className="w-full bg-white hover:bg-amber-100 border-amber-200 text-amber-700 rounded-xl"
+                className="w-full bg-card hover:bg-amber-100 border-amber-200 text-amber-700 rounded-xl"
                 onClick={() => handleChange('final_advance', String(pendingAdvance))}
               >
                 Recover full amount in this run
@@ -113,24 +113,24 @@ export function PayrollAdjustmentDrawer({ open, onOpenChange, item }: PayrollAdj
           <div className="grid grid-cols-2 gap-4">
             {fields.map((f) => (
               <div key={f.key} className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700">{f.label}</Label>
+                <Label className="text-sm font-semibold text-foreground">{f.label}</Label>
                 <Input
                   type="number"
                   value={formData[f.key]}
                   onChange={(e) => handleChange(f.key, e.target.value)}
-                  className="rounded-xl border-slate-200 focus:ring-indigo-500"
+                  className="rounded-xl border-border focus:ring-indigo-500"
                 />
               </div>
             ))}
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-700">Adjustment Reason <span className="text-red-500">*</span></Label>
+            <Label className="text-sm font-semibold text-foreground">Adjustment Reason <span className="text-red-500">*</span></Label>
             <Textarea
               value={adjustReason}
               onChange={(e) => setAdjustReason(e.target.value)}
               placeholder="Provide a reason for this adjustment..."
-              className="rounded-xl border-slate-200 focus:ring-indigo-500 min-h-[100px]"
+              className="rounded-xl border-border focus:ring-indigo-500 min-h-[100px]"
             />
           </div>
         </div>

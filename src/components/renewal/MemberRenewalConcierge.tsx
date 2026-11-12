@@ -80,9 +80,9 @@ export function MemberRenewalConcierge() {
 
   if (isError || !member) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-12 shadow-lg shadow-slate-200/50 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-12 shadow-lg shadow-slate-200/50 text-center">
         <AlertCircle className="h-6 w-6 text-red-500" aria-hidden />
-        <p className="text-sm tracking-wide text-slate-900">We could not load your membership right now.</p>
+        <p className="text-sm tracking-wide text-foreground">We could not load your membership right now.</p>
         <Button onClick={refetch} className="cursor-pointer rounded-2xl">Try again</Button>
       </div>
     );
@@ -110,10 +110,10 @@ export function MemberRenewalConcierge() {
           <div className="flex items-start gap-3">
             <ReceiptText className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
             <div>
-              <p className="text-sm font-medium tracking-wide text-slate-900">
+              <p className="text-sm font-medium tracking-wide text-foreground">
                 Invoice {payableInvoice.invoiceNumber} is waiting
               </p>
-              <p className="text-xs tracking-wide text-slate-500">
+              <p className="text-xs tracking-wide text-muted-foreground">
                 {formatINR(payableInvoice.balance)} outstanding{payableInvoice.dueDate ? ` · due ${formatDate(payableInvoice.dueDate)}` : ''}
               </p>
             </div>
@@ -127,7 +127,7 @@ export function MemberRenewalConcierge() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Extend your access</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Extend your access</h2>
           </div>
           {renewPlan ? (
             <MembershipRenewCard
@@ -138,7 +138,7 @@ export function MemberRenewalConcierge() {
               onSelect={openPlan}
             />
           ) : (
-            <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm tracking-wide text-slate-500">
+            <p className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm tracking-wide text-muted-foreground">
               No plans are published for your club yet. Please speak to the front desk.
             </p>
           )}

@@ -155,7 +155,7 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
             <CardTitle className="flex items-center gap-2 flex-wrap">
               <Radio className="h-5 w-5 text-primary" />
               RCS Hub{state === 'active' && (
-                <span className="text-slate-400 font-normal">— {activeProvider === 'smartping' ? 'Smartping' : 'Telinfy'}</span>
+                <span className="text-muted-foreground font-normal">— {activeProvider === 'smartping' ? 'Smartping' : 'Telinfy'}</span>
               )}
               <Badge variant="secondary" className="ml-1">Beta</Badge>
               <StatusPill state={state} loading={cfgLoading} />
@@ -230,10 +230,10 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
 }
 
 function StatusPill({ state, loading }: { state: 'unconfigured' | 'inactive' | 'active'; loading: boolean }) {
-  if (loading) return <Badge className="bg-slate-100 text-slate-500">Checking…</Badge>;
+  if (loading) return <Badge className="bg-muted text-muted-foreground">Checking…</Badge>;
   if (state === 'active') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-3 w-3 mr-1" />Connected</Badge>;
   if (state === 'inactive') return <Badge className="bg-amber-100 text-amber-700">Disabled</Badge>;
-  return <Badge className="bg-slate-100 text-slate-600">Not configured</Badge>;
+  return <Badge className="bg-muted text-muted-foreground">Not configured</Badge>;
 }
 
 function PauseCircleIcon() {
@@ -242,12 +242,12 @@ function PauseCircleIcon() {
 
 function EmptyConfigure({ onConfigure }: { onConfigure?: () => void }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+    <div className="rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center">
       <div className="mx-auto h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
         <Radio className="h-6 w-6" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-900">RCS provider isn't connected yet</h3>
-      <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+      <h3 className="text-sm font-semibold text-foreground">RCS provider isn't connected yet</h3>
+      <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
         Configure Smartping (preferred) or Telinfy credentials in Provider settings above, then enable the integration to start sending.
       </p>
       {onConfigure && (
@@ -322,7 +322,7 @@ function OverviewPanel({ branchId, canSeeWallet }: { branchId: string | null; ca
 
 function KpiCard({ label, value, icon, tone = 'slate' }: { label: string; value: number; icon: React.ReactNode; tone?: string }) {
   const toneMap: Record<string, string> = {
-    slate: 'bg-slate-100 text-slate-700',
+    slate: 'bg-muted text-foreground',
     emerald: 'bg-emerald-100 text-emerald-700',
     indigo: 'bg-indigo-100 text-indigo-700',
     red: 'bg-red-100 text-red-700',
@@ -331,10 +331,10 @@ function KpiCard({ label, value, icon, tone = 'slate' }: { label: string; value:
     <Card className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
           <span className={`p-2 rounded-full ${toneMap[tone]}`}>{icon}</span>
         </div>
-        <p className="text-2xl font-bold text-slate-900 mt-2">{value}</p>
+        <p className="text-2xl font-bold text-foreground mt-2">{value}</p>
       </CardContent>
     </Card>
   );
@@ -371,7 +371,7 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           {templates?.length ?? 0} approved template{templates?.length === 1 ? '' : 's'} mirrored from {providerLabel}.
         </p>
         {isAdmin && (
@@ -390,7 +390,7 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
       {isLoading ? <Skeleton className="h-40 w-full rounded-2xl" /> :
         templates && templates.length > 0 ? (
           <>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Rich-media RCS (image cards, carousels, suggested replies) must be pre-approved on the {providerLabel} dashboard.
               Create it there, then click "Sync from {providerLabel}" to mirror it here.
             </p>
@@ -400,8 +400,8 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
               return (
                 <div key={bucket} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    {bucket === 'rich' ? <ImageIcon className="h-4 w-4 text-indigo-600" /> : <MessageSquare className="h-4 w-4 text-slate-500" />}
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {bucket === 'rich' ? <ImageIcon className="h-4 w-4 text-indigo-600" /> : <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {bucket === 'rich' ? 'Rich media' : 'Basic'} · {rows.length}
                     </span>
                   </div>
@@ -409,13 +409,13 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
                     {rows.map((t) => (
                       <Card key={t.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
                         {t.media_url && (
-                          <div className="aspect-video bg-slate-100 overflow-hidden">
+                          <div className="aspect-video bg-muted overflow-hidden">
                             <img src={t.media_url} alt={`${t.template_name} preview`} className="w-full h-full object-cover" loading="lazy" />
                           </div>
                         )}
                         <CardContent className="p-4 space-y-2">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span className="font-semibold text-slate-900 truncate">{t.template_name}</span>
+                            <span className="font-semibold text-foreground truncate">{t.template_name}</span>
                             <div className="flex items-center gap-1">
                               {isRichKind(t.kind) && (
                                 <Badge className="bg-indigo-100 text-indigo-700 text-[10px]">
@@ -427,8 +427,8 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
                               </Badge>
                             </div>
                           </div>
-                          {t.kind && <p className="text-[10px] uppercase tracking-wider text-slate-400">{KIND_LABELS[t.kind] || t.kind}</p>}
-                          {t.body_preview && <p className="text-xs text-slate-600 line-clamp-3">{t.body_preview}</p>}
+                          {t.kind && <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{KIND_LABELS[t.kind] || t.kind}</p>}
+                          {t.body_preview && <p className="text-xs text-muted-foreground line-clamp-3">{t.body_preview}</p>}
                           {t.variables?.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                               {t.variables.map((v) => (
@@ -445,8 +445,8 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
             })}
           </>
         ) : (
-          <Card className="rounded-2xl border-dashed border-2 border-slate-200">
-            <CardContent className="p-8 text-center text-sm text-slate-500">
+          <Card className="rounded-2xl border-dashed border-2 border-border">
+            <CardContent className="p-8 text-center text-sm text-muted-foreground">
               No templates synced yet. Click "Sync from {providerLabel}" to import approved templates.
             </CardContent>
           </Card>
@@ -557,7 +557,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false, providerLabel = 'P
             ))}
 
             {logId && (
-              <Card className="rounded-xl bg-slate-50 border-0">
+              <Card className="rounded-xl bg-muted border-0">
                 <CardContent className="p-3 space-y-1 text-xs font-mono">
                   <div>log_id: {logId}</div>
                   <div>status: <Badge>{status?.delivery_status ?? 'pending'}</Badge></div>
@@ -631,11 +631,11 @@ function WalletPanel({ branchId, providerLabel = 'Provider' }: { branchId: strin
       {isLoading ? <Skeleton className="h-32 w-full rounded-2xl" /> : (
         <div className="space-y-2">
           {snaps?.length ? snaps.map((s) => (
-            <div key={s.id} className="flex items-center justify-between rounded-xl bg-white shadow-sm px-4 py-2 text-sm">
+            <div key={s.id} className="flex items-center justify-between rounded-xl bg-card shadow-sm px-4 py-2 text-sm">
               <span className="font-mono">{new Date(s.fetched_at).toLocaleString('en-IN')}</span>
-              <span className="font-bold text-slate-900">{s.currency || 'INR'} {Number(s.balance ?? 0).toLocaleString('en-IN')}</span>
+              <span className="font-bold text-foreground">{s.currency || 'INR'} {Number(s.balance ?? 0).toLocaleString('en-IN')}</span>
             </div>
-          )) : <div className="text-sm text-slate-500">No snapshots yet.</div>}
+          )) : <div className="text-sm text-muted-foreground">No snapshots yet.</div>}
         </div>
       )}
     </div>
@@ -692,20 +692,20 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
     <div className="space-y-4">
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Webhook className="h-4 w-4 text-slate-500" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Inbound webhook URLs</span>
+          <Webhook className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Inbound webhook URLs</span>
         </div>
         {rows.map(([label, url, hint]) => (
           <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm text-slate-900">{label}</span>
+                <span className="font-semibold text-sm text-foreground">{label}</span>
                 <Button size="sm" variant="outline" onClick={() => copy(url, label)}>
                   <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
                 </Button>
               </div>
-              <code className="block text-xs bg-slate-100 px-3 py-2 rounded font-mono break-all">{url}</code>
-              <p className="text-xs text-slate-500">{hint}</p>
+              <code className="block text-xs bg-muted px-3 py-2 rounded font-mono break-all">{url}</code>
+              <p className="text-xs text-muted-foreground">{hint}</p>
             </CardContent>
           </Card>
         ))}
@@ -713,19 +713,19 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-slate-500" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{snippetLabel}</span>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{snippetLabel}</span>
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           For ad-hoc testing only. Production sends MUST go through{' '}
-          <code className="px-1 py-0.5 rounded bg-slate-100 font-mono text-[11px]">dispatchCommunication()</code>{' '}
+          <code className="px-1 py-0.5 rounded bg-muted font-mono text-[11px]">dispatchCommunication()</code>{' '}
           so dedupe, preferences, quiet hours, and the kill-switch toggle are honored.
         </p>
         {snippets.map(([label, snippet]) => (
           <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm text-slate-900">{label}</span>
+                <span className="font-semibold text-sm text-foreground">{label}</span>
                 <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(snippet); toast.success(`${label} curl copied`); }}>
                   <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
                 </Button>
@@ -756,8 +756,8 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
   if (isLoading) return <Skeleton className="h-40 w-full rounded-2xl" />;
   if (!logs || logs.length === 0) {
     return (
-      <Card className="rounded-2xl border-dashed border-2 border-slate-200">
-        <CardContent className="p-8 text-center text-sm text-slate-500">
+      <Card className="rounded-2xl border-dashed border-2 border-border">
+        <CardContent className="p-8 text-center text-sm text-muted-foreground">
           No RCS sends yet. Use the Test Send console to dispatch a message.
         </CardContent>
       </Card>
@@ -769,7 +769,7 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
     if (v === 'read') return 'bg-indigo-100 text-indigo-700';
     if (v === 'delivered') return 'bg-emerald-100 text-emerald-700';
     if (v === 'failed') return 'bg-red-100 text-red-700';
-    if (v === 'sent') return 'bg-slate-100 text-slate-700';
+    if (v === 'sent') return 'bg-muted text-foreground';
     return 'bg-amber-100 text-amber-700';
   };
 
@@ -778,8 +778,8 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <thead className="bg-muted sticky top-0 z-10">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-2.5">Time</th>
                 <th className="px-4 py-2.5">Recipient</th>
                 <th className="px-4 py-2.5">Status</th>
@@ -789,8 +789,8 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
             </thead>
             <tbody>
               {logs.map((l) => (
-                <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                <tr key={l.id} className="border-t border-border hover:bg-muted transition-colors">
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
                     {new Date(l.created_at).toLocaleString('en-IN')}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs">{l.recipient}</td>
@@ -798,7 +798,7 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
                     <Badge className={badgeFor(l.delivery_status)}>{l.delivery_status || 'pending'}</Badge>
                     {l.error_message && <span className="ml-2 text-[10px] text-red-600 truncate">{l.error_message}</span>}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{l.provider_record_id || '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{l.provider_record_id || '—'}</td>
                   <td className="px-4 py-2.5 text-right">
                     {l.provider_record_id && (
                       <RecordDetailButton branchId={branchId} recordId={l.provider_record_id} />

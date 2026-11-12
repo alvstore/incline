@@ -78,7 +78,7 @@ export function HowbodyReportDrawer({ report, onOpenChange }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                  isOriginal ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                  isOriginal ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {isOriginal ? (
@@ -131,32 +131,32 @@ function Gauge({
   }, [v, band]);
 
   return (
-    <div className="rounded-2xl bg-white p-3 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:shadow-md">
+    <div className="rounded-2xl bg-card p-3 shadow-sm shadow-slate-200/60 transition-all duration-200 hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
         {z ? (
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${zoneTone[z]}`}>{zoneLabel[z]}</span>
         ) : null}
       </div>
-      <p className="mt-1 text-xl font-bold text-slate-900">
+      <p className="mt-1 text-xl font-bold text-foreground">
         {v ?? '—'}
-        {v != null && suffix ? <span className="ml-1 text-xs font-normal text-slate-500">{suffix}</span> : null}
+        {v != null && suffix ? <span className="ml-1 text-xs font-normal text-muted-foreground">{suffix}</span> : null}
       </p>
       {pct != null ? (
         <div className="mt-2">
-          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div className="absolute inset-y-0 left-1/3 w-1/3 bg-emerald-200" />
             <div
               className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-600 ring-2 ring-white"
               style={{ left: `${pct}%` }}
             />
           </div>
-          <p className="mt-1 text-[10px] text-slate-500">
+          <p className="mt-1 text-[10px] text-muted-foreground">
             Healthy range {band!.low}–{band!.high}{suffix ? ` ${suffix}` : ''}
           </p>
         </div>
       ) : hint ? (
-        <p className="mt-1 text-[10px] text-slate-500">{hint}</p>
+        <p className="mt-1 text-[10px] text-muted-foreground">{hint}</p>
       ) : null}
     </div>
   );
@@ -165,7 +165,7 @@ function Gauge({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
       {children}
     </section>
   );
@@ -258,7 +258,7 @@ function PostureMetrics({ r, onZoom }: { r: AnyReport | null; onZoom: (u: string
                 type="button"
                 onClick={() => onZoom(String(p.url))}
                 aria-label={`Open ${p.label} view`}
-                className="group overflow-hidden rounded-2xl bg-slate-100 shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="group overflow-hidden rounded-2xl bg-muted shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <img
                   src={String(p.url)}
@@ -266,7 +266,7 @@ function PostureMetrics({ r, onZoom }: { r: AnyReport | null; onZoom: (u: string
                   loading="lazy"
                   className="h-36 w-full object-cover transition-transform duration-200 group-hover:scale-105"
                 />
-                <span className="flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-slate-600">
+                <span className="flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-muted-foreground">
                   <Images className="h-3 w-3" /> {p.label}
                 </span>
               </button>
@@ -277,16 +277,16 @@ function PostureMetrics({ r, onZoom }: { r: AnyReport | null; onZoom: (u: string
 
       {measures.length > 0 && (
         <Section title="Alignment assessment">
-          <div className="overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-200/60">
+          <div className="overflow-hidden rounded-2xl bg-card shadow-sm shadow-slate-200/60">
             {measures.map((m, i) => (
               <div
                 key={m.key}
                 className={`flex items-center justify-between gap-3 px-3 py-2.5 text-sm ${
-                  i % 2 ? 'bg-slate-50/60' : ''
+                  i % 2 ? 'bg-muted/60' : ''
                 }`}
               >
-                <span className="text-slate-600">{m.label}</span>
-                <span className="font-semibold text-slate-900">{m.value}</span>
+                <span className="text-muted-foreground">{m.label}</span>
+                <span className="font-semibold text-foreground">{m.value}</span>
               </div>
             ))}
           </div>

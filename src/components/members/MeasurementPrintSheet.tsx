@@ -28,7 +28,7 @@ export function MeasurementPrintSheet({ memberName, memberCode, latest, history,
 
   return (
     <div className="print-sheet hidden">
-      <div className="p-8 text-slate-900">
+      <div className="p-8 text-foreground">
         <div className="mb-6 border-b pb-4">
           <h1 className="text-xl font-bold">Measurement Summary</h1>
           <p className="text-sm">The Incline Life by Incline</p>

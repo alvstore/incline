@@ -188,7 +188,7 @@ export function MetaSyncControls() {
               className={`h-7 gap-1 rounded-full text-xs ${
                 brokenStale.length > 0
                   ? 'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15'
-                  : 'border-slate-200 text-muted-foreground hover:bg-slate-50'
+                  : 'border-border text-muted-foreground hover:bg-muted'
               }`}
               aria-label={
                 brokenStale.length > 0

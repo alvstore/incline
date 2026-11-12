@@ -272,12 +272,12 @@ export function UpgradeMembershipDrawer({
           {/* Current plan */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
             <CardContent className="pt-5 space-y-2">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current plan</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current plan</p>
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-900">{currentPlan?.name || 'Current membership'}</span>
-                <span className="text-sm text-slate-600">{inr(currentPrice)}</span>
+                <span className="font-semibold text-foreground">{currentPlan?.name || 'Current membership'}</span>
+                <span className="text-sm text-muted-foreground">{inr(currentPrice)}</span>
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-muted-foreground">
                 {membership?.start_date && (
                   <>
                     Started {format(parseISO(String(membership.start_date)), 'dd MMM yyyy')} · {daysUsed} day
@@ -310,7 +310,7 @@ export function UpgradeMembershipDrawer({
               </SelectContent>
             </Select>
             {upgradablePlans.length === 0 && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 No plan priced above the {inr(credit)} already paid. Downgrades are handled through cancel + repurchase.
               </p>
             )}
@@ -322,7 +322,7 @@ export function UpgradeMembershipDrawer({
               <div className="space-y-2">
                 <Label htmlFor="upgrade-discount">Discount</Label>
                 <div className="relative">
-                  <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="upgrade-discount"
                     type="number"
@@ -333,7 +333,7 @@ export function UpgradeMembershipDrawer({
                     onChange={(e) => setDiscountAmount(Math.max(Number(e.target.value) || 0, 0))}
                   />
                 </div>
-                <p className="text-xs text-slate-500">Max {inr(maxDiscount)} (must stay above the paid credit)</p>
+                <p className="text-xs text-muted-foreground">Max {inr(maxDiscount)} (must stay above the paid credit)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="upgrade-discount-reason">Discount reason</Label>
@@ -351,7 +351,7 @@ export function UpgradeMembershipDrawer({
 
           {/* Complimentary locker (plan must include one) */}
           {newPlan && hasLockerBenefit && (
-            <div className="space-y-2 rounded-xl bg-slate-50 px-4 py-3">
+            <div className="space-y-2 rounded-xl bg-muted px-4 py-3">
               <Label htmlFor="upgrade-locker" className="flex items-center gap-2 text-sm">
                 <Lock className="h-4 w-4 text-indigo-600" />
                 Complimentary locker
@@ -360,7 +360,7 @@ export function UpgradeMembershipDrawer({
                 value={selectedLockerId || 'none'}
                 onValueChange={(v) => setSelectedLockerId(v === 'none' ? '' : v)}
               >
-                <SelectTrigger id="upgrade-locker" className="min-h-[44px] bg-white">
+                <SelectTrigger id="upgrade-locker" className="min-h-[44px] bg-card">
                   <SelectValue placeholder="Select a locker (optional)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -382,10 +382,10 @@ export function UpgradeMembershipDrawer({
           )}
 
           {/* GST */}
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl bg-muted px-4 py-3">
             <div>
               <Label htmlFor="upgrade-gst" className="text-sm">Tax invoice (GST)</Label>
-              <p className="text-xs text-slate-500">Recomputes GST on the revised total</p>
+              <p className="text-xs text-muted-foreground">Recomputes GST on the revised total</p>
             </div>
             <div className="flex items-center gap-3">
               {includeGst && (
@@ -451,7 +451,7 @@ export function UpgradeMembershipDrawer({
           {/* Collection */}
           {newPlan && balanceDue > 0 && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl bg-muted px-4 py-3">
                 <Label htmlFor="upgrade-paynow" className="text-sm">Collect payment now</Label>
                 <Switch id="upgrade-paynow" checked={payNow} onCheckedChange={setPayNow} />
               </div>
@@ -460,7 +460,7 @@ export function UpgradeMembershipDrawer({
                   <div className="space-y-2">
                     <Label htmlFor="upgrade-amount">Amount collected</Label>
                     <div className="relative">
-                      <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id="upgrade-amount"
                         type="number"
@@ -504,13 +504,13 @@ export function UpgradeMembershipDrawer({
                 </div>
               )}
               {(!payNow || amountPaying < balanceDue) && (
-                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between rounded-xl bg-muted px-4 py-3">
                   <div>
                     <Label htmlFor="upgrade-reminders" className="flex items-center gap-2 text-sm">
                       <BellRing className="h-4 w-4 text-indigo-600" />
                       Send payment reminders
                     </Label>
-                    <p className="text-xs text-slate-500">WhatsApp, SMS and email nudges for the balance</p>
+                    <p className="text-xs text-muted-foreground">WhatsApp, SMS and email nudges for the balance</p>
                   </div>
                   <Switch id="upgrade-reminders" checked={sendReminders} onCheckedChange={setSendReminders} />
                 </div>

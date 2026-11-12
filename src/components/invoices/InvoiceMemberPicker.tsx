@@ -37,10 +37,10 @@ export function InvoiceMemberPicker({ branchId, value, onChange }: Props) {
 
   if (value) {
     return (
-      <div className="flex items-center justify-between p-3 rounded-xl border bg-slate-50">
+      <div className="flex items-center justify-between p-3 rounded-xl border bg-muted">
         <div className="min-w-0">
-          <p className="font-medium text-sm text-slate-900 truncate">{value.full_name}</p>
-          <p className="text-xs text-slate-500">
+          <p className="font-medium text-sm text-foreground truncate">{value.full_name}</p>
+          <p className="text-xs text-muted-foreground">
             {value.member_code}
             {value.phone ? ` · ${value.phone}` : ''}
           </p>
@@ -55,7 +55,7 @@ export function InvoiceMemberPicker({ branchId, value, onChange }: Props) {
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           aria-label="Search member by name, code, phone or email"
           placeholder="Search by name, member code, mobile or email…"
@@ -67,11 +67,11 @@ export function InvoiceMemberPicker({ branchId, value, onChange }: Props) {
       {term.trim().length >= 2 && (
         <div className="border rounded-xl max-h-52 overflow-y-auto">
           {isFetching ? (
-            <div className="p-3 text-sm text-slate-500 flex items-center gap-2 justify-center">
+            <div className="p-3 text-sm text-muted-foreground flex items-center gap-2 justify-center">
               <Loader2 className="h-4 w-4 animate-spin" /> Searching…
             </div>
           ) : results.length === 0 ? (
-            <div className="p-3 text-sm text-slate-500 text-center">No members found — billing as walk-in.</div>
+            <div className="p-3 text-sm text-muted-foreground text-center">No members found — billing as walk-in.</div>
           ) : (
             results.map((m: any) => (
               <button
@@ -81,13 +81,13 @@ export function InvoiceMemberPicker({ branchId, value, onChange }: Props) {
                   onChange({ id: m.id, member_code: m.member_code, full_name: m.full_name, phone: m.phone ?? null });
                   setTerm('');
                 }}
-                className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm flex items-center justify-between gap-2 border-b last:border-b-0 cursor-pointer"
+                className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center justify-between gap-2 border-b last:border-b-0 cursor-pointer"
               >
                 <span className="flex items-center gap-2 min-w-0">
-                  <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate font-medium text-slate-900">{m.full_name}</span>
+                  <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate font-medium text-foreground">{m.full_name}</span>
                 </span>
-                <span className="text-xs text-slate-500 shrink-0">
+                <span className="text-xs text-muted-foreground shrink-0">
                   {m.member_code}
                   {m.phone ? ` · ${m.phone}` : ''}
                 </span>
@@ -96,7 +96,7 @@ export function InvoiceMemberPicker({ branchId, value, onChange }: Props) {
           )}
         </div>
       )}
-      <p className="text-xs text-slate-500">Leave empty to bill a walk-in customer.</p>
+      <p className="text-xs text-muted-foreground">Leave empty to bill a walk-in customer.</p>
     </div>
   );
 }

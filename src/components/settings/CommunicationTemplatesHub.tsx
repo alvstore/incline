@@ -116,8 +116,8 @@ function HealthStrip({ channel }: { channel: Channel }) {
   return (
     <div className={`grid gap-3 grid-cols-2 ${tiles.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-2xl bg-white border border-slate-100 shadow-xl shadow-slate-200/30 px-5 py-4 transition-all hover:shadow-2xl hover:shadow-slate-200/50">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-1">{t.label}</p>
+        <div key={t.label} className="rounded-2xl bg-card border border-border shadow-xl shadow-slate-200/30 px-5 py-4 transition-all hover:shadow-2xl hover:shadow-slate-200/50">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] mb-1">{t.label}</p>
           <p className={`text-2xl font-black ${t.cls}`}>{t.value}</p>
         </div>
       ))}
@@ -158,8 +158,8 @@ export function CommunicationTemplatesHub() {
     <>
       <div className="space-y-5">
         {/* Header: channel switch + primary action */}
-        <div className="rounded-2xl bg-white border border-slate-100 shadow-xl shadow-slate-200/40 p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-1 bg-slate-100/80 rounded-2xl p-1 w-fit border border-slate-200/60">
+        <div className="rounded-2xl bg-card border border-border shadow-xl shadow-slate-200/40 p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-1 bg-muted/80 rounded-2xl p-1 w-fit border border-border/60">
             {CHANNELS.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
@@ -168,16 +168,16 @@ export function CommunicationTemplatesHub() {
                 aria-pressed={channel === value}
                 className={`cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                   channel === value
-                    ? 'bg-white text-indigo-700 shadow-lg shadow-indigo-100 border border-slate-100'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
+                    ? 'bg-card text-indigo-700 shadow-lg shadow-indigo-100 border border-border'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
                 }`}
               >
-                <Icon className={`h-4.5 w-4.5 ${channel === value ? 'text-indigo-600' : 'text-slate-400'}`} /> {label}
+                <Icon className={`h-4.5 w-4.5 ${channel === value ? 'text-indigo-600' : 'text-muted-foreground'}`} /> {label}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-4">
-            <p className="hidden xl:block text-xs font-medium text-slate-500 max-w-[320px] leading-relaxed">
+            <p className="hidden xl:block text-xs font-medium text-muted-foreground max-w-[320px] leading-relaxed">
               {activeChannel.blurb}
             </p>
             <Button onClick={() => openAi(channel)} className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white font-semibold h-11 px-6 transition-all hover:scale-[1.02] active:scale-[0.98]">
@@ -201,14 +201,14 @@ export function CommunicationTemplatesHub() {
                     className={`cursor-pointer w-full text-left rounded-xl px-4 py-3 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-1 group ${
                       section === id
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]'
-                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
                     <span className="flex items-center gap-3 text-sm font-semibold tracking-tight">
-                      <Icon className={`h-4.5 w-4.5 ${section === id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'}`} /> 
+                      <Icon className={`h-4.5 w-4.5 ${section === id ? 'text-white' : 'text-muted-foreground group-hover:text-indigo-500'}`} /> 
                       {label}
                     </span>
-                    <span className={`hidden lg:block text-[11px] mt-1 pl-7.5 leading-tight ${section === id ? 'text-indigo-100/90' : 'text-slate-400'}`}>
+                    <span className={`hidden lg:block text-[11px] mt-1 pl-7.5 leading-tight ${section === id ? 'text-indigo-100/90' : 'text-muted-foreground'}`}>
                       {hint}
                     </span>
                   </button>

@@ -88,9 +88,9 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
           Google Reviews
           {reviews.length > 0 && (
             <span className="ml-auto flex items-baseline gap-1">
-              <span className="text-sm font-bold text-slate-900">{avg.toFixed(1)}</span>
+              <span className="text-sm font-bold text-foreground">{avg.toFixed(1)}</span>
               {aggregate?.count != null && (
-                <span className="text-[11px] font-normal text-slate-400">({aggregate.count})</span>
+                <span className="text-[11px] font-normal text-muted-foreground">({aggregate.count})</span>
               )}
             </span>
           )}
@@ -104,10 +104,10 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
             ))}
           </div>
         ) : isError ? (
-          <p className="py-8 text-center text-sm text-slate-500">Could not load reviews.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">Could not load reviews.</p>
         ) : reviews.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               No reviews synced yet. Connect Google Business Profile to pull reviews in automatically.
             </p>
             <Button asChild size="sm" variant="outline" className="cursor-pointer">
@@ -120,18 +120,18 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
         ) : (
           <ul className="space-y-2">
             {reviews.map((r) => (
-              <li key={r.id} className="rounded-xl px-2.5 py-2 transition-colors duration-150 hover:bg-slate-50">
+              <li key={r.id} className="rounded-xl px-2.5 py-2 transition-colors duration-150 hover:bg-muted">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold text-slate-900">
+                  <span className="truncate text-sm font-semibold text-foreground">
                     {r.author_name || 'Google user'}
                   </span>
                   <Stars rating={r.rating ?? 0} />
                 </div>
                 {r.review_text && (
-                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-600">{r.review_text}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{r.review_text}</p>
                 )}
                 <div className="mt-1 flex items-center gap-2">
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-muted-foreground">
                     {r.posted_at ? format(new Date(r.posted_at), 'dd MMM yyyy') : '—'}
                   </span>
                   {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (

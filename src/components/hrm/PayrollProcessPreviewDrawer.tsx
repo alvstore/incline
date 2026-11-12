@@ -62,12 +62,12 @@ export function PayrollProcessPreviewDrawer({ open, onOpenChange, item }: Payrol
 
         <div className="space-y-6">
           <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center text-indigo-600 font-bold text-lg shadow-sm">
+            <div className="h-12 w-12 rounded-full bg-card flex items-center justify-center text-indigo-600 font-bold text-lg shadow-sm">
               {item.profile?.full_name?.[0] || 'S'}
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">{item.profile?.full_name}</h3>
-              <p className="text-sm text-slate-500">{item.staff_kind} • {item.id.slice(0, 8)}</p>
+              <h3 className="font-bold text-foreground">{item.profile?.full_name}</h3>
+              <p className="text-sm text-muted-foreground">{item.staff_kind} • {item.id.slice(0, 8)}</p>
             </div>
             {isAdjusted && (
               <Badge variant="outline" className="ml-auto bg-amber-50 text-amber-700 border-amber-200">
@@ -77,25 +77,25 @@ export function PayrollProcessPreviewDrawer({ open, onOpenChange, item }: Payrol
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Earnings Breakdown</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Earnings Breakdown</h4>
             <div className="space-y-3">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-600">Base Salary</span>
+                <span className="text-muted-foreground">Base Salary</span>
                 <span className="font-mono font-medium">₹{Number(item.final_base).toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-600">PT Commission</span>
+                <span className="text-muted-foreground">PT Commission</span>
                 <span className="font-mono font-medium">₹{Number(item.final_pt_commission).toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-600">Bonus & Overtime</span>
+                <span className="text-muted-foreground">Bonus & Overtime</span>
                 <span className="font-mono font-medium">₹{(Number(item.final_bonus) + Number(item.final_ot)).toLocaleString()}</span>
               </div>
             </div>
           </div>
 
-          <div className="space-y-4 pt-2 border-t border-dashed border-slate-200">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Deductions</h4>
+          <div className="space-y-4 pt-2 border-t border-dashed border-border">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Deductions</h4>
             <div className="space-y-3">
               <div className="flex justify-between items-center text-sm text-red-600">
                 <span>Statutory Deductions</span>
@@ -135,15 +135,15 @@ export function PayrollProcessPreviewDrawer({ open, onOpenChange, item }: Payrol
           </div>
 
           {item.adjustment_reason && (
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Adjustment Reason</p>
-              <p className="text-sm text-slate-600 italic">"{item.adjustment_reason}"</p>
+            <div className="p-4 rounded-xl bg-muted border border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Adjustment Reason</p>
+              <p className="text-sm text-muted-foreground italic">"{item.adjustment_reason}"</p>
             </div>
           )}
         </div>
 
         <SheetFooter className="mt-8 flex-col sm:flex-row gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl flex-1 border-slate-200">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl flex-1 border-border">
             Cancel
           </Button>
           <Button 

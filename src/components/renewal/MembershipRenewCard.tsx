@@ -18,7 +18,7 @@ export function MembershipRenewCard({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7 ${
+      className={`relative overflow-hidden rounded-2xl bg-card p-6 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10 md:p-7 ${
         isUpgrade ? 'ring-2 ring-primary/40' : ''
       }`}
     >
@@ -28,27 +28,27 @@ export function MembershipRenewCard({
         </span>
       )}
 
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {isUpgrade ? 'Elevate your access' : 'Your plan'}
       </p>
-      <h3 className="mt-2 pr-20 text-xl font-bold text-slate-900">{plan.name}</h3>
+      <h3 className="mt-2 pr-20 text-xl font-bold text-foreground">{plan.name}</h3>
       {plan.description && (
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">{plan.description}</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{plan.description}</p>
       )}
 
       <div className="mt-5 flex items-end gap-2">
-        <span className="text-3xl font-bold text-slate-900">{formatINR(plan.price)}</span>
-        <span className="flex items-center gap-1 pb-1 text-xs text-slate-500">
+        <span className="text-3xl font-bold text-foreground">{formatINR(plan.price)}</span>
+        <span className="flex items-center gap-1 pb-1 text-xs text-muted-foreground">
           <Clock3 className="h-3.5 w-3.5" aria-hidden />
           {plan.durationDays} days
         </span>
       </div>
-      {footnote && <p className="mt-1 text-xs text-slate-500">{footnote}</p>}
+      {footnote && <p className="mt-1 text-xs text-muted-foreground">{footnote}</p>}
 
       {plan.perks.length > 0 && (
         <ul className="mt-5 space-y-2">
           {plan.perks.map((perk) => (
-            <li key={perk} className="flex items-start gap-2.5 text-sm text-slate-700">
+            <li key={perk} className="flex items-start gap-2.5 text-sm text-foreground">
               <span className="mt-0.5 rounded-full bg-emerald-50 p-0.5 text-emerald-600"><Check className="h-3.5 w-3.5" aria-hidden /></span>
               {perk}
             </li>
