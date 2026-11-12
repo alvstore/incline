@@ -262,7 +262,7 @@ export function RetryQueuePanel() {
         {rows.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {FILTERS.map((f) => (
-              <button
+              <button type="button"
                 key={f.key}
                 onClick={() => setFilter(f.key)}
                 className={cn(

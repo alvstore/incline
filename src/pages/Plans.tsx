@@ -250,7 +250,7 @@ function PlanDetailPanel({
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="rounded-xl bg-muted/40 px-2 sm:px-4 py-3 text-center">
-          <button
+          <button type="button"
             data-testid={`btn-members-${plan.id}`}
             onClick={() => onMemberCountClick(plan.id, plan.name)}
             className={`w-full transition-colors ${memberCount > 0 ? 'cursor-pointer' : 'cursor-default'}`}
@@ -595,7 +595,7 @@ export default function PlansPage() {
                     className="pl-8 h-8 text-sm rounded-lg"
                   />
                   {planSearch && (
-                    <button
+                    <button type="button"
                       onClick={() => setPlanSearch('')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >

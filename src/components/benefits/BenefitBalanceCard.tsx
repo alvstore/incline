@@ -141,7 +141,7 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
         )}
 
         {showRecordButton && !isExhausted && (
-          <button
+          <button type="button"
             onClick={onRecordUsage}
             className="w-full mt-2 text-sm bg-primary text-primary-foreground rounded-md py-2 hover:bg-primary/90 transition-colors"
           >

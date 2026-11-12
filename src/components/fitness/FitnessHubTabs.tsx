@@ -115,7 +115,7 @@ export function FitnessHubTabs({ compact = false }: { compact?: boolean } = {}) 
             const Icon = tab.icon;
             const isActive = tab.key === activeKey;
             return (
-              <button
+              <button type="button"
                 key={tab.key}
                 role="tab"
                 aria-selected={isActive}

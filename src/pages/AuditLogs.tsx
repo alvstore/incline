@@ -270,11 +270,11 @@ export default function AuditLogsPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center rounded-lg border bg-background p-0.5">
-              <button
+              <button type="button"
                 onClick={() => setDensity('comfortable')}
                 className={`px-2.5 py-1 text-xs rounded-md transition ${density === 'comfortable' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'}`}
               >Comfortable</button>
-              <button
+              <button type="button"
                 onClick={() => setDensity('compact')}
                 className={`px-2.5 py-1 text-xs rounded-md transition ${density === 'compact' ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'}`}
               >Compact</button>

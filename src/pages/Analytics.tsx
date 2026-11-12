@@ -908,7 +908,7 @@ export default function AnalyticsPage() {
                       { label: 'Next 14 days', members: renewalData?.bucket14 || [], color: 'text-warning', bg: 'bg-warning/10' },
                       { label: 'Next 30 days', members: renewalData?.bucket30 || [], color: 'text-info', bg: 'bg-info/10' },
                     ].map(({ label, members, color, bg }) => (
-                      <button
+                      <button type="button"
                         key={label}
                         className={`w-full flex items-center justify-between rounded-xl px-4 py-3 ${bg} hover:opacity-80 transition-opacity cursor-pointer`}
                         onClick={() => setRenewalDialog({ open: true, bucket: label, members })}

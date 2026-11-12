@@ -69,7 +69,7 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
         <Card className="absolute top-full mt-2 w-full z-50 overflow-hidden rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-card animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="max-h-[300px] overflow-y-auto p-2">
             {results.map((member) => (
-              <button
+              <button type="button"
                 key={member.id}
                 onClick={() => {
                   onSelect(member);

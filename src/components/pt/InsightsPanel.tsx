@@ -119,7 +119,7 @@ export function InsightsPanel({
                 </span>
                 <p className="text-sm font-medium">No active packages yet</p>
                 {canManage && (
-                  <button
+                  <button type="button"
                     onClick={onCreatePackage}
                     className="mt-3 cursor-pointer rounded text-xs font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   >

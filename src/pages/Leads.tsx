@@ -282,7 +282,7 @@ export default function LeadsPage() {
                 <PopoverContent className="w-56 p-2">
                   {savedViews.map((v: any) => (
                     <div key={v.id} className="flex items-center justify-between py-1 px-2 hover:bg-muted rounded-lg">
-                      <button className="text-sm text-left flex-1" onClick={() => loadView(v)}>{v.name}</button>
+                      <button type="button" className="text-sm text-left flex-1" onClick={() => loadView(v)}>{v.name}</button>
                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => deleteViewMutation.mutate(v.id)}>
                         <X className="h-3 w-3" />
                       </Button>

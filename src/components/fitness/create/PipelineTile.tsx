@@ -39,7 +39,7 @@ export function PipelineTile({
   const ready = !loading && !!count;
 
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       aria-label={`${title} — ${action}`}
       className="group flex min-h-[44px] w-full flex-1 cursor-pointer items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-lg shadow-slate-200/50 ring-1 ring-border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"

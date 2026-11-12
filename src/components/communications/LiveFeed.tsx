@@ -510,7 +510,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                   const channelEntries = Object.entries(g.channels);
                   return (
                     <div key={g.key} style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }} className="animate-fade-in">
-                      <button
+                      <button type="button"
                         onClick={() => setExpanded(isOpen ? null : g.key)}
                         className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors overflow-hidden"
                       >
@@ -642,7 +642,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 rounded-lg bg-background border border-border/60 p-0.5">
                   {PAGE_SIZES.map((sz) => (
-                    <button
+                    <button type="button"
                       key={sz}
                       onClick={() => setPageSize(sz)}
                       className={cn(

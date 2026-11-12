@@ -73,7 +73,7 @@ export function MemberSearchPicker({ value, onChange, label = 'Select Member', r
             <div className="p-3 text-sm text-muted-foreground text-center">No members found</div>
           ) : (
             results.map((m: any) => (
-              <button
+              <button type="button"
                 key={m.id}
                 onClick={() => {
                   onChange({ id: m.id, member_code: m.member_code, full_name: m.full_name });

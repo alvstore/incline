@@ -77,7 +77,7 @@ export function AutomationRuleRow({ rule, recentRuns, onToggle, onRunNow, onEdit
 
       {/* Sparkline of last 10 runs */}
       {sparkline.length > 0 && (
-        <button
+        <button type="button"
           onClick={onFocusRail}
           aria-label="Show recent runs"
           className="hidden md:flex items-end gap-0.5 h-6 px-1 rounded hover:bg-muted"

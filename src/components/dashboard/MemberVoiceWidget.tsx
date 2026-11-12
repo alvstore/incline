@@ -71,7 +71,7 @@ export function MemberVoiceWidget() {
             <MessageSquare className="h-5 w-5 text-primary" />
             Member Voice
           </CardTitle>
-          <button
+          <button type="button"
             onClick={() => navigate('/feedback')}
             className="text-xs text-primary hover:underline font-medium"
           >

@@ -138,7 +138,7 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                   {(form.keywords || []).map((k) => (
                     <Badge key={k} variant="secondary" className="rounded-full pr-1">
                       {k}
-                      <button onClick={() => removeKeyword(k)} className="ml-1 rounded-full p-0.5 hover:bg-muted">
+                      <button type="button" onClick={() => removeKeyword(k)} className="ml-1 rounded-full p-0.5 hover:bg-muted">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>

@@ -67,7 +67,7 @@ export function TasksHeader({ view, onViewChange, search, onSearchChange, subtit
             const Icon = v.icon;
             const active = view === v.id;
             return (
-              <button
+              <button type="button"
                 key={v.id}
                 onClick={() => onViewChange(v.id)}
                 className={cn(

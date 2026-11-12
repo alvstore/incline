@@ -157,7 +157,7 @@ export default function MyScanReport() {
       {isStaff && memberLabel && (
         <div className="mb-3 flex items-center justify-between rounded-xl bg-muted p-3 text-sm">
           <span className="text-muted-foreground">Viewing reports for <span className="font-semibold text-foreground">{memberLabel}</span></span>
-          <button
+          <button type="button"
             onClick={() => { setMemberId(null); setBody(null); setPosture(null); }}
             className="text-xs font-medium text-primary hover:underline"
           >
@@ -352,7 +352,7 @@ function StaffPicker({ onPick }: { onPick: (m: MemberHit) => void }) {
       </div>
       <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
         {results.map((m) => (
-          <button
+          <button type="button"
             key={m.id}
             onClick={() => onPick(m)}
             className="flex w-full items-center justify-between rounded-xl border border-border p-3 text-left transition hover:border-primary/40 hover:bg-primary/10"

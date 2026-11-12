@@ -257,7 +257,7 @@ export function OrganizationSettings() {
                       }`}
                     />
                     {!previewLogo.inherited && scopeSettings?.logo_url && (
-                      <button
+                      <button type="button"
                         onClick={() => removeLogoMutation.mutate()}
                         aria-label="Remove logo"
                         className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"

@@ -90,7 +90,7 @@ export function TaskCalendarView({ tasks, onOpen }: Props) {
                 {list.slice(0, 3).map((t) => {
                   const closed = t.status === 'completed' || t.status === 'cancelled';
                   return (
-                    <button
+                    <button type="button"
                       key={t.id}
                       onClick={() => onOpen(t)}
                       title={`${t.title} · ${String(t.status).replace('_', ' ')}`}

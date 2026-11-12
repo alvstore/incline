@@ -36,7 +36,7 @@ export function SessionTimeoutWarning() {
         >
           Stay Signed In
         </Button>
-        <button
+        <button type="button"
           onClick={() => setDismissed(true)}
           className="flex-shrink-0 text-muted-foreground hover:text-foreground"
         >

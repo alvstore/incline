@@ -110,7 +110,7 @@ export function TemplatePickerSheet({ open, onOpenChange, planType, member }: Pr
             <ul className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
               {rows.map((t) => (
                 <li key={t.id}>
-                  <button
+                  <button type="button"
                     onClick={() => openTemplate(t.id, t.type)}
                     aria-label={`Use template ${t.name}`}
                     className="group flex min-h-[56px] w-full cursor-pointer items-center gap-3 rounded-xl bg-card p-3 text-left ring-1 ring-border transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

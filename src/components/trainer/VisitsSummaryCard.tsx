@@ -60,7 +60,7 @@ export function VisitsSummaryCard() {
             </div>
             <div className="mt-2 flex gap-1" role="tablist" aria-label="Range">
               {RANGES.map((r) => (
-                <button key={r} role="tab" aria-selected={range === r} onClick={() => setRange(r)}
+                <button type="button" key={r} role="tab" aria-selected={range === r} onClick={() => setRange(r)}
                   className={cn('min-h-[32px] cursor-pointer rounded-lg px-2.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     range === r ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:bg-secondary')}>
                   {r} days

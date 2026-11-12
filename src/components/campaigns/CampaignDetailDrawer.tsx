@@ -441,7 +441,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
               ['pending', counts.pending],
               ...(counts.skipped > 0 ? [['skipped', counts.skipped] as const] : []),
             ] as [CampaignDeliveryFilter, number][]).map(([k, n]) => (
-              <button
+              <button type="button"
                 key={k}
                 onClick={() => setFilter(k)}
                 aria-pressed={filter === k}

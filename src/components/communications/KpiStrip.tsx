@@ -33,7 +33,7 @@ export function KpiStrip({ counts, activeKey, onSelect }: { counts: KpiCounts; a
         const Icon = it.icon;
         const active = activeKey === it.key;
         return (
-          <button
+          <button type="button"
             key={it.key}
             onClick={() => onSelect?.(it.key)}
             style={{ animationDelay: `${i * 40}ms` }}

@@ -193,7 +193,7 @@ export function TrainerClassDays({ classes }: { classes: any[] }) {
           const on = d.key === active;
           const [, , dd] = d.key.split('-');
           return (
-            <button
+            <button type="button"
               key={d.key}
               role="tab"
               aria-selected={on}

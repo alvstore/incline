@@ -47,7 +47,7 @@ export function AutomationActivityRail({ runs, rules, filterRuleId, onClearFilte
             <span className="text-muted-foreground">Filtering:</span>
             <Badge className="bg-primary/15 text-primary gap-1 hover:bg-primary/15">
               {filterRule.name}
-              <button onClick={onClearFilter} aria-label="Clear filter" className="ml-1 hover:text-primary">
+              <button type="button" onClick={onClearFilter} aria-label="Clear filter" className="ml-1 hover:text-primary">
                 <X className="h-3 w-3" />
               </button>
             </Badge>

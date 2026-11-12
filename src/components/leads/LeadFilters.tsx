@@ -80,7 +80,7 @@ export function LeadFilterBar({
           const cfg = STATUS_CONFIG[status];
           const isSelected = statusFilter.includes(status);
           return (
-            <button
+            <button type="button"
               key={status}
               onClick={() => onStatusFilterChange(
                 isSelected ? statusFilter.filter(s => s !== status) : [...statusFilter, status]
@@ -98,7 +98,7 @@ export function LeadFilterBar({
           const isSelected = temperatureFilter.includes(temp.value);
           const TempIcon = temp.icon;
           return (
-            <button
+            <button type="button"
               key={temp.value}
               onClick={() => onTemperatureFilterChange(
                 isSelected ? temperatureFilter.filter(t => t !== temp.value) : [...temperatureFilter, temp.value]
