@@ -11,7 +11,7 @@ import {
 import { JOBS_SQL, type JobStats, mirrorJobs, pauseStandbyJobs, planJobs, standbyJobs, syncSequences } from "./jobs.ts";
 import { type Sql, readJson } from "./primary.ts";
 import { compareTables, emptyRowStats, loadSpecs, type RowStats, syncTables } from "./rows.ts";
-import type { Standby } from "./standby.ts";
+import { STANDBY_ACCESS_SQL, type Standby } from "./standby.ts";
 import { cleanExtraBuckets, listObjects, planObjects, type StorageState, type StorageStats, syncObjects } from "./storage.ts";
 
 export const AUTH_TABLES = ["auth.users", "auth.identities", "auth.mfa_factors", "auth.audit_log_entries"];
