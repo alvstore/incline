@@ -144,6 +144,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { signOut, roles } = useAuth();
   const location = useLocation();
+  const sidebarScrollRef = useSidebarScrollMemory();
   const { data: unreadCount = 0 } = useWhatsAppUnreadCount();
 
 
