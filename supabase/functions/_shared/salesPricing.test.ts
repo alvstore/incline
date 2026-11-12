@@ -116,3 +116,9 @@ Deno.test("leak guard flags amounts not on the plan list", () => {
   assert(!hasUnlistedAmount("Annual is ₹36,900", ok));
   assert(hasUnlistedAmount("Special ₹20,000 today", ok));
 });
+
+Deno.test("half yearly is not mistaken for annual", () => {
+  assertEquals(matchDuration("Half yearly"), "half_yearly");
+  assertEquals(matchDuration("half-yearly fees"), "half_yearly");
+  assertEquals(matchDuration("yearly"), "annual");
+});

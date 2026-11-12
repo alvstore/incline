@@ -366,7 +366,7 @@ async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps):
   if (paused) {
     const held = [{ text: "Thank you! A member of our team is looking at your message and will reply here shortly." }];
     try { await storeTurns(deps.db, p.lead, [{ from: "user", text: topic ? (label || topic) : message }]); } catch { console.error("[web-chat] persist failed"); }
-    return { status: 200, body: { success: true, messages: held, topic: topic ?? "general", state: { ...state, quote }, visit_noted: false, paused: true } };
+    return { status: 200, body: { success: true, messages: held, topic: topic ?? "pricing", state: { ...state, quote }, visit_noted: false, paused: true } };
   }
   // Intake plan choice: lead row first, else the latest website intake activity (returning visitors).
   let interest = p.lead.plan_interest;
