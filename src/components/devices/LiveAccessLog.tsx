@@ -453,13 +453,12 @@ const LiveAccessLog = ({ branchId, limit = 400 }: LiveAccessLogProps) => {
               className={cn(
                 "cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
                 filter === f.key
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:bg-muted/70",
               )}
-              aria-pressed={filter === f.key}
             >
               {f.label}
-              <span className={cn("ml-1.5 tabular-nums", filter === f.key ? "text-white/80" : "text-foreground/60")}>
+              <span className={cn("ml-1.5 tabular-nums", filter === f.key ? "text-primary-foreground/80" : "text-foreground/60")}>
                 {f.count}
               </span>
             </button>
