@@ -20,10 +20,11 @@ export interface BucketDelta {
   missing: number; different: number; extra: number; metadata: number;
 }
 export interface VerifyReport {
-  schema?: { differences: number; summary: Record<string, number>; sample: string[] };
-  tables?: { total: number; matched: number; mismatched: Array<{ table: string; primary: string; standby: string }> };
+  schema?: { differences: number; summary: Record<string, number>; sample: string[]; reasons?: Record<string, number> };
+  tables?: { total: number; matched: number; mismatched: Array<{ table: string; primary: string; standby: string; reason?: string }> };
   storage?: { buckets: BucketDelta[]; objects: number; bytes: number; missing: number; different: number; extra: number; metadata: number };
-  jobs?: { activeOnStandby: number; missing: number; extra: number };
+  jobs?: { activeOnStandby: number; missing: number; extra: number; error?: string };
+  access?: { authUsersWrite?: boolean; authUsersReferences?: boolean; authIdentitiesWrite?: boolean; cronUsage?: boolean } | null;
   allInSync?: boolean;
   checkedAt?: string;
 }
@@ -126,6 +127,26 @@ export function friendlyTable(qualified: string): string {
   return label;
 }
 
+/** The standby refused a write (missing access), as opposed to data changing during the copy. */
+export const isRefusal = (reason?: string | null) => !!reason && /permission denied|must be owner|insufficient privilege/i.test(reason);
+
+/** Plain-language reason a table didn't match. */
+export function tableReason(reason?: string): string {
+  if (!reason) return "changed on the live app during the copy";
+  if (isRefusal(reason)) return "standby server refused access";
+  if (/duplicate key|unique constraint/i.test(reason)) return "clashed with an old row on the standby";
+  if (/missing on standby/i.test(reason)) return "table missing on the standby";
+  return "copy error";
+}
+
+/** True when the last check found writes the standby refused (needs a server-side fix, not time). */
+export function hasRefusals(v?: VerifyReport | null): boolean {
+  if (!v) return false;
+  if (v.tables?.mismatched.some((t) => isRefusal(t.reason))) return true;
+  if (Object.keys(v.schema?.reasons ?? {}).some((r) => isRefusal(r))) return true;
+  return !!v.jobs?.error && isRefusal(v.jobs.error);
+}
+
 export type Tone = "success" | "warning" | "danger" | "info" | "neutral";
 
 export function statusMeta(run: RunRow | null): { label: string; tone: Tone } {
@@ -134,7 +155,7 @@ export function statusMeta(run: RunRow | null): { label: string; tone: Tone } {
     case "queued": return { label: "Starting", tone: "info" };
     case "running": return { label: run.kind === "verify" ? "Checking" : "Copying", tone: "info" };
     case "succeeded": return { label: "Exact match", tone: "success" };
-    case "drift": return { label: "Small differences", tone: "warning" };
+    case "drift": return hasRefusals(run.report?.verify) ? { label: "Needs attention", tone: "danger" } : { label: "Small differences", tone: "warning" };
     case "failed": return { label: "Failed", tone: "danger" };
     default: return { label: "Cancelled", tone: "neutral" };
   }

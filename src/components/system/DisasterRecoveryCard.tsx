@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { can } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import {
-  FULL_STEPS, STEP_LABELS, formatBytes, formatDuration, friendlyTable, isActive, runProgress, statusMeta,
+  FULL_STEPS, STEP_LABELS, formatBytes, formatDuration, friendlyTable, isActive, isRefusal, tableReason, runProgress, statusMeta,
   type HistoryRow, type RunKind, type RunRow, type StandbyStatus, type Tone,
 } from "@/lib/dr/standbyCopy";
 
@@ -127,6 +127,13 @@ function Results({ run, oversized }: { run: RunRow; oversized: string[] }) {
   const jobIssues = jobs ? jobs.missing + jobs.extra : 0;
   const bucketIssues = (files?.buckets ?? []).filter((b) => b.missing + b.different + b.extra + b.metadata > 0);
   const errors = (run.report.errors ?? []).slice(-5).reverse();
+  const schemaRefused = Object.keys(v.schema?.reasons ?? {}).some((r) => isRefusal(r));
+  const refusedTables = tables?.mismatched.filter((t) => isRefusal(t.reason)) ?? [];
+  const otherFailed = tables?.mismatched.filter((t) => t.reason && !isRefusal(t.reason)) ?? [];
+  const changedOnly = tables?.mismatched.filter((t) => !t.reason) ?? [];
+  const accessMissing = v.access ? (["authUsersWrite", "authUsersReferences", "authIdentitiesWrite", "cronUsage"] as const).filter((k) => v.access?.[k] === false) : [];
+  const recordsCaption = !tables ? "Not checked" : tables.mismatched.length === 0 ? "Every table matches, including sign-in accounts"
+    : [refusedTables.length && `${n(refusedTables.length)} refused by the standby`, otherFailed.length && `${n(otherFailed.length)} couldn't be copied`, changedOnly.length && `${n(changedOnly.length)} changed during the copy`].filter(Boolean).join(" · ");
   const copyStats = run.report.rows;
 
   return (
@@ -143,16 +150,16 @@ function Results({ run, oversized }: { run: RunRow; oversized: string[] }) {
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <ResultTile icon={ShieldCheck} label="Structure & rules" value={schemaDiff === 0 ? "Identical" : n(schemaDiff)}
-          caption={schemaDiff === 0 ? "Tables, links, security rules, functions" : "differences in structure or security rules"}
+          caption={schemaDiff === 0 ? "Tables, links, security rules, functions" : schemaRefused ? "item(s) the standby refused to create (mostly links to sign-in accounts)" : "differences in structure or security rules"}
           tone={schemaDiff === 0 ? "success" : "warning"} />
         <ResultTile icon={Table2} label="Records" value={tables ? `${n(tables.matched)}/${n(tables.total)}` : "—"}
-          caption={tables && tables.mismatched.length === 0 ? "Every table matches, including sign-in accounts" : `${n(tables?.mismatched.length)} table(s) changed since the copy`}
+          caption={recordsCaption}
           tone={tables && tables.mismatched.length === 0 ? "success" : "warning"} />
         <ResultTile icon={FolderOpen} label="Files" value={files ? n(files.objects) : "—"}
           caption={files ? (fileIssues === 0 ? `${formatBytes(files.bytes)} · every file matches` : `${n(fileIssues)} file(s) differ`) : "Not checked"}
           tone={files && fileIssues === 0 ? "success" : "warning"} />
-        <ResultTile icon={CalendarClock} label="Scheduled jobs" value={jobs ? (jobs.activeOnStandby === 0 ? "Paused" : n(jobs.activeOnStandby)) : "—"}
-          caption={jobs ? (jobs.activeOnStandby === 0 && jobIssues === 0 ? "Copied and kept paused on the standby" : jobs.activeOnStandby > 0 ? "running on the standby — should be paused" : `${n(jobIssues)} job(s) differ`) : "Not checked"}
+        <ResultTile icon={CalendarClock} label="Scheduled jobs" value={jobs ? (jobs.activeOnStandby > 0 ? n(jobs.activeOnStandby) : jobs.missing ? `${n(jobs.missing)} missing` : "Paused") : "—"}
+          caption={jobs ? (jobs.activeOnStandby === 0 && jobIssues === 0 ? "Copied and kept paused on the standby" : jobs.activeOnStandby > 0 ? "running on the standby — should be paused" : jobs.missing && !jobs.extra ? `${n(jobs.missing)} job(s) not on the standby yet${jobs.error ? " — scheduler not reachable" : ""}` : `${n(jobIssues)} job(s) differ`) : "Not checked"}
           tone={jobs && jobs.activeOnStandby === 0 && jobIssues === 0 ? "success" : "warning"} />
       </div>
 
@@ -170,15 +177,31 @@ function Results({ run, oversized }: { run: RunRow; oversized: string[] }) {
               ones{run.report.storage ? `, and copied ${n(run.report.storage.copied)} files (${formatBytes(run.report.storage.copiedBytes)})` : ""}.
             </p>
           )}
+          {accessMissing.length > 0 && (
+            <div className="rounded-lg bg-destructive/10 p-3 text-xs">
+              <p className="flex items-center gap-1.5 font-semibold text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5" /> The standby server is refusing parts of the copy
+              </p>
+              <p className="mt-1.5 text-muted-foreground">
+                Its admin account lost access to {[accessMissing.some((k) => k.startsWith("auth")) && "sign-in accounts", accessMissing.includes("cronUsage") && "scheduled jobs"].filter(Boolean).join(" and ")}.
+                Whoever runs the standby server needs to restore that access once; the next copy then fills in everything automatically.
+              </p>
+            </div>
+          )}
           {tables && tables.mismatched.length > 0 && (
             <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tables that changed since the copy</p>
-              <p className="mb-2 text-xs text-muted-foreground">Busy tables (chats, gate scans) keep changing on the live app; the next copy picks these up.</p>
-              <ul className="flex flex-wrap gap-1.5">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tables that don't match</p>
+              <ul className="space-y-1">
                 {tables.mismatched.map((t) => (
-                  <li key={t.table} className="rounded-md bg-warning/10 px-2 py-1 text-xs text-warning">{friendlyTable(t.table)}</li>
+                  <li key={t.table} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
+                    <span className="font-medium text-foreground">{friendlyTable(t.table)}</span>
+                    <span className={cn("tabular-nums", isRefusal(t.reason) ? "text-destructive" : "text-warning")}>
+                      {n(Number(t.primary.split(":")[0]))} live · {n(Number(t.standby.split(":")[0]))} standby — {tableReason(t.reason)}
+                    </span>
+                  </li>
                 ))}
               </ul>
+              {changedOnly.length > 0 && <p className="mt-1.5 text-xs text-muted-foreground">Tables that changed during the copy are picked up by the next copy.</p>}
             </div>
           )}
           {files && (

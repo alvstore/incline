@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v2.2.0 — helper install over encrypted Postgres only; verify self-heals helpers. v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
+// v2.3.0 — honest verify reasons (refused writes, deduped links, jobs cause), unique-slot retry, access probe. v2.2.0 — helper install over encrypted Postgres only; verify self-heals helpers. v2.1.0 — standby details from Settings + owner connection test. 1:1 standby copy worker (structure, sign-in users, rows, buckets/files, jobs).
 //
 // Modes (POST JSON body):
 //   { "mode": "tick", "budgetMs"?: number }  advance the active copy run (pg_cron every 2 min)
@@ -16,7 +16,7 @@ import { crypto as stdCrypto } from "jsr:@std/crypto@1.0.3";
 import { encodeHex } from "jsr:@std/encoding@1.0.5/hex";
 import { connectPrimary, readOne } from "./primary.ts";
 import { tick } from "./run.ts";
-import { BOOTSTRAP_SQL, Standby } from "./standby.ts";
+import { BOOTSTRAP_SQL, STANDBY_ACCESS_SQL, Standby } from "./standby.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,7 +198,8 @@ Deno.serve(async (req) => {
         fetch(`${DR_URL}/storage/v1/version`).then((r) => r.text()).catch(() => null),
       ]);
       const [primaryUser] = await primary`select current_user as u`;
-      return json({ ok: true, primary: primaryUser.u, standbyHelpers: ready, standbyStorageVersion: storage });
+      const access = ready === true ? await standby.one(STANDBY_ACCESS_SQL).catch((e) => `error: ${(e as Error).message}`) : null;
+      return json({ ok: true, primary: primaryUser.u, standbyHelpers: ready, standbyAccess: access ? JSON.parse(String(access).startsWith("error") ? JSON.stringify(access) : String(access)) : null, standbyStorageVersion: storage });
     }
     if (mode === "status") {
       return json({ ok: true, run: JSON.parse((await readOne(primary, STATUS_SQL)) ?? "null") });

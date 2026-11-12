@@ -9,7 +9,7 @@
 
 import { type Sql, readJson, readOne } from "./primary.ts";
 import { type PkCol, qi, qn, rangePredicate, rowHashExpr, textArray } from "./sqlText.ts";
-import type { Standby } from "./standby.ts";
+import { type Standby, StandbyError } from "./standby.ts";
 
 export interface TableSpec {
   schema: string;
@@ -219,8 +219,16 @@ export async function syncTables(ctx: SyncContext, specs: TableSpec[], start: nu
         try {
           const rows = (await readOne(ctx.primary, rowsSql(spec, chunk.lo, chunk.hi))) ?? "[]";
           // Storage tables refuse direct deletes; standby-only buckets are removed via the Storage API first.
-          const res = await ctx.standby.replace(qn(spec.schema, spec.name), spec.cols, spec.pk.map((p) => p.name),
-            rangePredicate(spec.pk, chunk.lo, chunk.hi), rows, spec.schema !== "storage");
+          const write = (dedupe: boolean) => ctx.standby.replace(qn(spec.schema, spec.name), spec.cols, spec.pk.map((p) => p.name),
+            rangePredicate(spec.pk, chunk.lo, chunk.hi), rows, spec.schema !== "storage", dedupe);
+          let res;
+          try { res = await write(false); }
+          catch (e) {
+            // A stale standby row outside this range holds a unique slot (e.g. an old open
+            // request): retry once, clearing only rows that conflict on a unique key.
+            if (!(e instanceof StandbyError && e.code === "23505") || spec.schema === "storage" || !spec.pk.length) throw e;
+            res = await write(true);
+          }
           stats.chunksCopied++;
           stats.rowsWritten += res.written;
           stats.copied = { ...(stats.copied ?? {}), [key]: (stats.copied?.[key] ?? 0) + res.written };

@@ -1,4 +1,4 @@
-// v2.0.0 — Standby access over HTTPS only (PostgREST RPC + Storage API).
+// v2.3.0 — unique-slot dedupe retry, auth/cron access re-grant + access probe. v2.0.0 — Standby access over HTTPS only (PostgREST RPC + Storage API).
 //
 // The standby's Postgres port has no TLS, so member data never travels over it:
 // every read/write goes through https://<standby>/rest/v1/rpc/dr_mirror_* with the
@@ -47,7 +47,8 @@ END
 $fn$;
 
 DROP FUNCTION IF EXISTS public.dr_mirror_replace(text, text[], text[], text, text);
-CREATE OR REPLACE FUNCTION public.dr_mirror_replace(p_table text, p_cols text[], p_pk text[], p_where text, p_rows text, p_delete boolean DEFAULT true)
+DROP FUNCTION IF EXISTS public.dr_mirror_replace(text, text[], text[], text, text, boolean);
+CREATE OR REPLACE FUNCTION public.dr_mirror_replace(p_table text, p_cols text[], p_pk text[], p_where text, p_rows text, p_delete boolean DEFAULT true, p_dedupe boolean DEFAULT false)
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -63,8 +64,11 @@ AS $fn$
 -- restored to their exact previous state before commit, so audit/notification/code
 -- generation triggers never rewrite mirrored data. p_delete = false upserts only (storage
 -- tables refuse direct deletes; their extras are removed through the Storage API).
+-- p_dedupe = true first removes stale standby rows (other key, outside this range) that hold
+-- a unique slot one of these rows needs, e.g. an old "one open request" row.
 -- service_role only.
 DECLARE
+  ux record; n bigint;
   rel regclass := p_table::regclass;
   cols text := (SELECT string_agg(quote_ident(c), ', ') FROM unnest(p_cols) c);
   pk text := (SELECT string_agg(quote_ident(c), ', ') FROM unnest(p_pk) c);
@@ -85,6 +89,21 @@ BEGIN
     EXECUTE format('INSERT INTO %1$s (%2$s) OVERRIDING SYSTEM VALUE SELECT %2$s FROM json_populate_recordset(NULL::%1$s, $1::json)', rel, cols) USING p_rows;
     GET DIAGNOSTICS i = ROW_COUNT;
   ELSE
+    IF p_dedupe THEN
+      FOR ux IN
+        SELECT (SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY k.ord)
+                  FROM unnest(i.indkey::int2[]) WITH ORDINALITY k(attnum, ord)
+                  JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum) AS ucols,
+               coalesce(pg_get_expr(i.indpred, i.indrelid), 'true') AS pred
+        FROM pg_index i
+        WHERE i.indrelid = rel AND i.indisunique AND NOT i.indisprimary AND i.indexprs IS NULL AND i.indisvalid
+      LOOP
+        EXECUTE format('DELETE FROM %1$s WHERE (%4$s) AND (%2$s) IN (SELECT %2$s FROM json_populate_recordset(NULL::%1$s, $1::json) WHERE %4$s) AND (%3$s) NOT IN (SELECT %3$s FROM json_populate_recordset(NULL::%1$s, $1::json))',
+          rel, ux.ucols, pk, ux.pred) USING p_rows;
+        GET DIAGNOSTICS n = ROW_COUNT;
+        d := d + n;
+      END LOOP;
+    END IF;
     IF p_delete THEN
       EXECUTE format('DELETE FROM %1$s WHERE (%2$s) AND (%3$s) NOT IN (SELECT %3$s FROM json_populate_recordset(NULL::%1$s, $1::json))', rel, p_where, pk) USING p_rows;
       GET DIAGNOSTICS d = ROW_COUNT;
@@ -102,13 +121,47 @@ END
 $fn$;
 
 REVOKE ALL ON FUNCTION public.dr_mirror_run(text[], text[], boolean) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.dr_mirror_run(text[], text[], boolean) TO service_role;
-GRANT EXECUTE ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean) TO service_role;
+GRANT EXECUTE ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean, boolean) TO service_role;
+-- The helpers run as postgres. Standby image upgrades can reset postgres's access to the
+-- sign-in (auth) and scheduler (cron) schemas, which silently refuses those writes; re-grant
+-- them whenever the installer has the rights (admin endpoint), otherwise warn and continue.
+DO $grant$
+BEGIN
+  BEGIN
+    GRANT USAGE ON SCHEMA auth TO postgres;
+    GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres;
+  EXCEPTION WHEN insufficient_privilege THEN RAISE WARNING 'dr helper: cannot grant auth access (%)', SQLERRM;
+  END;
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'cron') THEN
+    BEGIN
+      GRANT USAGE ON SCHEMA cron TO postgres;
+      GRANT ALL ON ALL TABLES IN SCHEMA cron TO postgres;
+      GRANT ALL ON ALL SEQUENCES IN SCHEMA cron TO postgres;
+      GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA cron TO postgres;
+    EXCEPTION WHEN insufficient_privilege THEN RAISE WARNING 'dr helper: cannot grant cron access (%)', SQLERRM;
+    END;
+  END IF;
+END
+$grant$;
 ALTER ROLE service_role SET statement_timeout = '120s';
 NOTIFY pgrst, 'reload config';
 NOTIFY pgrst, 'reload schema';
 `;
+
+/** What the helpers can touch on the standby (runs as the helper owner). */
+export const STANDBY_ACCESS_SQL = `select json_build_object(
+  'runsAs', current_user::text,
+  'superuser', (select rolsuper from pg_roles where rolname = current_user),
+  'authUsersWrite', has_table_privilege('auth.users', 'INSERT,UPDATE,DELETE'),
+  'authUsersReferences', has_table_privilege('auth.users', 'REFERENCES'),
+  'authIdentitiesWrite', has_table_privilege('auth.identities', 'INSERT,UPDATE,DELETE'),
+  'authUsersOwner', (select pg_get_userbyid(relowner) from pg_class where oid = 'auth.users'::regclass),
+  'memberOf', (select coalesce(json_agg(r.rolname), '[]'::json) from pg_auth_members m join pg_roles r on r.oid = m.roleid where m.member = (select oid from pg_roles where rolname = current_user)),
+  'cronUsage', coalesce((select has_schema_privilege('cron', 'USAGE') where exists (select 1 from pg_namespace where nspname = 'cron')), false)
+)::text`;
 
 /** Chunk size the standby's resumable (TUS) endpoint requires. */
 export const TUS_CHUNK = 6 * 1024 * 1024;
@@ -154,10 +207,10 @@ export class Standby {
     return (await this.run([stmt], params))[0];
   }
 
-  async replace(table: string, cols: string[], pk: string[], where: string, rowsJson: string, allowDelete = true): Promise<ReplaceResult> {
-    const out = await this.rpc<string>("dr_mirror_replace", {
-      p_table: table, p_cols: cols, p_pk: pk, p_where: where, p_rows: rowsJson, p_delete: allowDelete,
-    });
+  async replace(table: string, cols: string[], pk: string[], where: string, rowsJson: string, allowDelete = true, dedupe = false): Promise<ReplaceResult> {
+    const args: Record<string, unknown> = { p_table: table, p_cols: cols, p_pk: pk, p_where: where, p_rows: rowsJson, p_delete: allowDelete };
+    if (dedupe) args.p_dedupe = true;
+    const out = await this.rpc<string>("dr_mirror_replace", args);
     const [d, w] = String(out).split(",").map(Number);
     return { deleted: d || 0, written: w || 0 };
   }
