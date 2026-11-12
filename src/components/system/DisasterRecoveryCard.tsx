@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { can } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import {
-  FULL_STEPS, STEP_LABELS, formatBytes, formatDuration, friendlyTable, isActive, runProgress, statusMeta,
+  FULL_STEPS, STEP_LABELS, formatBytes, formatDuration, friendlyTable, isActive, isRefusal, tableReason, runProgress, statusMeta,
   type HistoryRow, type RunKind, type RunRow, type StandbyStatus, type Tone,
 } from "@/lib/dr/standbyCopy";
 
