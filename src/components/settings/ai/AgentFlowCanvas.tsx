@@ -26,14 +26,15 @@ const JOURNEYS: { id: Journey; label: string; icon: React.ElementType; blurb: st
 
 type NodeTone = 'entry' | 'check' | 'agent' | 'tool' | 'human' | 'end' | 'stop';
 
+// Step categories map to theme roles so the flow stays legible in light and dark mode.
 const TONES: Record<NodeTone, { ring: string; chip: string }> = {
-  entry: { ring: 'border-indigo-200 bg-indigo-50/70', chip: 'bg-indigo-100 text-indigo-700' },
+  entry: { ring: 'border-primary/30 bg-primary/5', chip: 'bg-primary/15 text-primary' },
   check: { ring: 'border-border bg-card', chip: 'bg-muted text-muted-foreground' },
-  agent: { ring: 'border-violet-200 bg-violet-50/70', chip: 'bg-violet-100 text-violet-700' },
-  tool: { ring: 'border-sky-200 bg-sky-50/70', chip: 'bg-sky-100 text-sky-700' },
-  human: { ring: 'border-amber-200 bg-amber-50/70', chip: 'bg-amber-100 text-amber-700' },
-  end: { ring: 'border-emerald-200 bg-emerald-50/70', chip: 'bg-emerald-100 text-emerald-700' },
-  stop: { ring: 'border-red-200 bg-red-50/70', chip: 'bg-red-100 text-red-700' },
+  agent: { ring: 'border-accent/30 bg-accent/5', chip: 'bg-accent/15 text-accent' },
+  tool: { ring: 'border-info/30 bg-info/5', chip: 'bg-info/15 text-info' },
+  human: { ring: 'border-warning/30 bg-warning/5', chip: 'bg-warning/15 text-warning' },
+  end: { ring: 'border-success/30 bg-success/5', chip: 'bg-success/15 text-success' },
+  stop: { ring: 'border-destructive/30 bg-destructive/5', chip: 'bg-destructive/15 text-destructive' },
 };
 
 interface FlowNode {
