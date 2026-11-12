@@ -28,7 +28,8 @@ export async function ensureWebThread(db: Db, lead: { id: string; branch_id: str
   const key = webChatKey(lead.id);
   const { error } = await db.from("whatsapp_chat_settings").upsert({
     branch_id: lead.branch_id, phone_number: key, platform: "web_chat", captured_lead_id: lead.id,
-    contact_name: lead.full_name ?? "Website visitor", is_unread: true, bot_active: true,
+    contact_name: lead.full_name ?? "Website visitor", is_unread: true,
+    // bot_active is never set here: a staff pause must survive new visitor messages.
     // Not a deliverable channel: keeps nurture/broadcast workers from ever targeting this thread.
     do_not_contact: true, do_not_contact_reason: "web_chat_thread",
     updated_at: new Date().toISOString(),

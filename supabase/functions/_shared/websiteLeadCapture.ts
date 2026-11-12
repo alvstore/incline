@@ -359,11 +359,28 @@ async function handleChatTurn(body: Record<string, unknown>, deps: CaptureDeps):
     awaitingDuration: q.awaitingDuration === true,
     awaitingLinkConfirm: q.awaitingLinkConfirm === true,
   };
+  // Staff pause from the CRM silences the concierge on this thread.
+  const { data: thread } = await deps.db.from("whatsapp_chat_settings").select("bot_active, bot_paused_until")
+    .eq("branch_id", p.lead.branch_id).eq("phone_number", webChatKey(p.lead.id)).maybeSingle();
+  const paused = !!thread && (thread.bot_active === false || (!!thread.bot_paused_until && new Date(thread.bot_paused_until).getTime() > Date.now()));
+  if (paused) {
+    const held = [{ text: "Thank you! A member of our team is looking at your message and will reply here shortly." }];
+    try { await storeTurns(deps.db, p.lead, [{ from: "user", text: topic ? (label || topic) : message }]); } catch { console.error("[web-chat] persist failed"); }
+    return { status: 200, body: { success: true, messages: held, topic: topic ?? "general", state: { ...state, quote }, visit_noted: false, paused: true } };
+  }
+  // Intake plan choice: lead row first, else the latest website intake activity (returning visitors).
+  let interest = p.lead.plan_interest;
+  if (!interest) {
+    const { data: act } = await deps.db.from("lead_activities").select("metadata").eq("lead_id", p.lead.id)
+      .not("metadata->>plan_interest", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const v = (act?.metadata as Record<string, unknown> | null)?.plan_interest;
+    interest = typeof v === "string" ? v : null;
+  }
   const [k, plans, pricesOn] = await Promise.all([loadWebKnowledge(deps.db, p.lead.branch_id), activePlanNames(deps.db), webPricesEnabled(deps.db)]);
   let reply: { messages: SalesMsg[]; topic: WebTopic; state: WebState & { quote?: QuoteState }; visitPreference?: string } | null = null;
   if (pricesOn && !topic && message) {
     const [catalog, linksOn] = await Promise.all([loadSalesCatalog(deps.db, p.lead.branch_id), flagEnabled(deps.db, "sales_chat_payment_links")]);
-    const sr = salesTurn(message, quote, catalog, { interest: p.lead.plan_interest, linksEnabled: linksOn });
+    const sr = salesTurn(message, quote, catalog, { interest, linksEnabled: linksOn });
     if (sr) {
       let msgs = sr.messages;
       if (sr.createLink) {
