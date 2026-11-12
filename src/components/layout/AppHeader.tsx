@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { useQuery } from '@tanstack/react-query';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
+import { useLogoTone } from '@/hooks/useLogoTone';
 import { supabase } from '@/integrations/supabase/client';
 import { useGlobalChatSound } from '@/hooks/useChatSound';
 import { NavModeMenu } from './NavModeMenu';
@@ -93,6 +94,7 @@ export function AppHeader({ variant = 'standalone', showBrand = false }: AppHead
 
   // Org branding for the standalone (Header + Horizontal stacked) variant
   const { data: org } = useOrgBranding();
+  const logoTone = useLogoTone(org?.logo_url);
 
 
   return (
