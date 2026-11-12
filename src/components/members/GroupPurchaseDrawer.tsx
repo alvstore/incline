@@ -228,7 +228,7 @@ export function GroupPurchaseDrawer({ open, onOpenChange, branchId }: Props) {
                   <Badge key={m.id} variant="secondary" className="rounded-full pl-1 pr-2 py-1 gap-2">
                     <Avatar className="h-5 w-5"><AvatarFallback className="text-[10px]">{m.name[0]}</AvatarFallback></Avatar>
                     <span className="text-xs">{m.name}</span>
-                    <button type="button" onClick={() => removeMember(m.id)} aria-label={`Remove ${m.profiles?.full_name || 'member'}`} className="rounded-full hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <button type="button" onClick={() => removeMember(m.id)} aria-label={`Remove ${m.name}`} className="rounded-full hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
