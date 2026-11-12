@@ -327,12 +327,12 @@ export function AgentFlowCanvas() {
                     active ? 'bg-card text-foreground shadow-lg' : 'bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20'
                   }`}
                 >
-                  <span className={`rounded-full p-2 ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-white/15 text-white'}`}>
+                  <span className={`rounded-full p-2 ${active ? 'bg-primary/10 text-primary' : 'bg-primary-foreground/15 text-primary-foreground'}`}>
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold">{j.label}</span>
-                    <span className={`block text-xs ${active ? 'text-muted-foreground' : 'text-indigo-100'}`}>{j.blurb}</span>
+                    <span className={`block text-xs ${active ? 'text-muted-foreground' : 'text-primary-foreground/80'}`}>{j.blurb}</span>
                   </span>
                 </button>
               );
