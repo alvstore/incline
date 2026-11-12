@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMenuForRole } from '@/config/menu';
@@ -15,6 +15,22 @@ import { supabase } from '@/integrations/supabase/client';
 
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import { track } from '@/lib/analytics';
+
+const SIDEBAR_SCROLL_KEY = 'incline:sidebar-scroll';
+/** Pages each mount their own layout, so the sidebar remounts on navigation; remember its scroll. */
+function useSidebarScrollMemory() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const vp = ref.current?.querySelector<HTMLDivElement>('[data-radix-scroll-area-viewport]');
+    if (!vp) return;
+    const saved = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) || 0);
+    if (saved) vp.scrollTop = saved;
+    const onScroll = () => sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(vp.scrollTop));
+    vp.addEventListener('scroll', onScroll, { passive: true });
+    return () => vp.removeEventListener('scroll', onScroll);
+  }, []);
+  return ref;
+}
 
 export const OPEN_MOBILE_MENU_EVENT = 'incline:open-mobile-menu';
 export function openMobileMenu(source: 'bottom_more') {
@@ -162,6 +178,7 @@ export function AppSidebar({
   return (
     <TooltipProvider delayDuration={200}>
       <aside
+        ref={sidebarScrollRef}
         className={cn(
           'hidden lg:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200',
           embedded ? 'h-full' : 'h-screen sticky top-0 shadow-sm',
