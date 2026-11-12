@@ -554,7 +554,7 @@ export function PurchaseAddOnDrawer({
     const owned = remainingForType(p.benefit_type);
     const selected = selectedBenefitPkg === p.id;
     return (
-      <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+      <Card role="button" tabIndex={0} aria-pressed={selected} onKeyDown={clickOnActivateKey}
         key={p.id}
         onClick={() => { setCustomMode(false); setSelectedBenefitPkg(p.id); }}
         className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer transition-all duration-200 rounded-xl ${
@@ -599,7 +599,7 @@ export function PurchaseAddOnDrawer({
   const renderPtCard = (p: PtPackage) => {
     const selected = selectedPtPkg === p.id;
     return (
-      <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+      <Card role="button" tabIndex={0} aria-pressed={selected} onKeyDown={clickOnActivateKey}
         key={p.id}
         onClick={() => setSelectedPtPkg(p.id)}
         className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer transition-all duration-200 rounded-xl ${
@@ -730,7 +730,7 @@ export function PurchaseAddOnDrawer({
               )}
 
               {!isMember && (
-                <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+                <Card role="button" tabIndex={0} aria-pressed={customMode && !selectedBenefitPkg} onKeyDown={clickOnActivateKey}
                   onClick={() => { setSelectedBenefitPkg(null); setCustomMode(true); }}
                   className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer rounded-xl border-dashed transition-all duration-200 ${
                     customMode && !selectedBenefitPkg ? 'border-primary ring-2 ring-primary/30' : 'hover:border-primary/40'

@@ -832,7 +832,7 @@ export default function PaymentsPage() {
                     const dueAmount = (inv.total_amount || 0) - (inv.amount_paid || 0);
                     const isSelected = selectedInvoice?.id === inv.id;
                     return (
-                      <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
+                      <div role="button" tabIndex={0} aria-pressed={isSelected} onKeyDown={clickOnActivateKey}
                         key={inv.id}
                         className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring p-3 border rounded-lg cursor-pointer transition-colors ${
                           isSelected ? 'border-accent bg-accent/5 ring-1 ring-accent' : 'hover:bg-muted/50'

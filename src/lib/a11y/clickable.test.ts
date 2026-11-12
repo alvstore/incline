@@ -1,3 +1,4 @@
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
 import { describe, expect, test } from 'bun:test';
 import { clickOnActivateKey } from './clickable';
 
