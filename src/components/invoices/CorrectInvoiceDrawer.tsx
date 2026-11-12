@@ -125,7 +125,7 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="h-5 w-5 text-warning" />
             Correct Invoice {invoice.invoice_number}
           </SheetTitle>
           <SheetDescription>
@@ -194,7 +194,7 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
             </div>
           </div>
 
-          <Card className="bg-indigo-50/50 border-indigo-100">
+          <Card className="bg-primary/50 border-primary/30">
             <CardContent className="pt-4 text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Derived subtotal</span>
@@ -208,7 +208,7 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
                 <span className="text-foreground font-semibold">New total</span>
                 <span className="font-mono font-semibold">₹{totalNum.toLocaleString()}</span>
               </div>
-              <div className={`flex justify-between pt-1 ${overpaid ? 'text-emerald-700' : underpaid ? 'text-red-700' : 'text-muted-foreground'}`}>
+              <div className={`flex justify-between pt-1 ${overpaid ? 'text-success' : underpaid ? 'text-destructive' : 'text-muted-foreground'}`}>
                 <span>
                   {overpaid ? 'Overpayment to settle' : underpaid ? 'Additional due' : 'No balance change'}
                 </span>
@@ -250,7 +250,7 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="reason">Reason for correction <span className="text-red-500">*</span></Label>
+            <Label htmlFor="reason">Reason for correction <span className="text-destructive">*</span></Label>
             <Textarea
               id="reason"
               placeholder="e.g. Wrong price entered at billing — should have been ₹18,000 instead of ₹19,999"

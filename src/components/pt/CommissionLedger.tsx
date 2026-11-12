@@ -36,10 +36,10 @@ interface LedgerRow {
 }
 
 const MODE_BADGE: Record<string, string> = {
-  cash: 'bg-emerald-100 text-emerald-700',
-  upi: 'bg-indigo-100 text-indigo-700',
-  card: 'bg-violet-100 text-violet-700',
-  bank_transfer: 'bg-blue-100 text-blue-700',
+  cash: 'bg-success/10 text-success',
+  upi: 'bg-primary/10 text-primary',
+  card: 'bg-primary/10 text-primary',
+  bank_transfer: 'bg-info/10 text-info',
 };
 
 const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -190,11 +190,11 @@ export function CommissionLedger({ branchId }: Props) {
 
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
       <CardHeader className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+            <span className="rounded-full bg-primary/10 p-2 text-primary">
               <Wallet className="h-4 w-4" aria-hidden />
             </span>
             Trainer Commission Ledger
@@ -278,7 +278,7 @@ export function CommissionLedger({ branchId }: Props) {
           <p className="py-10 text-center text-sm text-destructive">Could not load the commission ledger. Please retry.</p>
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center">
-            <Wallet className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
+            <Wallet className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
             <p className="mt-3 text-sm font-medium text-foreground">
               {month ? 'No PT commissions in this month' : 'No PT commissions yet'}
             </p>
@@ -289,10 +289,10 @@ export function CommissionLedger({ branchId }: Props) {
             <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {[
                 ['PT Sales', totals.sales, 'text-foreground'],
-                ['Outstanding Dues', totals.due, 'text-red-600'],
+                ['Outstanding Dues', totals.due, 'text-destructive'],
                 ['Net Commission', totals.net, 'text-foreground'],
-                ['Payable Now', totals.pending, 'text-emerald-700'],
-                ['Held (member dues)', totals.blocked, 'text-amber-700'],
+                ['Payable Now', totals.pending, 'text-success'],
+                ['Held (member dues)', totals.blocked, 'text-warning'],
               ].map(([label, value, tone]) => (
                 <div key={label as string} className="rounded-xl bg-muted px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label as string}</p>
@@ -336,8 +336,8 @@ export function CommissionLedger({ branchId }: Props) {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{r.trainer_name}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{inr(r.total_amount)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-emerald-700">{inr(r.paid)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-red-600">{inr(r.due)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm text-success">{inr(r.paid)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm text-destructive">{inr(r.due)}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{r.percent}%</TableCell>
                       <TableCell>
                         <Badge
@@ -347,7 +347,7 @@ export function CommissionLedger({ branchId }: Props) {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">{inr(r.base_commission)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-amber-700">
+                      <TableCell className="text-right font-mono text-sm text-warning">
                         {r.gst_deduction > 0 ? `-${inr(r.gst_deduction)}` : '—'}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-bold text-foreground">
@@ -359,9 +359,9 @@ export function CommissionLedger({ branchId }: Props) {
                             <div
                               key={`${r.id}-${i.month}`}
                               className={cn(
-                                "flex flex-col items-center justify-center rounded-lg border px-2 py-1 transition-all hover:scale-105",
-                                i.status === 'paid' && "bg-emerald-50 border-emerald-200 text-emerald-700",
-                                i.status === 'blocked' && "bg-amber-50 border-amber-200 text-amber-700",
+ "flex flex-col items-center justify-center rounded-lg border px-2 py-1 transition-all hover:scale-105",
+                                i.status === 'paid' && "bg-success/10 border-success/30 text-success",
+                                i.status === 'blocked' && "bg-warning/10 border-warning/30 text-warning",
                                 i.status === 'pending' && "bg-muted border-border text-muted-foreground"
                               )}
                               title={
@@ -379,7 +379,7 @@ export function CommissionLedger({ branchId }: Props) {
                                 {inr(i.amount)}
                               </span>
                               {i.status === 'blocked' && (
-                                <span className="mt-0.5 text-[8px] font-black uppercase tracking-tighter text-amber-600">Held</span>
+                                <span className="mt-0.5 text-[8px] font-black uppercase tracking-tighter text-warning">Held</span>
                               )}
                             </div>
                           ))}

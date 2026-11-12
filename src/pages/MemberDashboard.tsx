@@ -185,16 +185,16 @@ export default function MemberDashboard() {
     ? Math.max(1, differenceInDays(new Date(activeMembership.end_date), new Date(activeMembership.start_date)))
     : 1;
   const planUsedPct = activeMembership ? Math.min(100, Math.max(0, ((totalPlanDays - daysRemaining) / totalPlanDays) * 100)) : 0;
-  const card = 'rounded-2xl bg-card dark:bg-card shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
+  const card = 'rounded-2xl bg-card dark:bg-card shadow-lg shadow-foreground/5 dark:shadow-none transition-all duration-200 hover:shadow-xl hover:shadow-primary/10';
   const label = 'text-xs font-semibold text-muted-foreground uppercase tracking-wider';
   const iconBadge = 'bg-primary/10 text-primary p-2 rounded-full';
   const statusBadge = isFrozen
-    ? { text: 'Frozen', cls: 'bg-blue-100 text-blue-700', Icon: Snowflake }
+    ? { text: 'Frozen', cls: 'bg-info/10 text-info', Icon: Snowflake }
     : activeMembership
-      ? { text: 'Active', cls: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle }
+      ? { text: 'Active', cls: 'bg-success/10 text-success', Icon: CheckCircle }
       : isScheduled
         ? { text: 'Scheduled', cls: 'bg-muted text-muted-foreground', Icon: CalendarClock }
-        : { text: 'Inactive', cls: 'bg-red-100 text-red-700', Icon: AlertCircle };
+        : { text: 'Inactive', cls: 'bg-destructive/10 text-destructive', Icon: AlertCircle };
 
   const quickActions = [
     { to: '/book', label: 'Book & Schedule', Icon: Calendar, disabled: isFrozen },
@@ -277,7 +277,7 @@ export default function MemberDashboard() {
 
         {/* Ad Banners Carousel */}
         {banners.length > 0 && (
-          <div className="overflow-hidden rounded-2xl shadow-lg shadow-slate-200/50" ref={emblaRef}>
+          <div className="overflow-hidden rounded-2xl shadow-lg shadow-foreground/5" ref={emblaRef}>
             <div className="flex">
               {banners.map((banner: any) => (
                 <div key={banner.id} className="flex-[0_0_100%] min-w-0">
@@ -295,9 +295,9 @@ export default function MemberDashboard() {
         )}
 
         {isFrozen && (
-          <Alert className="rounded-2xl border-0 bg-blue-50 shadow-lg shadow-slate-200/50">
-            <Snowflake className="h-4 w-4 text-blue-600" />
-            <AlertTitle className="text-blue-700">Membership frozen</AlertTitle>
+          <Alert className="rounded-2xl border-0 bg-info/10 shadow-lg shadow-foreground/5">
+            <Snowflake className="h-4 w-4 text-info" />
+            <AlertTitle className="text-info">Membership frozen</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
               <span className="text-muted-foreground">Gym access and bookings are paused.</span>
               <Button size="sm" variant="outline" className="w-fit" asChild>
@@ -308,7 +308,7 @@ export default function MemberDashboard() {
         )}
 
         {isScheduled && (
-          <Alert className="rounded-2xl border-0 bg-primary/10 shadow-lg shadow-slate-200/50">
+          <Alert className="rounded-2xl border-0 bg-primary/10 shadow-lg shadow-foreground/5">
             <CalendarClock className="h-4 w-4 text-primary" />
             <AlertTitle className="text-primary">Membership scheduled — {scheduledMembership?.plan?.name}</AlertTitle>
             <AlertDescription className="text-muted-foreground">
@@ -325,7 +325,7 @@ export default function MemberDashboard() {
             <p className="text-xs text-muted-foreground">{activePtPackage ? `of ${activePtPackage.sessions_total} left` : 'No active package'}</p>
           </div>
           <div className={`${card} p-5`}>
-            <div className="flex items-center justify-between"><span className={label}>Visits this month</span><span className="bg-emerald-50 text-emerald-600 p-2 rounded-full"><Clock className="h-4 w-4" /></span></div>
+            <div className="flex items-center justify-between"><span className={label}>Visits this month</span><span className="bg-success/10 text-success p-2 rounded-full"><Clock className="h-4 w-4" /></span></div>
             <p className="mt-3 text-2xl font-bold text-foreground dark:text-foreground">{visitsThisMonth}</p>
             <p className="text-xs text-muted-foreground">Last 10 check-ins tracked</p>
           </div>
@@ -337,7 +337,7 @@ export default function MemberDashboard() {
           <div className={`${card} p-5`}>
             <div className="flex items-center justify-between">
               <span className={label}>Pending dues</span>
-              <span className={totalPendingAmount > 0 ? 'bg-red-50 text-red-600 p-2 rounded-full' : 'bg-emerald-50 text-emerald-600 p-2 rounded-full'}><FileText className="h-4 w-4" /></span>
+ <span className={totalPendingAmount > 0 ? 'bg-destructive/10 text-destructive p-2 rounded-full' : 'bg-success/10 text-success p-2 rounded-full'}><FileText className="h-4 w-4" /></span>
             </div>
             <p className="mt-3 text-2xl font-bold text-foreground dark:text-foreground">₹{totalPendingAmount.toLocaleString('en-IN')}</p>
             {totalPendingAmount > 0 && pendingInvoices[0]?.id ? (
@@ -345,7 +345,7 @@ export default function MemberDashboard() {
                 <CreditCard className="h-3 w-3" /> Pay now · {pendingInvoices.length} invoice(s)
               </Link>
             ) : (
-              <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">All paid</span>
+              <span className="mt-1 inline-flex rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">All paid</span>
             )}
           </div>
         </div>
@@ -443,7 +443,7 @@ export default function MemberDashboard() {
                         <p className="truncate text-sm font-semibold text-foreground dark:text-foreground">{booking.class?.name}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(booking.class?.scheduled_at), 'EEE, dd MMM • HH:mm')}</p>
                       </div>
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Booked</span>
+                      <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">Booked</span>
                     </div>
                   ))}
                 </div>
@@ -455,7 +455,7 @@ export default function MemberDashboard() {
           <Card className={`${card} border-0`}>
             <CardHeader>
               <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
-                <span className="bg-emerald-50 text-emerald-600 p-2 rounded-full"><Clock className="h-5 w-5" /></span>
+                <span className="bg-success/10 text-success p-2 rounded-full"><Clock className="h-5 w-5" /></span>
                 Recent Visits
               </CardTitle>
             </CardHeader>
@@ -466,7 +466,7 @@ export default function MemberDashboard() {
                 <ul className="space-y-3">
                   {recentAttendance.slice(0, 5).map((record) => (
                     <li key={record.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-foreground dark:text-foreground"><CheckCircle className="h-4 w-4 text-emerald-500" />{format(new Date(record.check_in), 'EEE, dd MMM')}</span>
+                      <span className="flex items-center gap-2 text-foreground dark:text-foreground"><CheckCircle className="h-4 w-4 text-success" />{format(new Date(record.check_in), 'EEE, dd MMM')}</span>
                       <span className="text-muted-foreground">{format(new Date(record.check_in), 'HH:mm')}{record.check_out && ` – ${format(new Date(record.check_out), 'HH:mm')}`}</span>
                     </li>
                   ))}
@@ -511,7 +511,7 @@ export default function MemberDashboard() {
           <Card className={`${card} border-0`}>
             <CardHeader>
               <CardTitle className="text-lg font-bold text-foreground dark:text-foreground flex items-center gap-2">
-                <span className="bg-amber-50 text-amber-600 p-2 rounded-full"><Lock className="h-5 w-5" /></span>
+                <span className="bg-warning/10 text-warning p-2 rounded-full"><Lock className="h-5 w-5" /></span>
                 My Locker
               </CardTitle>
             </CardHeader>

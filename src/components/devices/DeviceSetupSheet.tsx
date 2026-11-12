@@ -163,7 +163,7 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
         <div className="mt-6 space-y-4 pb-10">
           <Section title="MIPS server connection" icon={<ServerCog className="h-3.5 w-3.5" />}>
             {!branchId ? (
-              <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Select one branch from the header to manage its MIPS connection.</p>
+              <p className="rounded-xl bg-warning/10 p-3 text-xs text-warning">Select one branch from the header to manage its MIPS connection.</p>
             ) : connectionQuery.isLoading ? (
               <div className="flex min-h-24 items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
             ) : (
@@ -182,7 +182,7 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
                   <Button type="button" variant="outline" disabled={connectionMutation.isPending} onClick={() => connectionMutation.mutate(false)} className="min-h-11 rounded-xl">{connectionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}Test entered details</Button>
                   <Button type="button" disabled={connectionMutation.isPending} onClick={() => connectionMutation.mutate(true)} className="min-h-11 rounded-xl">{connectionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save &amp; test</Button>
                 </div>
-                {connectionResult && <div className={`flex gap-2 rounded-xl p-3 text-xs ${connectionResult.success ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span>{connectionResult.message}</span></div>}
+                {connectionResult && <div className={`flex gap-2 rounded-xl p-3 text-xs ${connectionResult.success ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span>{connectionResult.message}</span></div>}
               </div>
             )}
           </Section>
@@ -193,14 +193,14 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
             </p>
             <UrlField
               step={1}
-              stepClass="bg-emerald-100 text-emerald-700"
+              stepClass="bg-success/10 text-success"
               title="Recognition Record Upload URL"
               hint="Face scan events — the critical URL for attendance"
               url={recognitionUrl}
               required
             />
             {mipsUrls?.isOverridden && (
-              <p className="text-[10px] text-amber-600">Using override from integration settings.</p>
+              <p className="text-[10px] text-warning">Using override from integration settings.</p>
             )}
             <UrlField
               step={2}
@@ -218,11 +218,11 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
               readOnly
             />
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-background p-3 text-[11px] text-muted-foreground">
-              <span className="rounded bg-indigo-100 px-2 py-1 font-medium text-indigo-700">Device</span>
+              <span className="rounded bg-primary/10 px-2 py-1 font-medium text-primary">Device</span>
               <span>→</span>
-              <span className="rounded bg-emerald-100 px-2 py-1 font-medium text-emerald-700">Our webhook</span>
+              <span className="rounded bg-success/10 px-2 py-1 font-medium text-success">Our webhook</span>
               <span>→</span>
-              <span className="rounded bg-violet-100 px-2 py-1 font-medium text-violet-700">MIPS server</span>
+              <span className="rounded bg-primary/10 px-2 py-1 font-medium text-primary">MIPS server</span>
               <span>Attendance is processed first, then relayed so both systems stay in sync.</span>
             </div>
           </Section>
@@ -242,11 +242,11 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
                 {tokenState.loading ? "Loading…" : tokenState.url ? "Refresh" : "Show URL"}
               </Button>
             </div>
-            {tokenState.error && <p className="text-sm text-red-600">{tokenState.error}</p>}
+            {tokenState.error && <p className="text-sm text-destructive">{tokenState.error}</p>}
             {tokenState.url && (
               <div className="space-y-2">
                 {!tokenState.configured && (
-                  <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                  <div className="rounded-xl bg-warning/10 p-3 text-xs text-warning">
                     <strong>Not configured.</strong> {tokenState.note}
                   </div>
                 )}

@@ -625,16 +625,16 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 <Label className="font-semibold">{partTitle('I')} — Acknowledgements</Label>
               </div>
               {acksReadOnly ? (
-                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/10">
+                <Badge className="bg-success/10 text-success border border-success/20 hover:bg-success/10">
                   <CheckCircle2 className="h-3 w-3 mr-1" /> All mandatory accepted
                 </Badge>
               ) : (
                 <Badge
                   variant="outline"
                   className={
-                    missingAcks.length
-                      ? 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+ missingAcks.length
+                      ? 'bg-warning/10 text-warning border-warning/20'
+                      : 'bg-success/10 text-success border-success/20'
                   }
                 >
                   {acceptedRequired}/{REQUIRED_ACKNOWLEDGEMENT_KEYS.length} mandatory accepted
@@ -658,7 +658,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                     return (
                       <div key={a.key} className="flex items-start gap-3 px-3 py-2.5">
                         {accepted ? (
-                          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" aria-hidden />
+                          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-success" aria-hidden />
                         ) : (
                           <MinusCircle className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground/60" aria-hidden />
                         )}
@@ -671,7 +671,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                             <span
                               className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                                 accepted
-                                  ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                  ? 'bg-success/10 text-success border border-success/20'
                                   : 'bg-muted text-muted-foreground border border-border'
                               }`}
                             >
@@ -715,7 +715,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                         <label
                           key={a.key}
                           className={`flex items-start gap-2 rounded-lg px-2 py-1.5 -mx-2 cursor-pointer transition-colors duration-150 hover:bg-secondary ${
-                            a.required && !accepted ? 'bg-amber-500/5' : ''
+                            a.required && !accepted ? 'bg-warning/5' : ''
                           }`}
                         >
                           <Checkbox
@@ -738,7 +738,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                   </div>
                 ))}
                 {missingAcks.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700">
+                  <div className="flex items-start gap-2 rounded-xl border border-warning/20 bg-warning/10 px-3 py-2.5 text-xs text-warning">
                     <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
                     <p>
                       {missingAcks.length} mandatory acknowledgement{missingAcks.length > 1 ? 's' : ''} pending — the
@@ -756,15 +756,15 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           {/* Digital Signature — hidden when member already signed via /register */}
           {existingSignature && !editMode ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2">
+            <div className="rounded-xl border border-success/30 bg-success/60 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <Label className="font-semibold text-emerald-800">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <Label className="font-semibold text-success">
                   Already signed{existingSignature.source === 'self_register' ? ' during self-registration' : ''}
                 </Label>
               </div>
               {existingSignature.signed_at && (
-                <p className="text-xs text-emerald-700/80">
+                <p className="text-xs text-success/80">
                   Signed on {new Date(existingSignature.signed_at).toLocaleString('en-IN')}
                 </p>
               )}
@@ -772,7 +772,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 <img
                   src={signatureUrl}
                   alt="Member signature"
-                  className="max-h-24 rounded border border-emerald-200 bg-card p-1"
+                  className="max-h-24 rounded border border-success/30 bg-card p-1"
                 />
               )}
               <div className="flex flex-wrap gap-2 pt-1">

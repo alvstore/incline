@@ -68,14 +68,14 @@ export function StockHistoryTab({ branchId }: { branchId: string | undefined }) 
                       <TableCell>
                         <span className="inline-flex items-center gap-1 text-sm">
                           {sign > 0 ? (
-                            <ArrowUpRight className="h-4 w-4 text-emerald-500" aria-hidden />
+                            <ArrowUpRight className="h-4 w-4 text-success" aria-hidden />
                           ) : (
                             <ArrowDownRight className="h-4 w-4 text-destructive" aria-hidden />
                           )}
                           {MOVEMENT_LABELS[m.movement_type] ?? m.movement_type}
                         </span>
                       </TableCell>
-                      <TableCell className={`text-right font-semibold tabular-nums ${sign > 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                      <TableCell className={`text-right font-semibold tabular-nums ${sign > 0 ? 'text-success' : 'text-destructive'}`}>
                         {sign > 0 ? '+' : '−'}{m.quantity}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[280px] truncate" title={m.notes ?? ''}>

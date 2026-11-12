@@ -118,7 +118,7 @@ export function TemplatePickerSheet({ open, onOpenChange, planType, member }: Pr
                     <span
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
                         t.type === 'diet'
-                          ? 'bg-emerald-500/10 text-emerald-600'
+                          ? 'bg-success/10 text-success'
                           : 'bg-primary/10 text-primary'
                       }`}
                       aria-hidden

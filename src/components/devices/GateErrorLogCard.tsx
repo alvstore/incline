@@ -38,7 +38,7 @@ const OP_LABEL: Record<string, string> = {
   access_update: "Access validity update",
 };
 
-const badge = (s: Item["severity"]) => (s === "error" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700");
+const badge = (s: Item["severity"]) => (s === "error" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning");
 
 const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
   const { data, isLoading, isError } = useQuery({
@@ -142,8 +142,8 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         {[
-          { label: "Failed gate pushes", value: data?.failedTotal ?? 0, icon: Ban, tone: "bg-red-50 text-red-600" },
-          { label: "Deferred (gate busy, retried)", value: data?.deferred ?? 0, icon: Clock, tone: "bg-amber-50 text-amber-600" },
+          { label: "Failed gate pushes", value: data?.failedTotal ?? 0, icon: Ban, tone: "bg-destructive/10 text-destructive" },
+          { label: "Deferred (gate busy, retried)", value: data?.deferred ?? 0, icon: Clock, tone: "bg-warning/10 text-warning" },
           { label: "Issues to review", value: items.length, icon: FileWarning, tone: "bg-primary/10 text-primary" },
         ].map((k) => (
           <Card key={k.label} className="rounded-2xl border-none shadow-lg shadow-muted/30">
@@ -174,14 +174,14 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
               <Skeleton className="h-14 rounded-xl" />
             </>
           ) : isError ? (
-            <div className="rounded-xl bg-red-50/70 p-6 text-center">
-              <AlertOctagon className="mx-auto mb-2 h-6 w-6 text-red-600" />
+            <div className="rounded-xl bg-destructive/70 p-6 text-center">
+              <AlertOctagon className="mx-auto mb-2 h-6 w-6 text-destructive" />
               <p className="text-sm font-semibold text-foreground">Could not load the error log</p>
               <p className="text-xs text-muted-foreground">Please refresh the page and try again.</p>
             </div>
           ) : items.length === 0 ? (
-            <div className="rounded-xl bg-emerald-50/60 p-6 text-center">
-              <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-600" />
+            <div className="rounded-xl bg-success/60 p-6 text-center">
+              <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-success" />
               <p className="text-sm font-semibold text-foreground">No gate failures in the last 3 days</p>
               <p className="text-xs text-muted-foreground">
                 Every push reached the gates or is waiting its turn in the paced queue.
@@ -197,7 +197,7 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
                     <Badge className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">{e.device}</Badge>
                   )}
                   {e.count > 1 && (
-                    <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">×{e.count}</Badge>
+                    <Badge className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning">×{e.count}</Badge>
                   )}
                   <span className="ml-auto text-xs text-muted-foreground">
                     {format(new Date(e.at), "dd MMM, h:mm a")} · {formatDistanceToNow(new Date(e.at), { addSuffix: true })}

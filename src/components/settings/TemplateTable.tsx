@@ -70,10 +70,10 @@ function eventLabel(id: string | null | undefined) {
 function metaStatusBadge(status: string | null | undefined) {
   if (!status) return <span className="text-xs text-muted-foreground">—</span>;
   const map: Record<string, { label: string; icon: any; className: string }> = {
-    APPROVED: { label: 'Approved', icon: CheckCircle, className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    PENDING: { label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-700 border-amber-200' },
-    PENDING_DELETION: { label: 'Deleting', icon: Trash2, className: 'bg-red-50 text-red-700 border-red-200 animate-pulse' },
-    REJECTED: { label: 'Rejected', icon: XCircle, className: 'bg-red-50 text-red-700 border-red-200' },
+    APPROVED: { label: 'Approved', icon: CheckCircle, className: 'bg-success/10 text-success border-success/30' },
+    PENDING: { label: 'Pending', icon: Clock, className: 'bg-warning/10 text-warning border-warning/30' },
+    PENDING_DELETION: { label: 'Deleting', icon: Trash2, className: 'bg-destructive/10 text-destructive border-destructive/30 animate-pulse' },
+    REJECTED: { label: 'Rejected', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/30' },
     PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
     DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
   };
@@ -159,7 +159,7 @@ export function TemplateTable({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, event or content"
-              className="pl-9 rounded-xl border-border shadow-sm focus:ring-indigo-500"
+              className="pl-9 rounded-xl border-border shadow-sm focus:ring-primary"
             />
           </div>
           {channel === 'whatsapp' && (
@@ -171,7 +171,7 @@ export function TemplateTable({
                   size="sm" 
                   variant={alignment === value ? 'default' : 'ghost'} 
                   onClick={() => setAlignment(value)} 
-                  className={`h-8 rounded-xl capitalize px-3 text-xs ${alignment === value ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-muted-foreground hover:bg-muted/50'}`}
+                  className={`h-8 rounded-xl capitalize px-3 text-xs ${alignment === value ? 'bg-primary text-white shadow-md shadow-primary/20' : 'text-muted-foreground hover:bg-muted/50'}`}
                 >
                   {value === 'missing' ? 'Missing / Stale' : value === 'mismatch' ? 'Header mismatch' : value}
                 </Button>
@@ -200,7 +200,7 @@ export function TemplateTable({
           )}
         </div>
       ) : (
-        <div className="rounded-2xl bg-card border border-border shadow-xl shadow-slate-200/40 overflow-hidden">
+        <div className="rounded-2xl bg-card border border-border shadow-xl shadow-foreground/5 overflow-hidden">
           <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
             <Table>
               <TableHeader className="sticky top-0 z-20 bg-muted/90 backdrop-blur-md border-b border-border">

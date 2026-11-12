@@ -240,7 +240,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
           <div className="flex gap-3 pt-4">
             {['pending', 'partial', 'overdue'].includes(invoice.status) && amountDue > 0 && onPayNow && (
               <Button 
-                className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
+                className="flex-1 bg-gradient-to-r from-primary to-primary hover:from-primary hover:to-primary"
                 onClick={() => onPayNow(invoice)}
               >
                 <CreditCard className="h-4 w-4 mr-2" />

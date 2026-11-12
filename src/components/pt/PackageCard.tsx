@@ -114,16 +114,16 @@ export function PackageCard({
   return (
     <Card
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10',
+ 'group relative flex flex-col overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10',
         inactive && 'opacity-70',
       )}
     >
       <div className={cn('h-1.5', TIER_RIBBON[tier])} aria-hidden />
-      <CardHeader className="pb-3">
+ <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <span
             className={cn(
-              'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
+ 'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
               TIER_ICON_BG[tier],
             )}
           >
@@ -160,7 +160,7 @@ export function PackageCard({
         <div className="mt-3 flex items-center gap-2">
           <span
             className={cn(
-              'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl',
+ 'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl',
               TIER_ICON_BG[tier],
             )}
             aria-hidden
@@ -186,7 +186,7 @@ export function PackageCard({
                   <li key={`${row.label}-${idx}`} className="flex items-start gap-2.5">
                     <span
                       className={cn(
-                        'mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg',
+ 'mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg',
                         TIER_ICON_BG[tier],
                       )}
                       aria-hidden

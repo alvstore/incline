@@ -27,14 +27,14 @@ type NoShowPolicy = Database["public"]["Enums"]["no_show_policy"];
 
 function getIconComponent(iconName: string | null, className = "h-5 w-5") {
   if (!iconName) return <Sparkles className={className} />;
-  const Icon = (LucideIcons as any)[iconName];
+ const Icon = (LucideIcons as any)[iconName];
   return Icon ? <Icon className={className} /> : <Sparkles className={className} />;
 }
 
 /* ── Configure Sheet (full settings form) ── */
 
 interface ConfigureSheetProps {
-  open: boolean;
+ open: boolean;
   onOpenChange: (open: boolean) => void;
   branchId: string;
   benefitType: BenefitType;
@@ -212,7 +212,7 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, hint, icon, gradient }: KpiCardProps) {
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/60 dark:shadow-slate-900/40 overflow-hidden">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 overflow-hidden">
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>

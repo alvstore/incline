@@ -130,7 +130,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
           {canDelete && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Delete task" className="text-red-600 hover:bg-red-50">
+                <Button variant="ghost" size="icon" aria-label="Delete task" className="text-destructive hover:bg-destructive/10">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </AlertDialogTrigger>
@@ -145,7 +145,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => deleteMutation.mutate()}
-                    className="bg-red-600 hover:bg-red-700"
+                    className="bg-destructive hover:bg-destructive"
                   >
                     Delete task
                   </AlertDialogAction>
@@ -173,7 +173,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
               </Badge>
             )}
             {task.member_created && (
-              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">
+              <Badge className="bg-warning/10 text-warning hover:bg-warning/10 border-warning/30">
                 Member Request
               </Badge>
             )}

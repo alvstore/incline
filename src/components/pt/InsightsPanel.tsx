@@ -36,7 +36,7 @@ export function InsightsPanel({
   return (
     <div className="space-y-4">
       {totalSessions > 0 && (
-        <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5">
           <CardContent className="py-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap items-center gap-3">
@@ -132,7 +132,7 @@ export function InsightsPanel({
         </Card>
 
         {/* Package split */}
-        <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-foreground">Package type split</CardTitle>
             <p className="text-xs text-muted-foreground">How your active clients are distributed.</p>
@@ -204,7 +204,7 @@ export function InsightsPanel({
         </Card>
 
         {/* Revenue by trainer */}
-        <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-foreground/5">
           <CardHeader className="flex flex-row items-start justify-between pb-2">
             <div>
               <CardTitle className="text-sm font-semibold text-foreground">Revenue by trainer</CardTitle>
@@ -226,7 +226,7 @@ export function InsightsPanel({
                     <li key={`${t.name}-${i}`} className="flex items-center gap-3">
                       <span
                         className={cn(
-                          'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+ 'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
                           i === 0 ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground',
                         )}
                       >
@@ -235,7 +235,7 @@ export function InsightsPanel({
                        <Avatar className="h-8 w-8 flex-shrink-0">
                          <AvatarImage src={t.avatarUrl || undefined} alt={t.name} />
                          <AvatarFallback className={cn('text-xs font-semibold', avatarColor(t.name))}>
-                           {initialsOf(t.name)}
+ {initialsOf(t.name)}
                          </AvatarFallback>
                        </Avatar>
                       <div className="min-w-0 flex-1">
@@ -289,7 +289,7 @@ function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+ 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
         map[color],
       )}
     >

@@ -148,7 +148,7 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
 
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
+    <Card className="rounded-2xl shadow-lg shadow-foreground/5 border-0">
       <CardHeader>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
@@ -178,11 +178,11 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
         ) : (
           <>
             {state === 'inactive' && (
-              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-3">
+              <div className="mb-4 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning flex items-start gap-3">
                 <PauseCircleIcon />
                 <div className="flex-1">
                   <p className="font-semibold">Credentials saved, but integration is disabled.</p>
-                  <p className="text-amber-700/90 text-xs mt-0.5">Flip the Enable Integration toggle in Provider credentials above to start sending.</p>
+                  <p className="text-warning/90 text-xs mt-0.5">Flip the Enable Integration toggle in Provider credentials above to start sending.</p>
                 </div>
                 {onConfigure && (
                   <Button size="sm" variant="outline" onClick={onConfigure}>Open</Button>
@@ -231,19 +231,19 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
 
 function StatusPill({ state, loading }: { state: 'unconfigured' | 'inactive' | 'active'; loading: boolean }) {
   if (loading) return <Badge className="bg-muted text-muted-foreground">Checking…</Badge>;
-  if (state === 'active') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-3 w-3 mr-1" />Connected</Badge>;
-  if (state === 'inactive') return <Badge className="bg-amber-100 text-amber-700">Disabled</Badge>;
+  if (state === 'active') return <Badge className="bg-success/10 text-success"><CheckCircle2 className="h-3 w-3 mr-1" />Connected</Badge>;
+  if (state === 'inactive') return <Badge className="bg-warning/10 text-warning">Disabled</Badge>;
   return <Badge className="bg-muted text-muted-foreground">Not configured</Badge>;
 }
 
 function PauseCircleIcon() {
-  return <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold">!</span>;
+  return <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-warning/10 text-warning text-xs font-bold">!</span>;
 }
 
 function EmptyConfigure({ onConfigure }: { onConfigure?: () => void }) {
   return (
     <div className="rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center">
-      <div className="mx-auto h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+      <div className="mx-auto h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3">
         <Radio className="h-6 w-6" />
       </div>
       <h3 className="text-sm font-semibold text-foreground">RCS provider isn't connected yet</h3>
@@ -301,7 +301,7 @@ function OverviewPanel({ branchId, canSeeWallet }: { branchId: string | null; ca
       <KpiCard label="Read" value={counts?.read ?? 0} icon={<MessageSquare className="h-4 w-4" />} tone="indigo" />
       <KpiCard label="Failed" value={counts?.failed ?? 0} icon={<XCircle className="h-4 w-4" />} tone="red" />
       {canSeeWallet && (
-        <Card className="md:col-span-4 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 shadow-lg shadow-indigo-500/20">
+        <Card className="md:col-span-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-white border-0 shadow-lg shadow-primary/20">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-wider text-white/80">Wallet balance</p>
@@ -323,12 +323,12 @@ function OverviewPanel({ branchId, canSeeWallet }: { branchId: string | null; ca
 function KpiCard({ label, value, icon, tone = 'slate' }: { label: string; value: number; icon: React.ReactNode; tone?: string }) {
   const toneMap: Record<string, string> = {
     slate: 'bg-muted text-foreground',
-    emerald: 'bg-emerald-100 text-emerald-700',
-    indigo: 'bg-indigo-100 text-indigo-700',
-    red: 'bg-red-100 text-red-700',
+    emerald: 'bg-success/10 text-success',
+    indigo: 'bg-primary/10 text-primary',
+    red: 'bg-destructive/10 text-destructive',
   };
   return (
-    <Card className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+    <Card className="rounded-2xl shadow-md shadow-foreground/5 border-0">
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
@@ -400,14 +400,14 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
               return (
                 <div key={bucket} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    {bucket === 'rich' ? <ImageIcon className="h-4 w-4 text-indigo-600" /> : <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+                    {bucket === 'rich' ? <ImageIcon className="h-4 w-4 text-primary" /> : <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {bucket === 'rich' ? 'Rich media' : 'Basic'} · {rows.length}
                     </span>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     {rows.map((t) => (
-                      <Card key={t.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
+                      <Card key={t.id} className="rounded-2xl shadow-md shadow-foreground/5 border-0 overflow-hidden">
                         {t.media_url && (
                           <div className="aspect-video bg-muted overflow-hidden">
                             <img src={t.media_url} alt={`${t.template_name} preview`} className="w-full h-full object-cover" loading="lazy" />
@@ -418,12 +418,12 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
                             <span className="font-semibold text-foreground truncate">{t.template_name}</span>
                             <div className="flex items-center gap-1">
                               {isRichKind(t.kind) && (
-                                <Badge className="bg-indigo-100 text-indigo-700 text-[10px]">
+                                <Badge className="bg-primary/10 text-primary text-[10px]">
                                   <ImageIcon className="h-2.5 w-2.5 mr-0.5" />Rich
                                 </Badge>
                               )}
-                              <Badge className={t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
-                                {t.status}
+                              <Badge className={t.status === 'approved' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}>
+ {t.status}
                               </Badge>
                             </div>
                           </div>
@@ -541,7 +541,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false, providerLabel = 'P
                   {templates?.map((t) => (
                     <SelectItem key={t.template_name} value={t.template_name}>
                       <span className="inline-flex items-center gap-1.5">
-                        {isRichKind(t.kind) && <ImageIcon className="h-3 w-3 text-indigo-600" />}
+                        {isRichKind(t.kind) && <ImageIcon className="h-3 w-3 text-primary" />}
                         {t.template_name}
                       </span>
                     </SelectItem>
@@ -570,7 +570,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false, providerLabel = 'P
                   {status?.sent_at && <div>sent: {new Date(status.sent_at).toLocaleTimeString()}</div>}
                   {status?.delivered_at && <div>delivered: {new Date(status.delivered_at).toLocaleTimeString()}</div>}
                   {status?.read_at && <div>read: {new Date(status.read_at).toLocaleTimeString()}</div>}
-                  {status?.error_message && <div className="text-red-600">error: {status.error_message}</div>}
+                  {status?.error_message && <div className="text-destructive">error: {status.error_message}</div>}
                 </CardContent>
               </Card>
             )}
@@ -696,7 +696,7 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Inbound webhook URLs</span>
         </div>
         {rows.map(([label, url, hint]) => (
-          <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+          <Card key={label} className="rounded-2xl shadow-md shadow-foreground/5 border-0">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-foreground">{label}</span>
@@ -722,7 +722,7 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
           so dedupe, preferences, quiet hours, and the kill-switch toggle are honored.
         </p>
         {snippets.map(([label, snippet]) => (
-          <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+          <Card key={label} className="rounded-2xl shadow-md shadow-foreground/5 border-0">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-foreground">{label}</span>
@@ -730,7 +730,7 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
                   <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
                 </Button>
               </div>
-              <pre className="text-[11px] bg-slate-900 text-slate-100 px-3 py-2 rounded font-mono overflow-x-auto whitespace-pre-wrap break-all">{snippet}</pre>
+              <pre className="text-[11px] bg-foreground text-muted px-3 py-2 rounded font-mono overflow-x-auto whitespace-pre-wrap break-all">{snippet}</pre>
             </CardContent>
           </Card>
         ))}
@@ -766,15 +766,15 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
 
   const badgeFor = (s: string | null) => {
     const v = (s || '').toLowerCase();
-    if (v === 'read') return 'bg-indigo-100 text-indigo-700';
-    if (v === 'delivered') return 'bg-emerald-100 text-emerald-700';
-    if (v === 'failed') return 'bg-red-100 text-red-700';
+    if (v === 'read') return 'bg-primary/10 text-primary';
+    if (v === 'delivered') return 'bg-success/10 text-success';
+    if (v === 'failed') return 'bg-destructive/10 text-destructive';
     if (v === 'sent') return 'bg-muted text-foreground';
-    return 'bg-amber-100 text-amber-700';
+    return 'bg-warning/10 text-warning';
   };
 
   return (
-    <Card className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
+    <Card className="rounded-2xl shadow-md shadow-foreground/5 border-0 overflow-hidden">
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -796,7 +796,7 @@ function ReportsPanel({ branchId }: { branchId: string | null }) {
                   <td className="px-4 py-2.5 font-mono text-xs">{l.recipient}</td>
                   <td className="px-4 py-2.5">
                     <Badge className={badgeFor(l.delivery_status)}>{l.delivery_status || 'pending'}</Badge>
-                    {l.error_message && <span className="ml-2 text-[10px] text-red-600 truncate">{l.error_message}</span>}
+ {l.error_message && <span className="ml-2 text-[10px] text-destructive truncate">{l.error_message}</span>}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{l.provider_record_id || '—'}</td>
                   <td className="px-4 py-2.5 text-right">
@@ -846,7 +846,7 @@ function RecordDetailButton({ branchId, recordId }: { branchId: string | null; r
               </Button>
             </div>
             {isLoading ? <Skeleton className="h-40 w-full rounded-xl" /> : (
-              <pre className="text-[11px] bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
+              <pre className="text-[11px] bg-foreground text-muted p-3 rounded-xl overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
                 {data ? JSON.stringify(data, null, 2) : 'No data'}
               </pre>
             )}

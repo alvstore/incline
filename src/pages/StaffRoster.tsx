@@ -492,7 +492,7 @@ export default function StaffRoster() {
         </div>
 
         {/* Main content card */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <CalIcon className="h-5 w-5 text-primary" />
@@ -1024,7 +1024,7 @@ function AttendanceMatrix({
           size="sm" variant={showOnlyLate ? 'default' : 'outline'}
           onClick={() => setShowOnlyLate((v) => !v)}
           className={showOnlyLate ? 'bg-warning hover:bg-warning text-primary-foreground' : ''}
-        >
+ >
           <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
           {showOnlyLate ? 'Showing late only' : 'Show only late'}
         </Button>
@@ -1640,7 +1640,7 @@ function SundayDatePicker({
             disabled={(d) => d.getDay() !== 0 || d < startOfDay(new Date())}
             initialFocus
             className={cn('p-3 pointer-events-auto')}
-          />
+ />
         </PopoverContent>
       </Popover>
       <Button
@@ -1718,7 +1718,7 @@ function SundayDutyCard({
                   </Avatar>
                   <span className="text-xs font-medium text-foreground">{t.full_name}</span>
                   <span className={cn(
-                    'rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+ 'rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
                     e.source === 'override'
                       ? 'bg-warning/15 text-warning'
                       : 'bg-muted text-muted-foreground',
@@ -1738,7 +1738,7 @@ function SundayDutyCard({
               );
               return editable ? (
                 <button key={t.user_id} type="button" onClick={() => onEdit(t)} className={commonClass} title={titleText}>
-                  {inner}
+ {inner}
                 </button>
               ) : (
                 <div key={t.user_id} className={commonClass} title={titleText} aria-disabled="true">
@@ -1884,14 +1884,14 @@ function SundayAssignSheet({
                 type="button"
                 onClick={() => setScope('one_off')}
                 className={cn(
-                  'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
+ 'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
                   scope === 'one_off'
                     ? 'border-warning bg-warning/10 shadow-sm'
                     : 'border-border bg-card hover:border-border',
                 )}
               >
                 <CalendarDays className={cn('h-4 w-4 mt-0.5', scope === 'one_off' ? 'text-warning' : 'text-muted-foreground')} />
-                <div>
+ <div>
                   <div className="text-xs font-semibold text-foreground">Just this Sunday</div>
                   <div className="text-[10px] text-muted-foreground leading-tight">One-off for {format(sundayDate, 'dd MMM')}. Their weekly schedule stays unchanged.</div>
                 </div>
@@ -1900,14 +1900,14 @@ function SundayAssignSheet({
                 type="button"
                 onClick={() => setScope('recurring')}
                 className={cn(
-                  'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
+ 'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
                   scope === 'recurring'
                     ? 'border-primary bg-primary/10 shadow-sm'
                     : 'border-border bg-card hover:border-border',
                 )}
               >
                 <Repeat className={cn('h-4 w-4 mt-0.5', scope === 'recurring' ? 'text-primary' : 'text-muted-foreground')} />
-                <div>
+ <div>
                   <div className="text-xs font-semibold text-foreground">Every Sunday going forward</div>
                   <div className="text-[10px] text-muted-foreground leading-tight">Overrides their weekly off permanently until changed.</div>
                 </div>
@@ -1932,8 +1932,8 @@ function SundayAssignSheet({
               const rowEditable = canEditFor(c.user_id);
               return (
                 <div key={c.user_id} className={cn('p-3', isOn ? 'bg-warning/10' : 'bg-card', !rowEditable && 'opacity-60')}>
-                  <label className={cn('flex items-center gap-3', rowEditable ? 'cursor-pointer' : 'cursor-not-allowed')}>
-                    <input
+ <label className={cn('flex items-center gap-3', rowEditable ? 'cursor-pointer' : 'cursor-not-allowed')}>
+ <input
                       type="checkbox"
                       checked={isOn}
                       disabled={!rowEditable}
@@ -2005,7 +2005,7 @@ function SundayAssignSheet({
             onClick={handleConfirm}
             disabled={!hasChanges || saving}
             className={cn(
-              'text-primary-foreground',
+ 'text-primary-foreground',
               scope === 'recurring' ? 'bg-primary hover:bg-primary' : 'bg-warning hover:bg-warning',
             )}
           >

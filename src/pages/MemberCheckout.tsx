@@ -253,7 +253,7 @@ export default function MemberCheckout() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-muted p-4">
-      <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow-slate-200/50">
+      <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow-foreground/5">
         <div className="bg-theme-gradient text-primary-foreground px-6 py-5">
           <h1 className="text-xl font-bold">Secure Payment — Incline Fitness</h1>
           <p className="text-warning text-sm">{invoice.branch_name}</p>
@@ -263,7 +263,7 @@ export default function MemberCheckout() {
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold leading-none tracking-tight">Invoice {invoice.invoice_number}</h2>
             <Badge variant={isPaid ? 'default' : 'secondary'} className={isPaid ? 'bg-success text-primary-foreground' : ''}>
-              {isPaid ? (
+ {isPaid ? (
                 <><CheckCircle className="h-3 w-3 mr-1" /> Paid</>
               ) : (
                 <><Clock className="h-3 w-3 mr-1" /> Pending</>

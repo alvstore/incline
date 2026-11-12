@@ -436,7 +436,7 @@ export default function MemberStore() {
         <div className="flex justify-between border-t border-border/60 pt-2 text-lg font-bold">
           <span>{finalAmount <= 0 ? 'Amount due' : 'To pay'}</span>
           <span className={finalAmount <= 0 ? 'text-success' : ''}>
-            {finalAmount <= 0 ? 'Fully covered' : `₹${finalAmount.toLocaleString()}`}
+ {finalAmount <= 0 ? 'Fully covered' : `₹${finalAmount.toLocaleString()}`}
           </span>
         </div>
       </div>
@@ -525,7 +525,7 @@ export default function MemberStore() {
 
         {/* Sub-tabs: Add-ons vs Store products */}
         {!isStaffBuyer && (
-          <div role="tablist" aria-label="Store sections" className="grid grid-cols-2 gap-1 rounded-2xl bg-card p-1.5 shadow-lg shadow-slate-200/50 dark:shadow-none">
+          <div role="tablist" aria-label="Store sections" className="grid grid-cols-2 gap-1 rounded-2xl bg-card p-1.5 shadow-lg shadow-foreground/5 dark:shadow-none">
             {([['products', 'Store products', Package], ['addons', 'Add-ons', Sparkles]] as const).map(([key, label, Icon]) => (
               <button
                 key={key}

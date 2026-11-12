@@ -454,7 +454,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
               <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Service recovery, loyalty gesture" />
             </div>
             {!membershipId && (
-              <p className="text-xs font-medium text-red-600">
+              <p className="text-xs font-medium text-destructive">
                 This member has no active or scheduled plan to extend.
               </p>
             )}
@@ -541,7 +541,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
             </div>
 
             {existingComps.length > 0 && (
-              <div className="rounded-2xl bg-card shadow-lg shadow-slate-200/50 p-3">
+              <div className="rounded-2xl bg-card shadow-lg shadow-foreground/5 p-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comp history</p>
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
                   {existingComps.map((c: any) => (
@@ -549,7 +549,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium text-foreground">{c.benefit_types?.name || 'Benefit'}</span>
-                          <Badge className={`h-4 text-[10px] px-1.5 ${c.source === 'approval' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          <Badge className={`h-4 text-[10px] px-1.5 ${c.source === 'approval' ? 'bg-info/10 text-info' : 'bg-success/10 text-success'}`}>
                             {c.source === 'approval' ? 'Approval' : 'Direct'}
                           </Badge>
                         </div>

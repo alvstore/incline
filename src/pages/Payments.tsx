@@ -411,7 +411,7 @@ export default function PaymentsPage() {
           </p>
         )}
 
-        <Card className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-border/50 shadow-lg shadow-foreground/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2"><Filter className="h-4 w-4" />Filters</CardTitle>
@@ -448,7 +448,7 @@ export default function PaymentsPage() {
                   {collectionsByMode.map(([mode, amt]) => (
                     <div key={mode} className="flex items-center justify-between">
                       <Badge className={getMethodColor(mode)}>{mode.replace('_', ' ')}</Badge>
-                      <span className="font-semibold">₹{amt.toLocaleString('en-IN')}</span>
+ <span className="font-semibold">₹{amt.toLocaleString('en-IN')}</span>
                     </div>
                   ))}
                   <div className="pt-2 border-t text-sm text-muted-foreground flex justify-between">
@@ -597,7 +597,7 @@ export default function PaymentsPage() {
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border-indigo-100">
+                                    <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">
                                       {g.invoices.length} {g.invoices.length > 1 ? 'Bills' : 'Bill'}
                                     </Badge>
                                   </TableCell>
@@ -605,7 +605,7 @@ export default function PaymentsPage() {
                                   <TableCell>
                                     {g.earliest ? (
                                       <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium", 
-                                        isOverdue ? "bg-red-50 text-red-700 border border-red-100" : "bg-muted text-muted-foreground border border-border")}>
+                                        isOverdue ? "bg-destructive/10 text-destructive border border-destructive/30" : "bg-muted text-muted-foreground border border-border")}>
                                         <Clock className="h-3 w-3" />
                                         {format(g.earliest, 'dd MMM')}
                                       </div>
@@ -634,7 +634,7 @@ export default function PaymentsPage() {
                                                   <div className="flex items-center gap-2">
                                                     <span className="text-sm font-semibold text-foreground">#{inv.invoice_number}</span>
                                                     {isGst ? (
-                                                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] h-4 py-0 font-medium">GST INVOICE</Badge>
+                                                      <Badge className="bg-success/10 text-success border-success/30 text-[9px] h-4 py-0 font-medium">GST INVOICE</Badge>
                                                     ) : (
                                                       <Badge variant="outline" className="text-[9px] h-4 py-0 font-medium text-muted-foreground border-border">CASH / NON-TAX</Badge>
                                                     )}
@@ -696,7 +696,7 @@ export default function PaymentsPage() {
                     const d = resolveMemberDisplay(payment.members);
                     return (
                       <TableRow key={payment.id} className={isReversed ? 'opacity-60' : ''}>
-                        <TableCell>
+ <TableCell>
                           <div className="flex flex-col">
                             <span className={`font-medium ${isReversed ? 'line-through' : ''}`}>{d.name}</span>
                             {d.code && <span className="text-xs text-muted-foreground">{d.code}</span>}
@@ -704,7 +704,7 @@ export default function PaymentsPage() {
                         </TableCell>
                         <TableCell className={`font-medium ${isReversed ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
                         <TableCell><Badge className={getMethodColor(payment.payment_method)}>{paymentChannelLabel(payment)}</Badge></TableCell>
-                        <TableCell className="text-xs">
+ <TableCell className="text-xs">
                           {isReversed ? (
                             <span className="text-muted-foreground">Not collected</span>
                           ) : payment.payment_source === 'razorpay' ? (
@@ -713,7 +713,7 @@ export default function PaymentsPage() {
                         </TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(payment.status)}>{reversalLabel(payment) ?? payment.status}</Badge>
-                          {isReversed && (
+ {isReversed && (
                             <p className="mt-1 text-[11px] italic text-muted-foreground">{reversalCaption(payment)}</p>
                           )}
                         </TableCell>
@@ -735,7 +735,7 @@ export default function PaymentsPage() {
                                 variant="ghost"
                                 size="sm"
                                 className={canEditPayments ? '' : 'text-destructive hover:text-destructive'}
-                                onClick={() => openVoidDialog(payment)}
+ onClick={() => openVoidDialog(payment)}
                               >
                                 {canEditPayments
                                   ? (<><Pencil className="h-4 w-4 mr-1" /> Edit</>)

@@ -39,7 +39,7 @@ function Rail({
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-[10px] font-medium leading-none',
+ 'flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-[10px] font-medium leading-none',
         tone === 'am' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary',
       )}
     >
@@ -81,7 +81,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
             </Badge>
           )}
           {lateDays > 0 && (
-            <Badge className="rounded-full border-0 bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100">
+            <Badge className="rounded-full border-0 bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive hover:bg-destructive/10">
               {lateDays} late
             </Badge>
           )}
@@ -103,7 +103,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                 <div
                   key={d.date}
                   className={cn(
-                    'flex min-h-[7rem] flex-col gap-1.5 rounded-xl p-2.5 transition-all duration-200',
+ 'flex min-h-[7rem] flex-col gap-1.5 rounded-xl p-2.5 transition-all duration-200',
                     isToday
                       ? 'bg-gradient-to-b from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20'
                       : 'bg-muted/40 hover:bg-muted/70',
@@ -113,7 +113,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                   <div className="flex items-center justify-between">
                     <span
                       className={cn(
-                        'text-[11px] font-semibold uppercase tracking-wider',
+ 'text-[11px] font-semibold uppercase tracking-wider',
                         isToday ? 'text-white/80' : 'text-muted-foreground',
                       )}
                     >
@@ -129,7 +129,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                   {d.is_off ? (
                     <span
                       className={cn(
-                        'mt-1 w-fit rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
+ 'mt-1 w-fit rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
                         isToday ? 'bg-background/15 text-primary-foreground' : 'bg-muted text-muted-foreground',
                       )}
                     >
@@ -137,11 +137,11 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                     </span>
                   ) : unscheduled ? (
                     <span className={cn('mt-1 text-[10px]', isToday ? 'text-white/70' : 'text-muted-foreground')}>
-                      Unscheduled
+ Unscheduled
                     </span>
                   ) : (
                     <div className={cn('space-y-1', isToday && '[&_*]:!text-white [&>div]:!bg-white/15')}>
-                      <Rail icon={Sun} start={d.morning_start} end={d.morning_end} tone="am" />
+ <Rail icon={Sun} start={d.morning_start} end={d.morning_end} tone="am" />
                       <Rail icon={Moon} start={d.evening_start} end={d.evening_end} tone="pm" />
                     </div>
                   )}
@@ -150,8 +150,8 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                     {d.source === 'override' && !d.is_off && (
                       <span
                         className={cn(
-                          'inline-flex w-fit rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
-                          isToday ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700',
+ 'inline-flex w-fit rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                          isToday ? 'bg-white/20 text-white' : 'bg-warning/10 text-warning',
                         )}
                       >
                         One-off
@@ -163,8 +163,8 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                           <TooltipTrigger asChild>
                             <span
                               className={cn(
-                                'inline-flex w-fit cursor-pointer items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                                isToday ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700',
+ 'inline-flex w-fit cursor-pointer items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                                isToday ? 'bg-white/20 text-white' : 'bg-destructive/10 text-destructive',
                               )}
                             >
                               <Clock className="h-2.5 w-2.5" /> Late
@@ -179,7 +179,7 @@ export function MyShiftWeekCard({ userId }: { userId: string | null | undefined 
                     ) : d.first_check_in && !d.is_off ? (
                       <span
                         className={cn(
-                          'inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+ 'inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
                           isToday ? 'bg-background/20 text-primary-foreground' : 'bg-success/10 text-success',
                         )}
                       >

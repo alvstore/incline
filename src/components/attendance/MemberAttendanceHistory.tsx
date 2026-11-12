@@ -117,8 +117,8 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
     <div className="space-y-6">
       {!selectedMember ? (
         <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in duration-300">
-          <div className="bg-indigo-50 p-4 rounded-full mb-6">
-            <History className="h-10 w-10 text-indigo-600" />
+          <div className="bg-primary/10 p-4 rounded-full mb-6">
+            <History className="h-10 w-10 text-primary" />
           </div>
           <h2 className="text-2xl font-bold text-foreground mb-2">Member Attendance History</h2>
           <p className="text-muted-foreground max-w-sm mb-8 leading-relaxed">
@@ -140,9 +140,9 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                 <ArrowLeft className="h-5 w-5 text-muted-foreground" />
               </Button>
               <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12 ring-2 ring-indigo-50">
+                <Avatar className="h-12 w-12 ring-2 ring-primary/30">
                   <AvatarImage src={selectedMember.avatar_url || undefined} />
-                  <AvatarFallback className="bg-indigo-600 text-white font-bold text-lg">
+                  <AvatarFallback className="bg-primary text-white font-bold text-lg">
                     {initials(selectedMember.full_name)}
                   </AvatarFallback>
                 </Avatar>
@@ -177,7 +177,7 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                 variant="default"
                 size="sm"
                 onClick={() => setSelectedMember(null)}
-                className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+                className="h-10 bg-primary hover:bg-primary text-white rounded-xl"
               >
                 Change Member
               </Button>
@@ -187,10 +187,10 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
           {/* Stats Summary */}
           {summary && (
             <div className="grid gap-4 md:grid-cols-3">
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 bg-card">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                    <div className="p-2 rounded-xl bg-success/10 text-success">
                       <CalendarDays className="h-5 w-5" />
                     </div>
                     <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Total Visits</p>
@@ -200,10 +200,10 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                 </CardContent>
               </Card>
 
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 bg-card">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                    <div className="p-2 rounded-xl bg-primary/10 text-primary">
                       <History className="h-5 w-5" />
                     </div>
                     <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Avg Duration</p>
@@ -213,10 +213,10 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                 </CardContent>
               </Card>
 
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card">
+              <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 bg-card">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                    <div className="p-2 rounded-xl bg-warning/10 text-warning">
                       <Info className="h-5 w-5" />
                     </div>
                     <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Last Visit</p>
@@ -236,17 +236,17 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
             </div>
           ) : isError ? (
             <Card className="rounded-2xl border-dashed border-2 border-border py-12 text-center text-muted-foreground">
-              <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-500 opacity-50" />
+              <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-warning opacity-50" />
               <p className="font-medium">Could not load attendance history.</p>
             </Card>
           ) : visits.length === 0 ? (
             <Card className="rounded-2xl border-dashed border-2 border-border py-20 text-center text-muted-foreground">
-              <History className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+              <History className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
               <p className="text-lg font-medium text-muted-foreground">No attendance records found for this month.</p>
               <p className="text-sm text-muted-foreground">Try selecting a different month or member.</p>
             </Card>
           ) : (
-            <Card className="rounded-2xl border-0 shadow-xl shadow-slate-200/50 overflow-hidden bg-card">
+            <Card className="rounded-2xl border-0 shadow-xl shadow-foreground/5 overflow-hidden bg-card">
               <CardHeader className="bg-muted/50 border-b border-border">
                 <CardTitle className="text-lg font-bold text-foreground">Session Logs</CardTitle>
                 <CardDescription>Detailed check-in and check-out records for {format(parseISO(`${month}-01`), 'MMMM yyyy')}</CardDescription>
@@ -270,13 +270,13 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                             {format(parseISO(v.check_in), 'd MMM yyyy')}
                           </TableCell>
                           <TableCell className="text-muted-foreground font-medium">
-                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 rounded-lg px-2 py-1">
+                            <Badge variant="outline" className="bg-success/10 text-success border-success/30 rounded-lg px-2 py-1">
                               {format(parseISO(v.check_in), 'h:mm a')}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-muted-foreground font-medium">
                             {v.check_out ? (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 rounded-lg px-2 py-1">
+                              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 rounded-lg px-2 py-1">
                                 {format(parseISO(v.check_out), 'h:mm a')}
                               </Badge>
                             ) : (
@@ -291,7 +291,7 @@ export function MemberAttendanceHistory({ branchId }: { branchId: string | undef
                             </span>
                           </TableCell>
                           <TableCell className="text-right pr-6">
-                            <Badge variant="outline" className="rounded-full text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 border-indigo-100 text-indigo-600 bg-indigo-50/30">
+                            <Badge variant="outline" className="rounded-full text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 border-primary/30 text-primary bg-primary/30">
                               {(v.check_in_method || 'manual').replace('_', ' ')}
                             </Badge>
                           </TableCell>

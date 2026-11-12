@@ -116,7 +116,7 @@ function HealthStrip({ channel }: { channel: Channel }) {
   return (
     <div className={`grid gap-3 grid-cols-2 ${tiles.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-2xl bg-card border border-border shadow-xl shadow-slate-200/30 px-5 py-4 transition-all hover:shadow-2xl hover:shadow-slate-200/50">
+        <div key={t.label} className="rounded-2xl bg-card border border-border shadow-xl shadow-foreground/5 px-5 py-4 transition-all hover:shadow-2xl hover:shadow-foreground/5">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] mb-1">{t.label}</p>
           <p className={`text-2xl font-black ${t.cls}`}>{t.value}</p>
         </div>
@@ -158,7 +158,7 @@ export function CommunicationTemplatesHub() {
     <>
       <div className="space-y-5">
         {/* Header: channel switch + primary action */}
-        <div className="rounded-2xl bg-card border border-border shadow-xl shadow-slate-200/40 p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="rounded-2xl bg-card border border-border shadow-xl shadow-foreground/5 p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-1 bg-muted/80 rounded-2xl p-1 w-fit border border-border/60">
             {CHANNELS.map(({ value, label, icon: Icon }) => (
               <button
@@ -172,7 +172,7 @@ export function CommunicationTemplatesHub() {
                     : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
                 }`}
               >
-                <Icon className={`h-4.5 w-4.5 ${channel === value ? 'text-indigo-600' : 'text-muted-foreground'}`} /> {label}
+                <Icon className={`h-4.5 w-4.5 ${channel === value ? 'text-primary' : 'text-muted-foreground'}`} /> {label}
               </button>
             ))}
           </div>
@@ -180,7 +180,7 @@ export function CommunicationTemplatesHub() {
             <p className="hidden xl:block text-xs font-medium text-muted-foreground max-w-[320px] leading-relaxed">
               {activeChannel.blurb}
             </p>
-            <Button onClick={() => openAi(channel)} className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white font-semibold h-11 px-6 transition-all hover:scale-[1.02] active:scale-[0.98]">
+            <Button onClick={() => openAi(channel)} className="gap-2 rounded-xl bg-primary hover:bg-primary shadow-lg shadow-primary/20 text-white font-semibold h-11 px-6 transition-all hover:scale-[1.02] active:scale-[0.98]">
               <Sparkles className="h-4.5 w-4.5" /> AI Generator Studio
             </Button>
           </div>
@@ -205,10 +205,10 @@ export function CommunicationTemplatesHub() {
                     }`}
                   >
                     <span className="flex items-center gap-3 text-sm font-semibold tracking-tight">
-                      <Icon className={`h-4.5 w-4.5 ${section === id ? 'text-white' : 'text-muted-foreground group-hover:text-indigo-500'}`} /> 
+                      <Icon className={`h-4.5 w-4.5 ${section === id ? 'text-white' : 'text-muted-foreground group-hover:text-primary'}`} /> 
                       {label}
                     </span>
-                    <span className={`hidden lg:block text-[11px] mt-1 pl-7.5 leading-tight ${section === id ? 'text-indigo-100/90' : 'text-muted-foreground'}`}>
+                    <span className={`hidden lg:block text-[11px] mt-1 pl-7.5 leading-tight ${section === id ? 'text-primary/90' : 'text-muted-foreground'}`}>
                       {hint}
                     </span>
                   </button>

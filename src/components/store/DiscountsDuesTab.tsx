@@ -173,7 +173,7 @@ export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
                         <div className="flex flex-col items-end gap-0.5">
                           <span>−₹{Number(s.manual_discount).toLocaleString('en-IN')} ({discountPercent(Number(s.manual_discount), orig(s))}%)</span>
                           {isHighDiscount(Number(s.manual_discount), orig(s)) && (
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20">
                               <TriangleAlert className="h-3 w-3 mr-1" aria-hidden />High discount
                             </Badge>
                           )}
@@ -184,10 +184,10 @@ export function DiscountsDuesTab({ branchId }: { branchId: string | null }) {
                     <TableCell className="text-right font-medium tabular-nums">₹{Number(s.total_amount).toLocaleString('en-IN')}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={
-                        s.settlement === 'due' && s.payment_status !== 'paid'
+ s.settlement === 'due' && s.payment_status !== 'paid'
                           ? 'bg-destructive/10 text-destructive border-destructive/20'
                           : s.settlement === 'salary_deduction'
-                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                            ? 'bg-warning/10 text-warning border-warning/20'
                             : 'bg-muted text-muted-foreground border-border'
                       }>
                         {SETTLEMENT_LABEL[s.settlement ?? ''] ?? s.payment_method}

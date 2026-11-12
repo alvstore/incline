@@ -1429,11 +1429,11 @@ export function MemberProfileDrawer({
                   )
                 ) : pendingMembership ? (
                   <>
-                    <div className="text-sm sm:text-lg font-bold text-indigo-600">SCHEDULED</div>
+                    <div className="text-sm sm:text-lg font-bold text-primary">SCHEDULED</div>
                     <p className="text-[10px] text-muted-foreground truncate px-1">
                       Starts {format(new Date(pendingMembership.start_date), 'dd MMM yy')}
                     </p>
-                    <Badge variant="outline" className="mt-1 bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] gap-1 px-1.5 py-0 leading-none">
+                    <Badge variant="outline" className="mt-1 bg-primary/10 text-primary border-primary/30 text-[9px] gap-1 px-1.5 py-0 leading-none">
                       <Calendar className="h-2.5 w-2.5" />
                       Future Plan
                     </Badge>
@@ -1543,9 +1543,9 @@ export function MemberProfileDrawer({
                     variant="secondary"
                     className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                       ptState === 'active'
-                        ? 'bg-emerald-100 text-emerald-700'
+                        ? 'bg-success/10 text-success'
                         : ptState === 'pending'
-                        ? 'bg-amber-100 text-amber-700'
+                        ? 'bg-warning/10 text-warning'
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
@@ -1775,7 +1775,7 @@ export function MemberProfileDrawer({
                           : 'Not provided'}
                       </span>
                       {profile?.government_id_verified && (
-                        <Badge className="ml-2 bg-emerald-100 text-emerald-700 rounded-full text-xs">Verified</Badge>
+                        <Badge className="ml-2 bg-success/10 text-success rounded-full text-xs">Verified</Badge>
                       )}
                     </div>
 
@@ -1842,7 +1842,7 @@ export function MemberProfileDrawer({
 
               {/* Assigned Trainer */}
               <Card className={assignedTrainerId ? 'border-primary/30 bg-primary/5' : ''}>
-                <CardContent className="pt-4">
+ <CardContent className="pt-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Dumbbell className="h-4 w-4 text-primary" />
@@ -1886,10 +1886,10 @@ export function MemberProfileDrawer({
 
               {/* Membership Registration & Agreement — the ONE signed document */}
               {onboardingSig && (
-                <Card className="border-emerald-200 bg-emerald-50/40">
+                <Card className="border-success/30 bg-success/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-emerald-600" />
+                      <FileText className="h-4 w-4 text-success" />
                       Membership Agreement
                       <Badge variant="outline" className="ml-auto font-mono text-[10px] tracking-wide">
                         {agreementReference(memberDetails?.member_code ?? member?.member_code, member?.id)}
@@ -1937,7 +1937,7 @@ export function MemberProfileDrawer({
                                 <span className="text-[11px] leading-snug text-muted-foreground">{q}</span>
                                 <span
                                   className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                    yes ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                    yes ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'
                                   }`}
                                 >
                                   {yes ? 'Yes' : 'No'}
@@ -1968,7 +1968,7 @@ export function MemberProfileDrawer({
                                   title={a.label}
                                   className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium border ${
                                     on
-                                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                      ? 'bg-success/10 text-success border-success/20'
                                       : 'bg-muted text-muted-foreground border-border'
                                   }`}
                                 >
@@ -2093,7 +2093,7 @@ export function MemberProfileDrawer({
                         Active Membership
                       </CardTitle>
                       <Badge className={getDaysLeftColor(daysLeft)}>
-                        {daysLeft > 0 ? `${daysLeft} days left` : 'Expiring today'}
+ {daysLeft > 0 ? `${daysLeft} days left` : 'Expiring today'}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -2641,7 +2641,7 @@ export function MemberProfileDrawer({
                     <li>They can no longer book classes or recovery slots</li>
                     <li>They lose access to the member app</li>
                   </ul>
-                  <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">
+                  <p className="rounded-xl bg-warning/10 px-3 py-2 text-warning">
                     Their membership, invoices and history are kept. You can activate them again at any time.
                   </p>
                 </div>

@@ -18,9 +18,9 @@ type Channel = EventChannel;
 type RowState = 'ok' | 'pending' | 'rejected' | 'inactive' | 'missing';
 
 const STATE_META: Record<RowState, { label: string; icon: any; cls: string }> = {
-  ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  pending: { label: 'Pending', icon: ShieldAlert, cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  rejected: { label: 'Rejected', icon: ShieldX, cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-success/10 text-success border-success/30' },
+  pending: { label: 'Pending', icon: ShieldAlert, cls: 'bg-warning/10 text-warning border-warning/30' },
+  rejected: { label: 'Rejected', icon: ShieldX, cls: 'bg-destructive/10 text-destructive border-destructive/30' },
   inactive: { label: 'Inactive', icon: AlertCircle, cls: 'bg-muted text-muted-foreground border-border' },
   missing: { label: 'Missing', icon: AlertCircle, cls: 'bg-muted text-muted-foreground border-border' },
 };
@@ -122,9 +122,9 @@ export function TemplateCoverageMatrix({ channel }: Props) {
   return (
     <>
       <div className="space-y-4">
-        <Card className="rounded-3xl shadow-2xl shadow-slate-200/50 border-0 bg-white/70 backdrop-blur-xl">
+        <Card className="rounded-3xl shadow-2xl shadow-foreground/5 border-0 bg-white/70 backdrop-blur-xl">
           <CardContent className="pt-8 px-6 pb-8 space-y-6">
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-amber-800 text-sm mb-4">
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-warning/10 border border-warning/30 text-warning text-sm mb-4">
               <Info className="h-5 w-5 shrink-0" />
               <p>
                 Meta Error <strong>131049 (Pacing Limit)</strong>? Marketing messages are being suppressed to protect engagement. 
@@ -139,19 +139,19 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">System Coverage Status</p>
                   <span className="text-sm font-black text-foreground">{okCount} of {total} Events Protected · {pct}%</span>
                 </div>
-                <Progress value={pct} className="h-2.5 bg-muted [&>div]:bg-indigo-600 [&>div]:shadow-[0_0_8px_rgba(79,70,229,0.4)] rounded-full" />
+                <Progress value={pct} className="h-2.5 bg-muted [&>div]:bg-primary [&>div]:shadow-[0_0_8px_rgba(79,70,229,0.4)] rounded-full" />
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={() => openAi(missingEvents)}
                   disabled={missingEvents.length === 0}
-                  className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 text-white font-semibold px-5 h-11 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="gap-2 rounded-xl bg-primary hover:bg-primary shadow-lg shadow-primary/20 text-white font-semibold px-5 h-11 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Wand2 className="h-4 w-4" />
                   Auto-fill Missing ({missingEvents.length})
                 </Button>
                 <Button variant="outline" onClick={() => openAi()} className="gap-2 rounded-xl border-border hover:bg-muted font-semibold px-5 h-11 text-foreground shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
-                  <Sparkles className="h-4 w-4 text-indigo-500" />
+                  <Sparkles className="h-4 w-4 text-primary" />
                   Studio
                 </Button>
               </div>
@@ -164,11 +164,11 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                 return (
                   <div
                     key={r.event}
-                    className="flex items-center justify-between p-4 rounded-2xl border border-border bg-card hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 group"
+                    className="flex items-center justify-between p-4 rounded-2xl border border-border bg-card hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 group"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <p className="font-bold text-sm tracking-tight text-foreground group-hover:text-indigo-700 transition-colors">{r.label}</p>
+                        <p className="font-bold text-sm tracking-tight text-foreground group-hover:text-primary transition-colors">{r.label}</p>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <p className="text-[11px] font-medium text-muted-foreground truncate max-w-[150px]">
@@ -189,7 +189,7 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                         size="sm"
                         variant="ghost"
                         aria-label={`Map a template to ${r.label}`}
-                        className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:bg-muted hover:text-indigo-600 transition-colors cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:bg-muted hover:text-primary transition-colors cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none"
                         onClick={() =>
                           setMapTarget({ event: r.event, label: r.label, templateId: r.tpl?.id ?? null })
                         }
@@ -202,7 +202,7 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                           size="sm"
                           variant="ghost"
                           aria-label={`Generate a template for ${r.label} with AI`}
-                          className="h-8 w-8 p-0 rounded-full text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className="h-8 w-8 p-0 rounded-full text-primary hover:bg-primary/10 transition-colors cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none"
                           onClick={() => openAi([r.event])}
                           title="Generate with AI"
                         >

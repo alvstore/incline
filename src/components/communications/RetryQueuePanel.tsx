@@ -266,7 +266,7 @@ export function RetryQueuePanel() {
                 key={f.key}
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+ 'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
                   filter === f.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70',
                 )}
               >
@@ -297,7 +297,7 @@ export function RetryQueuePanel() {
                     key={r.id}
                     style={{ animationDelay: `${i * 30}ms` }}
                     className={cn(
-                      'animate-fade-in flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/60 transition-colors border border-transparent hover:border-border/50'
+ 'animate-fade-in flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/60 transition-colors border border-transparent hover:border-border/50'
                     )}
                   >
                     <div className="p-2 rounded-lg bg-card border border-border/50">{channelIcon(r.type)}</div>
@@ -311,7 +311,7 @@ export function RetryQueuePanel() {
                           <Badge className="text-[10px] rounded-full bg-muted text-foreground">Exhausted</Badge>
                         )}
                         {r.status === 'retrying' && (
-                          <Badge className="text-[10px] rounded-full bg-amber-100 text-amber-700">Retrying</Badge>
+                          <Badge className="text-[10px] rounded-full bg-warning/10 text-warning">Retrying</Badge>
                         )}
                       </div>
                       <p className="text-[11px] text-destructive truncate mt-0.5">

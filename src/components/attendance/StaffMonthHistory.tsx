@@ -32,14 +32,14 @@ function initials(name?: string | null) {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  present: 'bg-emerald-100 text-emerald-700',
-  half_day: 'bg-amber-100 text-amber-700',
-  absent: 'bg-red-100 text-red-700',
-  leave: 'bg-blue-100 text-blue-700',
+  present: 'bg-success/10 text-success',
+  half_day: 'bg-warning/10 text-warning',
+  absent: 'bg-destructive/10 text-destructive',
+  leave: 'bg-info/10 text-info',
   weekly_off: 'bg-muted text-muted-foreground',
-  holiday: 'bg-violet-100 text-violet-700',
+  holiday: 'bg-primary/10 text-primary',
   scheduled: 'bg-muted text-muted-foreground',
-  unrostered: 'bg-orange-100 text-orange-700',
+  unrostered: 'bg-warning/10 text-warning',
 };
 
 export function StaffMonthHistory({ branchId }: { branchId: string | undefined }) {

@@ -230,7 +230,7 @@ function BuilderInner() {
 
   if (isLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
         <CardHeader><Skeleton className="h-6 w-56" /></CardHeader>
         <CardContent><Skeleton className="h-[520px] w-full rounded-2xl" /></CardContent>
       </Card>
@@ -239,9 +239,9 @@ function BuilderInner() {
 
   if (isError) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
         <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-          <span className="rounded-full bg-red-50 p-3 text-red-600"><AlertTriangle className="h-6 w-6" /></span>
+          <span className="rounded-full bg-destructive/10 p-3 text-destructive"><AlertTriangle className="h-6 w-6" /></span>
           <p className="text-sm text-muted-foreground">We could not load the workflow. Please try again.</p>
         </CardContent>
       </Card>
@@ -249,18 +249,18 @@ function BuilderInner() {
   }
 
   return (
-    <Card className="overflow-hidden rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+    <Card className="overflow-hidden rounded-2xl border-0 shadow-lg shadow-foreground/5">
       <CardHeader className="gap-3 border-b border-border pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 text-foreground">
               Visual flow builder
               {flow?.is_active ? (
-                <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Live</Badge>
+                <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success hover:bg-success/10">Live</Badge>
               ) : (
                 <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted">Draft</Badge>
               )}
-              {dirty && <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100">Unsaved changes</Badge>}
+              {dirty && <Badge className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning hover:bg-warning/10">Unsaved changes</Badge>}
             </CardTitle>
             <CardDescription>
               Drag steps on to the canvas, join them up and open any step to change what it does.
@@ -288,7 +288,7 @@ function BuilderInner() {
               <span
                 key={i}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  issue.level === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                  issue.level === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
                 }`}
               >
                 {issue.message}
@@ -297,7 +297,7 @@ function BuilderInner() {
           </div>
         )}
         {issues.length === 0 && (
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
             <CheckCircle2 className="h-3.5 w-3.5" /> Ready to publish
           </span>
         )}

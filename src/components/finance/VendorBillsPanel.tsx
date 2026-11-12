@@ -250,8 +250,8 @@ export function VendorBillsPanel({ branchId }: { branchId?: string | null }) {
                         <TableCell>
                           <div className="flex flex-col gap-1 items-start">
                             {b.is_paid
-                              ? <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Paid{b.payment_method ? ` · ${b.payment_method.replace('_', ' ')}` : ''}</Badge>
-                              : <Badge className="bg-amber-500/10 text-amber-500 border border-amber-500/20">Unpaid</Badge>}
+                              ? <Badge className="bg-success/10 text-success border border-success/20">Paid{b.payment_method ? ` · ${b.payment_method.replace('_', ' ')}` : ''}</Badge>
+                              : <Badge className="bg-warning/10 text-warning border border-warning/20">Unpaid</Badge>}
                             {syncedIds.has(b.id)
                               ? <Badge className="bg-muted text-muted-foreground border border-border text-[10px]">In Zoho</Badge>
                               : <Badge className="bg-muted text-muted-foreground border border-border text-[10px]">Not in Zoho</Badge>}

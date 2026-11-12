@@ -53,7 +53,7 @@ export function ConciergeCheckoutDrawer({
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
           {selection && breakdown && (
-            <div className="rounded-2xl bg-card p-5 shadow-lg shadow-slate-200/50">
+            <div className="rounded-2xl bg-card p-5 shadow-lg shadow-foreground/5">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
                 {selection.kind === 'membership' ? 'Membership' : 'Personal training'}
               </p>
@@ -72,7 +72,7 @@ export function ConciergeCheckoutDrawer({
           )}
 
           {payableInvoice && (
-            <div className="rounded-2xl bg-amber-50 p-5">
+            <div className="rounded-2xl bg-warning/10 p-5">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-primary">Awaiting payment</p>
               <p className="mt-2 text-sm tracking-wide text-foreground">
                 Invoice {payableInvoice.invoiceNumber} · {formatINR(payableInvoice.balance)} outstanding

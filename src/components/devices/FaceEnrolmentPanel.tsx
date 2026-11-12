@@ -26,21 +26,21 @@ interface Props {
 const stateBadge = (state: string, reason?: string | null) => {
   const base = "rounded-full px-2.5 py-0.5 text-xs font-medium";
   if (/timed out|timeout|gateway connection/i.test(reason || "") && state !== "enrolled") {
-    return <Badge className={`${base} bg-amber-100 text-amber-700 hover:bg-amber-100`}>Network retry</Badge>;
+    return <Badge className={`${base} bg-warning/10 text-warning hover:bg-warning/10`}>Network retry</Badge>;
   }
   if (state === "enrolled") {
-    return <Badge className={`${base} bg-emerald-100 text-emerald-700 hover:bg-emerald-100`}>Verified</Badge>;
+    return <Badge className={`${base} bg-success/10 text-success hover:bg-success/10`}>Verified</Badge>;
   }
   if (state === "rejected") {
-    return <Badge className={`${base} bg-red-100 text-red-700 hover:bg-red-100`}>Retake needed</Badge>;
+    return <Badge className={`${base} bg-destructive/10 text-destructive hover:bg-destructive/10`}>Retake needed</Badge>;
   }
   if (state === "unverified") {
     return <Badge className={`${base} bg-muted text-muted-foreground hover:bg-muted`}>Unverified</Badge>;
   }
   if (state === "missing") {
-    return <Badge className={`${base} bg-amber-100 text-amber-700 hover:bg-amber-100`}>Dropped</Badge>;
+    return <Badge className={`${base} bg-warning/10 text-warning hover:bg-warning/10`}>Dropped</Badge>;
   }
-  return <Badge className={`${base} bg-amber-100 text-amber-700 hover:bg-amber-100`}>Awaiting push</Badge>;
+  return <Badge className={`${base} bg-warning/10 text-warning hover:bg-warning/10`}>Awaiting push</Badge>;
 };
 
 const Metric = ({
@@ -135,11 +135,11 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
   };
 
   return (
-    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
       <CardContent className="space-y-4 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600">
+            <span className="rounded-full bg-primary/10 p-2 text-primary">
               <ScanFace className="h-4 w-4" />
             </span>
             <div>
@@ -156,7 +156,7 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
           <Button
             variant="outline"
             size="sm"
-            className="min-h-[36px] cursor-pointer rounded-xl text-xs focus:ring-2 focus:ring-indigo-500"
+            className="min-h-[36px] cursor-pointer rounded-xl text-xs focus:ring-2 focus:ring-primary"
             onClick={runSweep}
             disabled={sweeping}
           >
@@ -166,7 +166,7 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
         </div>
 
         {ledgerError && (
-          <div className="rounded-xl bg-red-50 p-3 text-xs leading-relaxed text-red-700">
+          <div className="rounded-xl bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
             Could not read the enrolment ledger:{" "}
             {ledgerError instanceof Error ? ledgerError.message : "unknown error"}. The numbers below are not
             shown rather than shown wrong.
@@ -208,12 +208,12 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                         Can't compare yet
                       </Badge>
                     ) : behind === 0 ? (
-                      <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
+                      <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success hover:bg-success/10">
                         <CheckCircle2 className="mr-1 h-3 w-3" />
                         Fully up to date
                       </Badge>
                     ) : (
-                      <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
+                      <Badge className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning hover:bg-warning/10">
                         <AlertTriangle className="mr-1 h-3 w-3" />
                         Missing {behind} photo{behind === 1 ? "" : "s"}
                       </Badge>
@@ -236,7 +236,7 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                       <div className="h-2 w-full overflow-hidden rounded-full bg-background">
                         <div
                           className={`h-full rounded-full transition-all duration-300 ${
-                            behind === 0 ? "bg-emerald-500" : "bg-amber-500"
+                            behind === 0 ? "bg-success" : "bg-warning"
                           }`}
                           style={{ width: `${pct}%` }}
                           role="progressbar"
@@ -253,7 +253,7 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                   )}
 
                   {faces !== null && !gate.online && (
-                    <p className="mb-2 rounded-lg bg-amber-50 p-2 text-[10px] leading-relaxed text-amber-700">
+                    <p className="mb-2 rounded-lg bg-warning/10 p-2 text-[10px] leading-relaxed text-warning">
                       Gate is offline — the counters below are its last reported values.
                     </p>
                   )}
@@ -270,7 +270,7 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                   </div>
 
                   <div className="mb-2 flex flex-wrap gap-1.5">
-                    <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
+                    <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success hover:bg-success/10">
                       <CheckCircle2 className="mr-1 h-3 w-3" />
                       {gate.verified} confirmed by name
                     </Badge>
@@ -279,13 +279,13 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                       {gate.unverified} counted but not named
                     </Badge>
                     {waiting.length > 0 && (
-                      <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
+                      <Badge className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning hover:bg-warning/10">
                         <Clock className="mr-1 h-3 w-3" />
                         {gate.awaiting.length} still to send
                       </Badge>
                     )}
                     {gate.rejected.length > 0 && (
-                      <Badge className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100">
+                      <Badge className="rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive hover:bg-destructive/10">
                         <AlertTriangle className="mr-1 h-3 w-3" />
                         {gate.rejected.length} need a new photo
                       </Badge>
@@ -326,9 +326,9 @@ const FaceEnrolmentPanel = ({ branchId }: Props) => {
                               <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{r.reason}</p>
                             )}
                             {r.person_id && serverErrors[r.person_id] && (
-                              <p className="mt-1 rounded-md bg-red-50 p-1.5 font-mono text-[10px] leading-relaxed text-red-700">
+                              <p className="mt-1 rounded-md bg-destructive/10 p-1.5 font-mono text-[10px] leading-relaxed text-destructive">
                                 MIPS server: {serverErrors[r.person_id].error}
-                                <span className="block font-sans text-red-600/80">
+                                <span className="block font-sans text-destructive/80">
                                   {serverErrors[r.person_id].op} · {serverErrors[r.person_id].count} failure
                                   {serverErrors[r.person_id].count === 1 ? "" : "s"} · last{" "}
                                   {formatDistanceToNow(new Date(serverErrors[r.person_id].at), { addSuffix: true })}

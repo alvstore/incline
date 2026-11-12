@@ -114,7 +114,7 @@ export function AddClassDrawer({ open, onOpenChange, lockedTrainerId, branchId }
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Class scheduled
+              <CheckCircle2 className="h-5 w-5 text-success" /> Class scheduled
             </SheetTitle>
             <SheetDescription>{created.name} is live on the schedule. What next?</SheetDescription>
           </SheetHeader>

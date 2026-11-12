@@ -98,7 +98,7 @@ export function PushTemplatesDrawer({
       <SheetContent className="sm:max-w-lg flex flex-col">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <UploadCloud className="h-5 w-5 text-indigo-600" />
+            <UploadCloud className="h-5 w-5 text-primary" />
             Push templates to {providerLabel}
           </SheetTitle>
           <SheetDescription>
@@ -112,7 +112,7 @@ export function PushTemplatesDrawer({
             <Skeleton className="h-32 w-full rounded-2xl" />
           ) : !templates || templates.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+              <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
               <p className="text-sm font-semibold text-foreground">All templates are already on {providerLabel}.</p>
               <p className="text-xs text-muted-foreground mt-1">Nothing left to push.</p>
             </div>
@@ -137,7 +137,7 @@ export function PushTemplatesDrawer({
                   <label
                     key={t.id}
                     className={`flex gap-3 rounded-2xl border p-3 transition ${
-                      selected[t.id] ? 'border-indigo-300 bg-indigo-50/40' : 'border-border bg-card'
+                      selected[t.id] ? 'border-primary/30 bg-primary/40' : 'border-border bg-card'
                     } ${blocked ? 'opacity-60' : 'cursor-pointer hover:border-border'}`}
                   >
                     <Checkbox
@@ -149,7 +149,7 @@ export function PushTemplatesDrawer({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {isRich ? (
-                          <Badge className="bg-indigo-100 text-indigo-700 text-[10px]"><ImageIcon className="h-2.5 w-2.5 mr-0.5" />Rich</Badge>
+                          <Badge className="bg-primary/10 text-primary text-[10px]"><ImageIcon className="h-2.5 w-2.5 mr-0.5" />Rich</Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px]"><MessageSquare className="h-2.5 w-2.5 mr-0.5" />Basic</Badge>
                         )}
@@ -159,7 +159,7 @@ export function PushTemplatesDrawer({
                         <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{t.body_preview}</p>
                       )}
                       {blocked && (
-                        <p className="text-xs text-amber-700 flex items-start gap-1 mt-1.5">
+                        <p className="text-xs text-warning flex items-start gap-1 mt-1.5">
                           <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                           {missingBody ? 'Body is empty. ' : ''}
                           {missingMedia ? 'Rich template needs a public https media URL.' : ''}

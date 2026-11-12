@@ -75,7 +75,7 @@ export function PipelineTile({
 
       {ready && (
         <span
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/10 text-success"
           aria-hidden
         >
           <Check className="h-3 w-3" />

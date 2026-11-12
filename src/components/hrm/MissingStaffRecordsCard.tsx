@@ -89,7 +89,7 @@ export function MissingStaffRecordsCard() {
 
   if (isLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
         <CardContent className="p-5 space-y-2">
           <Skeleton className="h-5 w-56" />
           <Skeleton className="h-10 w-full" />
@@ -101,14 +101,14 @@ export function MissingStaffRecordsCard() {
   if (isError || !data || data.length === 0) return null;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-amber-200/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-warning/50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <span className="rounded-full bg-amber-50 p-2 text-amber-600">
+          <span className="rounded-full bg-warning/10 p-2 text-warning">
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           </span>
           Missing staff records
-          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">{data.length}</Badge>
+          <Badge className="bg-warning/10 text-warning hover:bg-warning/10">{data.length}</Badge>
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           These privileged users have no HR record, so payroll and the turnstile treat them as

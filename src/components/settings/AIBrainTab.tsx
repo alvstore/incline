@@ -215,7 +215,7 @@ export function AIBrainTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow-foreground/5">
         <CardHeader>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
@@ -242,7 +242,7 @@ export function AIBrainTab() {
 
       {/* Health */}
       {health && health.length > 0 && (
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow-foreground/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Handle Health (last 24h)</CardTitle>
             <CardDescription>
@@ -281,7 +281,7 @@ export function AIBrainTab() {
       )}
 
       {/* Entries table */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow-foreground/5">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-2">
@@ -319,7 +319,7 @@ export function AIBrainTab() {
                         <div className="flex items-center gap-1.5">
                           <Badge variant="outline" className="text-xs">{r.topic}</Badge>
                           {r.priority <= 10 && (
-                            <Badge className="bg-violet-100 text-violet-700 text-[10px] uppercase tracking-wide">
+                            <Badge className="bg-primary/10 text-primary text-[10px] uppercase tracking-wide">
                               {r.topic === 'persona' ? 'Persona' : 'Rule'}
                             </Badge>
                           )}

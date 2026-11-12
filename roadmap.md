@@ -8,7 +8,7 @@
 - [x] Dark mode: default, Slate and Graphite themes now use a readable highlight colour (was near-black on dark).
 - [x] Dark logos now show as a white silhouette on the dark sidebar and dark-mode header (auto-detected).
 - [x] AI flow step colours use theme roles.
-- [ ] Next sweep: fixed colours outside buttons (badges, status chips, cards) in the remaining ~10 files that still use darker slate shades.
+- [x] Next sweep: fixed colours outside buttons (badges, status chips, cards) in the remaining ~10 files that still use darker slate shades.
 
 # Lovable AI credential cleanup (11 Nov 2026)
 - [x] Audit source, saved provider/purpose routing, settings and live database functions: Lovable already serves all active AI features; Google provider has no purpose references.

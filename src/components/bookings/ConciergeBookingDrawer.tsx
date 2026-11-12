@@ -473,7 +473,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                         return (
                           <div
                             key={c.id}
-                            className="overflow-hidden rounded-2xl bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                            className="overflow-hidden rounded-2xl bg-card shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
                           >
                             {c.banner_url && (
                               <img
@@ -497,7 +497,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                                 <Badge
                                   variant="outline"
                                   className={
-                                    c.is_full
+ c.is_full
                                       ? 'bg-destructive/10 text-destructive border-destructive/25'
                                       : 'bg-success/10 text-success border-success/25'
                                   }

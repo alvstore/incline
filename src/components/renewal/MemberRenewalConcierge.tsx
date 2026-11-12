@@ -80,8 +80,8 @@ export function MemberRenewalConcierge() {
 
   if (isError || !member) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-12 shadow-lg shadow-slate-200/50 text-center">
-        <AlertCircle className="h-6 w-6 text-red-500" aria-hidden />
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-12 shadow-lg shadow-foreground/5 text-center">
+        <AlertCircle className="h-6 w-6 text-destructive" aria-hidden />
         <p className="text-sm tracking-wide text-foreground">We could not load your membership right now.</p>
         <Button onClick={refetch} className="cursor-pointer rounded-2xl">Try again</Button>
       </div>
@@ -106,9 +106,9 @@ export function MemberRenewalConcierge() {
       />
 
       {payableInvoice && (
-        <div className="flex flex-col gap-4 rounded-2xl bg-amber-50 p-6 shadow-lg shadow-amber-100/50 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-2xl bg-warning/10 p-6 shadow-lg shadow-warning/50 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <ReceiptText className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+            <ReceiptText className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
             <div>
               <p className="text-sm font-medium tracking-wide text-foreground">
                 Invoice {payableInvoice.invoiceNumber} is waiting

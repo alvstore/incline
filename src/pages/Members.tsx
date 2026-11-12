@@ -373,7 +373,7 @@ export default function MembersPage() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       active: 'bg-success/10 text-success border-success/20',
-      scheduled: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30',
+      scheduled: 'bg-primary/10 text-primary border-primary/30   ',
       inactive: 'bg-muted text-muted-foreground border-muted',
       frozen: 'bg-info/10 text-info border-info/20',
       suspended: 'bg-destructive/10 text-destructive border-destructive/20',
@@ -431,7 +431,7 @@ export default function MembersPage() {
   const statCards = [
     { key: 'all' as const, label: 'Total Members', value: stats.total, icon: Users, accent: 'border-l-primary', text: 'text-primary', bg: 'bg-primary/10', bar: 'bg-primary' },
     { key: 'active' as const, label: 'Active', value: stats.active, icon: UserCheck, accent: 'border-l-success', text: 'text-success', bg: 'bg-success/10', bar: 'bg-success' },
-    { key: 'scheduled' as const, label: 'Scheduled', value: stats.scheduled, icon: CalendarClock, accent: 'border-l-indigo-500', text: 'text-indigo-600 dark:text-indigo-300', bg: 'bg-indigo-50 dark:bg-indigo-500/10', bar: 'bg-indigo-500' },
+    { key: 'scheduled' as const, label: 'Scheduled', value: stats.scheduled, icon: CalendarClock, accent: 'border-l-indigo-500', text: 'text-primary ', bg: 'bg-primary/10 ', bar: 'bg-primary' },
     { key: 'inactive' as const, label: 'Inactive', value: stats.inactive, icon: UserX, accent: 'border-l-muted-foreground', text: 'text-foreground', bg: 'bg-muted', bar: 'bg-muted-foreground' },
     { key: 'frozen' as const, label: 'Frozen', value: stats.frozen, icon: Snowflake, accent: 'border-l-info', text: 'text-info', bg: 'bg-info/10', bar: 'bg-info' },
     { key: 'expiring_soon' as const, label: 'Expiring ≤7d', value: stats.expiringSoon, icon: AlertTriangle, accent: 'border-l-warning', text: 'text-warning', bg: 'bg-warning/10', bar: 'bg-warning' },
@@ -488,8 +488,8 @@ export default function MembersPage() {
   const renderPlanBadges = (member: any) => (
     <div className="flex items-center gap-1.5 flex-wrap">
       {member.planName ? (
-        <Badge className={member.status === 'scheduled' ? 'bg-indigo-600 text-white hover:bg-indigo-600' : 'bg-success/10 text-success'}>
-          {member.planName}
+        <Badge className={member.status === 'scheduled' ? 'bg-primary text-white hover:bg-primary' : 'bg-success/10 text-success'}>
+ {member.planName}
         </Badge>
       ) : (
         <Badge variant="outline" className="text-muted-foreground border-dashed">No Plan</Badge>
@@ -746,7 +746,7 @@ export default function MembersPage() {
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                                  member.status === 'active' ? 'bg-success' : member.status === 'scheduled' ? 'bg-indigo-500' : member.status === 'frozen' ? 'bg-info' : 'bg-muted-foreground'
+                                  member.status === 'active' ? 'bg-success' : member.status === 'scheduled' ? 'bg-primary' : member.status === 'frozen' ? 'bg-info' : 'bg-muted-foreground'
                                 }`} />
                               </div>
                               <div>
@@ -796,7 +796,7 @@ export default function MembersPage() {
                       tabIndex={0}
                       onClick={() => handleViewProfile(member)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleViewProfile(member); }}
-                      className="rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 dark:shadow-none transition-all duration-200 hover:shadow-xl cursor-pointer"
+                      className="rounded-2xl bg-card p-4 shadow-lg shadow-foreground/5 dark:shadow-none transition-all duration-200 hover:shadow-xl cursor-pointer"
                     >
                       <div className="flex items-start gap-3">
                         <Avatar className="h-11 w-11">

@@ -108,7 +108,7 @@ export function CreateFlowLayout({
                       key={c.label}
                       variant="secondary"
                       className={cn(
-                        'rounded-full text-[11px] font-medium',
+ 'rounded-full text-[11px] font-medium',
                         c.tone === 'primary' && 'bg-primary/10 text-primary',
                         c.tone === 'muted' && 'bg-muted text-muted-foreground',
                       )}
@@ -119,10 +119,10 @@ export function CreateFlowLayout({
                   {showSaveState && (
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+ 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
                         isDirty
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700',
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-success/10 text-success',
                       )}
                     >
                       {isDirty ? <CircleDot className="h-3 w-3" /> : <Check className="h-3 w-3" />}
@@ -147,7 +147,7 @@ export function CreateFlowLayout({
                 <li key={s} className="flex shrink-0 items-center gap-2 sm:gap-4">
                   <div
                     className={cn(
-                      'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200',
+ 'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200',
                       isCurrent && 'bg-primary text-primary-foreground shadow-sm',
                       isDone && 'bg-success/15 text-success',
                       !isCurrent && !isDone && 'bg-muted text-muted-foreground',
@@ -155,7 +155,7 @@ export function CreateFlowLayout({
                   >
                     <span
                       className={cn(
-                        'flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold',
+ 'flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold',
                         isCurrent && 'bg-primary-foreground/20',
                         isDone && 'bg-success/20',
                         !isCurrent && !isDone && 'bg-background',

@@ -88,7 +88,7 @@ function StarRow({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`${cls} ${i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`}
+          className={`${cls} ${i <= Math.round(rating) ? 'fill-warning text-warning' : 'text-muted-foreground'}`}
           aria-hidden
         />
       ))}
@@ -386,7 +386,7 @@ export default function ExternalReviewsTab() {
       {/* Summary */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         {/* Average rating — hero */}
-        <Card className="rounded-2xl border-0 bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/30">
+        <Card className="rounded-2xl border-0 bg-gradient-to-br from-primary to-primary text-white shadow-lg shadow-primary/20 transition-all duration-200 hover:shadow-xl hover:shadow-primary/30">
           <CardContent className="p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Average rating</p>
             <div className="mt-2 flex items-end gap-2">
@@ -395,18 +395,18 @@ export default function ExternalReviewsTab() {
             </div>
             <div className="mt-3 flex items-center gap-0.5" aria-label={`${avgRating.toFixed(1)} out of 5 stars`}>
               {[1, 2, 3, 4, 5].map((i) => (
-                <Star key={i} className={`h-4 w-4 ${i <= Math.round(avgRating) ? 'fill-amber-300 text-amber-300' : 'text-white/30'}`} aria-hidden />
+                <Star key={i} className={`h-4 w-4 ${i <= Math.round(avgRating) ? 'fill-warning text-warning' : 'text-white/30'}`} aria-hidden />
               ))}
             </div>
           </CardContent>
         </Card>
 
         {/* Total reviews */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
           <CardContent className="p-5">
             <div className="flex items-start justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total reviews</p>
-              <span className="rounded-full bg-indigo-50 p-2 text-indigo-600"><MessageSquare className="h-4 w-4" aria-hidden /></span>
+              <span className="rounded-full bg-primary/10 p-2 text-primary"><MessageSquare className="h-4 w-4" aria-hidden /></span>
             </div>
             <p className="mt-2 text-3xl font-bold leading-none text-foreground">{totalReviews}</p>
             <p className="mt-2 text-xs text-muted-foreground">{stats.week} new in the last 7 days</p>
@@ -416,31 +416,31 @@ export default function ExternalReviewsTab() {
         {/* Pending replies — action card */}
         <Card
           className={`rounded-2xl border-0 shadow-lg transition-all duration-200 hover:shadow-xl ${
-            stats.pending > 0 ? 'bg-amber-50 shadow-amber-200/60 hover:shadow-amber-300/50' : 'shadow-slate-200/50 hover:shadow-emerald-500/10'
+            stats.pending > 0 ? 'bg-warning/10 shadow-warning/60 hover:shadow-warning/50' : 'shadow-foreground/5 hover:shadow-success/10'
           }`}
         >
           <CardContent className="p-5">
             <div className="flex items-start justify-between gap-2">
-              <p className={`text-xs font-semibold uppercase tracking-wider ${stats.pending > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wider ${stats.pending > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
                 Pending replies
               </p>
-              <span className={`rounded-full p-2 ${stats.pending > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-600'}`}>
+              <span className={`rounded-full p-2 ${stats.pending > 0 ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}`}>
                 {stats.pending > 0 ? <Clock3 className="h-4 w-4" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
               </span>
             </div>
-            <p className={`mt-2 text-3xl font-bold leading-none ${stats.pending > 0 ? 'text-amber-900' : 'text-foreground'}`}>{stats.pending}</p>
-            <p className={`mt-2 text-xs ${stats.pending > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>
+            <p className={`mt-2 text-3xl font-bold leading-none ${stats.pending > 0 ? 'text-warning' : 'text-foreground'}`}>{stats.pending}</p>
+            <p className={`mt-2 text-xs ${stats.pending > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
               {stats.pending > 0 ? 'Waiting on a reply from your team' : `All caught up · ${stats.replied} replied`}
             </p>
           </CardContent>
         </Card>
 
         {/* Flagged */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
           <CardContent className="p-5">
             <div className="flex items-start justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flagged by AI</p>
-              <span className={`rounded-full p-2 ${stats.fakes > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+              <span className={`rounded-full p-2 ${stats.fakes > 0 ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>
                 <ShieldAlert className="h-4 w-4" aria-hidden />
               </span>
             </div>
@@ -502,7 +502,7 @@ export default function ExternalReviewsTab() {
 
       {/* Diagnostics */}
       {diagnosis && (
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Google connection diagnostics</CardTitle>
           </CardHeader>
@@ -537,7 +537,7 @@ export default function ExternalReviewsTab() {
       {isLoading ? (
         <div className="space-y-4">
           {[0, 1, 2].map((i) => (
-            <Card key={i} className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+            <Card key={i} className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
               <CardContent className="space-y-4 p-5">
                 <div className="flex items-center gap-3">
                   <Skeleton className="h-11 w-11 rounded-full" />
@@ -571,12 +571,12 @@ export default function ExternalReviewsTab() {
             const isDrafting = draftingId === r.id && draftWithAI.isPending;
             const Icon = cb.icon;
             return (
-              <Card key={r.id} className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+              <Card key={r.id} className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <span
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-sm font-bold text-indigo-600"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary"
                         aria-hidden
                       >
                         {initialsOf(r.author_name)}
@@ -593,13 +593,13 @@ export default function ExternalReviewsTab() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {r.reply_status === 'sent' ? (
-                        <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                        <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
                           <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden />Replied
                         </Badge>
                       ) : r.reply_status === 'dismissed' ? (
                         <Badge className={rb.cls}>{rb.label}</Badge>
-                      ) : (
-                        <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+ ) : (
+                        <Badge className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning">
                           <Clock3 className="mr-1 h-3 w-3" aria-hidden />Needs reply
                         </Badge>
                       )}

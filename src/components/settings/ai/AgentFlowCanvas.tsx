@@ -362,7 +362,7 @@ export function AgentFlowCanvas() {
                       {node.status && (
                         <Badge
                           className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            node.status.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            node.status.ok ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
                           }`}
                         >
                           {node.status.label}
@@ -384,7 +384,7 @@ export function AgentFlowCanvas() {
               </Card>
               {i < nodes.length - 1 && (
                 <div className="flex justify-center py-1.5" aria-hidden="true">
-                  <ArrowDown className="h-4 w-4 text-slate-300" />
+                  <ArrowDown className="h-4 w-4 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -392,7 +392,7 @@ export function AgentFlowCanvas() {
         })}
       </div>
 
-      <Card className="rounded-2xl bg-card shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl bg-card shadow-lg shadow-foreground/5">
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-xs text-muted-foreground">
           <span className="font-semibold uppercase tracking-wider">Legend</span>
           {[

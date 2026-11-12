@@ -82,7 +82,7 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
       <SheetContent className="sm:max-w-xl overflow-y-auto">
         <SheetHeader className="mb-4">
           <SheetTitle className="flex items-center gap-2">
-            <PhoneCall className="h-5 w-5 text-indigo-600" aria-hidden />
+            <PhoneCall className="h-5 w-5 text-primary" aria-hidden />
             Voice AI call
           </SheetTitle>
           <SheetDescription>Retention call details from Incline Member Care.</SheetDescription>
@@ -95,7 +95,7 @@ export function VoiceCallDetailSheet({ callId, open, onOpenChange }: Props) {
         )}
 
         {isError && (
-          <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-2xl bg-destructive/10 p-4 text-sm text-destructive">
             You do not have access to this call, or it could not be loaded.
           </div>
         )}

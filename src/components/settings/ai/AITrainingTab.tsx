@@ -17,13 +17,13 @@ import { AITrainingRuleSheet, type AITrainingRule } from './AITrainingRuleSheet'
 import { cn } from '@/lib/utils';
 
 const INTENT_BADGE: Record<string, string> = {
-  location:   'bg-indigo-100 text-indigo-700 hover:bg-indigo-100',
-  pricing:    'bg-amber-100 text-amber-700 hover:bg-amber-100',
-  timeline:   'bg-violet-100 text-violet-700 hover:bg-violet-100',
-  handoff:    'bg-red-100 text-red-700 hover:bg-red-100',
+  location:   'bg-primary/10 text-primary hover:bg-primary/10',
+  pricing:    'bg-warning/10 text-warning hover:bg-warning/10',
+  timeline:   'bg-primary/10 text-primary hover:bg-primary/10',
+  handoff:    'bg-destructive/10 text-destructive hover:bg-destructive/10',
   decline:    'bg-muted text-foreground hover:bg-muted',
-  name_block: 'bg-blue-100 text-blue-700 hover:bg-blue-100',
-  custom:     'bg-emerald-100 text-emerald-700 hover:bg-emerald-100',
+  name_block: 'bg-info/10 text-info hover:bg-info/10',
+  custom:     'bg-success/10 text-success hover:bg-success/10',
 };
 
 interface Row {
@@ -109,11 +109,11 @@ export function AITrainingTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
+      <Card className="rounded-2xl shadow-lg shadow-foreground/5 border-0">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-600" />
+              <Sparkles className="h-5 w-5 text-primary" />
               AI Training Rules
             </CardTitle>
             <CardDescription className="mt-1">
@@ -149,14 +149,14 @@ export function AITrainingTab() {
 
           {sample.trim() && (
             <div className={cn(
-              'rounded-xl px-4 py-3 text-sm',
-              liveMatch ? 'bg-emerald-50 text-emerald-900' : 'bg-muted text-muted-foreground'
+ 'rounded-xl px-4 py-3 text-sm',
+              liveMatch ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
             )}>
               {liveMatch ? (
                 <>
                   Matches rule <span className="font-semibold">"{liveMatch.phrase_or_pattern}"</span>
                   {' '}→ <Badge className={INTENT_BADGE[liveMatch.intent_category]}>{liveMatch.intent_category}</Badge>
-                </>
+ </>
               ) : (
                 <>No rule matches — the AI will fall back to its hardcoded defaults.</>
               )}
@@ -194,7 +194,7 @@ export function AITrainingTab() {
                     <TableCell className="font-medium font-mono text-sm">{r.phrase_or_pattern}</TableCell>
                     <TableCell>
                       <Badge className={INTENT_BADGE[r.intent_category] ?? INTENT_BADGE.custom}>
-                        {r.intent_category}
+ {r.intent_category}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={r.correction_instruction}>
@@ -214,7 +214,7 @@ export function AITrainingTab() {
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)} aria-label="Delete rule">
-                        <Trash2 className="h-4 w-4 text-red-500" />
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -239,7 +239,7 @@ export function AITrainingTab() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && remove.mutate(deleteId)}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive"
             >
               Delete
             </AlertDialogAction>

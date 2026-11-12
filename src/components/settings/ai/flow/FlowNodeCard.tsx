@@ -71,13 +71,13 @@ function FlowNodeCardInner({ id, type, data, selected }: NodeProps) {
 
   return (
     <div
-      className={`w-[230px] rounded-2xl border px-3.5 py-3 shadow-lg shadow-slate-200/50 transition-all duration-200 ${tone.card} ${
-        selected ? 'ring-2 ring-indigo-500 ring-offset-2' : 'hover:shadow-xl hover:shadow-indigo-500/10'
+      className={`w-[230px] rounded-2xl border px-3.5 py-3 shadow-lg shadow-foreground/5 transition-all duration-200 ${tone.card} ${
+        selected ? 'ring-2 ring-primary ring-offset-2' : 'hover:shadow-xl hover:shadow-primary/10'
       }`}
     >
       {kind !== 'trigger' && <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />}
 
-      <div className="flex items-start gap-2.5">
+ <div className="flex items-start gap-2.5">
         <span className={`rounded-full p-2 ${tone.chip}`}>
           <Icon className="h-4 w-4" />
         </span>
@@ -99,14 +99,14 @@ function FlowNodeCardInner({ id, type, data, selected }: NodeProps) {
                 position={Position.Right}
                 style={{ top: 'auto', bottom: 'auto', transform: 'none', position: 'absolute', right: -14 }}
                 className={HANDLE_CLASS}
-                data-index={i}
+ data-index={i}
               />
             </div>
           ))}
         </div>
       ) : (
         kind !== 'end' && <Handle type="source" position={Position.Right} className={HANDLE_CLASS} />
-      )}
+ )}
       <span className="sr-only">{id}</span>
     </div>
   );

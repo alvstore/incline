@@ -131,15 +131,15 @@ const MIPSDeviceCard = ({
   };
 
   return (
-    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className={`relative rounded-xl p-2.5 ${isOnline ? "bg-emerald-50 text-emerald-600" : "bg-muted text-muted-foreground"}`}>
+            <div className={`relative rounded-xl p-2.5 ${isOnline ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
               <Monitor className="h-5 w-5" />
               <span
                 className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-card ${
-                  isOnline ? "animate-pulse bg-emerald-500" : "bg-red-500"
+                  isOnline ? "animate-pulse bg-success" : "bg-destructive"
                 }`}
               />
             </div>
@@ -153,7 +153,7 @@ const MIPSDeviceCard = ({
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             <Badge
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                isOnline ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                isOnline ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
               }`}
             >
               {isOnline ? "Online" : "Offline"}
@@ -276,7 +276,7 @@ const MIPSDeviceCard = ({
         ) : (
           onRegister && (
             <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">
-              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-medium text-amber-700">
+              <span className="rounded-full bg-warning/10 px-2.5 py-0.5 text-[10px] font-medium text-warning">
                 Not in CRM
               </span>
               <Button

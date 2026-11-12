@@ -99,7 +99,7 @@ export function BiometricFaceCaptureSheet({ open, onOpenChange, onCapture, busy 
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-2xl bg-slate-900">
+          <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-2xl bg-foreground">
             {phase === "review" && preview ? (
               <img src={preview.url} alt="Captured face preview" className="h-full w-full object-cover" />
             ) : (
@@ -127,12 +127,12 @@ export function BiometricFaceCaptureSheet({ open, onOpenChange, onCapture, busy 
             )}
 
             {phase === "starting" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-slate-300">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" /> Opening camera…
               </div>
             )}
             {phase === "fallback" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-slate-300">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
                 <Camera className="h-7 w-7" />
                 Camera not available. Upload a clear, front-facing photo instead.
               </div>
@@ -146,7 +146,7 @@ export function BiometricFaceCaptureSheet({ open, onOpenChange, onCapture, busy 
           </div>
 
           <ul className="mx-auto mt-5 grid max-w-sm grid-cols-3 gap-2 text-center text-[11px] text-muted-foreground">
-            <li className="rounded-xl bg-muted p-2.5"><Sun className="mx-auto mb-1 h-4 w-4 text-amber-500" />Good light on face</li>
+            <li className="rounded-xl bg-muted p-2.5"><Sun className="mx-auto mb-1 h-4 w-4 text-warning" />Good light on face</li>
             <li className="rounded-xl bg-muted p-2.5"><ScanFace className="mx-auto mb-1 h-4 w-4 text-primary" />Face fills the oval</li>
             <li className="rounded-xl bg-muted p-2.5"><Glasses className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />No cap, mask or shades</li>
           </ul>

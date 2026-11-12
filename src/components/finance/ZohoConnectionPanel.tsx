@@ -17,8 +17,8 @@ import { ZohoDirectSetupSheet } from './ZohoDirectSetupSheet';
 
 const BADGES = {
   not_configured: { label: 'Not configured', cls: 'bg-muted text-muted-foreground border border-border', Icon: PlugZap },
-  direct: { label: 'Connected (direct)', cls: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20', Icon: CheckCircle2 },
-  connector: { label: 'Using connector', cls: 'bg-blue-500/10 text-blue-600 border border-blue-500/20', Icon: Link2 },
+  direct: { label: 'Connected (direct)', cls: 'bg-success/10 text-success border border-success/20', Icon: CheckCircle2 },
+  connector: { label: 'Using connector', cls: 'bg-info/10 text-info border border-info/20', Icon: Link2 },
   reconnect: { label: 'Needs reconnect', cls: 'bg-destructive/10 text-destructive border border-destructive/20', Icon: AlertTriangle },
 } as const;
 

@@ -50,8 +50,8 @@ const statusLabel = (status?: string | null) => {
 
 const statusTone = (status?: string | null) => {
   const s = String(status || '').toLowerCase();
-  if (['sent', 'delivered', 'read'].includes(s)) return 'bg-emerald-100 text-emerald-700';
-  if (['failed', 'bounced', 'suppressed'].includes(s)) return 'bg-red-100 text-red-700';
+  if (['sent', 'delivered', 'read'].includes(s)) return 'bg-success/10 text-success';
+  if (['failed', 'bounced', 'suppressed'].includes(s)) return 'bg-destructive/10 text-destructive';
   return 'bg-muted text-muted-foreground';
 };
 
@@ -192,7 +192,7 @@ export function MemberScanReportsTab({ memberId }: Props) {
               ))}
             </div>
           ) : isError ? (
-            <div className="rounded-xl bg-red-50 p-6 text-center text-sm text-red-700">
+            <div className="rounded-xl bg-destructive/10 p-6 text-center text-sm text-destructive">
               Could not load this member's reports.
               <Button variant="outline" size="sm" className="ml-3" onClick={() => refetch()}>
                 Retry
@@ -238,9 +238,9 @@ export function MemberScanReportsTab({ memberId }: Props) {
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                         <span className="inline-flex items-center gap-1 text-muted-foreground">
                           {r.pdf_url ? (
-                            <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                            <CheckCircle2 className="h-3 w-3 text-success" />
                           ) : (
-                            <Clock3 className="h-3 w-3 text-amber-500" />
+                            <Clock3 className="h-3 w-3 text-warning" />
                           )}
                           {r.pdf_url ? 'PDF ready' : 'PDF pending'}
                         </span>
@@ -324,7 +324,7 @@ export function MemberScanReportsTab({ memberId }: Props) {
                           {busy === `upload-${r.data_key}` ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : r.pdf_source === 'howbody_original' ? (
-                            <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
+                            <FileCheck2 className="h-3.5 w-3.5 text-success" />
                           ) : (
                             <Upload className="h-3.5 w-3.5" />
                           )}

@@ -119,10 +119,10 @@ export function ZohoBooksSyncCard() {
   const stats = statsQuery.data;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div className="flex items-start gap-3">
-          <span className="rounded-full bg-indigo-50 p-2 text-indigo-600" aria-hidden="true">
+          <span className="rounded-full bg-primary/10 p-2 text-primary" aria-hidden="true">
             <BookOpenCheck className="h-5 w-5" />
           </span>
           <div>
@@ -137,7 +137,7 @@ export function ZohoBooksSyncCard() {
             variant="outline"
             onClick={() => dedupeMutation.mutate()}
             disabled={dedupeMutation.isPending || syncMutation.isPending}
-            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-primary"
           >
             {dedupeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             {dedupeMutation.isPending ? 'Checking…' : 'Fix duplicates'}
@@ -145,7 +145,7 @@ export function ZohoBooksSyncCard() {
           <Button
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending || dedupeMutation.isPending}
-            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="cursor-pointer gap-2 focus:outline-none focus:ring-2 focus:ring-primary"
           >
             {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {syncMutation.isPending ? 'Syncing…' : 'Sync now'}
@@ -160,7 +160,7 @@ export function ZohoBooksSyncCard() {
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
           </div>
         ) : statsQuery.isError ? (
-          <p className="text-sm text-red-600">Couldn’t load sync status.</p>
+          <p className="text-sm text-destructive">Couldn’t load sync status.</p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
@@ -178,7 +178,7 @@ export function ZohoBooksSyncCard() {
         )}
 
         {stats && stats.invFailed > 0 && (
-          <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+          <div className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               {stats.invFailed} invoice{stats.invFailed > 1 ? 's' : ''} failed to sync.
@@ -189,16 +189,16 @@ export function ZohoBooksSyncCard() {
 
         {lastRun && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <CheckCircle2 className="h-4 w-4 text-success" />
             <span>Last run:</span>
-            <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+            <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
               {lastRun.invoices_synced ?? 0} invoices
             </Badge>
-            <Badge className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+            <Badge className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
               {lastRun.payments_synced ?? 0} payments
             </Badge>
             {(lastRun.remaining ?? 0) > 0 && (
-              <Badge className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+              <Badge className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning">
                 {lastRun.remaining} remaining — run again
               </Badge>
             )}

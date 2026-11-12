@@ -439,7 +439,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="truncate text-sm font-semibold">{person.name}</span>
             {person.type === "trainer" && (
-              <Badge variant="outline" className="gap-0.5 rounded-full border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+              <Badge variant="outline" className="gap-0.5 rounded-full border-warning/30 bg-warning/10 text-[10px] text-warning">
                 <Dumbbell className="h-2.5 w-2.5" /> Trainer
               </Badge>
             )}
@@ -467,11 +467,11 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
         <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1.5 sm:flex">
           {isSynced ? (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Face on server</span>
+            <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">Face on server</span>
           ) : truth?.exists ? (
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">On server · no face</span>
+            <span className="rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-medium text-warning">On server · no face</span>
           ) : isFailed ? (
-            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Failed</span>
+            <span className="rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">Failed</span>
           ) : (
             <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Not on server</span>
           )}
@@ -483,11 +483,11 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           )}
           {verifyStatus !== undefined &&
             (verifyStatus ? (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+              <span className="flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
                <ShieldCheck className="h-3 w-3" /> On MIPS server
               </span>
             ) : (
-              <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+              <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
                 <ShieldX className="h-3 w-3" /> Missing
               </span>
             ))}
@@ -584,7 +584,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         <StatTile
           label="Missing face"
           value={stats.missingFace}
-          tone={stats.missingFace > 0 ? "text-amber-600" : "text-emerald-600"}
+          tone={stats.missingFace > 0 ? "text-warning" : "text-success"}
           hint={queueBacklog > 0 ? `Queue backlog: ${queueBacklog}` : "CRM photo on file, no face on MIPS"}
         />
         <StatTile
@@ -600,11 +600,11 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       </div>
 
       {truthError && (
-        <Card className="rounded-2xl border-none bg-red-50 shadow-lg shadow-red-100/50">
+        <Card className="rounded-2xl border-none bg-destructive/10 shadow-lg shadow-destructive/50">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div>
-              <p className="text-sm font-semibold text-red-700">MIPS roster verification is unavailable</p>
-              <p className="text-xs text-red-600">
+              <p className="text-sm font-semibold text-destructive">MIPS roster verification is unavailable</p>
+              <p className="text-xs text-destructive">
                 {truthErrorDetail instanceof Error ? truthErrorDetail.message : "The last verified counts are being preserved."}
               </p>
             </div>

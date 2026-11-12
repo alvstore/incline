@@ -87,7 +87,7 @@ export function SetInvoiceDueDateDrawer({ open, onOpenChange, invoice }: SetInvo
       <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
         <SheetHeader className="sticky top-0 z-10 border-b bg-background px-6 py-4">
           <SheetTitle className="flex items-center gap-2">
-            <span className="rounded-full bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-950">
+            <span className="rounded-full bg-primary/10 p-2 text-primary ">
               <CalendarClock className="h-4 w-4" />
             </span>
             Set Payment Due Date
@@ -131,9 +131,9 @@ export function SetInvoiceDueDateDrawer({ open, onOpenChange, invoice }: SetInvo
                         setDueDate(value);
                       }
                     }}
-                    className={`min-h-[44px] cursor-pointer items-center rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    className={`min-h-[44px] cursor-pointer items-center rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                       active
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-600'
+                        ? 'bg-primary text-white hover:bg-primary'
                         : 'bg-muted text-muted-foreground hover:bg-muted dark:bg-muted dark:text-muted-foreground'
                     }`}
                   >

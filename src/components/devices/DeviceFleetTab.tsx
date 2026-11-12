@@ -178,7 +178,7 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
             <Button
               variant="outline"
               size="sm"
-              className="min-h-[44px] rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50"
+              className="min-h-[44px] rounded-xl border-warning/30 text-warning hover:bg-warning/10"
               onClick={() => setConfirmFull(true)}
               disabled={busy !== null}
             >

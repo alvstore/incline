@@ -47,9 +47,9 @@ interface Row extends BlockedAttempt {
 
 function reasonLabel(message: string | null): { label: string; tone: string } {
   const text = (message || '').toLowerCase();
-  if (text.includes('dues')) return { label: 'Payment overdue', tone: 'bg-red-100 text-red-700' };
-  if (text.includes('expired')) return { label: 'Plan expired', tone: 'bg-amber-100 text-amber-700' };
-  if (text.includes('frozen')) return { label: 'Plan frozen', tone: 'bg-blue-100 text-blue-700' };
+  if (text.includes('dues')) return { label: 'Payment overdue', tone: 'bg-destructive/10 text-destructive' };
+  if (text.includes('expired')) return { label: 'Plan expired', tone: 'bg-warning/10 text-warning' };
+  if (text.includes('frozen')) return { label: 'Plan frozen', tone: 'bg-info/10 text-info' };
   if (text.includes('already checked in')) return { label: 'Already inside', tone: 'bg-muted text-muted-foreground' };
   if (text.includes('no membership')) return { label: 'No active plan', tone: 'bg-muted text-muted-foreground' };
   return { label: 'Entry refused', tone: 'bg-muted text-muted-foreground' };
@@ -117,10 +117,10 @@ export function BlockedEntryAttempts({
   });
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 bg-card overflow-hidden">
-      <CardHeader className="bg-red-50/40 border-b border-red-100/60">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 bg-card overflow-hidden">
+      <CardHeader className="bg-destructive/40 border-b border-destructive/60">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-red-50 text-red-600">
+          <div className="p-2 rounded-full bg-destructive/10 text-destructive">
             <ShieldAlert className="h-5 w-5" />
           </div>
           <div className="flex-1">
@@ -143,12 +143,12 @@ export function BlockedEntryAttempts({
           </div>
         ) : isError ? (
           <div className="py-10 text-center text-muted-foreground">
-            <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-500 opacity-60" />
+            <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-warning opacity-60" />
             <p className="font-medium">Could not load blocked entry attempts.</p>
           </div>
         ) : rows.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
-            <DoorClosed className="mx-auto mb-3 h-9 w-9 text-slate-300" />
+            <DoorClosed className="mx-auto mb-3 h-9 w-9 text-muted-foreground" />
             <p className="font-medium text-muted-foreground">No refused entries in this period.</p>
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">If the gate showed "permission denied" but nothing appears here, the gate refused on its own without telling the system. Use Force entry to let them in.</p>
           </div>

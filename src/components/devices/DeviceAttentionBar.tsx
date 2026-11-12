@@ -31,11 +31,11 @@ interface AlertRowProps {
 const AlertRow = ({ tone, icon, message, action }: AlertRowProps) => (
   <div
     className={`flex flex-col gap-3 rounded-2xl p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
-      tone === "danger" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"
+      tone === "danger" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"
     }`}
   >
     <div className="flex items-start gap-3">
-      <div className={`rounded-full p-1.5 ${tone === "danger" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"}`}>
+      <div className={`rounded-full p-1.5 ${tone === "danger" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"}`}>
         {icon}
       </div>
       <p className="text-sm leading-relaxed">{message}</p>

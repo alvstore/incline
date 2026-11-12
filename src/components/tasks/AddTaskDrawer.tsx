@@ -146,7 +146,7 @@ export function AddTaskDrawer({ open, onOpenChange }: AddTaskDrawerProps) {
               <Input type="number" name="slaHours" defaultValue={24} min={1} />
             </div>
             <div className="space-y-2 flex items-center gap-2 pt-8">
-              <input type="checkbox" name="memberCreated" id="memberCreated" className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+              <input type="checkbox" name="memberCreated" id="memberCreated" className="h-4 w-4 rounded border-border text-primary focus:ring-primary" />
               <Label htmlFor="memberCreated" className="cursor-pointer">Member Request</Label>
             </div>
           </div>

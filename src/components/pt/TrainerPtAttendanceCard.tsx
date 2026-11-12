@@ -30,8 +30,8 @@ export type MyBoardRow = {
 };
 
 const CORR: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-500 border border-amber-500/20',
-  approved: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20',
+  pending: 'bg-warning/10 text-warning border border-warning/20',
+  approved: 'bg-success/10 text-success border border-success/20',
   rejected: 'bg-destructive/10 text-destructive border border-destructive/20',
 };
 
@@ -76,7 +76,7 @@ export function TrainerPtAttendanceCard({ ptClients = [] }: { ptClients?: PtClie
   const waiting = ptClients.filter(c => !scanned.has(norm(c.member?.profile?.full_name ?? c.member?.member_code)));
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow-foreground/5">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <ScanFace className="h-4 w-4 text-primary" aria-hidden /> Today's PT attendance

@@ -149,7 +149,7 @@ export default function MemberProfile() {
       </div>
     </div>
   );
-  const cardCls = 'rounded-2xl bg-card shadow-lg shadow-slate-200/50 dark:shadow-none';
+  const cardCls = 'rounded-2xl bg-card shadow-lg shadow-foreground/5 dark:shadow-none';
 
   return (
     <AppLayout>
@@ -176,7 +176,7 @@ export default function MemberProfile() {
         </section>
 
         <Tabs defaultValue="details" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-card p-1.5 shadow-lg shadow-slate-200/50 dark:shadow-none">
+          <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-card p-1.5 shadow-lg shadow-foreground/5 dark:shadow-none">
             <TabsTrigger value="details" className="min-h-10 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Details</TabsTrigger>
             <TabsTrigger value="health" className="min-h-10 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Health</TabsTrigger>
             <TabsTrigger value="settings" className="min-h-10 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Settings</TabsTrigger>
@@ -184,7 +184,7 @@ export default function MemberProfile() {
 
           <TabsContent value="details" className="space-y-4">
             <section className={cardCls}>
-              <div className="flex items-center justify-between px-4 pt-4">
+ <div className="flex items-center justify-between px-4 pt-4">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</h2>
                 {!isEditing && <Button size="sm" variant="ghost" className="min-h-9 text-primary" onClick={() => { setFormData({ phone: profile?.phone || '', emergency_contact_name: profile?.emergency_contact_name || '', emergency_contact_phone: profile?.emergency_contact_phone || '' }); setIsEditing(true); }}><Pencil className="mr-1.5 h-3.5 w-3.5" />Edit</Button>}
               </div>
@@ -207,7 +207,7 @@ export default function MemberProfile() {
               )}
             </section>
             <section className={cardCls}>
-              <h2 className="px-4 pt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Membership</h2>
+ <h2 className="px-4 pt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Membership</h2>
               <div className="divide-y divide-border/60">
                 {row(CreditCard, 'Plan', activeMembership?.plan?.name || 'No active plan')}
                 {activeMembership && row(Calendar, 'Validity', `${format(parseISO(activeMembership.start_date), 'dd MMM yyyy')} – ${format(parseISO(activeMembership.end_date), 'dd MMM yyyy')}`)}
@@ -217,7 +217,7 @@ export default function MemberProfile() {
             {healthData?.signed_at && (
               <section className={`${cardCls} p-4`}>
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"><FileText className="h-4 w-4" aria-hidden /></span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/10 text-success"><FileText className="h-4 w-4" aria-hidden /></span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground">Membership Agreement</p>
                     <p className="text-xs text-muted-foreground">
@@ -242,7 +242,7 @@ export default function MemberProfile() {
               {healthData?.par_q && (
                 <div className="flex items-center gap-2 border-t border-border/50 pt-3 text-sm">
                   <span className="text-muted-foreground">Health questionnaire</span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${parqYesCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{parqYesCount > 0 ? `${parqYesCount} flagged` : 'Clear'}</span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${parqYesCount > 0 ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}`}>{parqYesCount > 0 ? `${parqYesCount} flagged` : 'Clear'}</span>
                   {healthData.signed_at && <span className="ml-auto text-xs text-muted-foreground">{format(parseISO(healthData.signed_at), 'dd MMM yyyy')}</span>}
                 </div>
               )}
@@ -263,7 +263,7 @@ export default function MemberProfile() {
             {member?.id && (member as any)?.branch_id && (
               <CommunicationPreferences memberId={member.id} branchId={(member as any).branch_id} />
             )}
-            <Button variant="ghost" className="min-h-11 w-full rounded-2xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700" onClick={() => void signOut()}>
+            <Button variant="ghost" className="min-h-11 w-full rounded-2xl bg-destructive/10 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => void signOut()}>
               <LogOut className="mr-2 h-4 w-4" />Sign out
             </Button>
           </TabsContent>

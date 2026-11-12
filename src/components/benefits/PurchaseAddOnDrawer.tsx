@@ -934,15 +934,15 @@ export function PurchaseAddOnDrawer({
                   </p>
                 </div>
               ) : (
-                <div className="mt-4 space-y-1 rounded-2xl bg-indigo-50 p-4 dark:bg-indigo-950/30">
-                  <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Pay online to confirm</p>
-                  <p className="text-xs text-indigo-800/80 dark:text-indigo-300/80">
+                <div className="mt-4 space-y-1 rounded-2xl bg-primary/10 p-4 ">
+                  <p className="text-sm font-semibold text-primary ">Pay online to confirm</p>
+                  <p className="text-xs text-primary/80 ">
                     {conveniencePct > 0
                       ? `A ${conveniencePct}% online convenience charge is added and shown on your bill.`
                       : 'Your bill is created only after the payment succeeds.'}
                   </p>
                   {tab === 'benefits' && selectedPackage && conveniencePct > 0 && (
-                    <p className="pt-1 text-sm font-bold text-indigo-900 dark:text-indigo-100">
+                    <p className="pt-1 text-sm font-bold text-primary ">
                       Total ₹{(Number(selectedPackage.price) * (1 + conveniencePct / 100)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </p>
                   )}

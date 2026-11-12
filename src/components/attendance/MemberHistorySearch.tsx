@@ -58,15 +58,15 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
             if (!e.target.value) setIsOpen(false);
           }}
           onFocus={() => query.length >= 2 && setIsOpen(true)}
-          className="h-12 pl-10 pr-10 rounded-2xl border-indigo-100 bg-card shadow-sm focus-visible:ring-indigo-500 transition-all text-base"
+          className="h-12 pl-10 pr-10 rounded-2xl border-primary/30 bg-card shadow-sm focus-visible:ring-primary transition-all text-base"
         />
         {isLoading && (
-          <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-indigo-500" />
+          <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-primary" />
         )}
       </div>
 
       {isOpen && results.length > 0 && (
-        <Card className="absolute top-full mt-2 w-full z-50 overflow-hidden rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-card animate-in fade-in slide-in-from-top-2 duration-200">
+        <Card className="absolute top-full mt-2 w-full z-50 overflow-hidden rounded-2xl border-0 shadow-2xl shadow-primary/10 bg-card animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="max-h-[300px] overflow-y-auto p-2">
             {results.map((member) => (
               <button type="button"
@@ -77,18 +77,18 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
                   setIsOpen(false);
                 }}
                 className={cn(
-                  "w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-150 text-left hover:bg-primary/5 group",
+ "w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-150 text-left hover:bg-primary/5 group",
                   selectedMemberId === member.id && "bg-primary/10"
                 )}
               >
-                <Avatar className="h-10 w-10 border border-indigo-50">
+                <Avatar className="h-10 w-10 border border-primary/30">
                   <AvatarImage src={member.avatar_url || undefined} />
-                  <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold">
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                     {member.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground truncate group-hover:text-indigo-600 transition-colors">
+                  <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                     {member.full_name}
                   </p>
                   <div className="flex items-center gap-3 mt-0.5">
@@ -111,8 +111,8 @@ export function MemberHistorySearch({ branchId, onSelect, selectedMemberId }: Me
       )}
 
       {isOpen && query.length >= 2 && results.length === 0 && !isLoading && (
-        <Card className="absolute top-full mt-2 w-full z-50 p-8 text-center rounded-2xl border-0 shadow-2xl shadow-indigo-500/10 bg-card">
-          <User className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+        <Card className="absolute top-full mt-2 w-full z-50 p-8 text-center rounded-2xl border-0 shadow-2xl shadow-primary/10 bg-card">
+          <User className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground font-medium">No members found matching "{query}"</p>
         </Card>
       )}

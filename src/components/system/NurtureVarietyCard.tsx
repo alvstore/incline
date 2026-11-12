@@ -50,10 +50,10 @@ export function NurtureVarietyCard() {
   }, [rows]);
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow-foreground/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="h-4 w-4 text-indigo-600" />
+          <Sparkles className="h-4 w-4 text-primary" />
           Nurture variety (last 7 days)
         </CardTitle>
       </CardHeader>
@@ -81,7 +81,7 @@ export function NurtureVarietyCard() {
                     <span className="w-40 truncate text-foreground">{angle}</span>
                     <div className="h-2 flex-1 rounded-full bg-muted">
                       <div
-                        className="h-2 rounded-full bg-indigo-500"
+                        className="h-2 rounded-full bg-primary"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -91,7 +91,7 @@ export function NurtureVarietyCard() {
               })}
             </div>
             {stats.sorted.length < 3 && (
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-warning">
                 Variety is low — check that <code>lead_nurture_angles</code> has multiple active rows.
               </p>
             )}
