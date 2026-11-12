@@ -225,28 +225,28 @@ export default function StorePage() {
         </div>
 
         {/* Hero Card */}
-        <div className="bg-gradient-to-r from-primary to-primary rounded-2xl shadow-lg shadow-primary/20 p-6 text-white">
+        <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl shadow-lg shadow-primary/20 p-6 text-primary-foreground">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold tracking-tight">Store Overview</h2>
-              <p className="text-primary/70 text-sm mt-1">Realized revenue and order performance across all channels</p>
+              <p className="text-primary-foreground/70 text-sm mt-1">Realized revenue and order performance across all channels</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <div className="text-center">
                 <p className="text-2xl font-bold">{posSales.filter((s: any) => s.payment_status !== 'cancelled').length}</p>
-                <p className="text-primary/70 text-xs mt-1">Total Sales</p>
+                <p className="text-primary-foreground/70 text-xs mt-1">Total Sales</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{products.length}</p>
-                <p className="text-primary/70 text-xs mt-1">Products</p>
+                <p className="text-primary-foreground/70 text-xs mt-1">Products</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">₹{todayPosTotal.toLocaleString()}</p>
-                <p className="text-primary/70 text-xs mt-1">Today's POS</p>
+                <p className="text-primary-foreground/70 text-xs mt-1">Today's POS</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</p>
-                <p className="text-primary/70 text-xs mt-1">Net Revenue</p>
+                <p className="text-primary-foreground/70 text-xs mt-1">Net Revenue</p>
               </div>
             </div>
           </div>
