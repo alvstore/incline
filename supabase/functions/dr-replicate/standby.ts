@@ -110,6 +110,16 @@ NOTIFY pgrst, 'reload config';
 NOTIFY pgrst, 'reload schema';
 `;
 
+/** What the helpers can touch on the standby (runs as the helper owner). */
+export const STANDBY_ACCESS_SQL = `select json_build_object(
+  'runsAs', current_user::text,
+  'superuser', (select rolsuper from pg_roles where rolname = current_user),
+  'authUsersWrite', has_table_privilege('auth.users', 'INSERT,UPDATE,DELETE'),
+  'authUsersReferences', has_table_privilege('auth.users', 'REFERENCES'),
+  'authIdentitiesWrite', has_table_privilege('auth.identities', 'INSERT,UPDATE,DELETE'),
+  'cronUsage', coalesce((select has_schema_privilege('cron', 'USAGE') where exists (select 1 from pg_namespace where nspname = 'cron')), false)
+)::text`;
+
 /** Chunk size the standby's resumable (TUS) endpoint requires. */
 export const TUS_CHUNK = 6 * 1024 * 1024;
 

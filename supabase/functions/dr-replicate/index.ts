@@ -16,7 +16,7 @@ import { crypto as stdCrypto } from "jsr:@std/crypto@1.0.3";
 import { encodeHex } from "jsr:@std/encoding@1.0.5/hex";
 import { connectPrimary, readOne } from "./primary.ts";
 import { tick } from "./run.ts";
-import { BOOTSTRAP_SQL, Standby } from "./standby.ts";
+import { BOOTSTRAP_SQL, STANDBY_ACCESS_SQL, Standby } from "./standby.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,7 +198,8 @@ Deno.serve(async (req) => {
         fetch(`${DR_URL}/storage/v1/version`).then((r) => r.text()).catch(() => null),
       ]);
       const [primaryUser] = await primary`select current_user as u`;
-      return json({ ok: true, primary: primaryUser.u, standbyHelpers: ready, standbyStorageVersion: storage });
+      const access = ready === true ? await standby.one(STANDBY_ACCESS_SQL).catch((e) => `error: ${(e as Error).message}`) : null;
+      return json({ ok: true, primary: primaryUser.u, standbyHelpers: ready, standbyAccess: access ? JSON.parse(String(access).startsWith("error") ? JSON.stringify(access) : String(access)) : null, standbyStorageVersion: storage });
     }
     if (mode === "status") {
       return json({ ok: true, run: JSON.parse((await readOne(primary, STATUS_SQL)) ?? "null") });
