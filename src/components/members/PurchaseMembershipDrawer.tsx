@@ -86,6 +86,8 @@ export function PurchaseMembershipDrawer({
   const [paymentDueDate, setPaymentDueDate] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
   const [sendReminders, setSendReminders] = useState(true);
   const [transactionId, setTransactionId] = useState('');
+  // Date the money was actually received (can be earlier than today, e.g. advance part-payment).
+  const [paymentReceivedDate, setPaymentReceivedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   
   const queryClient = useQueryClient();
@@ -283,6 +285,32 @@ export function PurchaseMembershipDrawer({
       if (result?.success === false) throw new Error(result.error || 'Purchase failed');
 
       const invoiceId: string | undefined = result?.invoice_id;
+
+      // Backdate the initial payment when staff say it was received earlier.
+      if (!isPaymentLink && actualAmountPaid > 0 && invoiceId && paymentReceivedDate < format(new Date(), 'yyyy-MM-dd')) {
+        const { data: pays } = await supabase
+          .from('payments')
+          .select('id, amount, payment_method, transaction_id, notes')
+          .eq('invoice_id', invoiceId)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: true })
+          .limit(1);
+        const p = pays?.[0];
+        if (p) {
+          const { data: ed, error: edErr } = await supabase.rpc('edit_payment' as any, {
+            p_payment_id: p.id,
+            p_amount: Number(p.amount),
+            p_payment_method: p.payment_method,
+            p_payment_date: new Date(`${paymentReceivedDate}T12:00:00`).toISOString(),
+            p_transaction_id: p.transaction_id,
+            p_notes: p.notes,
+            p_reason: `Payment received on ${paymentReceivedDate} (entered at sale)`,
+          });
+          if (edErr || (ed as any)?.success === false) {
+            toast.warning('Plan sold, but the payment date could not be backdated — edit it from Payments.');
+          }
+        }
+      }
       const membershipId: string | undefined = result?.membership_id ?? result?.entity_id;
 
       // Generate Razorpay payment link (the RPC left the invoice unpaid for us).
@@ -348,6 +376,7 @@ export function PurchaseMembershipDrawer({
     setIsPartialPayment(false);
     setAmountPaying(0);
     setPaymentDueDate(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
+    setPaymentReceivedDate(format(new Date(), 'yyyy-MM-dd'));
     setSendReminders(true);
     setTransactionId('');
   };
@@ -712,6 +741,17 @@ export function PurchaseMembershipDrawer({
                               max={calculateTotal() - 1}
                               value={amountPaying}
                               onChange={(e) => setAmountPaying(Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="payment-received-date">Received On *</Label>
+                            <Input
+                              id="payment-received-date"
+                              type="date"
+                              value={paymentReceivedDate}
+                              max={todayIso}
+                              min={format(addDays(new Date(), -90), 'yyyy-MM-dd')}
+                              onChange={(e) => setPaymentReceivedDate(e.target.value || todayIso)}
                             />
                           </div>
                         </div>
