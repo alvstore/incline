@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { HowbodyDeviceDrawer } from "./HowbodyDeviceDrawer";
 import { formatDistanceToNow } from "date-fns";
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export function HowbodyDevicesCard() {
   const { hasAnyRole } = useAuth();
   const canManage = hasAnyRole(["owner", "admin"]);
@@ -116,7 +117,7 @@ export function HowbodyDevicesCard() {
               </TableRow>
             )}
             {filtered.map((d) => (
-              <TableRow
+              <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
                 key={d.id}
                 className={canManage ? "cursor-pointer hover:bg-muted" : ""}
                 onClick={() => openEdit(d)}

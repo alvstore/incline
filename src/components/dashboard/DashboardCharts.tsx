@@ -5,6 +5,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Clock, AlertTriangle, CheckCircle, ClipboardList, IndianRupee } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface ChartData {
   name: string;
   value: number;
@@ -262,9 +263,9 @@ export function AccountsReceivableWidget({ data, totalOutstanding }: AccountsRec
         ) : (
           <div className="space-y-2">
             {data.map((member) => (
-              <div
+              <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                 key={member.id}
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                 onClick={() => navigate('/invoices')}
               >
                 <div>
@@ -307,9 +308,9 @@ export function ExpiringMembersWidget({ data }: ExpiringMembersWidgetProps) {
         ) : (
           <div className="space-y-2">
             {data.map((member, idx) => (
-              <div 
+              <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey} 
                 key={idx} 
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                 onClick={() => navigate('/members')}
               >
                 <div>
@@ -337,8 +338,8 @@ export function PendingApprovalsWidget({ count }: PendingApprovalsWidgetProps) {
   const navigate = useNavigate();
 
   return (
-    <Card 
-      className="shadow-lg shadow-primary/10 rounded-2xl border-0 cursor-pointer hover:shadow-xl transition-shadow"
+    <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey} 
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shadow-lg shadow-primary/10 rounded-2xl border-0 cursor-pointer hover:shadow-xl transition-shadow"
       onClick={() => navigate('/approvals')}
     >
       <CardContent className="p-4">

@@ -7,6 +7,7 @@ import { DueDatePill } from './DueDatePill';
 import { STATUS_PILL, STATUS_LABEL, PRIORITY_PILL, PRIORITY_DOT } from './taskTokens';
 import type { TaskStatus } from '@/services/taskService';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface Props {
   tasks: any[];
   isLoading: boolean;
@@ -52,10 +53,10 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
       {tasks.map((task) => {
         const isClosed = task.status === 'completed' || task.status === 'cancelled';
         return (
-        <div
+        <div tabIndex={0} onKeyDown={clickOnActivateKey}
           key={task.id}
           onClick={() => onOpen(task)}
-          className={cn(
+          className={cn('focus:outline-none focus-visible:ring-2 focus-visible:ring-ring', 
             'group flex items-center gap-3 rounded-xl bg-card p-3 sm:p-4 shadow-sm ring-1 ring-border cursor-pointer',
             'transition-all duration-150 hover:shadow-md hover:ring-primary/30',
             isClosed && 'opacity-70',

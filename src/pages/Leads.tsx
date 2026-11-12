@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export default function LeadsPage() {
   const { user } = useAuth();
   const { effectiveBranchId, branchFilter } = useBranchContext();
@@ -418,7 +419,7 @@ export default function LeadsPage() {
                         {format(day, 'd')}
                       </p>
                       {dayLeads.slice(0, 3).map((lead: any) => (
-                        <div key={lead.id} className={`text-xs px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer ${STATUS_CONFIG[lead.status]?.color || 'bg-muted'}`} onClick={() => openProfile(lead)}>
+                        <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey} key={lead.id} className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring text-xs px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer ${STATUS_CONFIG[lead.status]?.color || 'bg-muted'}`} onClick={() => openProfile(lead)}>
                           {lead.full_name}
                         </div>
                       ))}

@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AttendanceDetailDrawer } from '@/components/attendance/AttendanceDetailDrawer';
 import type { Database } from '@/integrations/supabase/types';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type MonthRow = Database['public']['Functions']['staff_month_summary']['Returns'][number];
 type PayrollRow = Database['public']['Functions']['compute_payroll']['Returns'][number];
 
@@ -207,9 +208,9 @@ export function StaffMonthHistory({ branchId }: { branchId: string | undefined }
                 </TableHeader>
                 <TableBody>
                   {days.map((d) => (
-                    <TableRow
+                    <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
                       key={String(d.work_date)}
-                      className="cursor-pointer transition-colors duration-150 hover:bg-muted/50"
+                      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer transition-colors duration-150 hover:bg-muted/50"
                       onClick={() => setEditDate(String(d.work_date))}
                     >
                       <TableCell className="text-sm">{format(new Date(String(d.work_date)), 'd MMM (EEE)')}</TableCell>

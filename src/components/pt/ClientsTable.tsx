@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { buildSuccessorMap, queuedRenewalOf } from './ptContinuation';
 import { avatarColor, initialsOf, type PTMemberPackageRow } from './ptTypes';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type SortKey = 'member' | 'progress' | 'expiry';
 export type ClientFilter = 'all' | 'needs_trainer' | 'payment_due' | 'expiring' | 'low_sessions' | 'expired';
 
@@ -348,7 +349,7 @@ export function ClientsTable(props: Props) {
             {visible.map((pkg) => {
               const p = progressOf(pkg);
               return (
-                <li key={pkg.id} className="rounded-2xl border border-border p-4" onClick={() => onView(pkg)}>
+                <li role="button" tabIndex={0} onKeyDown={clickOnActivateKey} key={pkg.id} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-2xl border border-border p-4" onClick={() => onView(pkg)}>
                   <div className="flex items-start justify-between gap-2"><MemberCell pkg={pkg} /><RowMenu pkg={pkg} /></div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div><p className="text-xs text-muted-foreground">Package</p>{pkg.package_name || '—'}</div>

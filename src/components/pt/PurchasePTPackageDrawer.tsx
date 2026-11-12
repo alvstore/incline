@@ -26,6 +26,7 @@ import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type Mode = 'session' | 'monthly';
 type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque' | 'wallet';
 type PaySource = 'in_person' | 'payment_link';
@@ -800,9 +801,9 @@ export function PurchasePTPackageDrawer({
                   </div>
                 )}
 
-                <Card
+                <Card tabIndex={0} onKeyDown={clickOnActivateKey}
                   onClick={() => selected !== 'custom' && setSelected('custom')}
-                  className={`cursor-pointer rounded-2xl border-2 border-dashed shadow-none transition-all duration-200 ${
+                  className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer rounded-2xl border-2 border-dashed shadow-none transition-all duration-200 ${
                     selected === 'custom' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
                   }`}
                 >

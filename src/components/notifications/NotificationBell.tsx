@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { isChatSoundEnabled, setChatSoundEnabled } from '@/hooks/useChatSound';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 const typeIcons = {
   info: Info,
   success: CheckCircle2,
@@ -160,9 +161,9 @@ export function NotificationBell() {
                 const colorClass = typeColors[notification.type as keyof typeof typeColors] || 'text-muted-foreground';
 
                 return (
-                  <div
+                  <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                     key={notification.id}
-                    className={`p-3 hover:bg-muted/50 cursor-pointer transition-colors ${
+                    className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring p-3 hover:bg-muted/50 cursor-pointer transition-colors ${
                       !notification.is_read ? 'bg-primary/5' : ''
                     }`}
                     onClick={() => {

@@ -26,6 +26,7 @@ import { sendWhatsAppDocument } from '@/utils/whatsappDocumentSender';
 import { PRODUCT_VARIANTS_ENABLED, groupVariants, priceRange } from '@/lib/products/variantRules';
 import { stockFor, minStockFor } from '@/lib/store/stockStatus';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 export default function POSPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -675,9 +676,9 @@ export default function POSPage() {
                   const isLowStock = stock !== null && stock > 0 && stock < getMinStock(product);
 
                   return (
-                    <Card
+                    <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                       key={product.id}
-                      className={`transition-colors ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary'} ${isLowStock ? 'border-warning/50' : ''}`}
+                      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary'} ${isLowStock ? 'border-warning/50' : ''}`}
                       onClick={() => !isOutOfStock && addToCart(product)}
                     >
                       <CardContent className="p-4 relative">
@@ -833,9 +834,9 @@ export default function POSPage() {
                         {members.map((m: any) => {
                           const info = getMemberDisplayInfo(m);
                           return (
-                            <div
+                            <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                               key={m.id}
-                              className="p-2 hover:bg-muted cursor-pointer"
+                              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring p-2 hover:bg-muted cursor-pointer"
                               onClick={() => {
                                 setSelectedMember(m);
                                 setMemberSearch('');

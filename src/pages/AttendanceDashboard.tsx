@@ -45,6 +45,7 @@ import {
 
 
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type FlashState = {
   type: 'success' | 'denied';
   name: string;
@@ -1212,7 +1213,7 @@ export default function AttendanceDashboard() {
               {forceEntryResults.length > 0 && !selectedForceEntryMember && (
                 <div className="space-y-1 max-h-48 overflow-auto border rounded-lg">
                   {forceEntryResults.map((m: any) => (
-                    <div key={m.id} className="flex items-center justify-between p-3 hover:bg-muted/50 cursor-pointer" onClick={() => { setSelectedForceEntryMember(m); setForceEntrySearch(m.full_name || m.member_code); }}>
+                    <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey} key={m.id} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between p-3 hover:bg-muted/50 cursor-pointer" onClick={() => { setSelectedForceEntryMember(m); setForceEntrySearch(m.full_name || m.member_code); }}>
                       <div>
                         <p className="font-medium">{m.full_name || 'Unknown'}</p>
                         <p className="text-xs text-muted-foreground">{m.member_code} · {m.phone}</p>

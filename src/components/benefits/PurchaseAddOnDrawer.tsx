@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createTask } from '@/services/taskService';
 import { initializePayment, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/paymentService';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 type PtPurchaseResult = { success?: boolean; error?: string; code?: string };
 
 
@@ -553,10 +554,10 @@ export function PurchaseAddOnDrawer({
     const owned = remainingForType(p.benefit_type);
     const selected = selectedBenefitPkg === p.id;
     return (
-      <Card
+      <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
         key={p.id}
         onClick={() => { setCustomMode(false); setSelectedBenefitPkg(p.id); }}
-        className={`cursor-pointer transition-all duration-200 rounded-xl ${
+        className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer transition-all duration-200 rounded-xl ${
           selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-primary/20' : 'border-border/60 hover:border-primary/40'
         }`}
       >
@@ -598,10 +599,10 @@ export function PurchaseAddOnDrawer({
   const renderPtCard = (p: PtPackage) => {
     const selected = selectedPtPkg === p.id;
     return (
-      <Card
+      <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
         key={p.id}
         onClick={() => setSelectedPtPkg(p.id)}
-        className={`cursor-pointer transition-all duration-200 rounded-xl ${
+        className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer transition-all duration-200 rounded-xl ${
           selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-primary/20' : 'border-border/60 hover:border-primary/40'
         }`}
       >
@@ -729,9 +730,9 @@ export function PurchaseAddOnDrawer({
               )}
 
               {!isMember && (
-                <Card
+                <Card role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                   onClick={() => { setSelectedBenefitPkg(null); setCustomMode(true); }}
-                  className={`cursor-pointer rounded-xl border-dashed transition-all duration-200 ${
+                  className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer rounded-xl border-dashed transition-all duration-200 ${
                     customMode && !selectedBenefitPkg ? 'border-primary ring-2 ring-primary/30' : 'hover:border-primary/40'
                   }`}
                 >

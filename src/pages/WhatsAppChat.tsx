@@ -72,6 +72,7 @@ import {
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ChatContact {
@@ -1062,9 +1063,9 @@ export default function WhatsAppChatPage() {
                 </div>
               ) : (
                 filteredContacts.map((contact: ChatContact) => (
-                  <div
+                  <div role="button" tabIndex={0} onKeyDown={clickOnActivateKey}
                     key={contact.phone_number}
-                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all hover:bg-muted/50 ${
+                    className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-3 px-4 py-3 cursor-pointer transition-all hover:bg-muted/50 ${
                       selectedContact?.phone_number === contact.phone_number
                         ? 'bg-primary/5 border-l-2 border-l-primary'
                         : 'border-l-2 border-l-transparent'

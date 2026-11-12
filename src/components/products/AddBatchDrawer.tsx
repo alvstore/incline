@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { FileUp, Loader2, FileText, X } from 'lucide-react';
 import { createBatch, fetchBatches, suggestBatchNumber, uploadLabReport } from '@/services/batchService';
 
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -222,8 +223,8 @@ export function AddBatchDrawer({ open, onOpenChange, product }: Props) {
               <Label>
                 Lab Test Report (CoA) {product.requires_lab_report && <span className="text-destructive">*</span>}
               </Label>
-              <div
-                className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
+              <div tabIndex={0} onKeyDown={clickOnActivateKey}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
                 onClick={() => fileRef.current?.click()}
               >
                 {labFile ? (
