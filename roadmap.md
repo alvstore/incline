@@ -3,7 +3,7 @@
 - [x] Announce selected/open state on every chip, tab-like and toggle button still missing it (~36 spots).
 - [x] Replace fixed colours inside buttons with theme colours (21 spots) so dark mode works.
 - [x] Give the 6 icon-only buttons a readable name.
-- [ ] Re-scan, compile, run tests, and browser-check light/dark/phone on a sample of changed screens.
+- [~] Re-scan, compile, run tests, and browser-check light/dark/phone on a sample of changed screens.
 
 # Lovable AI credential cleanup (11 Nov 2026)
 - [x] Audit source, saved provider/purpose routing, settings and live database functions: Lovable already serves all active AI features; Google provider has no purpose references.
