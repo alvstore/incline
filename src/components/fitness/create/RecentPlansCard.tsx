@@ -90,6 +90,7 @@ export function RecentPlansCard() {
                 )}
 
                 <button
+                  type="button"
                   onClick={() =>
                     navigate(
                       `/fitness/create/ai?memberId=${r.member_id}&memberName=${encodeURIComponent(
