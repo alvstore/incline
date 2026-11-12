@@ -27,7 +27,7 @@ export type SalesReply = {
 export const DUR_LABEL: Record<Duration, string> = { monthly: "Monthly", quarterly: "Quarterly", half_yearly: "Half-Yearly", annual: "Annual" };
 const DUR_MONTHS: Record<Duration, string> = { monthly: "1 month", quarterly: "3 months", half_yearly: "6 months", annual: "12 months" };
 
-export const DESK_BEST = `I truly understand wanting the best value, and I'm sorry I can't go lower here. This is already our discounted offer price, and no further discount is possible over chat. For that price you get the premium Panatta training floor, a fully air-conditioned club, digital lockers, free steam, plus yoga, Pilates and group classes. If you'd still like to discuss it, you're most welcome to visit the club or call our front desk on ${DESK_PHONE}.`;
+export const DESK_BEST = `I truly understand wanting the best value, and I'm sorry I can't go lower here. This is already our discounted offer price, and no further discount is possible over chat. For that price you get the premium Panatta training floor, a fully air-conditioned club, digital lockers for use during your visit, free steam, plus yoga, Pilates and group classes. If you'd still like to discuss it, you're most welcome to visit the club or call our front desk on ${DESK_PHONE}.`;
 export const RE_VISITED = /\b(already (visited|seen|been|came|come|checked)|have visited|i visited|visited (already|before|the (club|gym))|seen the (club|gym|facility)|been there)\b/i;
 export const DESK_OTHER = `For free days, freezes, group or couple memberships, or any other special arrangement, please contact our front desk on ${DESK_PHONE}.`;
 export const ADDON_OUTSIDER = `Add-on rates for non-members are different. Please call the front desk on ${DESK_PHONE} for the current rate.`;
@@ -46,8 +46,9 @@ export const RE_SALES = {
 
 export function matchDuration(text: string): Duration | undefined {
   const t = String(text || "").toLowerCase();
-  if (/\b(annual|annually|yearly|year|1 ?yr|12 ?months?|saal)\b/.test(t)) return "annual";
+  // Half-yearly first: "half yearly" also contains "yearly".
   if (/\b(half[- ]?year\w*|6 ?months?|six months?|chhe mahine)\b/.test(t)) return "half_yearly";
+  if (/\b(annual|annually|yearly|year|1 ?yr|12 ?months?|saal)\b/.test(t)) return "annual";
   if (/\b(quarter\w*|3 ?months?|three months?)\b/.test(t)) return "quarterly";
   if (/\b(month|monthly|1 ?month|mahina|mahine)\b/.test(t)) return "monthly";
   return undefined;
@@ -125,7 +126,7 @@ function quoteOriginal(rows: PlanRow[], dur: Duration, q: QuoteState): SalesRepl
   return {
     messages: [
       { text: `The ${DUR_LABEL[dur]} membership (${DUR_MONTHS[dur]}) is ${inr(p.price)}.` },
-      { text: "It covers the Panatta training floor in a fully air-conditioned club, digital lockers and recovery access as per the plan. Would you like me to send a payment link, or do you have any questions?" },
+      { text: "It covers the Panatta training floor in a fully air-conditioned club, digital lockers for use during your visit and recovery access as per the plan. Would you like me to send a payment link, or do you have any questions?" },
     ],
     quote: { dur, stage: "original", awaitingDuration: false }, event: "price_quoted", plan: p, amount: p.price,
   };
@@ -139,7 +140,7 @@ function nextStage(rows: PlanRow[], q: QuoteState): SalesReply {
     return {
       messages: [
         { text: `I can offer the ${DUR_LABEL[dur]} membership at ${inr(offer)} instead of ${inr(p.price)}.` },
-        { text: "That's the full club experience: premium Panatta equipment, a calm air-conditioned space, digital lockers and our recovery suites. Shall I send the payment link at this price?" },
+        { text: "That's the full club experience: premium Panatta equipment, a calm air-conditioned space, digital lockers for use during your visit and our recovery suites. Shall I send the payment link at this price?" },
       ],
       quote: { ...q, stage: "offer" }, event: "offer_revealed", plan: p, amount: offer,
     };
@@ -164,6 +165,8 @@ function nextStage(rows: PlanRow[], q: QuoteState): SalesReply {
  * payment, so the caller's normal concierge answers it.
  * @param interest — the plan length the visitor picked during intake, if any.
  */
+export const RE_DAY_PASS = /\b(day[- ]?pass|one[- ]day|1[- ]day|single[- ]day|daily pass)\b/i;
+
 export function salesTurn(raw: string, q: QuoteState, rows: PlanRow[], opts: { isMember?: boolean; interest?: string | null; linksEnabled?: boolean } = {}): SalesReply | null {
   const t = String(raw ?? "").trim().slice(0, 300);
   if (!t) return null;
@@ -193,6 +196,14 @@ export function salesTurn(raw: string, q: QuoteState, rows: PlanRow[], opts: { i
   if (RE_SALES.addon.test(t) && (RE_SALES.price.test(t) || RE_SALES.discount.test(t))) {
     if (opts.isMember) return null; // member channel uses get_member_addon_prices
     return { messages: [{ text: ADDON_OUTSIDER, tel: true }], quote: q, event: "desk_handoff" };
+  }
+
+  // Day pass: quote only from the live plan list, never a membership.
+  if (RE_DAY_PASS.test(t)) {
+    const dp = rows.filter((r) => /day pass/i.test(r.name) && r.price > 0).sort((a, b) => a.price - b.price)[0];
+    if (!dp) return { messages: [{ text: `For a day pass, please call the front desk on ${DESK_PHONE}.`, tel: true }], quote: q, event: "desk_handoff" };
+    const amt = offerOf(dp) ?? dp.price;
+    return { messages: [{ text: `A Day Pass is ${inr(amt)} for one visit. Our front desk on ${DESK_PHONE} can book it for you. Would you also like to know about our memberships?`, tel: true }], quote: q, event: null, plan: dp, amount: amt };
   }
 
   const said = matchDuration(t);
@@ -226,7 +237,9 @@ export function salesTurn(raw: string, q: QuoteState, rows: PlanRow[], opts: { i
     return { messages: [{ text: `Great choice! To confirm: ${DUR_LABEL[dur]} membership at ${inr(sp.amount)}. Shall I send the payment link?` }], quote: { ...sq, awaitingLinkConfirm: true }, event: null, plan: sp.plan, amount: sp.amount };
   }
 
-  if (isPrice || (said && /\b(plan|membership|package)\b/i.test(t))) {
+  // A bare plan name ("Half-yearly") is a price question.
+  const bare = !!said && t.split(/\s+/).length <= 3;
+  if (isPrice || bare || (said && /\b(plan|membership|package)\b/i.test(t))) {
     const dur = said ?? (q.dur ? undefined : matchDuration(opts.interest ?? "")) ?? q.dur;
     if (!dur) return { messages: [{ text: ASK_DURATION }], quote: { ...q, awaitingDuration: true }, event: null };
     if (q.dur === dur && q.stage && q.stage !== "original") {

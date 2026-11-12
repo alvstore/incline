@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertMatch } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { salesTurn, hasUnlistedAmount, allowedAmounts, type PlanRow, type QuoteState } from "./salesPricing.ts";
+import { salesTurn, matchDuration, hasUnlistedAmount, allowedAmounts, type PlanRow, type QuoteState } from "./salesPricing.ts";
 
 const PLANS: PlanRow[] = [
   { id: "d", name: "Day Pass", duration_days: 1, price: 999, discounted_price: null },
@@ -115,4 +115,19 @@ Deno.test("leak guard flags amounts not on the plan list", () => {
   const ok = allowedAmounts(PLANS);
   assert(!hasUnlistedAmount("Annual is ₹36,900", ok));
   assert(hasUnlistedAmount("Special ₹20,000 today", ok));
+});
+
+Deno.test("half yearly is not mistaken for annual", () => {
+  assertEquals(matchDuration("Half yearly"), "half_yearly");
+  assertEquals(matchDuration("half-yearly fees"), "half_yearly");
+  assertEquals(matchDuration("yearly"), "annual");
+});
+
+Deno.test("bare plan name quotes that plan", () => {
+  const r = salesTurn("Half-yearly", {}, PLANS)!;
+  assertEquals(r.quote.dur, "half_yearly");
+});
+Deno.test("day pass quotes the day pass plan", () => {
+  const r = salesTurn("Day pass fees", { dur: "quarterly", stage: "offer" }, PLANS)!;
+  assertMatch(r.messages[0].text, /₹999/);
 });
