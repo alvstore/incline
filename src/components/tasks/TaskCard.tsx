@@ -40,6 +40,7 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
     >
       {draggable && (
         <button
+          type="button"
           {...attributes}
           {...listeners}
           className="absolute right-1 top-1 p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-ring rounded"
@@ -50,7 +51,7 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
         </button>
       )}
 
-      <button onClick={onClick} className="w-full text-left focus:outline-none">
+      <button type="button" onClick={onClick} className="w-full rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <div className="flex items-start gap-2">
           <span className={cn('mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0', PRIORITY_DOT[task.priority] || PRIORITY_DOT.medium)} />
           <div className="min-w-0 flex-1">

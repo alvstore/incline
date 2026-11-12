@@ -59,6 +59,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
             {overdue > 0 ? `${overdue} overdue across the team — let's clear them.` : 'No overdue items. Stay sharp.'}
           </p>
           <button
+            type="button"
             onClick={onOpenMine}
             disabled={myOpenCount === 0}
             className="mt-5 inline-flex items-center gap-2 rounded-full bg-card px-4 py-2 text-xs font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-foreground/60 disabled:cursor-not-allowed disabled:opacity-60"
@@ -71,9 +72,10 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
 
       {/* Overdue */}
       <button
+        type="button"
         onClick={() => onFilter('overdue')}
         aria-label={`Show ${overdue} overdue tasks`}
-        className="text-left rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-primary/10 transition-all duration-200 ring-1 ring-border group focus:outline-none focus:ring-2 focus:ring-ring"
+        className="text-left rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-200 ring-1 ring-border group focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Overdue</span>
@@ -89,9 +91,10 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
 
       {/* High priority */}
       <button
+        type="button"
         onClick={() => onFilter('high')}
         aria-label={`Show ${highPriority} high priority tasks`}
-        className="text-left rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-primary/10 transition-all duration-200 ring-1 ring-border group focus:outline-none focus:ring-2 focus:ring-ring"
+        className="text-left rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-200 ring-1 ring-border group focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">High priority</span>
@@ -104,7 +107,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
       </button>
 
       {/* Completion rate ring */}
-      <div className="col-span-2 lg:col-span-3 rounded-2xl bg-card p-4 shadow-lg shadow-slate-200/50 ring-1 ring-border flex items-center gap-4">
+      <div className="col-span-2 lg:col-span-3 rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 ring-1 ring-border flex items-center gap-4">
         <div className="relative h-20 w-20 flex-shrink-0">
           <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90" aria-hidden="true">
             <circle cx="40" cy="40" r={r} stroke="currentColor" className="text-muted" strokeWidth="8" fill="none" />
