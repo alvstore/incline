@@ -1676,13 +1676,16 @@ export function MemberProfileDrawer({
 
           <Tabs defaultValue="overview" className="w-full">
             <div className="relative flex items-center gap-1">
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => scrollTabs('left')}
-                className="flex-shrink-0 h-8 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                className="flex-shrink-0 h-8 w-7 text-muted-foreground hover:text-foreground"
                 aria-label="Scroll tabs left"
               >
                 <ChevronLeft className="h-4 w-4" />
-              </button>
+              </Button>
               <div
                 ref={tabsScrollRef}
                 className="flex-1 overflow-x-auto scrollbar-hide"
@@ -1726,13 +1729,16 @@ export function MemberProfileDrawer({
                   </TabsTrigger>
                 </TabsList>
               </div>
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => scrollTabs('right')}
-                className="flex-shrink-0 h-8 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                className="flex-shrink-0 h-8 w-7 text-muted-foreground hover:text-foreground"
                 aria-label="Scroll tabs right"
               >
                 <ChevronRight className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
 
             <TabsContent value="overview" className="space-y-4 mt-4">
