@@ -93,6 +93,7 @@ function WeekStrip({
           return (
             <button
               key={d.toISOString()}
+              type="button"
               aria-pressed={isSelected}
               onClick={() => onSelect(d)}
               className={cn(
@@ -177,6 +178,7 @@ function TrainerRail({
         return (
           <button
             key={t.id}
+            type="button"
             aria-pressed={active}
             onClick={() => onSelect(t.id)}
             className={cn(
@@ -480,6 +482,8 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
   return (
     <Card className="rounded-2xl shadow-sm">
       <button
+        type="button"
+        aria-expanded={open}
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between p-4 hover:bg-muted rounded-2xl transition-colors"
       >

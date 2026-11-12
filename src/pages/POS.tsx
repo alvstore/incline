@@ -1013,8 +1013,8 @@ export default function POSPage() {
                           <Label className="text-xs flex items-center gap-1.5"><Percent className="h-3.5 w-3.5" />Manual discount</Label>
                           <div className="flex rounded-md border border-border overflow-hidden text-xs" role="group" aria-label="Discount type">
                             {(['amount', 'percent'] as const).map((m) => (
-                              <button key={m} type="button" onClick={() => setManualMode(m)}
-                                className={`px-2.5 py-1 cursor-pointer ${manualMode === m ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}>
+                              <button key={m} type="button" aria-pressed={manualMode === m} aria-label={m === 'amount' ? 'Discount in rupees' : 'Discount in percent'} onClick={() => setManualMode(m)}
+                                className={`px-2.5 py-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${manualMode === m ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}>
                                 {m === 'amount' ? '₹' : '%'}
                               </button>
                             ))}
