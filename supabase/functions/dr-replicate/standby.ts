@@ -139,6 +139,8 @@ export const STANDBY_ACCESS_SQL = `select json_build_object(
   'authUsersWrite', has_table_privilege('auth.users', 'INSERT,UPDATE,DELETE'),
   'authUsersReferences', has_table_privilege('auth.users', 'REFERENCES'),
   'authIdentitiesWrite', has_table_privilege('auth.identities', 'INSERT,UPDATE,DELETE'),
+  'authUsersOwner', (select pg_get_userbyid(relowner) from pg_class where oid = 'auth.users'::regclass),
+  'memberOf', (select coalesce(json_agg(r.rolname), '[]'::json) from pg_auth_members m join pg_roles r on r.oid = m.roleid where m.member = (select oid from pg_roles where rolname = current_user)),
   'cronUsage', coalesce((select has_schema_privilege('cron', 'USAGE') where exists (select 1 from pg_namespace where nspname = 'cron')), false)
 )::text`;
 
