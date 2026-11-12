@@ -105,6 +105,28 @@ REVOKE ALL ON FUNCTION public.dr_mirror_run(text[], text[], boolean) FROM PUBLIC
 REVOKE ALL ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.dr_mirror_run(text[], text[], boolean) TO service_role;
 GRANT EXECUTE ON FUNCTION public.dr_mirror_replace(text, text[], text[], text, text, boolean) TO service_role;
+-- The helpers run as postgres. Standby image upgrades can reset postgres's access to the
+-- sign-in (auth) and scheduler (cron) schemas, which silently refuses those writes; re-grant
+-- them whenever the installer has the rights (admin endpoint), otherwise warn and continue.
+DO $grant$
+BEGIN
+  BEGIN
+    GRANT USAGE ON SCHEMA auth TO postgres;
+    GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres;
+  EXCEPTION WHEN insufficient_privilege THEN RAISE WARNING 'dr helper: cannot grant auth access (%)', SQLERRM;
+  END;
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'cron') THEN
+    BEGIN
+      GRANT USAGE ON SCHEMA cron TO postgres;
+      GRANT ALL ON ALL TABLES IN SCHEMA cron TO postgres;
+      GRANT ALL ON ALL SEQUENCES IN SCHEMA cron TO postgres;
+      GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA cron TO postgres;
+    EXCEPTION WHEN insufficient_privilege THEN RAISE WARNING 'dr helper: cannot grant cron access (%)', SQLERRM;
+    END;
+  END IF;
+END
+$grant$;
 ALTER ROLE service_role SET statement_timeout = '120s';
 NOTIFY pgrst, 'reload config';
 NOTIFY pgrst, 'reload schema';
