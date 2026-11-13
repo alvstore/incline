@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Zap, Server, Brain, Sparkles, Edit3 } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Zap, Server, Brain, Sparkles, Edit3, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-import { PROVIDER_DEFAULTS } from '@/lib/ai/providerCatalog';
+import { PROVIDER_DEFAULTS, providerOptions } from '@/lib/ai/providerCatalog';
 
 const SCOPES = [
   { value: 'all', label: 'All AI calls (global default)' },
@@ -225,10 +225,36 @@ function ProviderDrawer({
     setTestResult(null);
   }, [open, editing]);
 
-  const presetModels = useMemo(
-    () => PROVIDER_DEFAULTS[provider]?.models || [],
-    [provider],
-  );
+  const [liveModels, setLiveModels] = useState<Record<string, string[]>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState('');
+  const presetModels = useMemo(() => {
+    const live = liveModels[provider] || [];
+    const built = PROVIDER_DEFAULTS[provider]?.models || [];
+    return Array.from(new Set([...built, ...live]));
+  }, [provider, liveModels]);
+
+  const refreshModels = async () => {
+    setRefreshing(true);
+    setRefreshStatus('Loading models…');
+    try {
+      const { data, error } = await supabase.functions.invoke('diagnostics', {
+        body: { kind: 'ai_models', provider, base_url: baseUrl, api_key_secret_name: secretName },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Could not load models');
+      const ids: string[] = data.models || [];
+      setLiveModels((m) => ({ ...m, [provider]: ids }));
+      setModelMode('preset');
+      setRefreshStatus(`${ids.length} live models loaded`);
+      toast.success(`${ids.length} live models loaded`);
+    } catch (e: any) {
+      setRefreshStatus(`Could not load live models: ${e.message}. Showing the built-in list.`);
+      toast.error(e.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // When user changes provider in the form, reload its presets (only on Add)
   const applyDefaults = (p: string) => {
@@ -304,17 +330,9 @@ function ProviderDrawer({
             <Select value={provider} onValueChange={applyDefaults} disabled={isEdit}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="lovable">Lovable AI (built-in)</SelectItem>
-                <SelectItem value="google">Google Gemini (direct API, free tier)</SelectItem>
-                <SelectItem value="openrouter">OpenRouter (free tier available)</SelectItem>
-                <SelectItem value="groq">Groq (ultra-fast, free tier)</SelectItem>
-                <SelectItem value="together">Together AI (free Llama models)</SelectItem>
-                <SelectItem value="deepseek">DeepSeek (very cheap)</SelectItem>
-                <SelectItem value="mistral">Mistral AI</SelectItem>
-                <SelectItem value="anthropic">Anthropic Claude</SelectItem>
-                <SelectItem value="xai">xAI Grok</SelectItem>
-                <SelectItem value="ollama">Ollama (self-hosted on your VPS)</SelectItem>
-                <SelectItem value="openai_compatible">Custom OpenAI-compatible endpoint</SelectItem>
+                {providerOptions().map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {help && <p className="text-xs text-muted-foreground mt-1.5">{help}</p>}
@@ -332,7 +350,16 @@ function ProviderDrawer({
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <Label>Default Model</Label>
+              <Label htmlFor="ai-default-model">Default Model</Label>
+              <div className="flex items-center gap-3">
+              {provider !== 'lovable' && (
+                <button type="button" onClick={refreshModels} disabled={refreshing}
+                  aria-label="Refresh models from provider"
+                  className="text-xs text-primary hover:underline inline-flex items-center gap-1 disabled:opacity-50">
+                  <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh models
+                </button>
+              )}
               {presetModels.length > 0 && (
                 <button aria-pressed={modelMode === 'preset'}
                   type="button"
@@ -343,11 +370,12 @@ function ProviderDrawer({
                   {modelMode === 'preset' ? 'Type custom model' : 'Choose from list'}
                 </button>
               )}
+              </div>
             </div>
             {modelMode === 'preset' && presetModels.length > 0 ? (
               <Select value={model} onValueChange={setModel}>
-                <SelectTrigger><SelectValue placeholder="Select a model" /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger id="ai-default-model"><SelectValue placeholder="Select a model" /></SelectTrigger>
+                <SelectContent className="max-h-80">
                   {presetModels.map((m) => (
                     <SelectItem key={m} value={m} className="font-mono text-xs">{m}</SelectItem>
                   ))}
@@ -355,6 +383,7 @@ function ProviderDrawer({
               </Select>
             ) : (
               <Input
+                id="ai-default-model"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 placeholder="provider/model-name"
@@ -366,6 +395,7 @@ function ProviderDrawer({
                 ? 'Pick the latest known model for this provider, or switch to custom to type a new model name.'
                 : 'Enter the exact model identifier this endpoint expects.'}
             </p>
+            <p className="text-xs text-muted-foreground mt-1" role="status" aria-live="polite">{refreshStatus}</p>
           </div>
 
           <div>
