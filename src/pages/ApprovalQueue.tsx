@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ApproveLockerRequestSheet, type LockerRequestRow } from '@/components/lockers/ApproveLockerRequestSheet';
@@ -594,7 +593,7 @@ export default function ApprovalQueuePage() {
                     const open = () => { setSelectedId(r.id); if (!window.matchMedia('(min-width: 1024px)').matches) setMobileOpen(true); };
                     return (
                       <li key={r.id} data-anim="row" data-row-id={r.id}>
-                        <div role="button" tabIndex={0} aria-current={isSel || undefined} onClick={open} onKeyDown={clickOnActivateKey(open)}
+                        <div role="button" tabIndex={0} aria-current={isSel || undefined} onClick={open} onKeyDown={clickOnActivateKey}
                           className={`flex min-h-[56px] items-center gap-3 rounded-xl p-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isSel ? 'bg-primary/10' : 'hover:bg-muted/60'}`}>
                           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${config.color}`}><TypeIcon className="h-4 w-4" /></div>
                           <div className="min-w-0 flex-1">
