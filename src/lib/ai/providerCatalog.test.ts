@@ -13,3 +13,10 @@ describe('Lovable AI credential routing', () => {
     assert.equal(Object.values(PROVIDER_DEFAULTS).some(p => p.secret_name === 'GOOGLE_AI_API_KEY'), false);
   });
 });
+
+describe('NVIDIA provider preset', () => {
+  test('NVIDIA uses its own endpoint and key name', () => {
+    assert.equal(new URL(PROVIDER_DEFAULTS.nvidia.base_url).hostname, 'integrate.api.nvidia.com');
+    assert.equal(PROVIDER_DEFAULTS.nvidia.secret_name, 'NVIDIA_API_KEY');
+  });
+});
