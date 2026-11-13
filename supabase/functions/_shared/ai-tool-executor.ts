@@ -1,6 +1,9 @@
 // Shared AI tool executor — used by whatsapp-webhook + meta-webhook
+// v1.3.0 — status guard (memberChatPolicy), class booking via book_class RPC,
+//          facility source whatsapp_ai, resume/renewal become front-desk tasks.
 // v1.2.0 — persists tool-derived facts to ai_memory (contact, bookings)
 import type { MemberContext } from "./ai-tools.ts";
+import { blockedAiTools, type ChatState } from "./memberChatPolicy.ts";
 import { upsertMemory } from "./ai-memory.ts";
 
 type SB = any; // SupabaseClient (kept loose to avoid duplicate imports)
@@ -17,6 +20,24 @@ export async function executeSharedToolCall(
   platform: "whatsapp" | "instagram" | "messenger" = "whatsapp",
 ): Promise<Record<string, any>> {
   try {
+    if (ctx.chatState) {
+      const blocked = blockedAiTools(ctx.chatState as ChatState);
+      if (blocked.includes("*") || blocked.includes(toolName)) {
+        return {
+          success: false,
+          error: `Not available for this member's current membership status (${ctx.chatState}). Explain kindly and offer renewal, dues payment or the front desk instead.`,
+        };
+      }
+    }
+    const deskTask = async (title: string, description: string) => {
+      const { data: mgr } = await supabase.from("branch_managers").select("user_id")
+        .eq("branch_id", branchId).order("is_primary", { ascending: false }).limit(1);
+      await supabase.from("tasks").insert({
+        branch_id: branchId, title: title.slice(0, 120), description, priority: "high", status: "pending",
+        assigned_to: mgr?.[0]?.user_id ?? null, sla_hours: 2, linked_entity_type: "member",
+        linked_entity_id: ctx.memberId, member_created: true,
+      });
+    };
     switch (toolName) {
       // ─── Membership & Account ─────────────────────────────
       case "get_member_profile": {
@@ -77,17 +98,11 @@ export async function executeSharedToolCall(
       }
 
       case "request_resume": {
-        if (!ctx.memberId || !ctx.membershipId) return { error: "No membership found." };
-        const { data, error } = await supabase.from("approval_requests").insert({
-          branch_id: branchId,
-          approval_type: "membership_resume",
-          reference_type: "membership",
-          reference_id: ctx.membershipId,
-          status: "pending",
-          request_data: { member_id: ctx.memberId, channel: platform },
-        }).select("id").single();
-        if (error) return { error: "Failed to submit resume request." };
-        return { success: true, request_id: data.id, message: "Resume request submitted. ▶️" };
+        // There is no "resume" approval type; the desk resumes via the unfreeze flow.
+        if (!ctx.memberId) return { error: "Not a registered member." };
+        await deskTask(`Resume request: ${ctx.memberName}`,
+          `Member asked to resume (unfreeze) their plan via ${platform} (${phoneNumber}).`);
+        return { success: true, message: "Resume request sent to the front desk — they'll confirm here once your plan is active again. ▶️" };
       }
 
       // ─── Bookings ─────────────────────────────────────────
@@ -129,7 +144,7 @@ export async function executeSharedToolCall(
           p_member_id: ctx.memberId,
           p_membership_id: ctx.membershipId ?? null,
           p_staff_id: null,
-          p_source: platform,
+          p_source: "whatsapp_ai",
           p_force: false,
           p_force_reason: null,
         });
@@ -421,38 +436,15 @@ export async function executeSharedToolCall(
       case "book_class": {
         if (!ctx.memberId) return { error: "Not a registered member." };
         if (!args.class_id) return { error: "class_id required." };
-        // Capacity check via existing booked count
-        const { data: cls } = await supabase
-          .from("classes")
-          .select("id, name, capacity, scheduled_at, branch_id")
-          .eq("id", args.class_id)
-          .maybeSingle();
+        // Same validated path as the WhatsApp menu: plan validity, capacity,
+        // duplicates and branch rules all live in the book_class RPC.
+        const { data: cls } = await supabase.from("classes").select("id, name, branch_id").eq("id", args.class_id).maybeSingle();
         if (!cls) return { error: "Class not found." };
         if (cls.branch_id !== branchId) return { error: "Class is at a different branch." };
-        const { count: booked } = await supabase
-          .from("class_bookings")
-          .select("id", { count: "exact", head: true })
-          .eq("class_id", args.class_id)
-          .in("status", ["booked", "confirmed", "attended"]);
-        if ((booked || 0) >= (cls.capacity || 0)) {
-          return { error: "Class is full." };
-        }
-        // Prevent duplicate booking
-        const { data: existing } = await supabase
-          .from("class_bookings")
-          .select("id")
-          .eq("class_id", args.class_id)
-          .eq("member_id", ctx.memberId)
-          .in("status", ["booked", "confirmed"])
-          .maybeSingle();
-        if (existing) return { error: "You're already booked for this class.", booking_id: existing.id };
-        const { data: booking, error } = await supabase
-          .from("class_bookings")
-          .insert({ class_id: args.class_id, member_id: ctx.memberId, status: "booked" })
-          .select("id")
-          .single();
-        if (error) return { error: "Booking failed." };
-        return { success: true, booking_id: booking.id, message: `Booked into ${cls.name}. ✅` };
+        const { data, error } = await supabase.rpc("book_class", { _class_id: args.class_id, _member_id: ctx.memberId });
+        if (error) return { error: error.message || "Booking failed." };
+        if (!(data as any)?.success) return { error: (data as any)?.error || "Class not available." };
+        return { success: true, booking_id: (data as any)?.booking_id ?? null, message: `Booked into ${cls.name}. ✅` };
       }
 
       case "cancel_class_booking": {
@@ -470,71 +462,12 @@ export async function executeSharedToolCall(
       // ─── Renewal & Add-On Intents ─────────────────────────
       // Never charges directly — generates an invoice + Razorpay link.
       case "initiate_membership_renewal": {
-        if (!ctx.memberId || !ctx.membershipId) {
-          return { error: "No active membership to renew." };
-        }
-        // Resolve plan: explicit arg or current membership's plan
-        let planId = args.plan_id || null;
-        if (!planId) {
-          const { data: ms } = await supabase
-            .from("memberships")
-            .select("plan_id")
-            .eq("id", ctx.membershipId)
-            .maybeSingle();
-          planId = (ms as any)?.plan_id || null;
-        }
-        if (!planId) return { error: "Could not determine plan to renew." };
-        const { data: plan } = await supabase
-          .from("plans")
-          .select("id, name, price, duration_days")
-          .eq("id", planId)
-          .maybeSingle();
-        if (!plan) return { error: "Plan not found." };
-
-        // Create a pending renewal invoice
-        const { data: inv, error: invErr } = await supabase
-          .from("invoices")
-          .insert({
-            branch_id: branchId,
-            member_id: ctx.memberId,
-            total_amount: plan.price,
-            amount_paid: 0,
-            status: "pending",
-            invoice_type: "membership_renewal",
-            notes: `Renewal for ${plan.name} (via ${platform} bot)`,
-          })
-          .select("id, invoice_number, total_amount")
-          .single();
-        if (invErr || !inv) return { error: "Failed to create renewal invoice." };
-
-        // Try to attach a Razorpay payment link
-        try {
-          const resp = await fetch(`${supabaseUrl}/functions/v1/create-razorpay-link`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
-            body: JSON.stringify({ invoice_id: inv.id, branch_id: branchId }),
-          });
-          const data = await resp.json();
-          if (resp.ok && data?.short_url) {
-            return {
-              success: true,
-              invoice_id: inv.id,
-              invoice_number: inv.invoice_number,
-              amount: `₹${plan.price}`,
-              plan: plan.name,
-              payment_link: data.short_url,
-              message: `Renewal invoice for ${plan.name} (₹${plan.price}) ready. Pay securely: ${data.short_url}`,
-            };
-          }
-        } catch (_) { /* fall through */ }
-        return {
-          success: true,
-          invoice_id: inv.id,
-          invoice_number: inv.invoice_number,
-          amount: `₹${plan.price}`,
-          plan: plan.name,
-          message: `Renewal invoice ${inv.invoice_number} created for ₹${plan.price}. Staff will share a payment link shortly.`,
-        };
+        // Prices come only from the desk / live plan list (sales playbook), so the
+        // bot never creates invoices itself — it files a renewal task instead.
+        if (!ctx.memberId) return { error: "Not a registered member." };
+        await deskTask(`Renewal request: ${ctx.memberName}`,
+          `Member asked to renew via ${platform} (${phoneNumber}).${args.plan_id ? ` Preferred plan id: ${args.plan_id}.` : ""} Confirm the plan and send the payment link.`);
+        return { success: true, message: "Renewal request sent to the front desk — they'll confirm your plan and send a secure payment link here shortly." };
       }
 
       case "purchase_addon_intent": {

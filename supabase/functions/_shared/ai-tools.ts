@@ -9,6 +9,8 @@ export type MemberContext = {
   membershipId?: string | null;
   planId?: string | null;
   contextPrompt: string;
+  /** memberChatPolicy state; executor refuses tools the state doesn't allow. */
+  chatState?: string;
 };
 
 export function getAllToolDefinitions() {
