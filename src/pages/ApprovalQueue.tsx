@@ -640,8 +640,8 @@ function StatCard({ label, value, icon: Icon, tone, active, onClick }: { label: 
   const ref = useCountUp(value);
   return (
     <button type="button" data-anim="card" onClick={onClick} aria-pressed={active}
-      className={`group rounded-2xl bg-card p-4 text-left shadow-sm transition-all [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'ring-2 ring-primary/40' : ''}`}>
-      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" /></div>
+      className={`group flex flex-col justify-between rounded-2xl bg-card p-4 text-left shadow-sm transition-all [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'ring-2 ring-primary/40' : ''}`}>
+      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" /></div><div className="flex-1" />
       <p className="text-2xl font-bold tabular-nums"><span ref={ref}>0</span></p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </button>
