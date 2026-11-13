@@ -1,3 +1,7 @@
+# Browser notification text (13 Nov 2026)
+- [x] Audit live team alert categories; replace generic browser messages with privacy-safe event headings/descriptions and retain full details after sign-in.
+- [ ] Run delivery-payload/worker regression checks and deploy; physical OS display requires the admin's device.
+
 # UI unification — remaining buttons (12 Nov 2026)
 - [x] Mark every remaining raw action button as a plain button so it never submits a form by accident (46 spots).
 - [x] Announce selected/open state on every chip, tab-like and toggle button still missing it (~36 spots).
