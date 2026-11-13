@@ -43,6 +43,21 @@ export const PROVIDER_DEFAULTS: Record<string, ProviderPreset> = {
     ],
     help: 'Built-in Lovable AI Gateway. LOVABLE_API_KEY is auto-provisioned — no setup needed.',
   },
+  google: {
+    label: 'Google Gemini (direct API)',
+    base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    secret_name: 'GEMINI_API_KEY',
+    default_model: 'gemini-3-flash-preview',
+    models: [
+      'gemini-3-flash-preview',
+      'gemini-3.1-pro-preview',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-pro',
+    ],
+    help: 'Google AI Studio key (free tier). Get key at aistudio.google.com/apikey. Use "Refresh models" for the live list.',
+  },
   openrouter: {
     label: 'OpenRouter',
     base_url: 'https://openrouter.ai/api/v1/chat/completions',
@@ -156,8 +171,11 @@ export const PROVIDER_DEFAULTS: Record<string, ProviderPreset> = {
       'nvidia/nemotron-3.5-super-vl-120b-a12b',
       'nvidia/nemotron-nano-3-30b-a3b',
       'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+      'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+      'nvidia/nemotron-3.5-bolt-e4b',
       'deepseek-ai/deepseek-v4.1-flash',
       'moonshotai/kimi-k2.6',
+      'minimaxai/minimax-m3.1-flash',
       'mistralai/mistral-large-4-1t-a52b',
       'z-ai/glm-5.3-flash',
       'openai/gpt-oss-20b',
@@ -250,4 +268,21 @@ export function normalizeModelForProvider(provider: string, model: string): stri
     return `google/${model}`;
   }
   return model;
+}
+
+
+/** Provider Type options for the drawer — generated from the catalog so none can be missed. */
+export function providerOptions(): { value: string; label: string }[] {
+  return Object.entries(PROVIDER_DEFAULTS).map(([value, p]) => ({ value, label: p.label }));
+}
+
+/** Extracts model ids from an OpenAI-style `/models` response ({data:[{id}]}) or Gemini ({models:[{name}]}). */
+export function parseModelIds(json: unknown): string[] {
+  const j = json as any;
+  const list: any[] = Array.isArray(j?.data) ? j.data : Array.isArray(j?.models) ? j.models : Array.isArray(j) ? j : [];
+  const ids = list
+    .map((m) => (typeof m === 'string' ? m : m?.id ?? m?.name ?? ''))
+    .map((id: string) => String(id).replace(/^models\//, ''))
+    .filter(Boolean);
+  return Array.from(new Set(ids)).sort();
 }

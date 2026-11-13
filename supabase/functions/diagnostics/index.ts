@@ -56,6 +56,8 @@ Deno.serve(async (req) => {
         return await handleAiProvider(authHeader, body);
       case "ai_tool":
         return await handleAiTool(authHeader, body);
+      case "ai_models":
+        return await handleAiModels(authHeader, body);
       default:
         return json({ error: `Unknown kind: ${kind}` }, 400);
     }
@@ -485,6 +487,55 @@ async function hmacSha256(secret: string, message: string): Promise<string> {
 // AI PROVIDER (was test-ai-provider)
 // ════════════════════════════════════════════════════════════
 const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+// Lists live models for a provider (admin/owner). Key resolved server-side; only ids returned.
+async function handleAiModels(authHeader: string, body: any) {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+  if (!authHeader) return json({ error: "Unauthorized" }, 401);
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+  const { data: authData } = await userClient.auth.getUser();
+  if (!authData?.user) return json({ error: "Unauthorized" }, 401);
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", authData.user.id);
+  if (!roles?.some((r: any) => ["owner", "admin"].includes(r.role))) return json({ error: "Forbidden" }, 403);
+
+  const provider = String(body?.provider || "");
+  const base = String(body?.base_url || "");
+  const secret = typeof body?.api_key_secret_name === "string" ? body.api_key_secret_name : "";
+  if (!provider || !base) return json({ success: false, error: "Endpoint URL is required" }, 400);
+  if (!isAllowedProviderUrl(base, AI_HOSTS)) {
+    return json({ success: false, error: "Endpoint must be an https address of a supported AI provider" }, 400);
+  }
+  let url: string;
+  try {
+    const u = new URL(base);
+    u.pathname = u.pathname.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
+    if (!/\/v\d+(beta)?(\/openai)?$/.test(u.pathname)) u.pathname += "/v1";
+    u.pathname += "/models";
+    url = u.toString();
+  } catch { return json({ success: false, error: "Invalid endpoint URL" }, 400); }
+
+  const apiKey = secret && /^[A-Z0-9_]+$/.test(secret) ? Deno.env.get(secret) ?? null : null;
+  if (!apiKey && provider !== "ollama" && provider !== "nvidia") {
+    return json({ success: false, error: `Secret '${secret}' is not saved yet`, secret_missing: true });
+  }
+  const headers: Record<string, string> = {};
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+  try {
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return json({ success: false, error: `Provider returned ${res.status}` });
+    const j: any = await res.json();
+    const list: any[] = Array.isArray(j?.data) ? j.data : Array.isArray(j?.models) ? j.models : [];
+    const models = Array.from(new Set(list
+      .map((m) => String(typeof m === "string" ? m : m?.id ?? m?.name ?? "").replace(/^models\//, ""))
+      .filter((id) => id && !/embed|rerank|safety|guard|reward|parse|whisper|tts|image/i.test(id)))).sort();
+    return json({ success: true, models });
+  } catch (e: any) {
+    return json({ success: false, error: e?.message || "Request failed" });
+  }
+}
 
 async function handleAiProvider(authHeader: string, body: any) {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
