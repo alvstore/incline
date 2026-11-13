@@ -1,4 +1,9 @@
-// whatsapp-member-menu.ts — v1.4.0
+// whatsapp-member-menu.ts — v1.5.0
+// v1.5.0 — status-aware gateway: every member (not only status=active) is
+// resolved, classified by memberChatPolicy (active/expiring/expired/frozen/
+// unpaid start/no plan/blocked) and shown only the actions their real plan
+// allows. Adds My bills, Renew, Freeze/Resume and See plans; front-desk tasks
+// go to the branch manager, not the trainer. Flag: member_chat_status_v2.
 // v1.4.0 — member feedback/complaints escalate to the branch manager (urgent
 // task + team in-app/push alert + 4h bot pause) before keyword routing, so
 // words like "yoga room" or "trainer" inside a complaint never open menus.
@@ -19,6 +24,11 @@
 
 // deno-lint-ignore-file no-explicit-any
 
+import {
+  ALLOWED, blockedReply, canDo, classifyMemberChat, inrText, statusHeadline,
+  type ChatAction, type ChatFacts, type ChatState,
+} from "./memberChatPolicy.ts";
+
 const PORTAL = "https://theincline.in";
 const IST = "Asia/Kolkata";
 
@@ -30,6 +40,24 @@ export interface MemberContext {
   firstName: string;
   assignedTrainerId: string | null;
   gender: string | null;
+  /** Real chat status (member_chat_status_v2). Undefined = legacy behaviour. */
+  state?: ChatState;
+  facts?: ChatFacts | null;
+}
+
+async function statusV2Enabled(supabase: any): Promise<boolean> {
+  try {
+    const { data } = await supabase.from("settings").select("value").is("branch_id", null)
+      .eq("key", "member_chat_status_v2").maybeSingle();
+    const v = (data as any)?.value;
+    return !(v === false || (v && typeof v === "object" && v.enabled === false));
+  } catch { return true; }
+}
+
+export async function loadChatFacts(supabase: any, memberId: string): Promise<ChatFacts | null> {
+  const { data, error } = await supabase.rpc("member_chat_status", { p_member_id: memberId });
+  if (error || !data) return null;
+  return { ...data, dues: Number(data.dues ?? 0), login_disabled: !!data.login_disabled } as ChatFacts;
 }
 
 // ─── Epic 1: phone normalisation ──────────────────────────────────────────────
@@ -49,6 +77,13 @@ export async function resolveActiveMember(
 ): Promise<MemberContext | null> {
   const variants = phoneVariants(phone);
   if (variants.length === 0) return null;
+  const v2 = await statusV2Enabled(supabase);
+  const withStatus = async (c: MemberContext | null): Promise<MemberContext | null> => {
+    if (!c || !v2) return c;
+    const facts = await loadChatFacts(supabase, c.memberId);
+    if (!facts) return c;
+    return { ...c, facts, state: classifyMemberChat(facts) };
+  };
 
   const build = (m: any, profileName?: string | null, profileGender?: string | null): MemberContext => {
     const fullName = profileName || m?.profiles?.full_name || "there";
@@ -71,13 +106,14 @@ export async function resolveActiveMember(
     .limit(5);
 
   for (const p of profiles ?? []) {
-    const { data: m } = await supabase
+    let q = supabase
       .from("members")
       .select("id, branch_id, member_code, status, assigned_trainer_id")
-      .eq("user_id", p.id)
-      .eq("status", "active")
-      .maybeSingle();
-    if (m) return build(m, p.full_name, p.gender);
+      .eq("user_id", p.id);
+    if (!v2) q = q.eq("status", "active");
+    const { data: rows } = await q.order("created_at", { ascending: false }).limit(1);
+    const m = rows?.[0];
+    if (m) return await withStatus(build(m, p.full_name, p.gender));
   }
 
   // Fallback: an alternate / international number linked to a member
@@ -90,13 +126,13 @@ export async function resolveActiveMember(
     .maybeSingle();
 
   if (linked?.linked_member_id) {
-    const { data: m } = await supabase
+    let q = supabase
       .from("members")
       .select("id, branch_id, member_code, status, assigned_trainer_id, profiles:user_id(full_name, gender)")
-      .eq("id", linked.linked_member_id)
-      .eq("status", "active")
-      .maybeSingle();
-    if (m) return build(m);
+      .eq("id", linked.linked_member_id);
+    if (!v2) q = q.eq("status", "active");
+    const { data: m } = await q.maybeSingle();
+    if (m) return await withStatus(build(m));
   }
 
   return null;
@@ -185,14 +221,53 @@ const MENU: Row[] = [
   { id: "MENU_HUMAN", title: "Speak with front desk", description: "A team member will reply" },
 ];
 
+const EXTRA: Row[] = [
+  { id: "MENU_BILLS", title: "My bills & dues", description: "Balance due and payment link" },
+  { id: "MENU_RENEW", title: "Renew membership", description: "Our desk sends your renewal link" },
+  { id: "MENU_FREEZE", title: "Pause (freeze) plan", description: "Request a freeze" },
+  { id: "MENU_RESUME", title: "Resume my plan", description: "Request to unfreeze" },
+  { id: "MENU_SEE_PLANS", title: "Rejoin / see plans", description: "Our desk shares member offers" },
+];
+const ALL_ROWS = [...MENU, ...EXTRA];
+
+const ACTION_OF: Record<string, ChatAction> = {
+  MENU_MEMBERSHIP: "membership", MENU_CLASS: "classes", MENU_RECOVERY: "recovery",
+  MENU_BALANCE: "balance", MENU_TRAINER: "trainer", MENU_MY_PLANS: "my_plans",
+  MENU_REQUEST_PLAN: "request_plan", MENU_ATTENDANCE: "attendance", MENU_HUMAN: "human",
+  MENU_BILLS: "bills", MENU_RENEW: "renew", MENU_FREEZE: "freeze", MENU_RESUME: "resume",
+  MENU_SEE_PLANS: "see_plans",
+};
+
+// Rows shown per state (WhatsApp lists hold at most 10 rows). Renew/Freeze for
+// active members stay reachable by keyword and from Membership details.
+const ROWS_BY_STATE: Record<ChatState, string[]> = {
+  active: ["MENU_MEMBERSHIP", "MENU_CLASS", "MENU_RECOVERY", "MENU_BALANCE", "MENU_TRAINER", "MENU_MY_PLANS", "MENU_REQUEST_PLAN", "MENU_ATTENDANCE", "MENU_BILLS", "MENU_HUMAN"],
+  expiring: ["MENU_RENEW", "MENU_MEMBERSHIP", "MENU_CLASS", "MENU_RECOVERY", "MENU_BALANCE", "MENU_TRAINER", "MENU_MY_PLANS", "MENU_ATTENDANCE", "MENU_BILLS", "MENU_HUMAN"],
+  expired: ["MENU_RENEW", "MENU_MEMBERSHIP", "MENU_BILLS", "MENU_ATTENDANCE", "MENU_HUMAN"],
+  frozen: ["MENU_RESUME", "MENU_MEMBERSHIP", "MENU_BILLS", "MENU_ATTENDANCE", "MENU_HUMAN"],
+  unpaid_start: ["MENU_BILLS", "MENU_MEMBERSHIP", "MENU_HUMAN"],
+  no_plan: ["MENU_SEE_PLANS", "MENU_BILLS", "MENU_ATTENDANCE", "MENU_HUMAN"],
+  blocked: [],
+};
+
+function rowsFor(ctx: MemberContext): Row[] {
+  if (!ctx.state) return MENU;
+  return ROWS_BY_STATE[ctx.state].map((id) => ALL_ROWS.find((r) => r.id === id)!).filter(Boolean);
+}
+
 function mainMenu(ctx: MemberContext): string {
+  const head = ctx.state && ctx.facts
+    ? statusHeadline(ctx.state, ctx.facts, ctx.firstName)
+    : `Welcome back, ${ctx.firstName}! ✨`;
   return list(
-    `Welcome back, ${ctx.firstName}! ✨\nChoose what you'd like to do at Incline:`,
-    "View services",
-    MENU,
+    `${head}\nChoose what you'd like to do at Incline:`,
+    "View options",
+    rowsFor(ctx),
     "Incline Member Gateway",
   );
 }
+
+const allowed = (ctx: MemberContext, action: ChatAction) => !ctx.state || canDo(ctx.state, action);
 
 const GREETING_RE = /^(hi|hii+|hey+|hello|menu|main menu|start|options|help|namaste|hola)\b[!. ]*$/i;
 
@@ -213,6 +288,18 @@ async function activeMembership(supabase: any, memberId: string) {
 }
 
 async function handleMembership(supabase: any, ctx: MemberContext): Promise<string> {
+  if (ctx.state && ctx.facts && ctx.state !== "active" && ctx.state !== "expiring") {
+    const f = ctx.facts;
+    const lines = [
+      "💳 *Your Incline membership*", "",
+      `Name: ${ctx.fullName}${ctx.memberCode ? ` (${ctx.memberCode})` : ""}`,
+      ...(f.plan_name ? [`Plan: ${f.plan_name}`] : []),
+      ...(f.end_date ? [`${f.end_date < f.today ? "Ended" : "Valid till"}: ${prettyDate(f.end_date)}`] : []),
+      ...(f.dues > 0 ? [`Balance due: ${inrText(f.dues)}`] : []),
+      "", statusHeadline(ctx.state, f, ctx.firstName),
+    ];
+    return lines.join("\n") + BACK;
+  }
   const ms = await activeMembership(supabase, ctx.memberId);
   if (!ms) {
     return `Hi ${ctx.firstName}, I can't see an active membership on your account right now. Our front desk can sort this out for you — reply *Front desk* and we'll get on it.${BACK}`;
@@ -229,6 +316,9 @@ async function handleMembership(supabase: any, ctx: MemberContext): Promise<stri
     `Started: ${prettyDate(ms.start_date)}`,
     `Valid till: ${prettyDate(ms.end_date)}`,
     `Days remaining: ${daysLeft}`,
+    ...(ctx.facts && ctx.facts.dues > 0 ? [`Balance due: ${inrText(ctx.facts.dues)} (reply *My bills*)`] : []),
+    "",
+    "Reply *Renew* to renew or *Freeze* to pause your plan.",
   ].join("\n") + BACK;
 }
 
@@ -736,11 +826,15 @@ async function createTask(
   description: string,
   slaHours: number,
 ): Promise<void> {
+  // Front-desk work goes to the branch's primary manager (the reply promises
+  // the front desk, not the member's trainer). Unassigned if none is set.
   let assignedTo: string | null = null;
-  if (ctx.assignedTrainerId) {
-    const { data: t } = await supabase.from("trainers").select("user_id").eq("id", ctx.assignedTrainerId).maybeSingle();
-    assignedTo = t?.user_id ?? null;
-  }
+  try {
+    const { data: mgrs } = await supabase.from("branch_managers")
+      .select("user_id, is_primary").eq("branch_id", ctx.branchId)
+      .order("is_primary", { ascending: false }).limit(1);
+    assignedTo = mgrs?.[0]?.user_id ?? null;
+  } catch { /* unassigned */ }
   await supabase.from("tasks").insert({
     branch_id: ctx.branchId,
     title: cut(title, 120),
@@ -925,6 +1019,93 @@ async function handleUpgradeLink(supabase: any, ctx: MemberContext): Promise<str
   return `Here's your secure UPI/card link for ${inr(inv.amount)}:\n${link}\n\nOnce paid, your membership switches to Annual automatically and you'll get a confirmation.${BACK}`;
 }
 
+// ─── status-aware handlers (v1.5.0) ───────────────────────────────────────────
+
+/** True when an open task with this title was created for the member recently. */
+async function recentTask(supabase: any, ctx: MemberContext, title: string, hours: number): Promise<boolean> {
+  const since = new Date(Date.now() - hours * 3600_000).toISOString();
+  const { data } = await supabase.from("tasks").select("id")
+    .eq("linked_entity_id", ctx.memberId).eq("title", cut(title, 120))
+    .in("status", ["pending", "in_progress"]).gte("created_at", since).limit(1);
+  return (data ?? []).length > 0;
+}
+
+async function deskRequest(
+  supabase: any, ctx: MemberContext, phone: string, kind: string, detail: string, dedupeHours: number,
+): Promise<boolean> {
+  const title = `${kind}: ${ctx.fullName}`;
+  if (await recentTask(supabase, ctx, title, dedupeHours)) return false;
+  const f = ctx.facts;
+  const facts = f
+    ? `\nStatus: ${ctx.state ?? "-"} · Plan: ${f.plan_name ?? "-"} · Ends: ${f.end_date ?? "-"} · Dues: ${inrText(f.dues)}`
+    : "";
+  await createTask(supabase, ctx, title,
+    `${detail}\nMember: ${ctx.fullName}${ctx.memberCode ? ` (${ctx.memberCode})` : ""} · WhatsApp ${phone}${facts}`, 2);
+  await supabase.from("whatsapp_chat_settings").upsert(
+    { branch_id: ctx.branchId, phone_number: phone, is_unread: true },
+    { onConflict: "branch_id,phone_number" },
+  );
+  return true;
+}
+
+async function handleBills(supabase: any, ctx: MemberContext): Promise<string> {
+  const { data } = await supabase.from("invoices")
+    .select("id, invoice_number, total_amount, amount_paid, due_date, branch_id")
+    .eq("member_id", ctx.memberId).in("status", ["pending", "partial", "overdue"])
+    .order("due_date", { ascending: true, nullsFirst: false }).limit(5);
+  const open = (data ?? []).map((i: any) => ({ ...i, bal: Math.max(0, Number(i.total_amount || 0) - Number(i.amount_paid || 0)) }))
+    .filter((i: any) => i.bal > 0);
+  if (open.length === 0) return `You're all clear, ${ctx.firstName} — nothing is due on your account. ✅${BACK}`;
+  const total = open.reduce((s: number, i: any) => s + i.bal, 0);
+  const lines = open.map((i: any) => `• ${i.invoice_number ?? "Bill"} — ${inrText(i.bal)}${i.due_date ? ` (due ${prettyDate(i.due_date)})` : ""}`);
+  let linkLine = "Reply *Front desk* and we'll send you a payment link.";
+  try {
+    const first = open[0];
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const res = await fetch(`${url}/functions/v1/create-razorpay-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, apikey: key },
+      body: JSON.stringify({ invoiceId: first.id, amount: first.bal, branchId: first.branch_id ?? ctx.branchId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    const link = body?.short_url ?? body?.shortUrl ?? body?.url ?? body?.payment_link;
+    if (res.ok && link) linkLine = `Pay ${first.invoice_number ?? "your bill"} (${inrText(first.bal)}) securely by UPI/card:\n${link}`;
+  } catch { /* fall back to desk */ }
+  return `🧾 *Your bills*\n\n${lines.join("\n")}\n\nTotal due: *${inrText(total)}*\n\n${linkLine}${BACK}`;
+}
+
+async function handleRenew(supabase: any, ctx: MemberContext, phone: string): Promise<string> {
+  await deskRequest(supabase, ctx, phone, "Renewal request", "Member asked to renew on WhatsApp. Confirm the plan and send the payment link.", 24 * 7);
+  return `Lovely, ${ctx.firstName}! 🙌 I've asked our front desk to prepare your renewal. They'll confirm your plan and send a secure payment link here shortly.${BACK}`;
+}
+
+async function handleFreeze(supabase: any, ctx: MemberContext, phone: string): Promise<string> {
+  await deskRequest(supabase, ctx, phone, "Freeze request", "Member asked to pause (freeze) their plan on WhatsApp. Confirm dates and raise the freeze for approval.", 24);
+  return `Got it, ${ctx.firstName}. I've passed your freeze request to our front desk — they'll confirm the dates with you here and pause your plan once approved.${BACK}`;
+}
+
+async function handleResume(supabase: any, ctx: MemberContext, phone: string): Promise<string> {
+  await deskRequest(supabase, ctx, phone, "Resume request", "Member asked to resume (unfreeze) their plan on WhatsApp.", 24);
+  return `Welcome back, ${ctx.firstName}! 💪 I've asked our front desk to resume your plan. They'll confirm here once it's active again.${BACK}`;
+}
+
+async function handleSeePlans(supabase: any, ctx: MemberContext, phone: string): Promise<string> {
+  await deskRequest(supabase, ctx, phone, "Rejoin interest", "Former member wants to rejoin. Share member plans and offers (never public lead pricing).", 24 * 7);
+  return `We'd love to have you back, ${ctx.firstName}! ✨ Our front desk will message you here with the current member plans and offers.${BACK}`;
+}
+
+async function handleBlocked(supabase: any, ctx: MemberContext, phone: string): Promise<string> {
+  try {
+    await deskRequest(supabase, ctx, phone, "Account-on-hold member messaged", "A member whose account is on hold (suspended / blacklisted / login off) messaged on WhatsApp. No automated help was given.", 24);
+  } catch { /* reply anyway */ }
+  return blockedReply(ctx.firstName);
+}
+
+function notAllowedReply(ctx: MemberContext): string {
+  return mainMenu(ctx);
+}
+
 // ─── router ───────────────────────────────────────────────────────────────────
 
 // ─── Feedback / complaint escalation ─────────────────────────────────────────
@@ -1009,6 +1190,9 @@ export async function runMemberGateway(
   const raw = String(text || "").trim();
   const n = norm(raw);
 
+  // Account on hold: fixed desk reply, never menus or AI.
+  if (ctx.state === "blocked") return await handleBlocked(supabase, ctx, phone);
+
   if (!raw || GREETING_RE.test(raw)) return mainMenu(ctx);
 
   if (UPGRADE_SAVINGS_RE.test(n)) return await handleUpgradeSavings(supabase, ctx);
@@ -1016,8 +1200,8 @@ export async function runMemberGateway(
 
   // Exact sub-menu taps first (service / day / time titles echoed back by Meta),
   // otherwise keyword routing below would bounce "Steam room" back to the menu.
-  const menuMatch = MENU.find((r) => norm(r.title) === n);
-  if (!menuMatch) {
+  const menuMatch = ALL_ROWS.find((r) => norm(r.title) === n);
+  if (!menuMatch && (allowed(ctx, "classes") || allowed(ctx, "recovery"))) {
     const { types } = await recoveryContext(supabase, ctx);
     const fac = types.find((t: any) => norm(cut(t.name, 24)) === n);
     if (fac) return await handleFacilityDates(supabase, ctx, fac.id, fac.name);
@@ -1040,11 +1224,17 @@ export async function runMemberGateway(
   // Meta echoes the row title ("Workout plan"/"Diet plan"), which would
   // otherwise be swallowed by the /my workout|my diet|…/ regex and show the
   // already-assigned plans instead of creating the coach request.
+  if (!allowed(ctx, "request_plan") && /^(workout plan|diet plan|both plans)$/.test(n)) return notAllowedReply(ctx);
   if (n === "workout plan") return await handleRequestPlan(supabase, ctx, "workout");
   if (n === "diet plan") return await handleRequestPlan(supabase, ctx, "diet");
   if (n === "both plans") return await handleRequestPlan(supabase, ctx, "both");
 
   const pick = menuMatch?.id
+    ?? (/(renew|renewal|extend my plan)/.test(n) ? "MENU_RENEW" : null)
+    ?? (/(unfreeze|resume|reactivate)/.test(n) ? "MENU_RESUME" : null)
+    ?? (/(freeze|pause my|hold my plan)/.test(n) ? "MENU_FREEZE" : null)
+    ?? (/(dues|due amount|my bills?|invoice|pending payment|pay my)/.test(n) ? "MENU_BILLS" : null)
+    ?? (/(rejoin|join again|see plans|plans and prices)/.test(n) ? "MENU_SEE_PLANS" : null)
     ?? (/(membership|my plan\b|validity|expiry)/.test(n) ? "MENU_MEMBERSHIP" : null)
     ?? (/(book a class|class|yoga|pilates|zumba|hiit)/.test(n) ? "MENU_CLASS" : null)
     ?? (/(recovery|steam|sauna|ice bath|cold plunge)/.test(n) ? "MENU_RECOVERY" : null)
@@ -1055,7 +1245,17 @@ export async function runMemberGateway(
     ?? (/(attendance|visits|check in history|last 7 days)/.test(n) ? "MENU_ATTENDANCE" : null)
     ?? (/(front desk|human|agent|talk to someone|manager)/.test(n) ? "MENU_HUMAN" : null);
 
+  if (pick && ACTION_OF[pick] && !allowed(ctx, ACTION_OF[pick])) {
+    // e.g. "Book a class" while expired/frozen — explain and show what's possible.
+    return notAllowedReply(ctx);
+  }
+
   switch (pick) {
+    case "MENU_BILLS": return await handleBills(supabase, ctx);
+    case "MENU_RENEW": return await handleRenew(supabase, ctx, phone);
+    case "MENU_FREEZE": return await handleFreeze(supabase, ctx, phone);
+    case "MENU_RESUME": return await handleResume(supabase, ctx, phone);
+    case "MENU_SEE_PLANS": return await handleSeePlans(supabase, ctx, phone);
     case "MENU_MEMBERSHIP": return await handleMembership(supabase, ctx);
     case "MENU_CLASS": return await handleClasses(supabase, ctx);
     case "MENU_RECOVERY": return await handleRecovery(supabase, ctx);
