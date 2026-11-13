@@ -72,8 +72,8 @@ export function blockedAiTools(state: ChatState): string[] {
   switch (state) {
     case "active": case "expiring": return ["request_resume"];
     case "expired": return [...BOOKING_TOOLS, "request_freeze", "request_resume"];
-    case "frozen": return [...BOOKING_TOOLS, "request_freeze", "renew_membership"];
-    case "unpaid_start": return [...BOOKING_TOOLS, "request_freeze", "request_resume", "renew_membership"];
+    case "frozen": return [...BOOKING_TOOLS, "request_freeze", "initiate_membership_renewal"];
+    case "unpaid_start": return [...BOOKING_TOOLS, "request_freeze", "request_resume", "initiate_membership_renewal"];
     case "no_plan": return [...BOOKING_TOOLS, "request_freeze", "request_resume"];
     case "blocked": return ["*"];
   }
