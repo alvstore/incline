@@ -63,7 +63,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
             type="button"
             onClick={onOpenMine}
             disabled={myOpenCount === 0}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-card px-4 py-2 text-xs font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-foreground/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary-foreground px-4 py-2 text-xs font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-foreground/60 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {myOpenCount === 0 ? 'Nothing assigned to you' : 'Open my queue'}
             {myOpenCount > 0 && <ArrowRight className="h-3.5 w-3.5" />}
