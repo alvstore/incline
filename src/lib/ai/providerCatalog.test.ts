@@ -22,11 +22,10 @@ describe('NVIDIA provider preset', () => {
 });
 
 describe('Provider Type options', () => {
-  test('every catalog provider, including NVIDIA and Google, is offered', () => {
+  test('every catalog provider, including NVIDIA, is offered', () => {
     const values = providerOptions().map((o) => o.value);
     assert.deepEqual(values.sort(), Object.keys(PROVIDER_DEFAULTS).sort());
     assert.ok(values.includes('nvidia'));
-    assert.ok(PROVIDER_DEFAULTS.google.base_url.startsWith('https://generativelanguage.googleapis.com'));
   });
   test('parseModelIds reads OpenAI and Gemini shapes', () => {
     assert.deepEqual(parseModelIds({ data: [{ id: 'b' }, { id: 'a' }, { id: 'a' }] }), ['a', 'b']);
