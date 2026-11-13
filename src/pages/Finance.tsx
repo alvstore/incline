@@ -32,6 +32,8 @@ import { SalesReportTab } from '@/components/finance/SalesReportTab';
 
 import { toast } from 'sonner';
 import { paymentChannelLabel } from '@/lib/payments/paymentDisplay';
+import { inferIncomeCategory } from '@/lib/finance/incomeCategory';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function FinancePage() {
   const queryClient = useQueryClient();
@@ -59,12 +61,12 @@ export default function FinancePage() {
   });
 
   // Fetch income data (payments)
-  const { data: incomeData = [] } = useQuery({
+  const { data: incomeData = [], isLoading: incomeLoading, isError: incomeError, refetch: refetchIncome } = useQuery({
     queryKey: ['finance-income', selectedBranch, dateRange],
     queryFn: async () => {
       let query = supabase
         .from('payments')
-        .select('*, member:members(member_code, profiles:user_id(full_name, avatar_url), lead:lead_id(full_name)), invoice:invoices(invoice_number, pos_sale_id, customer_name), income_category:income_categories(name)')
+        .select('*, member:members(member_code, profiles:user_id(full_name, avatar_url), lead:lead_id(full_name)), invoice:invoices(invoice_number, pos_sale_id, customer_name, invoice_items(reference_type)), income_category:income_categories(name)')
         .eq('status', 'completed');
 
       if (selectedBranch && selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
@@ -278,7 +280,7 @@ export default function FinancePage() {
       Type: 'Income',
       Date: format(new Date(p.date), 'yyyy-MM-dd'),
       Description: p.type,
-      Category: p.payment_method || '-',
+      Category: inferIncomeCategory(p),
       Amount: p.amount,
     }));
     const expenseRows = expenseData.map((e: any) => ({
@@ -608,9 +610,27 @@ export default function FinancePage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">{payment.income_category?.name || '-'}</Badge>
+                              <Badge variant="secondary" className="whitespace-nowrap font-medium">{payment.type === 'POS Sale (Legacy)' ? 'Store / POS Sales' : inferIncomeCategory(payment)}</Badge>
                             </TableCell>
-                            <TableCell>{payment.member?.member_code || '-'}</TableCell>
+                            <TableCell>
+                              {(() => {
+                                const d = resolveMemberDisplay(payment.member, payment.invoice?.customer_name);
+                                return (
+                                  <div className="flex items-center gap-2.5 min-w-[160px]">
+                                    <Avatar className="h-8 w-8 rounded-xl">
+                                      {d.avatar_url ? <AvatarImage src={d.avatar_url} alt={d.name} /> : null}
+                                      <AvatarFallback className="rounded-xl bg-primary/10 text-[11px] font-semibold text-primary">
+                                        {(d.name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="min-w-0">
+                                      <div className="truncate font-medium text-foreground">{d.name || 'Walk-in'}</div>
+                                      {d.code ? <div className="text-xs text-muted-foreground">{d.code}</div> : null}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
                             <TableCell>{payment.invoice?.invoice_number || '-'}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{paymentChannelLabel(payment)}</Badge>
@@ -620,10 +640,22 @@ export default function FinancePage() {
                             </TableCell>
                           </TableRow>
                         ))}
-                        {combinedIncomeData.length === 0 && (
+                        {incomeLoading && Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={`sk-${i}`}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                        ))}
+                        {!incomeLoading && incomeError && (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                              No income transactions found
+                            <TableCell colSpan={7} className="py-8 text-center">
+                              <p className="text-sm text-destructive">Couldn't load income transactions.</p>
+                              <Button size="sm" variant="outline" className="mt-3" onClick={() => refetchIncome()}>Retry</Button>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {!incomeLoading && !incomeError && combinedIncomeData.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="py-8 text-center">
+                              <p className="font-medium text-foreground">No income in this period</p>
+                              <p className="text-sm text-muted-foreground">Try a wider date range or another branch.</p>
                             </TableCell>
                           </TableRow>
                         )}

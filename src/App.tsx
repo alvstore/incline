@@ -4,7 +4,15 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
+
+function LegacyMemberRedirect() {
+  const { id } = useParams();
+  const loc = useLocation();
+  const tab = new URLSearchParams(loc.search).get("tab");
+  const t = tab === "invoices" ? "payments" : tab;
+  return <Navigate to={`/members?member=${id}${t ? `&tab=${t}` : ""}`} replace />;
+}
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BranchProvider } from "@/contexts/BranchContext";
@@ -252,6 +260,7 @@ function RoutedContent() {
           {/* ==================== ADMIN/MANAGER/OWNER ROUTES ==================== */}
           <Route path="/dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><DashboardPage /></ProtectedRoute>} />
           <Route path="/members" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><MembersPage /></ProtectedRoute>} />
+          <Route path="/members/:id" element={<LegacyMemberRedirect />} />
           <Route path="/leads" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><LeadsPage /></ProtectedRoute>} />
           <Route path="/plans" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><PlansPage /></ProtectedRoute>} />
           <Route path="/attendance" element={<Navigate to="/attendance-dashboard" replace />} />
