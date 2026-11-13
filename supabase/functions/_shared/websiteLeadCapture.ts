@@ -1,4 +1,5 @@
 // _shared/websiteLeadCapture.ts
+// v2.1.0 — already_member carries on_hold for suspended/blacklisted/login-off members.
 // v2.0.0 — Chatbot: email required, interest from active plans/categories, no WhatsApp handoff/consent, visit preference.
 // v1.0.0 — Pure, dependency-injected lead capture used by `capture-lead`.
 // Serves both the legacy embed form (anti-enumeration response contract kept)
@@ -199,7 +200,13 @@ export async function handleCaptureLead(raw: unknown, meta: CaptureMeta, deps: C
     // Legacy embed contract: identical response for every outcome (no enumeration).
     if (existing || existingMember) return { status: 200, body: { success: true, message: GENERIC_MSG } };
   } else if (existingMember && !existing) {
-    return { status: 200, body: { success: true, status: "already_member", already_member: true, created: false, existing: false } };
+    // Account on hold (suspended / blacklisted / login off) → desk-only handoff copy.
+    let onHold = false;
+    try {
+      const { data: mem } = await db.from("members").select("status, login_disabled_at").eq("user_id", existingMember.id).limit(1).maybeSingle();
+      onHold = !!mem && (mem.status === "suspended" || mem.status === "blacklisted" || !!mem.login_disabled_at);
+    } catch { /* default: not on hold */ }
+    return { status: 200, body: { success: true, status: "already_member", already_member: true, on_hold: onHold, created: false, existing: false } };
   }
 
   const activityMeta = {

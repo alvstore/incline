@@ -127,6 +127,7 @@ import { websiteHandoffPrompt } from "./websiteHandoff.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
+import { aiStatusLabel, blockedAiTools, blockedReply, classifyMemberChat, type ChatState } from "./memberChatPolicy.ts";
 import { getOpsToolDefinitions, executeOpsToolCall, isFinancialRole } from "./ai-ops-tools.ts";
 import {
   CALLBACK_YES_RE,
@@ -1744,6 +1745,12 @@ ANSWER-FIRST RULE (highest priority in this block):
 export async function runMemberAgent(state: AgentRunState): Promise<AgentResult> {
   const { supabase, supabaseUrl, serviceKey, ctx, aiConfig, orgConfig, chatSettings, memberCtx } = state;
 
+  // Account on hold (suspended / blacklisted / login off): fixed desk reply, no AI.
+  if (memberCtx.chatState === "blocked") {
+    const first = String(memberCtx.memberName || "there").trim().split(/\s+/)[0];
+    return { replyText: blockedReply(first), leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
+  }
+
   const memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
 
   // Conversation history (cross-platform, treated as one thread).
@@ -1818,6 +1825,10 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
   if (allowList && allowList.length > 0) {
     tools = tools.filter((t: any) => allowList.includes(t.function.name));
   }
+  if (tools && memberCtx.chatState) {
+    const blocked = blockedAiTools(memberCtx.chatState);
+    tools = tools.filter((t: any) => !blocked.includes(t.function.name));
+  }
   if (!tools || tools.length === 0) tools = undefined;
 
   const aiMessages: any[] = [{ role: "system", content: systemPrompt }, ...history];
@@ -1879,6 +1890,7 @@ export async function runMemberAgent(state: AgentRunState): Promise<AgentResult>
             membershipId: memberCtx.membershipId ?? null,
             planId: memberCtx.planId ?? null,
             contextPrompt: memberCtx.contextPrompt,
+            chatState: memberCtx.chatState,
           },
           ctx.senderId, ctx.branchId, ctx.platform,
         );
@@ -2609,6 +2621,7 @@ interface MemberResolveResult {
   planName?: string;
   planEndsAt?: string;
   contextPrompt: string;
+  chatState?: ChatState;
   // Set only when isMember=false and a lead row exists for this sender.
   leadId?: string;
   leadName?: string;
@@ -2971,7 +2984,25 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         : `${daysRemaining}d remaining`;
 
   const memberCode = (memberMatch as any).member_code || "";
-  const contextPrompt = `Context: Speaking to ${memberName}, an Active Member${memberCode ? ` (Code: ${memberCode})` : ""}.${planName ? ` Plan: ${planName}.` : ""} ${lifecycle}.${duesLine}${recentReminderLine}`;
+  let contextPrompt = `Context: Speaking to ${memberName}, an Active Member${memberCode ? ` (Code: ${memberCode})` : ""}.${planName ? ` Plan: ${planName}.` : ""} ${lifecycle}.${duesLine}${recentReminderLine}`;
+  // member_chat_status_v2: real status (expired/frozen/no plan/on hold…) instead of "Active Member".
+  let chatState: ChatState | undefined;
+  try {
+    const { data: flag } = await supabase.from("settings").select("value").is("branch_id", null).eq("key", "member_chat_status_v2").maybeSingle();
+    const fv = (flag as any)?.value;
+    const v2 = !(fv === false || (fv && typeof fv === "object" && fv.enabled === false));
+    if (v2) {
+      const { data: facts } = await supabase.rpc("member_chat_status", { p_member_id: memberMatch.id });
+      if (facts) {
+        const f = { ...facts, dues: Number(facts.dues ?? 0), login_disabled: !!facts.login_disabled };
+        chatState = classifyMemberChat(f);
+        if (f.membership_id) membershipId = f.membership_id;
+        if (f.plan_name) planName = f.plan_name;
+        if (f.end_date) endDate = f.end_date;
+        contextPrompt = `Context: Speaking to ${memberName}${memberCode ? ` (Code: ${memberCode})` : ""}. Membership status: ${aiStatusLabel(chatState, f)}${recentReminderLine}`;
+      }
+    }
+  } catch (_) { /* keep legacy context */ }
 
   return {
     isMember: true,
@@ -2984,6 +3015,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     planName,
     planEndsAt: endDate,
     contextPrompt,
+    chatState,
   };
 }
 

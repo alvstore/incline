@@ -25,7 +25,7 @@ type FormErrors = Partial<Record<'name' | 'phone' | 'email' | 'intent' | 'durati
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean; url?: string };
 /** Only gateway payment links may be rendered as a link. */
 const safePayUrl = (u: unknown) => (typeof u === 'string' && /^https:\/\/(rzp\.io|razorpay\.me|pages\.razorpay\.com)\//.test(u) ? u : undefined);
-type SaveResult = { status?: string; lead_id?: string; reference?: string };
+type SaveResult = { status?: string; lead_id?: string; reference?: string; on_hold?: boolean };
 
 const WELCOME = 'Hi! Welcome to Incline. I can help you explore training, membership and recovery.';
 const FIRST_Q = 'Share a few quick details below and I will answer anything about plans, prices, training and recovery.';
@@ -190,7 +190,10 @@ export default function WebsiteLeadChatbot() {
       if (data.status === 'already_member') {
         // Members, trainers and staff are not served by this lead chat: they use the
         // WhatsApp self-service concierge (plan, PT, classes, recovery, gate pass) or call the desk.
-        botSay([
+        botSay(data.on_hold ? [
+          { text: `Hi ${firstName(name)}, your number is already registered with Incline.` },
+          { text: `For help with your account, please call our front desk on ${ESCALATION_PHONE}. Our team will be happy to assist you.` },
+        ] : [
           { text: `Welcome back, ${firstName(name)}! This chat is for new enquiries, and your number is already registered with Incline.` },
           { text: `For your plan, PT sessions, classes, recovery bookings or gate pass, message our WhatsApp concierge or call us on ${ESCALATION_PHONE}.` },
         ], 'handoff');
