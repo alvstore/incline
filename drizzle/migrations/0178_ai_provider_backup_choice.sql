@@ -1,0 +1,4 @@
+ALTER TABLE public.ai_provider_configs DROP CONSTRAINT IF EXISTS ai_provider_configs_provider_check;
+ALTER TABLE public.ai_provider_configs ADD CONSTRAINT ai_provider_configs_provider_check CHECK (provider = ANY (ARRAY['lovable','openrouter','ollama','deepseek','openai_compatible','google','groq','together','mistral','anthropic','xai','nvidia']));
+ALTER TABLE public.ai_provider_configs ADD COLUMN IF NOT EXISTS fallback_provider_id uuid NULL REFERENCES public.ai_provider_configs(id) ON DELETE SET NULL;
+COMMENT ON COLUMN public.ai_provider_configs.fallback_provider_id IS 'Backup provider used when this one fails; NULL + enable_fallback=true means Lovable AI.';

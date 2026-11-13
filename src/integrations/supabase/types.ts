@@ -753,6 +753,7 @@ export type Database = {
           display_name: string
           enable_fallback: boolean
           extra_config: Json | null
+          fallback_provider_id: string | null
           id: string
           is_active: boolean
           is_default: boolean
@@ -769,6 +770,7 @@ export type Database = {
           display_name: string
           enable_fallback?: boolean
           extra_config?: Json | null
+          fallback_provider_id?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -785,6 +787,7 @@ export type Database = {
           display_name?: string
           enable_fallback?: boolean
           extra_config?: Json | null
+          fallback_provider_id?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -792,7 +795,15 @@ export type Database = {
           scope?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_provider_configs_fallback_provider_id_fkey"
+            columns: ["fallback_provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_provider_configs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_purposes: {
         Row: {
