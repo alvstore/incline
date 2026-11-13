@@ -22,7 +22,7 @@ function isAllowedProviderUrl(raw: string, hostSuffixes: string[], allowHttp = f
   } catch { return false; }
 }
 const AI_HOSTS = ["ai.gateway.lovable.dev", "openrouter.ai", "api.deepseek.com", "generativelanguage.googleapis.com",
-  "api.groq.com", "api.together.xyz", "api.mistral.ai", "api.openai.com", "api.anthropic.com", "api.x.ai", "api.perplexity.ai", "api.sarvam.ai"];
+  "api.groq.com", "api.together.xyz", "api.mistral.ai", "api.openai.com", "api.anthropic.com", "api.x.ai", "api.perplexity.ai", "api.sarvam.ai", "integrate.api.nvidia.com"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

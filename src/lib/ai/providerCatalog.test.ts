@@ -20,3 +20,16 @@ describe('NVIDIA provider preset', () => {
     assert.equal(PROVIDER_DEFAULTS.nvidia.secret_name, 'NVIDIA_API_KEY');
   });
 });
+
+describe('Provider Type options', () => {
+  test('every catalog provider, including NVIDIA and Google, is offered', () => {
+    const values = providerOptions().map((o) => o.value);
+    assert.deepEqual(values.sort(), Object.keys(PROVIDER_DEFAULTS).sort());
+    assert.ok(values.includes('nvidia'));
+    assert.ok(PROVIDER_DEFAULTS.google.base_url.startsWith('https://generativelanguage.googleapis.com'));
+  });
+  test('parseModelIds reads OpenAI and Gemini shapes', () => {
+    assert.deepEqual(parseModelIds({ data: [{ id: 'b' }, { id: 'a' }, { id: 'a' }] }), ['a', 'b']);
+    assert.deepEqual(parseModelIds({ models: [{ name: 'models/gemini-x' }] }), ['gemini-x']);
+  });
+});
