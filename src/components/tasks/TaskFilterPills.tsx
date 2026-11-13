@@ -19,7 +19,7 @@ interface Props {
 
 export function TaskFilterPills({ value, onChange, counts }: Props) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="-mx-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label="Quick filters">
       {FILTERS.map((f) => {
         const active = value === f.id;
         const count = counts?.[f.id];
@@ -28,11 +28,11 @@ export function TaskFilterPills({ value, onChange, counts }: Props) {
             key={f.id}
             onClick={() => onChange(f.id)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150',
+              'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-all duration-150',
               'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
               active
-                ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20'
-                : 'bg-card text-muted-foreground ring-1 ring-border hover:ring-primary/40 hover:text-primary',
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:text-foreground',
             )}
           >
             {f.label}
@@ -40,7 +40,7 @@ export function TaskFilterPills({ value, onChange, counts }: Props) {
               <span
                 className={cn(
                   'inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums',
-                  active ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground',
+                  active ? 'bg-primary-foreground/20' : 'bg-background',
                 )}
               >
                 {count}
