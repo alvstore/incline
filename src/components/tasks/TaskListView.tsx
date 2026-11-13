@@ -8,6 +8,7 @@ import { STATUS_PILL, STATUS_LABEL, PRIORITY_PILL, PRIORITY_DOT } from './taskTo
 import type { TaskStatus } from '@/services/taskService';
 
 import { clickOnActivateKey } from '@/lib/a11y/clickable';
+import { isTaskDueToday, isTaskOverdue } from '@/lib/tasks/taskStatus';
 interface Props {
   tasks: any[];
   isLoading: boolean;
@@ -22,7 +23,7 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
     return (
       <div className="space-y-2">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+          <div key={i} className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm">
             <Skeleton className="h-2 w-2 rounded-full" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-3 w-1/3" />
@@ -38,11 +39,11 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-2xl bg-card p-12 shadow-lg shadow-md text-center">
+      <div className="rounded-2xl bg-card p-12 shadow-sm text-center">
         <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
           <CheckSquare className="h-6 w-6" />
         </div>
-        <h3 className="text-sm font-semibold text-foreground">No tasks here yet</h3>
+        <h3 className="text-sm font-semibold text-foreground">All clear</h3>
         <p className="mt-1 text-xs text-muted-foreground">Adjust filters, or click "New Task" to create one.</p>
       </div>
     );
@@ -53,16 +54,16 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
       {tasks.map((task) => {
         const isClosed = task.status === 'completed' || task.status === 'cancelled';
         return (
-        <div tabIndex={0} onKeyDown={clickOnActivateKey}
+        <div tabIndex={0} onKeyDown={clickOnActivateKey} data-anim="row" data-task-row={task.id}
           key={task.id}
           onClick={() => onOpen(task)}
           className={cn('focus:outline-none focus-visible:ring-2 focus-visible:ring-ring', 
-            'group flex items-center gap-3 rounded-xl bg-card p-3 sm:p-4 shadow-sm ring-1 ring-border cursor-pointer',
-            'transition-all duration-150 hover:shadow-md hover:ring-primary/30',
+            'group flex items-center gap-3 rounded-xl bg-card p-3 sm:p-4 shadow-sm cursor-pointer',
+            'transition-shadow duration-150 hover:shadow-md',
             isClosed && 'opacity-70',
           )}
         >
-          <span className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', isClosed ? 'bg-muted-foreground/30' : PRIORITY_DOT[task.priority])} />
+          <span className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', isClosed ? 'bg-muted-foreground/30' : isTaskOverdue(task) ? 'bg-destructive' : isTaskDueToday(task) ? 'bg-warning' : 'bg-success')} />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
