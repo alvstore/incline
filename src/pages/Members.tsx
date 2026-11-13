@@ -148,6 +148,7 @@ export default function MembersPage() {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [purchasePTOpen, setPurchasePTOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState<string>('overview');
   const [quickFreezeOpen, setQuickFreezeOpen] = useState(false);
   const [groupPurchaseOpen, setGroupPurchaseOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
@@ -205,6 +206,8 @@ export default function MembersPage() {
     const params = new URLSearchParams(window.location.search);
     const memberId = params.get('member');
     if (!memberId) return;
+    const tabParam = params.get('tab');
+    if (tabParam) setProfileTab(tabParam === 'invoices' ? 'payments' : tabParam);
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
@@ -236,9 +239,11 @@ export default function MembersPage() {
   const handleProfileOpenChange = (open: boolean) => {
     setProfileOpen(open);
     if (!open) {
+      setProfileTab('overview');
       const url = new URL(window.location.href);
       if (url.searchParams.has('member')) {
         url.searchParams.delete('member');
+        url.searchParams.delete('tab');
         window.history.replaceState({}, '', url.toString());
       }
     }
@@ -534,7 +539,7 @@ export default function MembersPage() {
                 : 'Add Plan'}
           </DropdownMenuItem>
           {member.dues > 0 && (
-            <DropdownMenuItem onClick={() => navigate(`/members/${member.id}?tab=invoices`)}>
+            <DropdownMenuItem onClick={() => { setSelectedMember(member); setProfileTab('payments'); setProfileOpen(true); }}>
               <Wallet className="h-4 w-4 mr-2 text-destructive" />
               Collect Due ₹{member.dues.toLocaleString()}
             </DropdownMenuItem>
@@ -887,6 +892,7 @@ export default function MembersPage() {
               open={profileOpen}
               onOpenChange={handleProfileOpenChange}
               member={selectedMember}
+              initialTab={profileTab}
               onPurchaseMembership={() => { setProfileOpen(false); setPurchaseOpen(true); }}
               onPurchasePT={() => { setProfileOpen(false); setPurchasePTOpen(true); }}
             />

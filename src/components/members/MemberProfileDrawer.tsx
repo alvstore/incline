@@ -676,6 +676,8 @@ interface MemberProfileDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: any;
+  /** Tab to show when the drawer opens (defaults to overview). */
+  initialTab?: string;
   onPurchaseMembership: () => void;
   onPurchasePT: () => void;
 }
@@ -694,6 +696,7 @@ export function MemberProfileDrawer({
   open, 
   onOpenChange, 
   member,
+  initialTab,
   onPurchaseMembership,
   onPurchasePT
 }: MemberProfileDrawerProps) {
@@ -1674,7 +1677,7 @@ export function MemberProfileDrawer({
 
           <Separator />
 
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs key={`${member?.id}-${initialTab ?? "overview"}-${open}`} defaultValue={initialTab || "overview"} className="w-full">
             <div className="relative flex items-center gap-1">
               <Button
                 type="button"
