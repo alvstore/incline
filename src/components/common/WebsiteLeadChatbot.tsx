@@ -25,7 +25,7 @@ type FormErrors = Partial<Record<'name' | 'phone' | 'email' | 'intent' | 'durati
 type Msg = { from: 'bot' | 'user'; text: string; tel?: boolean; url?: string };
 /** Only gateway payment links may be rendered as a link. */
 const safePayUrl = (u: unknown) => (typeof u === 'string' && /^https:\/\/(rzp\.io|razorpay\.me|pages\.razorpay\.com)\//.test(u) ? u : undefined);
-type SaveResult = { status?: string; lead_id?: string; reference?: string };
+type SaveResult = { status?: string; lead_id?: string; reference?: string; on_hold?: boolean };
 
 const WELCOME = 'Hi! Welcome to Incline. I can help you explore training, membership and recovery.';
 const FIRST_Q = 'Share a few quick details below and I will answer anything about plans, prices, training and recovery.';
