@@ -1,3 +1,4 @@
+// v2.1.0 — event_key matches the approved daily_ops_summary_v2 template; strict (no guessed fallback).
 // daily-ops-summary v2.0.0 — richer report: unique members, renewals, PT sales/sessions/clients,
 //   payment split, facility bookings/no-shows, expiring members, leads. WhatsApp uses
 //   UTILITY template `daily_ops_summary_v2` (20 slots); falls back to SMS until approved.
@@ -48,7 +49,12 @@ Deno.serve(async (req) => {
   { const __caller = await requireCaller(req, corsHeaders, { roles: [] }); if (!__caller.ok) return __caller.response; }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { startUtc, endUtc, dateLabel, isoDate } = istDayBounds();
+  // Optional ?date=YYYY-MM-DD re-runs a past IST day; ?resend=1 bypasses that day's dedupe.
+  const __qs = new URL(req.url).searchParams;
+  const __d = __qs.get("date");
+  const __at = __d && /^\d{4}-\d{2}-\d{2}$/.test(__d) ? new Date(`${__d}T12:00:00+05:30`) : new Date();
+  const __resend = __qs.get("resend") === "1" ? `:resend-${Date.now()}` : "";
+  const { startUtc, endUtc, dateLabel, isoDate } = istDayBounds(__at);
 
   try {
     const [
@@ -295,7 +301,7 @@ Deno.serve(async (req) => {
         ["new_leads", String(newLeads)],
       ];
       const variables: Record<string, string> = {
-        member_name: name, full_name: name, event_key: "daily_ops_summary_report",
+        member_name: name, full_name: name, event_key: "daily_ops_summary", strict_event_template: "1",
         total_sales: inr(invoicedTotal),
       };
       slots.forEach(([k, v], idx) => {
@@ -327,7 +333,7 @@ Deno.serve(async (req) => {
                 use_branded_template: channel === "email",
               },
               // One report per recipient per IST day, whatever the retries.
-              dedupe_key: `daily_ops_summary:${isoDate}:${recipient}:${channel}`,
+              dedupe_key: `daily_ops_summary:${isoDate}:${recipient}:${channel}${__resend}`,
               force: true,
               source_caller: "daily-ops-summary",
             }),
