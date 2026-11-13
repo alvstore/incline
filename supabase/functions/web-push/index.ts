@@ -1,7 +1,8 @@
-// v2.3.0 — owners/admins/managers can subscribe; team alerts get generic lock-screen titles + deep links.
+// v2.4.0 — descriptive, privacy-safe browser headings and messages for all team alert categories.
 // v2.2.0 — one device-push worker: browser (web) + Flutter (fcm). Phone push uses direct Firebase settings; connector is fallback.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { classifyFcmError, loadFcmConfig, sendFcm } from '../_shared/fcm.ts';
+import { browserPushPresentation } from '../_shared/browserPushPresentation.ts';
 import webpush from 'npm:web-push@3.6.7';
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -33,14 +34,6 @@ async function teamAccess(db: any, userId: string, branchId: string | null) {
   const { data: emp } = await db.from('employees').select('id').eq('user_id', userId).eq('branch_id', branchId).limit(1);
   return Boolean(emp?.length);
 }
-// Lock-screen safe titles per category (no names, amounts or health data).
-const TEAM_TITLES: Record<string, [string, string]> = {
-  staff_late: ['Late check-in', '/staff-attendance'],
-  approval: ['Approval waiting', '/approvals'],
-  task: ['New task', '/tasks'],
-  payment: ['Payment update', '/invoices'],
-};
-
 Deno.serve(async req => {
   const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: headers(req) });
   if (req.method === 'OPTIONS') return respond(200, {});
@@ -116,13 +109,9 @@ Deno.serve(async req => {
               if (start !== end && (start < end ? time >= start && time < end : time >= start || time < end)) { await finish('suppressed', 'Quiet hours; notification remains in inbox'); return; }
             }
           }
-          const teamKey = isTeam ? Object.keys(TEAM_TITLES).find(k => String(notice.category || '').includes(k)) : undefined;
-          const home = isTeam ? (teamKey ? TEAM_TITLES[teamKey][1] : '/dashboard') : member ? '/member-dashboard' : '/trainer-dashboard';
-          const rawUrl = notice.action_url || home;
-          const url = rawUrl.startsWith('/') && !rawUrl.startsWith('//') ? rawUrl : home;
-          // Never expose names, prices, attendance, or health data on the lock screen.
-          const title = teamKey ? TEAM_TITLES[teamKey][0] : 'Incline';
-          const payload = JSON.stringify({ title, body: teamKey ? 'Tap to view in Incline.' : 'You have a new update. Open Incline to view it.', url, tag: notice.id });
+          const presentation = browserPushPresentation(notice, isTeam, Boolean(member));
+          const { url } = presentation;
+          const payload = JSON.stringify({ ...presentation, tag: notice.id });
           if (sub.kind === 'fcm') {
             const title = String(notice.title || 'Incline Alert');
             const body = String(notice.message || notice.body || 'You have a new update.');
