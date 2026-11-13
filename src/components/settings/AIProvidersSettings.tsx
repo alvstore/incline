@@ -164,6 +164,7 @@ export function AIProvidersSettings() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         editing={editing}
+        providers={providers}
         onSaved={() => qc.invalidateQueries({ queryKey: ['ai-provider-configs'] })}
       />
     </Card>
@@ -171,9 +172,9 @@ export function AIProvidersSettings() {
 }
 
 function ProviderDrawer({
-  open, onOpenChange, editing, onSaved,
+  open, onOpenChange, editing, onSaved, providers,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void; editing: ProviderRow | null; onSaved: () => void;
+  open: boolean; onOpenChange: (v: boolean) => void; editing: ProviderRow | null; onSaved: () => void; providers: ProviderRow[];
 }) {
   const isEdit = !!editing;
   const [provider, setProvider] = useState<string>('openrouter');
@@ -185,6 +186,8 @@ function ProviderDrawer({
   const [isActive, setIsActive] = useState(true);
   const [isDefault, setIsDefault] = useState(false);
   const [enableFallback, setEnableFallback] = useState(true);
+  const [backupId, setBackupId] = useState<string>('lovable');
+  const backupOptions = providers.filter((p) => p.is_active && p.id !== editing?.id && !(p.provider === 'lovable' && provider !== 'lovable'));
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [modelMode, setModelMode] = useState<'preset' | 'custom'>('preset');
