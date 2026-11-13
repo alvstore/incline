@@ -2,7 +2,12 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchTasks, updateTaskStatus, getTaskStats, assignTask, type TaskStatus } from '@/services/taskService';
 import { supabase } from '@/integrations/supabase/client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { usePageEntrance, useRowsEntrance, prefersReducedMotion } from '@/components/motion/pageMotion';
+import { DecisionBarChart } from '@/components/motion/DecisionBarChart';
+import { Button } from '@/components/ui/button';
+import { XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { AddTaskDrawer } from '@/components/tasks/AddTaskDrawer';
 import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer';
@@ -28,7 +33,7 @@ export default function TasksPage() {
   const { user } = useAuth();
   const { effectiveBranchId } = useBranchContext();
 
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: tasks = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['tasks', effectiveBranchId || 'all'],
     queryFn: () => fetchTasks(effectiveBranchId),
   });
@@ -141,13 +146,44 @@ export default function TasksPage() {
     [user?.id],
   );
 
+  // Done-with-Undo: hide optimistically, commit after 5s unless undone.
+  const [pendingDone, setPendingDone] = useState<Set<string>>(new Set());
+  const doneTimers = useRef<Map<string, number>>(new Map());
+  useEffect(() => () => { doneTimers.current.forEach((t) => window.clearTimeout(t)); }, []);
+  const changeStatus = useCallback((id: string, status: TaskStatus) => {
+    if (status !== 'completed') { updateStatusMutation.mutate({ id, status }); return; }
+    if (doneTimers.current.has(id)) return;
+    setPendingDone((s) => new Set(s).add(id));
+    const t = window.setTimeout(() => {
+      doneTimers.current.delete(id);
+      updateStatusMutation.mutate({ id, status }, {
+        onSettled: () => setPendingDone((s) => { const n = new Set(s); n.delete(id); return n; }),
+      });
+    }, 5000);
+    doneTimers.current.set(id, t);
+    toast('Marking task done…', {
+      duration: 5000,
+      action: { label: 'Undo', onClick: () => {
+        const tm = doneTimers.current.get(id);
+        if (tm) window.clearTimeout(tm);
+        doneTimers.current.delete(id);
+        setPendingDone((s) => { const n = new Set(s); n.delete(id); return n; });
+      } },
+    });
+  }, [updateStatusMutation]);
+
+  const displayTasks = useMemo(
+    () => (pendingDone.size ? tasks.map((t: any) => (pendingDone.has(t.id) ? { ...t, status: 'completed', completed_at: new Date().toISOString() } : t)) : tasks),
+    [tasks, pendingDone],
+  );
+
   const visibleTasks = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return tasks.filter((t: any) => {
+    return displayTasks.filter((t: any) => {
       if (q && !(`${t.title} ${t.description || ''}`.toLowerCase().includes(q))) return false;
       return matchesFilter(t, filter);
     });
-  }, [tasks, filter, search, matchesFilter]);
+  }, [displayTasks, filter, search, matchesFilter]);
 
   const linkedMembers = useLinkedMembers(tasks);
 
@@ -184,9 +220,56 @@ export default function TasksPage() {
       unassigned: 'Unassigned',
     } as Record<QuickFilter, string>)[filter] || 'All tasks';
 
+  const pageRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  usePageEntrance(pageRef);
+  useRowsEntrance(viewRef, `${view}|${filter}|${effectiveBranchId}|${isLoading}`);
+
+  // Keyboard: J/K move, Enter open, D done, N new
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || t.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="listbox"]')) return;
+      if (drawerOpen || selectedTask) return;
+      const ids = visibleTasks.map((x: any) => x.id);
+      const i = focusId ? ids.indexOf(focusId) : -1;
+      if (e.key === 'n') { setDrawerOpen(true); e.preventDefault(); return; }
+      if (e.key === 'j' || e.key === 'k') {
+        const n = ids[Math.max(0, Math.min(ids.length - 1, i + (e.key === 'j' ? 1 : -1)))];
+        if (n) {
+          setFocusId(n);
+          const el = viewRef.current?.querySelector<HTMLElement>(`[data-flip-id="${n}"] button:not([aria-label="Drag task"]), [data-task-row="${n}"]`);
+          el?.focus(); el?.scrollIntoView({ block: 'nearest' });
+          e.preventDefault();
+        }
+        return;
+      }
+      const cur = visibleTasks.find((x: any) => x.id === focusId);
+      if (!cur) return;
+      if (e.key === 'Enter' && t === document.body) { setSelectedTask(cur); e.preventDefault(); }
+      if (e.key === 'd' && cur.status !== 'completed' && cur.status !== 'cancelled') { changeStatus(cur.id, 'completed'); e.preventDefault(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visibleTasks, focusId, drawerOpen, selectedTask, changeStatus]);
+
+  // Drawer contents stagger in when a task opens.
+  useEffect(() => {
+    if (!selectedTask || prefersReducedMotion()) return;
+    const id = window.setTimeout(() => {
+      const dlg = document.querySelector('[role="dialog"][data-state="open"]');
+      const kids = dlg?.querySelectorAll(':scope > div > *, :scope > *:not(button)');
+      if (kids?.length) gsap.from(kids, { opacity: 0, y: 14, duration: 0.5, ease: 'power3.out', delay: 0.12, stagger: 0.04, clearProps: 'opacity,transform' });
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [selectedTask?.id]);
+
+  const finishedSeries = useMemo(() => [{ status: 'completed', label: 'Finished', dot: 'bg-success', bar: 'bg-success' }], []);
+
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div ref={pageRef} className="space-y-6">
         <TasksHeader
           view={view}
           onViewChange={setView}
@@ -203,12 +286,20 @@ export default function TasksPage() {
           onOpenChange={(o) => !o && setSelectedTask(null)}
         />
 
-        <TaskStatsBento
-          stats={stats}
-          myOpenCount={myOpenCount}
-          onOpenMine={() => setFilter('mine')}
-          onFilter={(k) => setFilter(k as QuickFilter)}
-        />
+        <div className="grid gap-4 xl:grid-cols-12">
+          <div className="xl:col-span-8">
+            <TaskStatsBento
+              stats={stats}
+              myOpenCount={myOpenCount}
+              onOpenMine={() => setFilter('mine')}
+              onFilter={(k) => setFilter(k as QuickFilter)}
+            />
+          </div>
+          <div data-anim="card" className="rounded-2xl bg-card p-5 shadow-sm xl:col-span-4">
+            <h2 className="mb-2 text-base font-semibold">Tasks finished · last 7 days</h2>
+            <DecisionBarChart rows={displayTasks} series={finishedSeries} dateKey="completed_at" summaryNoun="tasks" />
+          </div>
+        </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TaskFilterPills value={filter} onChange={setFilter} counts={filterCounts} />
@@ -223,26 +314,39 @@ export default function TasksPage() {
         />
 
 
-        {view === 'board' && (
+        <div ref={viewRef}>
+        {isError ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-card py-12 text-center shadow-sm">
+            <XCircle className="h-10 w-10 text-destructive/60" />
+            <p className="text-sm text-muted-foreground">Couldn't load tasks.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </div>
+        ) : view === 'board' && isLoading ? (
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Loading tasks">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-72 rounded-2xl bg-muted/60" />)}
+          </div>
+        ) : null}
+        {!isError && !(view === 'board' && isLoading) && view === 'board' && (
           <TaskBoard
             tasks={visibleTasks}
             onOpen={setSelectedTask}
-            onMove={(id, status) => updateStatusMutation.mutate({ id, status })}
+            onMove={changeStatus}
           />
         )}
 
-        {view === 'list' && (
+        {!isError && view === 'list' && (
           <TaskListView
             tasks={visibleTasks}
             isLoading={isLoading}
             staffUsers={staffUsers}
             onOpen={setSelectedTask}
             onAssign={(taskId, userId) => assignTaskMutation.mutate({ taskId, userId })}
-            onStatus={(id, status) => updateStatusMutation.mutate({ id, status })}
+            onStatus={changeStatus}
           />
         )}
 
-        {view === 'calendar' && <TaskCalendarView tasks={visibleTasks} onOpen={setSelectedTask} />}
+        {!isError && view === 'calendar' && <TaskCalendarView tasks={visibleTasks} onOpen={setSelectedTask} />}
+        </div>
       </div>
     </AppLayout>
   );
