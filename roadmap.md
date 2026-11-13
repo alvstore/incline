@@ -1,6 +1,6 @@
 # Browser notification text (13 Nov 2026)
 - [x] Audit live team alert categories; replace generic browser messages with privacy-safe event headings/descriptions and retain full details after sign-in.
-- [ ] Run delivery-payload/worker regression checks and deploy; physical OS display requires the admin's device.
+- [x] Five delivery-payload/worker regression tests pass; deployed web-push; Chrome notification API reads back the late-check-in heading, description and attendance destination. Build OK. Physical OS display remains an admin-device check; published worker changes require Publish → Update.
 
 # UI unification — remaining buttons (12 Nov 2026)
 - [x] Mark every remaining raw action button as a plain button so it never submits a form by accident (46 spots).
