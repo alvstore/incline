@@ -1,4 +1,5 @@
 // _shared/websiteConcierge.ts
+// v1.1.0 — member pricing replies drop the public rate list entirely.
 // v1.0.0 — Deterministic website concierge. Answers come from ai_knowledge rows tagged
 // `web:<topic>` (the same table the WhatsApp AI reads), so editing knowledge updates both
 // channels. No LLM, no public AI endpoint. Outbound text passes the shared pricing leak guard.
@@ -124,7 +125,8 @@ function withOffer(r: WebReply, prev?: WebState): WebReply {
   const isMember = prev?.isMember === true || r.state.isMember === true;
   let messages = r.messages;
   if (isMember && (r.topic === "pricing" || r.topic === "discount")) {
-    messages = [messages[0], { text: MEMBER_PRICE }, ...messages.filter((m) => m.tel)];
+    // Members never see the public rate list here — only the member route.
+    messages = [{ text: MEMBER_PRICE }, ...messages.filter((m) => m.tel)];
   } else if (!isMember && prev?.lastTopic === r.topic && !["unknown", "discount", "greeting"].includes(r.topic) && messages.length > 1 && !r.visitPreference) {
     messages = [{ text: "As I mentioned, " + messages[0].text.charAt(0).toLowerCase() + messages[0].text.slice(1) }, messages[messages.length - 1]];
   }

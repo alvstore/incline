@@ -190,7 +190,10 @@ export default function WebsiteLeadChatbot() {
       if (data.status === 'already_member') {
         // Members, trainers and staff are not served by this lead chat: they use the
         // WhatsApp self-service concierge (plan, PT, classes, recovery, gate pass) or call the desk.
-        botSay([
+        botSay(data.on_hold ? [
+          { text: `Hi ${firstName(name)}, your number is already registered with Incline.` },
+          { text: `For help with your account, please call our front desk on ${ESCALATION_PHONE}. Our team will be happy to assist you.` },
+        ] : [
           { text: `Welcome back, ${firstName(name)}! This chat is for new enquiries, and your number is already registered with Incline.` },
           { text: `For your plan, PT sessions, classes, recovery bookings or gate pass, message our WhatsApp concierge or call us on ${ESCALATION_PHONE}.` },
         ], 'handoff');
