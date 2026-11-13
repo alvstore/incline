@@ -17545,6 +17545,7 @@ export type Database = {
       }
       cancel_membership: {
         Args: {
+          p_balance_action?: string
           p_idempotency_key?: string
           p_membership_id: string
           p_reason: string
@@ -18709,6 +18710,10 @@ export type Database = {
       }
       leave_facility_waitlist: {
         Args: { p_waitlist_id: string }
+        Returns: Json
+      }
+      lift_member_suspension: {
+        Args: { p_member_id: string; p_note?: string }
         Returns: Json
       }
       list_inbox_threads: {
@@ -20406,6 +20411,16 @@ export type Database = {
       supersede_fitness_plans: {
         Args: { p_plan_ids: string[] }
         Returns: number
+      }
+      suspend_member: {
+        Args: {
+          p_balance_action?: string
+          p_member_id: string
+          p_reason: string
+          p_refund_amount?: number
+          p_refund_method?: string
+        }
+        Returns: Json
       }
       touch_presence: { Args: never; Returns: undefined }
       trainer_can_read_member_runs: {

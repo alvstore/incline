@@ -1233,6 +1233,13 @@
       "when": 1794551920462,
       "tag": "0175_fix_membership_activation_on_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1794552851774,
+      "tag": "0176_cancel_balance_action_and_suspend",
+      "breakpoints": true
     }
   ]
 }
