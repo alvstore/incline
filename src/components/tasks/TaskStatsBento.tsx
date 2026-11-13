@@ -1,5 +1,6 @@
 import { ArrowRight, AlertTriangle, Sparkles, ListChecks, Loader2, Ban, CircleDot } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CountUp } from '@/components/motion/pageMotion';
 
 interface Props {
   stats?: {
@@ -42,7 +43,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
   return (
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-6">
       {/* Hero: Today's focus */}
-      <div className="col-span-2 lg:col-span-3 row-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/90 p-6 text-primary-foreground shadow-lg shadow-primary/20">
+      <div data-anim="card" className="col-span-2 lg:col-span-3 row-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/90 p-6 text-primary-foreground shadow-lg shadow-primary/20">
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary-foreground/10 blur-3xl" />
         <div className="absolute right-8 bottom-4 h-24 w-24 rounded-full bg-primary-foreground/10 blur-2xl" />
         <div className="relative">
@@ -50,7 +51,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
             <Sparkles className="h-3 w-3" /> Today's focus
           </div>
           <div className="mt-4 flex items-end gap-3">
-            <div className="text-5xl font-bold tabular-nums leading-none">{myOpenCount}</div>
+            <div className="text-5xl font-bold tabular-nums leading-none"><CountUp value={myOpenCount} /></div>
             <div className="pb-1 text-sm text-primary-foreground/90">
               {myOpenCount === 1 ? 'task on your plate' : 'tasks on your plate'}
             </div>
@@ -75,7 +76,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
         type="button"
         onClick={() => onFilter('overdue')}
         aria-label={`Show ${overdue} overdue tasks`}
-        className="text-left rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-200 ring-1 ring-border group focus:outline-none focus:ring-2 focus:ring-ring"
+        data-anim="card" className="text-left rounded-2xl bg-card p-4 shadow-sm hover:shadow-md transition-all duration-300 [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1 group focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Overdue</span>
@@ -84,7 +85,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
           </span>
         </div>
         <div className={cn('mt-2 text-3xl font-bold tabular-nums', overdue > 0 ? 'text-destructive' : 'text-foreground')}>
-          {overdue}
+          <CountUp value={overdue} />
         </div>
         <div className="text-[11px] text-muted-foreground mt-0.5">Needs attention</div>
       </button>
@@ -94,7 +95,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
         type="button"
         onClick={() => onFilter('high')}
         aria-label={`Show ${highPriority} high priority tasks`}
-        className="text-left rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-200 ring-1 ring-border group focus:outline-none focus:ring-2 focus:ring-ring"
+        data-anim="card" className="text-left rounded-2xl bg-card p-4 shadow-sm hover:shadow-md transition-all duration-300 [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1 group focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">High priority</span>
@@ -102,12 +103,12 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
             <Sparkles className="h-3.5 w-3.5" />
           </span>
         </div>
-        <div className="mt-2 text-3xl font-bold text-foreground tabular-nums">{highPriority}</div>
+        <div className="mt-2 text-3xl font-bold text-foreground tabular-nums"><CountUp value={highPriority} /></div>
         <div className="text-[11px] text-muted-foreground mt-0.5">Still open &amp; urgent</div>
       </button>
 
       {/* Completion rate ring */}
-      <div className="col-span-2 lg:col-span-3 rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 ring-1 ring-border flex items-center gap-4">
+      <div data-anim="card" className="col-span-2 lg:col-span-3 rounded-2xl bg-card p-4 shadow-lg shadow-primary/5 ring-1 ring-border flex items-center gap-4">
         <div className="relative h-20 w-20 flex-shrink-0">
           <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90" aria-hidden="true">
             <circle cx="40" cy="40" r={r} stroke="currentColor" className="text-muted" strokeWidth="8" fill="none" />

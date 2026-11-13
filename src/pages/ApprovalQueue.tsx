@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { ApprovalTrendChart } from '@/components/approvals/ApprovalTrendChart';
-import { usePageEntrance, useRowsEntrance, useCountUp, prefersReducedMotion } from '@/components/approvals/approvalMotion';
+import { DecisionBarChart } from '@/components/motion/DecisionBarChart';
+import { usePageEntrance, useRowsEntrance, useCountUp, prefersReducedMotion } from '@/components/motion/pageMotion';
 import { clickOnActivateKey } from '@/lib/a11y/clickable';
 import gsap from 'gsap';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -528,7 +528,7 @@ export default function ApprovalQueuePage() {
           </div>
           <Card data-anim="card" className="lg:col-span-5 rounded-2xl">
             <CardHeader className="pb-1"><CardTitle className="text-base">Decisions · last 7 days</CardTitle></CardHeader>
-            <CardContent><ApprovalTrendChart rows={decisions} /></CardContent>
+            <CardContent><DecisionBarChart rows={decisions} /></CardContent>
           </Card>
         </div>
 

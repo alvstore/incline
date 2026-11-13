@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { createElement, useLayoutEffect, useRef, type RefObject } from 'react';
 import gsap from 'gsap';
 
 export const prefersReducedMotion = () =>
@@ -42,3 +42,15 @@ export function useCountUp(value: number) {
   return ref;
 }
 
+
+/** Letter-rise heading that keeps a full accessible name. */
+export function SplitTitle({ text, className }: { text: string; className?: string }) {
+  return createElement('h1', { className, 'aria-label': text },
+    text.split(' ').map((w, wi) => createElement('span', { key: wi, 'aria-hidden': 'true', className: 'mr-[0.25em] inline-block overflow-hidden align-bottom last:mr-0' },
+      w.split('').map((c, ci) => createElement('span', { key: ci, 'data-anim': 'char', className: 'inline-block' }, c)))));
+}
+
+export function CountUp({ value, className }: { value: number; className?: string }) {
+  const ref = useCountUp(value);
+  return createElement('span', { ref, className }, '0');
+}

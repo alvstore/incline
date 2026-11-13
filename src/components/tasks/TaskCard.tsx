@@ -6,6 +6,7 @@ import { DueDatePill } from './DueDatePill';
 import { AssigneeAvatar } from './AssigneeAvatar';
 import { PRIORITY_DOT, PRIORITY_PILL } from './taskTokens';
 import { useSortable } from '@dnd-kit/sortable';
+import { isTaskDueToday, isTaskOverdue } from '@/lib/tasks/taskStatus';
 import { CSS } from '@dnd-kit/utilities';
 
 interface Props {
@@ -26,14 +27,15 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
   };
 
   const isClosed = task.status === 'completed' || task.status === 'cancelled';
+  const urgency = isClosed ? null : isTaskOverdue(task) ? { c: 'bg-destructive', l: 'Overdue' } : isTaskDueToday(task) ? { c: 'bg-warning', l: 'Due today' } : { c: 'bg-success', l: 'On track' };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative rounded-xl bg-card p-3.5 shadow-sm ring-1 ring-border',
-        'transition-all duration-200 hover:shadow-md hover:ring-primary/30',
+        'group relative rounded-xl bg-card p-3.5 shadow-sm',
+        'transition-shadow duration-200 hover:shadow-md',
         isDragging && 'opacity-50 ring-primary shadow-xl',
         isClosed && 'opacity-70',
       )}
@@ -107,6 +109,7 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {urgency && <span className={cn('h-2 w-2 rounded-full', urgency.c)} title={urgency.l} aria-label={urgency.l} />}
             {task.comments_count > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
                 <MessageSquare className="h-3 w-3" /> {task.comments_count}

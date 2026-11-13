@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { SplitTitle } from '@/components/motion/pageMotion';
 
 export type TaskView = 'board' | 'list' | 'calendar';
 
@@ -30,16 +31,14 @@ export function TasksHeader({ view, onViewChange, search, onSearchChange, subtit
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Operations · Tasks
           </div>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-            Mission Control
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          <SplitTitle text="Mission Control" className="mt-1 text-2xl sm:text-3xl font-bold text-foreground tracking-tight" />
+          <p className="mt-1 text-sm text-muted-foreground" aria-live="polite">{subtitle}<span className="hidden lg:inline"> · Shortcuts: J/K move, Enter open, D done, N new</span></p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {roles.some((r) => ['owner', 'admin', 'manager', 'staff'].includes(r.role)) && (
             <Button
               onClick={onNew}
-              className="bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-lg hover:shadow-xl hover:from-primary hover:to-primary rounded-xl"
+              className="rounded-full shadow-md"
             >
               <Plus className="mr-1.5 h-4 w-4" />
               New Task
@@ -55,14 +54,14 @@ export function TasksHeader({ view, onViewChange, search, onSearchChange, subtit
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search tasks…"
-            className="pl-9 pr-16 h-10 rounded-xl border-border bg-card shadow-sm focus-visible:ring-ring"
+            className="pl-9 pr-16 h-10 rounded-full border-border bg-card shadow-sm focus-visible:ring-ring"
           />
           <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
             <Command className="h-2.5 w-2.5" />K
           </kbd>
         </div>
 
-        <div className="inline-flex rounded-xl bg-card p-1 shadow-sm ring-1 ring-border">
+        <div className="inline-flex rounded-full bg-muted p-1" role="group" aria-label="View">
           {VIEWS.map((v) => {
             const Icon = v.icon;
             const active = view === v.id;
@@ -71,11 +70,11 @@ export function TasksHeader({ view, onViewChange, search, onSearchChange, subtit
                 key={v.id}
                 onClick={() => onViewChange(v.id)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150',
+                  'inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150',
                   'focus:outline-none focus:ring-2 focus:ring-ring',
                   active
-                    ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20'
-                    : 'text-muted-foreground hover:text-primary hover:bg-muted/50',
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 aria-pressed={active}
               >
