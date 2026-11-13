@@ -1226,6 +1226,13 @@
       "when": 1794464616155,
       "tag": "0174_fix_member_plan_request_name",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1794551920462,
+      "tag": "0175_fix_membership_activation_on_payment",
+      "breakpoints": true
     }
   ]
 }
