@@ -36,6 +36,7 @@ interface ProviderRow {
   is_active: boolean;
   is_default: boolean;
   enable_fallback: boolean;
+  fallback_provider_id?: string | null;
 }
 
 export function AIProvidersSettings() {
@@ -201,6 +202,7 @@ function ProviderDrawer({
       setIsActive(editing.is_active);
       setIsDefault(editing.is_default);
       setEnableFallback(editing.enable_fallback);
+      setBackupId(editing.fallback_provider_id ?? (editing.enable_fallback && editing.provider !== 'lovable' ? 'lovable' : 'none'));
       const presetModels = PROVIDER_DEFAULTS[editing.provider]?.models || [];
       setModelMode(presetModels.includes(editing.default_model) ? 'preset' : 'custom');
     } else {
@@ -214,6 +216,7 @@ function ProviderDrawer({
       setIsActive(true);
       setIsDefault(false);
       setEnableFallback(true);
+      setBackupId('lovable');
       setModelMode('preset');
     }
     setTestResult(null);
@@ -245,7 +248,9 @@ function ProviderDrawer({
     const payload = {
       provider, display_name: displayName, base_url: baseUrl || null,
       api_key_secret_name: secretName || null, default_model: model, scope,
-      is_active: isActive, is_default: isDefault, enable_fallback: enableFallback,
+      is_active: isActive, is_default: isDefault,
+      enable_fallback: backupId !== 'none',
+      fallback_provider_id: backupId === 'none' || backupId === 'lovable' ? null : backupId,
     };
     const op = isEdit
       ? (supabase as any).from('ai_provider_configs').update(payload).eq('id', editing!.id)
@@ -400,12 +405,19 @@ function ProviderDrawer({
               </div>
               <Switch checked={isDefault} onCheckedChange={setIsDefault} />
             </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Auto-fallback to Lovable AI</Label>
-                <p className="text-xs text-muted-foreground">If this provider fails, retry on Lovable AI</p>
-              </div>
-              <Switch checked={enableFallback} onCheckedChange={setEnableFallback} disabled={provider === 'lovable'} />
+            <div className="space-y-2">
+              <Label>Backup provider</Label>
+              <Select value={backupId} onValueChange={setBackupId}>
+                <SelectTrigger aria-label="Backup provider"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {provider !== 'lovable' && <SelectItem value="lovable">Lovable AI (built-in)</SelectItem>}
+                  {backupOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.display_name} · {p.default_model}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">If this provider is busy, down or out of credits, the same request is retried once on this backup.</p>
             </div>
           </div>
 
