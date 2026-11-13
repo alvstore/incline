@@ -25,7 +25,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import {
-  ALLOWED, blockedReply, canDo, classifyMemberChat, inrText, statusHeadline,
+  blockedReply, canDo, classifyMemberChat, inrText, statusHeadline,
   type ChatAction, type ChatFacts, type ChatState,
 } from "./memberChatPolicy.ts";
 
