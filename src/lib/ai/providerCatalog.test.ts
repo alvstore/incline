@@ -1,6 +1,6 @@
 import { describe, it as test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDER_DEFAULTS } from './providerCatalog';
+import { PROVIDER_DEFAULTS, providerOptions, parseModelIds } from './providerCatalog';
 
 describe('Lovable AI credential routing', () => {
   test('built-in AI uses the managed Lovable credential and gateway', () => {
