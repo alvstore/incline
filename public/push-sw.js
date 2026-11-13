@@ -5,8 +5,12 @@ self.addEventListener('push', event => {
   let data = {};
   try { data = event.data?.json() || {}; } catch { /* Keep a safe generic message. */ }
   const url = typeof data.url === 'string' && data.url.startsWith('/') && !data.url.startsWith('//') ? data.url : '/member-dashboard';
-  const title = typeof data.title === 'string' && data.title.length <= 40 ? data.title : 'Incline';
-  const body = typeof data.body === 'string' && data.body.length <= 80 ? data.body : 'You have a new update. Open Incline to view it.';
+  const text = (value, fallback, limit) => {
+    const clean = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+    return clean ? (clean.length > limit ? clean.slice(0, limit - 1) + '…' : clean) : fallback;
+  };
+  const title = text(data.title, 'Incline · New notification', 80);
+  const body = text(data.body, 'A new notification is available. Open Incline to view the details.', 180);
   event.waitUntil(self.registration.showNotification(title, {
     body,
     icon: '/icon-192.png', badge: '/icon-192.png',

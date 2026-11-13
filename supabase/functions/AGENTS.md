@@ -8,6 +8,7 @@
 - Chat pricing (website + WhatsApp leads) runs only through `_shared/salesPricing.ts` (stage ladder, live plan list, leak guard, one live link per lead+plan+amount in `sales_payment_links`, audit in `sales_quote_events`); the LLM never states amounts, so prices cannot be invented.
 
 - In-App delivery: a `notifications` row (via dispatchCommunication) fans out through `web-push` to every device in `web_push_subscriptions` (kind web|fcm; Flutter registers with `register_device`).
+- Browser push headings/descriptions and default destinations use `_shared/browserPushPresentation.ts`, never raw inbox text, so useful event summaries do not expose private records on lock screens.
 - Campaign In-App delivery retains full audience filters, uses recipient-scoped board access and atomic leased jobs through `process-inapp-delivery`/Automation Brain; notification-level dedupe survives interrupted dispatch so scheduled and immediate delivery cannot diverge.
 - Contract signing links resolve server-configured public HTTPS origins; request-origin fallback is published-host allowlisted and never local/preview, because signing invitations leave the browser.
 - Contract PDF photos come only from the linked profile's display avatar in this backend's avatars bucket; embed image bytes and retain cached signed artifacts, so arbitrary URL fetches and changing gate identities cannot alter signed copies.
