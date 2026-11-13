@@ -696,6 +696,7 @@ export function MemberProfileDrawer({
   open, 
   onOpenChange, 
   member,
+  initialTab,
   onPurchaseMembership,
   onPurchasePT
 }: MemberProfileDrawerProps) {
