@@ -10,6 +10,13 @@ import { PurchasePTPackageDrawer } from '@/components/pt/PurchasePTPackageDrawer
 import { MemberProfileDrawer } from '@/components/members/MemberProfileDrawer';
 import { QuickFreezeDrawer } from '@/components/members/QuickFreezeDrawer';
 import { GroupPurchaseDrawer } from '@/components/members/GroupPurchaseDrawer';
+import { CancelMembershipDrawer } from '@/components/members/CancelMembershipDrawer';
+import { SuspendMemberDrawer } from '@/components/members/SuspendMemberDrawer';
+import { liftMemberSuspension } from '@/services/membershipActionsService';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
+import { toast } from 'sonner';
+import { XCircle, Ban, ShieldCheck } from 'lucide-react';
 import {
   MemberFilterBar,
   type MemberFilterState,
@@ -149,6 +156,10 @@ export default function MembersPage() {
   const [purchasePTOpen, setPurchasePTOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileTab, setProfileTab] = useState<string>('overview');
+  const [cancelPlanOpen, setCancelPlanOpen] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const { roles: authRoles } = useAuth();
+  const canCancel = can.cancelMembership(authRoles as any);
   const [quickFreezeOpen, setQuickFreezeOpen] = useState(false);
   const [groupPurchaseOpen, setGroupPurchaseOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
@@ -573,6 +584,34 @@ export default function MembersPage() {
               </DropdownMenuItem>
             </>
           )}
+          {canCancel && (
+            <>
+              <DropdownMenuSeparator />
+              {(member.activeMembership || member.scheduledMembership) && (
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setSelectedMember(member); setCancelPlanOpen(true); }}>
+                  <XCircle className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Cancel plan
+                </DropdownMenuItem>
+              )}
+              {member.status === 'suspended' ? (
+                <DropdownMenuItem onClick={async () => {
+                  try {
+                    await liftMemberSuspension(member.id);
+                    toast.success('Suspension lifted. You can now sell a new plan.');
+                    queryClient.invalidateQueries({ queryKey: ['members'] });
+                  } catch (e: any) { toast.error(e?.message || 'Could not lift suspension'); }
+                }}>
+                  <ShieldCheck className="h-4 w-4 mr-2 text-success" aria-hidden="true" />
+                  Lift suspension
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setSelectedMember(member); setSuspendOpen(true); }}>
+                  <Ban className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Suspend member
+                </DropdownMenuItem>
+              )}
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -895,6 +934,20 @@ export default function MembersPage() {
               initialTab={profileTab}
               onPurchaseMembership={() => { setProfileOpen(false); setPurchaseOpen(true); }}
               onPurchasePT={() => { setProfileOpen(false); setPurchasePTOpen(true); }}
+            />
+            <CancelMembershipDrawer
+              open={cancelPlanOpen}
+              onOpenChange={setCancelPlanOpen}
+              membership={selectedMember && (selectedMember.activeMembership || selectedMember.scheduledMembership)
+                ? { ...(selectedMember.activeMembership || selectedMember.scheduledMembership), member_id: selectedMember.id, branch_id: selectedMember.branch_id }
+                : null}
+              memberName={selectedMember?.profiles?.full_name || 'Member'}
+            />
+            <SuspendMemberDrawer
+              open={suspendOpen}
+              onOpenChange={setSuspendOpen}
+              member={selectedMember}
+              membership={selectedMember ? (selectedMember.activeMembership || selectedMember.scheduledMembership || null) : null}
             />
             {selectedMembershipForFreeze && (
               <QuickFreezeDrawer

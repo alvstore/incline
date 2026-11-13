@@ -12,6 +12,7 @@ export interface CancelMembershipInput {
   refundAmount?: number;
   refundMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet';
   idempotencyKey?: string;
+  balanceAction?: 'keep' | 'write_off';
 }
 
 export interface CancelMembershipResult {
@@ -30,6 +31,7 @@ export async function cancelMembership(
     p_refund_amount: input.refundAmount ?? 0,
     p_refund_method: input.refundMethod ?? 'cash',
     p_idempotency_key: input.idempotencyKey ?? null,
+    p_balance_action: input.balanceAction ?? 'keep',
   });
   if (error) throw error;
   return data as unknown as CancelMembershipResult;
@@ -109,4 +111,34 @@ export async function upgradeMembership(
   });
   if (error) throw error;
   return data as unknown as UpgradeMembershipResult;
+}
+
+export interface SuspendMemberInput {
+  memberId: string;
+  reason: string;
+  balanceAction?: 'keep' | 'write_off';
+  refundAmount?: number;
+  refundMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet';
+}
+
+/** Suspend a member: cancels their current plan(s) and blocks access, atomically. */
+export async function suspendMember(input: SuspendMemberInput) {
+  const { data, error } = await supabase.rpc('suspend_member', {
+    p_member_id: input.memberId,
+    p_reason: input.reason,
+    p_balance_action: input.balanceAction ?? 'keep',
+    p_refund_amount: input.refundAmount ?? 0,
+    p_refund_method: input.refundMethod ?? 'cash',
+  });
+  if (error) throw error;
+  return data as { member_id: string; plans_cancelled: number };
+}
+
+export async function liftMemberSuspension(memberId: string, note?: string) {
+  const { data, error } = await supabase.rpc('lift_member_suspension', {
+    p_member_id: memberId,
+    p_note: note ?? null,
+  });
+  if (error) throw error;
+  return data;
 }
