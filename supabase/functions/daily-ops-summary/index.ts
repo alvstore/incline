@@ -1,3 +1,4 @@
+// v2.1.0 — event_key matches the approved daily_ops_summary_v2 template; strict (no guessed fallback).
 // daily-ops-summary v2.0.0 — richer report: unique members, renewals, PT sales/sessions/clients,
 //   payment split, facility bookings/no-shows, expiring members, leads. WhatsApp uses
 //   UTILITY template `daily_ops_summary_v2` (20 slots); falls back to SMS until approved.
@@ -295,7 +296,7 @@ Deno.serve(async (req) => {
         ["new_leads", String(newLeads)],
       ];
       const variables: Record<string, string> = {
-        member_name: name, full_name: name, event_key: "daily_ops_summary_report",
+        member_name: name, full_name: name, event_key: "daily_ops_summary", strict_event_template: "1",
         total_sales: inr(invoicedTotal),
       };
       slots.forEach(([k, v], idx) => {

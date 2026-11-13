@@ -1437,7 +1437,10 @@ Deno.serve(async (req) => {
               }
             }
           }
-          if (!input.template_id) {
+          // Strict callers (e.g. owner reports) must never borrow an unrelated
+          // template like class_booked when their own template is missing.
+          const strictEventTemplate = String((input.payload as any)?.variables?.strict_event_template ?? '') === '1';
+          if (!input.template_id && !strictEventTemplate) {
             // v1.36.0: aligned with the trigger_event values that actually exist
             // in `templates` (previously several categories pointed at event
             // names nobody uses, e.g. payment_alert → payment_overdue, which
