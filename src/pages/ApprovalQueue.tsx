@@ -1,4 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { ApprovalTrendChart } from '@/components/approvals/ApprovalTrendChart';
+import { usePageEntrance, useRowsEntrance, useCountUp, prefersReducedMotion } from '@/components/approvals/approvalMotion';
+import { clickOnActivateKey } from '@/lib/a11y/clickable';
+import gsap from 'gsap';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +19,7 @@ import { closeMemberRequestTask } from '@/lib/tasks/memberRequestTasks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict, subDays } from 'date-fns';
 
 const safeFormatDate = (value: any, fmt: string = 'dd MMM yyyy', fallback: string = '-') => {
   if (!value) return fallback;
@@ -71,8 +76,8 @@ export default function ApprovalQueuePage() {
   const queryClient = useQueryClient();
 
   // Fetch approval requests
-  const { data: requests = [], isLoading } = useQuery({
-    queryKey: ['approval-queue', branchFilter, activeTab, typeFilter],
+  const { data: requests = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ['approval-queue', branchFilter, activeTab],
     queryFn: async () => {
       let query = supabase
         .from('approval_requests')
@@ -87,11 +92,7 @@ export default function ApprovalQueuePage() {
         query = query.eq('status', activeTab as 'pending' | 'approved' | 'rejected');
       }
 
-      if (typeFilter !== 'all') {
-        query = query.eq('approval_type', typeFilter as 'membership_freeze' | 'membership_transfer' | 'refund' | 'discount' | 'complimentary' | 'expense' | 'contract');
-      }
-
-      const { data, error } = await query.limit(100);
+      const { data, error } = await query.limit(200);
       if (error) throw error;
       return data;
     },
@@ -120,6 +121,18 @@ export default function ApprovalQueuePage() {
       ]);
 
       return { pending: pending || 0, approvedToday: approved || 0, rejectedToday: rejected || 0 };
+    },
+  });
+
+  const { data: decisions = [] } = useQuery({
+    queryKey: ['approval-stats', 'trend', branchFilter],
+    queryFn: async () => {
+      let q = supabase.from('approval_requests').select('status, reviewed_at')
+        .in('status', ['approved', 'rejected']).gte('reviewed_at', format(subDays(new Date(), 6), 'yyyy-MM-dd'));
+      if (branchFilter) q = q.eq('branch_id', branchFilter);
+      const { data, error } = await q.limit(1000);
+      if (error) throw error;
+      return data as { status: string; reviewed_at: string | null }[];
     },
   });
 
@@ -196,18 +209,6 @@ export default function ApprovalQueuePage() {
     onError: (error: any) => {
       toast.error(error.message || 'Failed to process request');
     },
-  });
-
-  // Filter by search
-  const filteredRequests = requests.filter((r) => {
-    if (!search) return true;
-    const data = r.request_data as any;
-    const searchLower = search.toLowerCase();
-    return (
-      data?.memberName?.toLowerCase().includes(searchLower) ||
-      data?.memberCode?.toLowerCase().includes(searchLower) ||
-      r.approval_type?.toLowerCase().includes(searchLower)
-    );
   });
 
   const getTypeConfig = (type: string) => {
@@ -332,198 +333,4 @@ export default function ApprovalQueuePage() {
     );
   };
 
-  return (
-    <AppLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Approval Queue</h1>
-            <p className="text-muted-foreground">Review and process pending requests</p>
-          </div>
-          {/* Branch selector moved to global header */}
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid gap-4 grid-cols-3">
-          <Card className="border-l-4 border-l-warning">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold text-warning">{stats?.pending || 0}</p>
-                </div>
-                <Clock className="h-8 w-8 text-warning/50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-success">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Approved Today</p>
-                  <p className="text-2xl font-bold text-success">{stats?.approvedToday || 0}</p>
-                </div>
-                <CheckCircle2 className="h-8 w-8 text-success/50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-4 border-l-destructive">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Rejected Today</p>
-                  <p className="text-2xl font-bold text-destructive">{stats?.rejectedToday || 0}</p>
-                </div>
-                <XCircle className="h-8 w-8 text-destructive/50" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters & Tabs */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search by member name or code..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="membership_freeze">Freeze</SelectItem>
-                  <SelectItem value="membership_transfer">Membership Transfer</SelectItem>
-                  <SelectItem value="branch_transfer">Branch Transfer</SelectItem>
-                  <SelectItem value="comp_gift">Comp/Gift</SelectItem>
-                  <SelectItem value="refund">Refund</SelectItem>
-                  <SelectItem value="discount">Discount</SelectItem>
-                  <SelectItem value="complimentary">Complimentary</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="pending" className="gap-2">
-                  Pending
-                  {stats?.pending ? <Badge variant="secondary" className="ml-1">{stats.pending}</Badge> : null}
-                </TabsTrigger>
-                <TabsTrigger value="approved">Approved</TabsTrigger>
-                <TabsTrigger value="rejected">Rejected</TabsTrigger>
-                <TabsTrigger value="all">All</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value={activeTab} className="mt-4">
-                {isLoading ? (
-                  <div className="flex justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                  </div>
-                ) : filteredRequests.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    {activeTab === 'pending' ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <CheckCircle2 className="h-12 w-12 text-success/50" />
-                        <p>All caught up! No pending requests.</p>
-                      </div>
-                    ) : (
-                      <p>No {activeTab} requests found</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredRequests.map((request) => {
-                      const config = getTypeConfig(request.approval_type);
-                      const TypeIcon = config.icon;
-
-                      return (
-                        <Card key={request.id} className="relative overflow-hidden">
-                          <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                              <Badge className={config.color}>
-                                <TypeIcon className="h-3 w-3 mr-1" />
-                                {config.label}
-                              </Badge>
-                              <Badge
-                                variant="outline"
-                                className={
-                                  request.status === 'pending'
-                                    ? 'bg-warning/10 text-warning border-warning/20'
-                                    : request.status === 'approved'
-                                    ? 'bg-success/10 text-success border-success/20'
-                                    : 'bg-destructive/10 text-destructive border-destructive/20'
-                                }
-                              >
-                                {request.status}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {safeFormatDate(request.created_at, 'dd MMM yyyy, HH:mm')}
-                            </p>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            {renderRequestDetails(request)}
-
-                            {request.status === 'pending' && (
-                              <>
-                                <Textarea
-                                  placeholder="Add notes (optional)"
-                                  value={reviewNotes[request.id] || ''}
-                                  onChange={(e) => setReviewNotes({ ...reviewNotes, [request.id]: e.target.value })}
-                                  rows={2}
-                                  className="mt-2"
-                                />
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex-1 text-destructive hover:bg-destructive/10"
-                                    onClick={() => approveMutation.mutate({ requestId: request.id, approved: false })}
-                                    disabled={approveMutation.isPending}
-                                  >
-                                    <XCircle className="h-4 w-4 mr-1" />
-                                    Reject
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    className="flex-1"
-                                    onClick={() => request.approval_type === 'locker_request'
-                                      ? setLockerApproval(request as unknown as LockerRequestRow)
-                                      : approveMutation.mutate({ requestId: request.id, approved: true })}
-                                    disabled={approveMutation.isPending}
-                                  >
-                                    <CheckCircle className="h-4 w-4 mr-1" />
-                                    Approve
-                                  </Button>
-                                </div>
-                              </>
-                            )}
-
-                            {request.review_notes && request.status !== 'pending' && (
-                              <p className="text-xs text-muted-foreground border-t pt-2">
-                                <span className="font-medium">Notes:</span> {request.review_notes}
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
-      <ApproveLockerRequestSheet request={lockerApproval} onOpenChange={(o) => !o && setLockerApproval(null)} />
-    </AppLayout>
-  );
-}
+__TAIL__
