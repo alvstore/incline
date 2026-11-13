@@ -18918,6 +18918,7 @@ export type Database = {
         Args: { _path: string }
         Returns: boolean
       }
+      member_chat_status: { Args: { p_member_id: string }; Returns: Json }
       member_check_in: {
         Args: {
           _at?: string
