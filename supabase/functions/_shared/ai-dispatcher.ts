@@ -1,4 +1,4 @@
-// Shared AI dispatcher — routes chat-completion calls to the active provider
+// v3.0.0 — Shared AI dispatcher — routes chat-completion calls to the active provider
 // for the given scope (Lovable AI, OpenRouter, Ollama, DeepSeek, or any
 // OpenAI-compatible endpoint), with optional automatic fallback to Lovable AI.
 //
@@ -14,6 +14,8 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_LOVABLE_MODEL = "google/gemini-3-flash-preview";
+
+const PROVIDER_COLS = "id, provider, display_name, base_url, api_key_secret_name, default_model, enable_fallback, fallback_provider_id, extra_config";
 
 export type AIScope = "all" | "whatsapp_ai" | "lead_scoring" | "fitness_plans" | "dashboard_insights" | "lead_nurture";
 
@@ -49,7 +51,9 @@ export interface CallAIResult {
 }
 
 interface ProviderConfig {
-  provider: "lovable" | "openrouter" | "ollama" | "deepseek" | "google" | "groq" | "together" | "mistral" | "anthropic" | "xai" | "openai_compatible";
+  provider: "lovable" | "openrouter" | "ollama" | "deepseek" | "google" | "groq" | "together" | "mistral" | "anthropic" | "xai" | "nvidia" | "openai_compatible";
+  id?: string;
+  fallback_provider_id?: string | null;
   display_name: string;
   base_url: string | null;
   api_key_secret_name: string | null;
@@ -71,7 +75,7 @@ async function resolveProvider(
   // 1. Active default for this exact scope
   let { data } = await supabase
     .from("ai_provider_configs")
-    .select("provider, display_name, base_url, api_key_secret_name, default_model, enable_fallback, extra_config")
+    .select(PROVIDER_COLS)
     .eq("scope", scope)
     .eq("is_active", true)
     .eq("is_default", true)
@@ -84,7 +88,7 @@ async function resolveProvider(
   // 2. Active default for "all" scope
   ({ data } = await supabase
     .from("ai_provider_configs")
-    .select("provider, display_name, base_url, api_key_secret_name, default_model, enable_fallback, extra_config")
+    .select(PROVIDER_COLS)
     .eq("scope", "all")
     .eq("is_active", true)
     .eq("is_default", true)
@@ -161,6 +165,8 @@ function buildEndpoint(cfg: ProviderConfig): string {
       return "https://api.anthropic.com/v1/chat/completions";
     case "xai":
       return "https://api.x.ai/v1/chat/completions";
+    case "nvidia":
+      return "https://integrate.api.nvidia.com/v1/chat/completions";
     case "ollama":
       throw new Error("Ollama provider requires base_url to be set (e.g. https://ollama.example.com)");
     case "openai_compatible":
@@ -175,6 +181,17 @@ function isTransientError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   if (/HTTP\s+(429|5\d\d)/i.test(msg)) return true;
   if (/abort|timeout|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|network/i.test(msg)) return true;
+  return false;
+}
+
+// v3 — Which primary failures may switch to the backup provider:
+// busy/down/timeout/network, credits exhausted (402) or a credit/limit 403.
+// Bad requests (400), auth (401), refusals and other 4xx never switch.
+export function isFallbackEligible(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (isTransientError(err)) return true;
+  if (/HTTP\s+402/i.test(msg)) return true;
+  if (/HTTP\s+403/i.test(msg) && /credit|limit|quota|disabled/i.test(msg)) return true;
   return false;
 }
 
@@ -279,13 +296,39 @@ function logCall(
   /* no-op — see comment above */
 }
 
+const LOVABLE_BACKUP: ProviderConfig = {
+  provider: "lovable",
+  display_name: "Lovable AI (fallback)",
+  base_url: LOVABLE_GATEWAY,
+  api_key_secret_name: "LOVABLE_API_KEY",
+  default_model: DEFAULT_LOVABLE_MODEL,
+  enable_fallback: false,
+  extra_config: {},
+};
+
+// Backup chosen in the provider drawer (fallback_provider_id); legacy
+// enable_fallback without an id still means "Lovable AI".
+async function resolveBackup(supabase: SupabaseClient, primary: ProviderConfig): Promise<ProviderConfig | null> {
+  if (primary.fallback_provider_id && primary.fallback_provider_id !== primary.id) {
+    const { data } = await supabase
+      .from("ai_provider_configs")
+      .select(PROVIDER_COLS)
+      .eq("id", primary.fallback_provider_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data) return data as ProviderConfig;
+  }
+  if (primary.enable_fallback && primary.provider !== "lovable") return LOVABLE_BACKUP;
+  return null;
+}
+
 export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
   const supabase = opts.supabase ?? getServiceSupabase();
   let primary: ProviderConfig | null = null;
   if (opts.providerId) {
     const { data } = await supabase
       .from("ai_provider_configs")
-      .select("provider, display_name, base_url, api_key_secret_name, default_model, enable_fallback, extra_config")
+      .select(PROVIDER_COLS)
       .eq("id", opts.providerId)
       .eq("is_active", true)
       .maybeSingle();
@@ -314,47 +357,22 @@ export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`[ai-dispatcher] primary provider ${primary.provider} failed:`, errorMessage);
 
-    if (primary.enable_fallback && primary.provider !== "lovable") {
+    const fallback = await resolveBackup(supabase, primary);
+    if (fallback && isFallbackEligible(err)) {
       try {
-        const fallback: ProviderConfig = {
-          provider: "lovable",
-          display_name: "Lovable AI (fallback)",
-          base_url: LOVABLE_GATEWAY,
-          api_key_secret_name: "LOVABLE_API_KEY",
-          default_model: DEFAULT_LOVABLE_MODEL,
-          enable_fallback: false,
-          extra_config: {},
-        };
-        // Strip primary-specific model so Lovable uses its own default (primary model IDs are invalid here)
+        // Strip primary-specific model so the backup uses its own default.
         const result = await executeCall(fallback, { ...opts, model: undefined });
-        logCall(supabase, {
-          provider: "lovable",
-          scope: opts.scope,
-          model: result.model,
-          status: "fallback",
-          duration_ms: Date.now() - start,
-          error_message: `primary ${primary.provider} failed: ${errorMessage}`,
-          fallback_used: true,
-        });
+        console.warn(`[ai-dispatcher] answered by backup ${fallback.provider} after ${primary.provider} failed`);
         return {
           content: result.content,
           raw: result.raw,
-          provider: "lovable",
+          provider: fallback.provider,
           model: result.model,
           fallback_used: true,
         };
       } catch (fbErr) {
         const fbMessage = fbErr instanceof Error ? fbErr.message : String(fbErr);
-        logCall(supabase, {
-          provider: primary.provider,
-          scope: opts.scope,
-          model: opts.model || primary.default_model,
-          status: "error",
-          duration_ms: Date.now() - start,
-          error_message: `primary failed: ${errorMessage}; fallback failed: ${fbMessage}`,
-          fallback_used: true,
-        });
-        throw new Error(`Both primary (${primary.provider}) and fallback (lovable) failed. ${fbMessage}`);
+        throw new Error(`Both primary (${primary.provider}) and backup (${fallback.provider}) failed. ${fbMessage}`);
       }
     }
 
