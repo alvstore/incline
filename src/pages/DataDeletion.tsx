@@ -127,8 +127,8 @@ export default function DataDeletion() {
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   Questions? Email{" "}
-                  <a href="mailto:privacy@theinclinelife.com" className="text-primary font-medium">
-                    privacy@theinclinelife.com
+                  <a href="mailto:info@theinclinelife.com" className="text-primary font-medium">
+                    info@theinclinelife.com
                   </a>
                 </p>
               </form>
