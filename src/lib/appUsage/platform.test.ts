@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
+import { describe, it, expect } from 'bun:test';
 import { detectPlatform, activityLevel, shouldBeat } from './platform';
 
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)';
