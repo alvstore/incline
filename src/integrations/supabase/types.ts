@@ -1016,6 +1016,62 @@ export type Database = {
           },
         ]
       }
+      app_devices: {
+        Row: {
+          app: string
+          app_version: string | null
+          branch_id: string | null
+          device_model: string | null
+          first_seen_at: string
+          id: string
+          install_id: string
+          last_seen_at: string
+          os_version: string | null
+          person_type: string
+          platform: string
+          push_enabled: boolean
+          user_id: string
+        }
+        Insert: {
+          app?: string
+          app_version?: string | null
+          branch_id?: string | null
+          device_model?: string | null
+          first_seen_at?: string
+          id?: string
+          install_id: string
+          last_seen_at?: string
+          os_version?: string | null
+          person_type?: string
+          platform: string
+          push_enabled?: boolean
+          user_id: string
+        }
+        Update: {
+          app?: string
+          app_version?: string | null
+          branch_id?: string | null
+          device_model?: string | null
+          first_seen_at?: string
+          id?: string
+          install_id?: string
+          last_seen_at?: string
+          os_version?: string | null
+          person_type?: string
+          platform?: string
+          push_enabled?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_devices_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       approval_audit_archive: {
         Row: {
           action: string
@@ -17282,6 +17338,7 @@ export type Database = {
           sessions_total: number
         }[]
       }
+      app_usage_summary: { Args: { p_branch_id?: string }; Returns: Json }
       apply_advance_recovery: {
         Args: { _amount: number; _user_id: string }
         Returns: Json
@@ -19747,6 +19804,18 @@ export type Database = {
         Returns: Json
       }
       refresh_campaign_stats: { Args: { p_campaign_id: string }; Returns: Json }
+      register_app_device: {
+        Args: {
+          p_app?: string
+          p_app_version?: string
+          p_device_model?: string
+          p_install_id: string
+          p_os_version?: string
+          p_platform: string
+          p_push_enabled?: boolean
+        }
+        Returns: undefined
+      }
       reinstate_class_session: { Args: { p_class_id: string }; Returns: Json }
       release_coupon: {
         Args: { p_reason?: string; p_redemption_id: string }
