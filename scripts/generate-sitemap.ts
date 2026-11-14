@@ -16,13 +16,13 @@ interface SitemapEntry {
   priority?: string;
 }
 
+// lastmod = date the page's content last changed materially. Update by hand when
+// you change a page; never use the build date.
 const entries: SitemapEntry[] = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/register", changefreq: "monthly", priority: "0.9" },
-  { path: "/feedback", changefreq: "monthly", priority: "0.6" },
-  { path: "/privacy-policy", changefreq: "yearly", priority: "0.3" },
-  { path: "/terms", changefreq: "yearly", priority: "0.3" },
-  { path: "/terms-of-service", changefreq: "yearly", priority: "0.3" },
+  { path: "/privacy-policy", lastmod: "2026-11-14", changefreq: "yearly", priority: "0.3" },
+  { path: "/terms", lastmod: "2026-11-14", changefreq: "yearly", priority: "0.3" },
   { path: "/data-deletion", changefreq: "yearly", priority: "0.3" },
 ];
 
