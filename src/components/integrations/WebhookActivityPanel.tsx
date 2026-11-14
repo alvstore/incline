@@ -258,6 +258,17 @@ export function WebhookActivityPanel() {
     }
   };
 
+  const { data: lastDelivery } = useQuery<string | null>({
+    queryKey: ['webhook-last-razorpay-delivery'],
+    queryFn: async () => {
+      const { data } = await supabase.from('payment_transactions')
+        .select('received_at').eq('gateway', 'razorpay').eq('source', 'webhook')
+        .order('received_at', { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+      return (data as { received_at: string | null } | null)?.received_at ?? null;
+    },
+    refetchInterval: 60000,
+  });
+
   return (
     <Card className="rounded-2xl border-border/60 shadow-sm">
       <CardHeader className="pb-3">
@@ -270,6 +281,14 @@ export function WebhookActivityPanel() {
               Webhook Activity
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">Every payment webhook delivery, signature verification, and HTTP outcome.</p>
+            {lastDelivery !== undefined && (!lastDelivery || Date.now() - new Date(lastDelivery).getTime() > 7 * 86400000) && (
+              <div role="status" className="mt-3 rounded-xl bg-warning/10 text-foreground p-3 text-sm space-y-1">
+                <p className="font-semibold flex items-center gap-1.5"><AlertCircle className="h-4 w-4 text-warning" /> Razorpay webhook not connected</p>
+                <p className="text-muted-foreground">No payment webhook received in 7 days. Payments are still picked up by the 5-minute auto-check. To get instant updates, in Razorpay → Settings → Webhooks add:</p>
+                <code className="block break-all rounded-lg bg-muted px-2 py-1 text-xs">{`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/payment-webhook?gateway=razorpay`}</code>
+                <p className="text-muted-foreground text-xs">Events: payment_link.paid, payment.captured, payment.failed. Use the webhook secret saved in Integrations.</p>
+              </div>
+            )}
           </div>
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />Refresh
