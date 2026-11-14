@@ -411,8 +411,10 @@ export default function ApprovalQueuePage() {
     const run = () => {
       setHidden((h) => { const n = new Set(h); n.add(request.id); return n; });
       selectNext(request.id);
+      pendingDecisions.current.set(request.id, { requestId: request.id, approved });
       const t = window.setTimeout(() => {
         timers.current.delete(request.id);
+        pendingDecisions.current.delete(request.id);
         approveMutation.mutate({ requestId: request.id, approved }, {
           onSettled: () => setHidden((h) => { const n = new Set(h); n.delete(request.id); return n; }),
         });
