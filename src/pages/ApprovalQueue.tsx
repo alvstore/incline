@@ -375,7 +375,15 @@ export default function ApprovalQueuePage() {
     return () => ctx.revert();
   }, [selectedId]);
 
-  useEffect(() => () => { timers.current.forEach((t) => window.clearTimeout(t)); }, []);
+  // On unmount, commit any decisions still inside the undo window instead of dropping them.
+  const pendingDecisions = useRef<Map<string, { requestId: string; approved: boolean }>>(new Map());
+  const approveMutationRef = useRef(approveMutation);
+  useEffect(() => { approveMutationRef.current = approveMutation; }, [approveMutation]);
+  useEffect(() => () => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    pendingDecisions.current.forEach((d) => approveMutationRef.current.mutate(d));
+    pendingDecisions.current.clear();
+  }, []);
 
   const oldestPending = useMemo(() => {
     const p = requests.filter((r) => r.status === 'pending');
@@ -403,8 +411,10 @@ export default function ApprovalQueuePage() {
     const run = () => {
       setHidden((h) => { const n = new Set(h); n.add(request.id); return n; });
       selectNext(request.id);
+      pendingDecisions.current.set(request.id, { requestId: request.id, approved });
       const t = window.setTimeout(() => {
         timers.current.delete(request.id);
+        pendingDecisions.current.delete(request.id);
         approveMutation.mutate({ requestId: request.id, approved }, {
           onSettled: () => setHidden((h) => { const n = new Set(h); n.delete(request.id); return n; }),
         });
@@ -415,6 +425,7 @@ export default function ApprovalQueuePage() {
         action: { label: 'Undo', onClick: () => {
           const tm = timers.current.get(request.id);
           if (tm) { window.clearTimeout(tm); timers.current.delete(request.id); }
+          pendingDecisions.current.delete(request.id);
           setHidden((h) => { const n = new Set(h); n.delete(request.id); return n; });
           setSelectedId(request.id);
         } },
