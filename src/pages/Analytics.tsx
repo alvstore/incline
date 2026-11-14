@@ -377,7 +377,6 @@ export default function AnalyticsPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {appUsageOn && canSeeAppUsage && <AppUsageCard />}
         {/* Hero Gradient Card */}
         <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl shadow-lg shadow-primary/20 p-6 text-primary-foreground">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -948,9 +947,9 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          {/* Session Duration */}
-          <div className="mt-6">
-            <Card className="rounded-2xl border-none shadow-lg shadow-primary/5">
+          {/* Session Duration + App usage */}
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            <Card className={`rounded-2xl border-none shadow-lg shadow-primary/5 ${appUsageOn && canSeeAppUsage ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -1009,6 +1008,7 @@ export default function AnalyticsPage() {
                 )}
               </CardContent>
             </Card>
+            {appUsageOn && canSeeAppUsage && <AppUsageCard />}
           </div>
         </div>
       </div>
