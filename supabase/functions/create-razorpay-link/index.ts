@@ -247,6 +247,7 @@ serve(async (req: Request) => {
         : `Payment for Invoice ${invoice.invoice_number || invoiceId}`,
       notes: {
         invoice_id: invoiceId,
+        branch_id: invoice.branch_id,
         base_amount: String(amount),
         convenience_fee: String(surcharge),
         ...(partialReason ? { partial_reason: partialReason.slice(0, 250) } : {}),

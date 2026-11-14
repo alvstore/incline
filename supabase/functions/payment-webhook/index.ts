@@ -1,3 +1,4 @@
+// v2.4.0 — branch resolved server-side; clean URL without ?gateway/&branch_id supported.
 // v2.3.1 — order/payment path credits only the invoice balance (fee split).
 // v2.3.0 — Chat sales links (notes.kind=sales_lead) marked paid idempotently with a desk task.
 // v2.2.1 — STRICT FAIL-CLOSED: Refuses to process any payment webhook without a valid provider signature.
@@ -175,27 +176,28 @@ serve(async (req: Request) => {
     }
 
     const url = new URL(req.url);
-    const gateway = url.searchParams.get("gateway") || "razorpay";
-    const branchId = url.searchParams.get("branch_id");
+    // Gateway: query param (legacy) or detected from the signature header.
+    const gateway = (url.searchParams.get("gateway")
+      || (req.headers.get("x-razorpay-signature") ? "razorpay"
+        : req.headers.get("x-verify") ? "phonepe" : "razorpay")).toLowerCase();
     outcome.gateway = gateway;
-    outcome.branchId = branchId;
-
     if (!isValidGateway(gateway)) {
-      return reply({ error: "Invalid payment gateway" }, 400, `Invalid gateway: ${gateway}`);
+      return reply({ error: "invalid_input", message: "Invalid payment gateway" }, 400, `Invalid gateway: ${gateway}`);
     }
-    if (!branchId) return reply({ error: "branch_id is required" }, 400, "Missing branch_id query param");
-    if (!isValidUUID(branchId)) return reply({ error: "Invalid branch_id format" }, 400, `Invalid branch_id format: ${branchId}`);
-
-    const { data: branchExists } = await supabase
-      .from("branches").select("id").eq("id", branchId).maybeSingle();
-    if (!branchExists) return reply({ error: "Branch not found" }, 404, `Branch not found: ${branchId}`);
 
     const body = await req.text();
     let payload: any;
     try { payload = JSON.parse(body); }
-    catch { return reply({ error: "Invalid JSON payload" }, 400, "Invalid JSON payload"); }
+    catch { return reply({ error: "invalid_input", message: "Invalid JSON payload" }, 400, "Invalid JSON payload"); }
     outcome.payload = payload;
 
+    // Branch is resolved server-side (one merchant account serves every branch).
+    // ?branch_id= is accepted only as a legacy hint and must exist.
+    const branchId = await resolveBranchId(supabase, gateway, payload, url.searchParams.get("branch_id"));
+    outcome.branchId = branchId;
+    if (!branchId) return reply({ error: "not_found", message: "Branch could not be resolved" }, 404, "Branch could not be resolved");
+
+    // Credentials: branch override first, then the global business account.
     const { data: integrations, error: integrationError } = await supabase
       .from("integration_settings")
       .select("credentials, branch_id")
@@ -210,7 +212,7 @@ serve(async (req: Request) => {
     const integration = integrations?.[0];
 
     if (!integration) {
-      return reply({ error: "Integration not configured" }, 400, "Integration not configured for branch");
+      return reply({ error: "invalid_input", message: "Integration not configured" }, 400, "Payment integration not configured");
     }
 
     let transactionData: {
@@ -540,7 +542,7 @@ serve(async (req: Request) => {
       .from("payment_transactions")
       .select("id, invoice_id")
       .eq("gateway_order_id", transactionData.gateway_order_id)
-      .eq("branch_id", branchId)
+      .eq("branch_id", outcome.branchId)
       .eq("gateway", gateway)
       .eq("source", "order")
       .order('created_at', { ascending: false })
@@ -647,4 +649,60 @@ async function sha512(message: string): Promise<string> {
   const data = new TextEncoder().encode(message);
   const hashBuffer = await globalThis.crypto.subtle.digest("SHA-512", data);
   return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function toUuid(raw?: string | null): string | null {
+  if (!raw) return null;
+  const head = String(raw).split("|")[0];
+  if (isValidUUID(head)) return head;
+  const hex = head.replace(/-/g, "").slice(0, 32);
+  return /^[0-9a-f]{32}$/i.test(hex)
+    ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+    : null;
+}
+
+async function branchExists(supabase: any, id: string | null): Promise<string | null> {
+  if (!id || !isValidUUID(id)) return null;
+  const { data } = await supabase.from("branches").select("id").eq("id", id).maybeSingle();
+  return data?.id ?? null;
+}
+
+// Order: legacy hint → notes.branch_id → invoice → order row → chat sales link → sole active branch.
+async function resolveBranchId(supabase: any, gateway: string, payload: any, hint: string | null): Promise<string | null> {
+  const fromHint = await branchExists(supabase, hint);
+  if (fromHint) return fromHint;
+  let invoiceId: string | null = null;
+  let orderId: string | null = null;
+  let linkId: string | null = null;
+  if (gateway === "razorpay") {
+    const plink = payload?.payload?.payment_link?.entity;
+    const pay = payload?.payload?.payment?.entity;
+    const notes = { ...(pay?.notes || {}), ...(plink?.notes || {}) };
+    const fromNotes = await branchExists(supabase, notes.branch_id);
+    if (fromNotes) return fromNotes;
+    invoiceId = toUuid(plink?.reference_id) ?? toUuid(notes.invoice_id);
+    orderId = pay?.order_id ?? null;
+    linkId = plink?.id ?? null;
+  } else if (gateway === "payu") {
+    invoiceId = toUuid(payload?.udf1);
+    orderId = payload?.txnid ?? null;
+  } else if (gateway === "phonepe") {
+    orderId = payload?.data?.merchantTransactionId ?? null;
+  }
+  if (invoiceId) {
+    const { data } = await supabase.from("invoices").select("branch_id").eq("id", invoiceId).maybeSingle();
+    if (data?.branch_id) return data.branch_id;
+  }
+  for (const oid of [orderId, linkId]) {
+    if (!oid) continue;
+    const { data } = await supabase.from("payment_transactions").select("branch_id")
+      .eq("gateway", gateway).eq("gateway_order_id", oid).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (data?.branch_id) return data.branch_id;
+  }
+  if (linkId) {
+    const { data } = await supabase.from("sales_payment_links").select("branch_id").eq("gateway_link_id", linkId).maybeSingle();
+    if (data?.branch_id) return data.branch_id;
+  }
+  const { data: active } = await supabase.from("branches").select("id").eq("is_active", true).limit(2);
+  return active && active.length === 1 ? active[0].id : null;
 }
