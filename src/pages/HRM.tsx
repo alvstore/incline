@@ -290,6 +290,8 @@ export default function HRMPage() {
     () => Array.from(new Set(unifiedPeople.map((p) => p.department).filter(Boolean))) as string[],
     [unifiedPeople],
   );
+  const appUsageOn = useAppUsageEnabled();
+  const appDevices = useAppDevices(useMemo(() => unifiedPeople.map((p: any) => p.user_id), [unifiedPeople]), appUsageOn);
   const filteredDirectory = useMemo(() => {
     const term = dirSearch.toLowerCase();
     return unifiedPeople.filter((p) => {
