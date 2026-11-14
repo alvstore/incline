@@ -166,7 +166,7 @@ export default function MyInvoices() {
 
         {/* Unfinished online checkouts — no bill, nothing owed */}
         {draftInvoices.length > 0 && (
-          <Card className="rounded-2xl border-warning/30 bg-warning/60 shadow-sm">
+          <Card className="rounded-2xl border-warning/30 bg-warning/10 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Payment not completed</CardTitle>
               <p className="text-sm text-muted-foreground">

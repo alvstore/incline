@@ -1889,7 +1889,7 @@ export function MemberProfileDrawer({
 
               {/* Membership Registration & Agreement — the ONE signed document */}
               {onboardingSig && (
-                <Card className="border-success/30 bg-success/40">
+                <Card className="border-success/30 bg-success/10">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
                       <FileText className="h-4 w-4 text-success" />

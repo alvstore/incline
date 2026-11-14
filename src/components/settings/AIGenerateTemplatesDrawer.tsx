@@ -338,7 +338,7 @@ export function AIGenerateTemplatesDrawer({
               )}
 
               {brokenTemplates.length > 0 && (
-                <div className="rounded-2xl border border-warning/30 bg-warning/60 px-4 py-3 space-y-2">
+                <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-warning" />
                     <span className="text-sm font-bold text-warning">

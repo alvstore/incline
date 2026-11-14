@@ -756,7 +756,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           {/* Digital Signature — hidden when member already signed via /register */}
           {existingSignature && !editMode ? (
-            <div className="rounded-xl border border-success/30 bg-success/60 p-4 space-y-2">
+            <div className="rounded-xl border border-success/30 bg-success/10 p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success" />
                 <Label className="font-semibold text-success">

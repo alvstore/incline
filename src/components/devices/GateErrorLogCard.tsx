@@ -174,13 +174,13 @@ const GateErrorLogCard = ({ branchId }: { branchId?: string }) => {
               <Skeleton className="h-14 rounded-xl" />
             </>
           ) : isError ? (
-            <div className="rounded-xl bg-destructive/70 p-6 text-center">
+            <div className="rounded-xl bg-destructive/10 p-6 text-center">
               <AlertOctagon className="mx-auto mb-2 h-6 w-6 text-destructive" />
               <p className="text-sm font-semibold text-foreground">Could not load the error log</p>
               <p className="text-xs text-muted-foreground">Please refresh the page and try again.</p>
             </div>
           ) : items.length === 0 ? (
-            <div className="rounded-xl bg-success/60 p-6 text-center">
+            <div className="rounded-xl bg-success/10 p-6 text-center">
               <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-success" />
               <p className="text-sm font-semibold text-foreground">No gate failures in the last 3 days</p>
               <p className="text-xs text-muted-foreground">
