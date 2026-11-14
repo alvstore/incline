@@ -838,7 +838,7 @@ Deno.serve(async (req) => {
         const { attempt_id } = await createOutboundCall(opts.apiKey, cfg, {
           to,
           agentVariables: finalVars,
-          initialBotMessage: buildOpeningLine(opts.reason, finalVars),
+          // Greeting is owned by the Sarvam agent script; no initial_bot_message override.
           webhookUrl: cfg.webhook_token ? webhookUrl : undefined,
           webhookMetadata: { attempt_ref: attemptRowId, source: opts.source },
         });
