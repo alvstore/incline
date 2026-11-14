@@ -31,6 +31,9 @@ export interface RenewalCaseRow {
   last_visit: string | null;
   latest_event: string | null;
   latest_event_at: string | null;
+  closed_at?: string | null;
+  cycle_number?: number | null;
+  prior_renewals?: number | null;
   total_count: number;
 }
 
@@ -43,11 +46,11 @@ export interface RenewalActionInput {
   note?: string | null;
 }
 
-export function useRenewalQueue(branchId: string | undefined, queue: RenewalQueue, search: string) {
+export function useRenewalQueue(branchId: string | undefined, queue: RenewalQueue, search: string, since?: string) {
   const { roles } = useAuth();
   return useQuery({
     enabled: can.manageRenewals(roles),
-    queryKey: ['renewal-center', branchId ?? 'all', queue, search],
+    queryKey: ['renewal-center', branchId ?? 'all', queue, search, since ?? ''],
     queryFn: async (): Promise<RenewalCaseRow[]> => {
       const { data, error } = await supabase.rpc('renewal_center_queue', {
         _branch_id: branchId ?? undefined,
@@ -55,7 +58,8 @@ export function useRenewalQueue(branchId: string | undefined, queue: RenewalQueu
         _search: search.trim() || undefined,
         _limit: 100,
         _offset: 0,
-      });
+        _since: since,
+      } as any);
       if (error) throw error;
       return (data ?? []) as RenewalCaseRow[];
     },
@@ -106,14 +110,15 @@ export type RenewalQueueCounts = Partial<Record<RenewalQueue, number>>;
  * Per-tab case counts so the queue tabs can show where the work actually is.
  * Same branch/capability scoping as the queue itself.
  */
-export function useRenewalQueueCounts(branchId: string | undefined) {
+export function useRenewalQueueCounts(branchId: string | undefined, since?: string) {
   const { roles } = useAuth();
   return useQuery({
     enabled: can.manageRenewals(roles),
-    queryKey: ['renewal-queue-counts', branchId ?? 'all'],
+    queryKey: ['renewal-queue-counts', branchId ?? 'all', since ?? ''],
     queryFn: async (): Promise<RenewalQueueCounts> => {
       const { data, error } = await (supabase as any).rpc('renewal_queue_counts', {
         _branch_id: branchId ?? undefined,
+        _since: since,
       });
       if (error) throw error;
       return (data ?? {}) as RenewalQueueCounts;
@@ -232,6 +237,23 @@ export function useSetRenewalEngineConfig() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['renewal-engine-config'] });
+    },
+  });
+}
+export interface RenewalHistoryRow {
+  case_id: string; expiry_date: string; stage: string; outcome: string | null;
+  attempts_count: number; voice_attempts_count: number; created_at: string; closed_at: string | null; plan_name: string | null;
+}
+
+/** Every renewal cycle for one member, newest first (timeline panel). */
+export function useRenewalMemberHistory(memberId: string | undefined) {
+  return useQuery({
+    enabled: Boolean(memberId),
+    queryKey: ['renewal-member-history', memberId],
+    queryFn: async (): Promise<RenewalHistoryRow[]> => {
+      const { data, error } = await (supabase as any).rpc('renewal_member_history', { _member_id: memberId });
+      if (error) throw error;
+      return (data ?? []) as RenewalHistoryRow[];
     },
   });
 }
