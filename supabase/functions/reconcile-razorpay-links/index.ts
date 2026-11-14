@@ -1,3 +1,4 @@
+// v3.1.0 — credits only the invoice balance (convenience fee split off); logs every outcome.
 // v3.0.0 — de-duplicates against manual staff entries; preserves capture time and Razorpay settlement deductions.
 //
 // Fetches the current status of pending Razorpay Payment Links via the
@@ -10,6 +11,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { splitCapturedAmount } from "../_shared/razorpayAmounts.ts";
 import { requireCaller, callerBranchIds } from "../_shared/requireCaller.ts";
 
 const corsHeaders = {
@@ -88,13 +90,15 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
     .eq("id", tx.invoice_id)
     .maybeSingle();
   if (!inv) return { ok: false, reason: "invoice_missing" };
+  const due = Number(inv.total_amount || 0) - Number(inv.amount_paid || 0);
+  const { base: creditAmount, fee: convenienceFee } = splitCapturedAmount(paidAmount, due);
 
   // 2. De-duplicate against a manual staff entry for the same gateway payment.
   // Front desk often records the Razorpay payment by hand seconds before the
   // reconciler imports it; adopt that ledger row instead of inserting a twin.
   const { data: adoptedId } = await supabase.rpc("settle_payment_adopt_manual", {
     p_invoice_id: inv.id,
-    p_amount: paidAmount,
+    p_amount: creditAmount,
     p_gateway_payment_id: gatewayPaymentId,
     p_payment_source: "razorpay",
     p_metadata: {
@@ -105,6 +109,8 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
       gateway_fee: gatewayFee,
       gateway_tax: gatewayTax,
       net_settlement_amount: netSettlement,
+      charged_amount: paidAmount,
+      convenience_fee: convenienceFee,
     },
   });
 
@@ -113,7 +119,7 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
       p_branch_id: inv.branch_id,
       p_invoice_id: inv.id,
       p_member_id: inv.member_id,
-      p_amount: paidAmount,
+      p_amount: creditAmount,
       p_payment_method: paymentMethod,
       p_transaction_id: gatewayPaymentId,
       p_notes: `Razorpay payment ${gatewayPaymentId} auto-reconciled`,
@@ -131,6 +137,8 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
         gateway_fee: gatewayFee,
         gateway_tax: gatewayTax,
         net_settlement_amount: netSettlement,
+        charged_amount: paidAmount,
+        convenience_fee: convenienceFee,
       },
     });
     if (settleError) throw settleError;
@@ -173,11 +181,11 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
       event_type: "reconciled.captured",
       received_at: capturedAt,
       source: "order",
-      webhook_data: { ...(tx.webhook_data || {}), reconciled_at: new Date().toISOString(), reconciler_version: "2.1.0", gateway_fee: gatewayFee, gateway_tax: gatewayTax },
+      webhook_data: { ...(tx.webhook_data || {}), reconciled_at: new Date().toISOString(), reconciler_version: "3.1.0", auto_checked: true, convenience_fee: convenienceFee, credited_amount: creditAmount, gateway_fee: gatewayFee, gateway_tax: gatewayTax },
     })
     .eq("id", tx.id);
 
-  return { ok: true, invoice_id: inv.id, amount: paidAmount, payment_id: gatewayPaymentId };
+  return { ok: true, invoice_id: inv.id, amount: creditAmount, convenience_fee: convenienceFee, payment_id: gatewayPaymentId };
 }
 
 serve(async (req: Request) => {
@@ -196,9 +204,9 @@ serve(async (req: Request) => {
       .select("id, invoice_id, gateway_order_id, status, amount, branch_id, webhook_data")
       .eq("gateway", "razorpay")
       .eq("source", "order")
-      .gte("created_at", new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
+      .gte("created_at", new Date(Date.now() - (body?.days === 120 ? 120 : 14) * 24 * 3600 * 1000).toISOString())
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(body?.days === 120 ? 200 : 50);
 
     if (invoiceId) q = q.eq("invoice_id", invoiceId);
     else q = q.in("status", ["created", "pending", "authorized"]);
@@ -242,7 +250,19 @@ serve(async (req: Request) => {
           ? gatewayData.items.find((p: any) => p.status === "captured")
           : null);
       if (paidPayment && (gatewayData.status === "paid" || paidPayment.status === "captured")) {
-        const settled = await settleCaptured(supabase, tx, paidPayment);
+        let settled: any;
+        try { settled = await settleCaptured(supabase, tx, paidPayment); }
+        catch (e: any) { settled = { ok: false, reason: "settle_error", error: e?.message ?? String(e) }; }
+        if (!settled.ok) {
+          await supabase.from("payment_transactions").update({
+            webhook_data: { ...(tx.webhook_data || {}), reconcile: { at: new Date().toISOString(), outcome: settled.reason, detail: settled } },
+          }).eq("id", tx.id);
+          await supabase.rpc("log_error_event", {
+            p_severity: "error", p_source: "edge_function", p_function_name: "reconcile-razorpay-links",
+            p_message: `Razorpay payment captured but not recorded: ${settled.reason}`,
+            p_context: { tx_id: tx.id, invoice_id: tx.invoice_id, ...settled },
+          }).then(() => {}, () => {});
+        }
         results.push({ tx: tx.id, ...settled, gateway_status: paidPayment.status });
       } else if (isPaymentLink && (gatewayData.status === "cancelled" || gatewayData.status === "expired")) {
         await supabase.from("payment_transactions")
@@ -250,6 +270,9 @@ serve(async (req: Request) => {
           .eq("id", tx.id);
         results.push({ tx: tx.id, gateway_status: gatewayData.status, updated: "failed" });
       } else {
+        await supabase.from("payment_transactions").update({
+          webhook_data: { ...(tx.webhook_data || {}), reconcile: { at: new Date().toISOString(), outcome: "waiting", gateway_status: gatewayData.status ?? "not_captured" } },
+        }).eq("id", tx.id);
         results.push({ tx: tx.id, gateway_status: gatewayData.status ?? "not_captured", updated: "no_change" });
       }
     }
