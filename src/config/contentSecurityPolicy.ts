@@ -9,7 +9,7 @@ export const CSP_DIRECTIVES: Record<string, string[]> = {
   "img-src": ["'self'", "data:", "blob:", "https:"],
   "media-src": ["'self'", "data:", "blob:", "https:"],
   "font-src": ["'self'", "data:"],
-  "connect-src": ["'self'", "https://*.supabase.co", "wss://*.supabase.co", "https://*.razorpay.com", "https://maps.googleapis.com", "https://*.lovable.app", "https://*.lovable.dev", "https://*.gpteng.co", "https://prodapi.howbodyfit.com", "https://storage.googleapis.com", "data:", "blob:"],
+  "connect-src": ["'self'", "https://*.supabase.co", "wss://*.supabase.co", "https://*.razorpay.com", "https://maps.googleapis.com", "https://*.lovable.app", "https://*.lovable.dev", "https://*.gpteng.co", "https://prodapi.howbodyfit.com", "https://howbody-haidiobj.s3.eu-central-1.amazonaws.com", "https://storage.googleapis.com", "data:", "blob:"],
   "frame-src": ["'self'", "blob:", "https://*.razorpay.com", "https://www.google.com", "https://www.youtube.com", "https://www.youtube-nocookie.com"],
   "worker-src": ["'self'", "blob:"],
   "manifest-src": ["'self'"],

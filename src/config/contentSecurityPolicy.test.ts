@@ -16,3 +16,7 @@ test("CSP blocks plugins and base-tag hijacking", () => {
   expect(csp).toContain("base-uri 'self'");
   expect(csp).not.toContain("'unsafe-eval'");
 });
+
+test("CSP allows the body-scan 3D model storage host", () => {
+  expect(CSP_DIRECTIVES["connect-src"]).toContain("https://howbody-haidiobj.s3.eu-central-1.amazonaws.com");
+});
