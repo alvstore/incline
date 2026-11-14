@@ -1,3 +1,4 @@
+// v1.8.0 — greeting comes from the Sarvam agent script (no initial_bot_message override).
 // v1.7.0 — test calls (and member-less calls by signed-in users) only to the caller's own profile phone.
 // v1.6.0 — mandatory outreach limits and pre-dial renewal case binding.
 // v1.4.0 — call recording import (get_recording). v1.3.0 — purpose-specific opening line (renewal vs retention). Sarvam Voice AI control plane (owner/admin only).
@@ -17,7 +18,6 @@ import {
   checkConnection,
   corsHeaders,
   buildAgentVariables,
-  buildOpeningLine,
   createOutboundCall,
   isOutboundCapable,
   json,
