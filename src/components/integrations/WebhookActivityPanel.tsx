@@ -285,7 +285,7 @@ export function WebhookActivityPanel() {
               <div role="status" className="mt-3 rounded-xl bg-warning/10 text-foreground p-3 text-sm space-y-1">
                 <p className="font-semibold flex items-center gap-1.5"><AlertCircle className="h-4 w-4 text-warning" /> Razorpay webhook not connected</p>
                 <p className="text-muted-foreground">No payment webhook received in 7 days. Payments are still picked up by the 5-minute auto-check. To get instant updates, in Razorpay → Settings → Webhooks add:</p>
-                <code className="block break-all rounded-lg bg-muted px-2 py-1 text-xs">{`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/payment-webhook?gateway=razorpay&branch_id=${branchFilter || rows[0]?.branch_id || '<branch-id>'}`}</code>
+                <code className="block break-all rounded-lg bg-muted px-2 py-1 text-xs">{`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/payment-webhook`}</code>
                 <p className="text-muted-foreground text-xs">Events: payment_link.paid, payment.captured, payment.failed. Use the webhook secret saved in Integrations.</p>
               </div>
             )}

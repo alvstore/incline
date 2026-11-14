@@ -19,10 +19,8 @@ export const getWebhookInfoForProvider = (type: string, provider: string, branch
   if (type === 'payment_gateway') {
     return {
       label: 'Payment Webhook URL',
-      url: `${SUPABASE_FUNCTION_BASE}/payment-webhook?gateway=${encodeURIComponent(provider)}${branchId && branchId !== 'all' ? `&branch_id=${encodeURIComponent(branchId)}` : ''}`,
-      description: branchId && branchId !== 'all'
-        ? 'Paste this exact branch-aware URL in your payment gateway webhook settings.'
-        : 'Select a branch to generate the required branch-aware payment webhook URL.',
+      url: `${SUPABASE_FUNCTION_BASE}/payment-webhook`,
+      description: 'One URL for the whole business. The branch is worked out automatically from each payment.',
     };
   }
   if (type === 'whatsapp' && provider === 'meta_cloud') {
