@@ -2,3 +2,4 @@
 - Clickable cards/rows that can't be a `<button>` get `tabIndex={0}` + `onKeyDown={clickOnActivateKey}` (`src/lib/a11y/clickable.ts`) and `role="button"` unless they are table rows or contain other controls, so keyboard users can reach every action.
 - Themes whose primary is unreadable on a dark page declare `darkVars` in ThemeContext; inline theme vars override `.dark`, so dark-mode fixes belong there, not in index.css.
 - Renewal cases: one open case per member (partial unique index + supersede trigger); the Active pipeline shows only open cases and Renewed/Lost are period-scoped, so repeat cycles become history instead of piling up.
+- App usage insights: devices recorded via register_app_device heartbeat (2 min, visible only); counts come from branch-guarded app_usage_summary, so managers never see other branches.

@@ -20,6 +20,7 @@ import { getNavMode, setNavMode, subscribeNavMode, type NavMode } from '@/lib/na
 import { getMenuForRole } from '@/config/menu';
 import { groupMenuIntoModules, findActiveModuleId } from '@/config/navModules';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
+import { useAppHeartbeat } from '@/hooks/useAppHeartbeat';
 import { MemberMobileNav } from '@/components/member/MemberMobileNav';
 import { TrainerMobileNav } from '@/components/trainer/TrainerMobileNav';
 import { MobileBranchBar } from './MobileBranchBar';
@@ -50,6 +51,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Live presence heartbeat (mounted once globally)
   usePresenceHeartbeat();
+  useAppHeartbeat();
 
   const [navMode, setNavModeState] = useState<NavMode>(getNavMode);
   useEffect(() => subscribeNavMode(setNavModeState), []);
