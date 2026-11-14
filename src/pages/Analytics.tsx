@@ -11,6 +11,8 @@ import { format, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, ge
 import { analyticsService } from '@/services/analyticsService';
 import { UpgradeWindowWidget } from '@/components/dashboard/UpgradeWindowWidget';
 import { useAuth } from '@/contexts/AuthContext';
+import { AppUsageCard } from '@/components/appUsage/AppUsageCard';
+import { useAppUsageEnabled } from '@/hooks/useAppDevices';
 import { can } from '@/lib/auth/permissions';
 import { useState } from 'react';
 import { ResponsiveSheet, ResponsiveSheetHeader, ResponsiveSheetTitle, ResponsiveSheetDescription } from '@/components/ui/ResponsiveSheet';
@@ -36,6 +38,8 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export default function AnalyticsPage() {
   const { branchFilter } = useBranchContext();
   const { roles } = useAuth();
+  const appUsageOn = useAppUsageEnabled();
+  const canSeeAppUsage = roles?.some((r: any) => ['owner','admin','manager'].includes(typeof r === 'string' ? r : r?.role));
 
   const { data: stats } = useQuery({
     queryKey: ['analytics-stats', branchFilter],
@@ -373,6 +377,7 @@ export default function AnalyticsPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
+        {appUsageOn && canSeeAppUsage && <AppUsageCard />}
         {/* Hero Gradient Card */}
         <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl shadow-lg shadow-primary/20 p-6 text-primary-foreground">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">

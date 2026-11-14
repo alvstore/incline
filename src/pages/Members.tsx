@@ -44,6 +44,8 @@ import { CalendarDays } from 'lucide-react';
 import { membershipValidity, type ValidityTone } from '@/lib/memberships/validityDisplay';
 
 import { clickOnActivateKey } from '@/lib/a11y/clickable';
+import { AppPlatformIcon } from '@/components/appUsage/AppPlatformIcon';
+import { useAppDevices, useAppUsageEnabled } from '@/hooks/useAppDevices';
 const PAGE_SIZE = 20;
 
 interface MemberRow {
@@ -304,6 +306,9 @@ export default function MembersPage() {
   });
 
   const members = useMemo(() => rows.map(toLegacyMember), [rows]);
+  const appUsageOn = useAppUsageEnabled();
+  const memberUserIds = useMemo(() => members.map((m: any) => m.user_id).filter(Boolean) as string[], [members]);
+  const appDevices = useAppDevices(memberUserIds, appUsageOn);
   const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
   const totalPages = totalCount ? Math.ceil(totalCount / PAGE_SIZE) : 0;
 
@@ -794,7 +799,7 @@ export default function MembersPage() {
                                 }`} />
                               </div>
                               <div>
-                                <div className="font-medium group-hover:text-primary transition-colors">{member.profiles?.full_name || 'N/A'}</div>
+                                <div className="flex items-center gap-1.5 font-medium group-hover:text-primary transition-colors">{member.profiles?.full_name || 'N/A'}{appUsageOn && <AppPlatformIcon devices={appDevices.get(member.user_id)} />}</div>
                                 <div className="text-sm text-muted-foreground">{member.profiles?.phone || member.profiles?.email}</div>
                               </div>
                             </div>
@@ -851,7 +856,7 @@ export default function MembersPage() {
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium truncate">{member.profiles?.full_name || 'N/A'}</p>
+                            <p className="flex min-w-0 items-center gap-1.5 font-medium"><span className="truncate">{member.profiles?.full_name || 'N/A'}</span>{appUsageOn && <AppPlatformIcon devices={appDevices.get(member.user_id)} />}</p>
                             <Badge variant="outline" className={`${getStatusColor(member.status)} rounded-full text-[10px]`}>
                               {statusLabel(member)}
                             </Badge>
