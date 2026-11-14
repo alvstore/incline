@@ -18,7 +18,7 @@
 - Submit the sitemap to the connected Google Search Console after publish; Bing Webmaster Tools needs one connect card for you to approve.
 
 ## 4. Google reviews
-- Show verified Google reviews on the homepage only if pulled from Google with its required attribution (needs a Google Places key you approve). Until then, keep the current "review us on Google" request flow; no copied or invented reviews.
+- Not shown on the website. The current private "review us on Google" request flow stays as it is.
 
 ## 5. Tracking
 - Count on the website: phone taps, WhatsApp taps, registration started, registration completed — visible as a small card in Analytics.
