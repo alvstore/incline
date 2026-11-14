@@ -18,6 +18,20 @@ const NotFound = () => {
 
   useEffect(() => {
     console.warn("404 — Route not found:", location.pathname);
+    // No real 404 status on static hosting: tell crawlers not to index this screen.
+    const prevTitle = document.title;
+    document.title = "Page not found — The Incline Life";
+    const robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const prevRobots = robots?.content;
+    if (robots) robots.content = "noindex, follow";
+    const canonical = document.querySelector('link[rel="canonical"]');
+    const parent = canonical?.parentNode;
+    canonical?.remove();
+    return () => {
+      document.title = prevTitle;
+      if (robots && prevRobots) robots.content = prevRobots;
+      if (canonical && parent) parent.appendChild(canonical);
+    };
   }, [location.pathname]);
 
   const handleHome = () => {
