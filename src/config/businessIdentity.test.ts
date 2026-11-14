@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// @ts-expect-error bun test runtime types are not installed
+import { describe, it, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { BUSINESS_IDENTITY, realOr } from './businessIdentity';
 
