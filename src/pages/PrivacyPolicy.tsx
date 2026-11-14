@@ -1,4 +1,4 @@
-import { BUSINESS_ADDRESS, BUSINESS_IDENTITY, realOr } from '@/config/businessIdentity';
+import { BUSINESS_ADDRESS, BUSINESS_IDENTITY } from '@/config/businessIdentity';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Dumbbell } from 'lucide-react';
@@ -208,9 +208,9 @@ export default function PrivacyPolicyPage() {
           <p>For privacy requests, WhatsApp consent updates, internal-audit data requests, or complaints, contact:</p>
           <ul className="list-disc pl-5 space-y-2">
             <li>Entity: {BUSINESS_IDENTITY.legalName}</li>
-            <li>Email: {realOr(theme.contactEmail, BUSINESS_IDENTITY.email)}</li>
-            <li>Phone: {realOr(theme.contactPhone, BUSINESS_IDENTITY.phone)}</li>
-            <li>Address: {realOr(theme.address, BUSINESS_ADDRESS)}</li>
+            <li>Email: {BUSINESS_IDENTITY.email}</li>
+            <li>Phone: {BUSINESS_IDENTITY.phone}</li>
+            <li>Address: {BUSINESS_ADDRESS}</li>
           </ul>
           <p>
             We handle requests in line with applicable local guidelines, regulatory obligations, and internal audit controls.
