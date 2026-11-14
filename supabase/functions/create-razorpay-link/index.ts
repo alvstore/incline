@@ -145,11 +145,12 @@ serve(async (req: Request) => {
       const due = Math.round((Number(invoice.total_amount ?? 0) - Number(invoice.amount_paid ?? 0)) * 100) / 100;
       const resolved = resolvePaymentLinkAmount({
         due,
-        isStaff: caller.ok && !memberSelfPay,
-        mode: body.mode,
+        isStaff: caller.ok && !memberSelfPay && !caller.internal,
+        // Internal callers (reminders, WhatsApp menu, AI) always charge the balance.
+        mode: caller.ok && caller.internal ? undefined : body.mode,
         partialAmount: body.partialAmount,
         partialReason: body.partialReason,
-        legacyAmount: body.amount,
+        legacyAmount: caller.ok && caller.internal ? undefined : body.amount,
       });
       if (!resolved.ok) {
         return new Response(JSON.stringify({ error: resolved.error, code: resolved.code }),
