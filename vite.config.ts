@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { buildCsp } from "./src/config/contentSecurityPolicy";
 
 const SUPABASE_URL = "https://iyqqpbvnszyrrgerniog.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -15,6 +16,12 @@ export default defineConfig(() => ({
   },
   plugins: [
     react(),
+    {
+      name: "inject-csp",
+      apply: "build",
+      transformIndexHtml: (html: string) =>
+        html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${buildCsp()}" />`),
+    },
   ],
   optimizeDeps: {
     // Pre-bundle heavy, ubiquitous deps so dev cold-starts don't pause on

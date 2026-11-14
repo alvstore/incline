@@ -3,3 +3,4 @@
 - Themes whose primary is unreadable on a dark page declare `darkVars` in ThemeContext; inline theme vars override `.dark`, so dark-mode fixes belong there, not in index.css.
 - Renewal cases: one open case per member (partial unique index + supersede trigger); the Active pipeline shows only open cases and Renewed/Lost are period-scoped, so repeat cycles become history instead of piling up.
 - App usage insights: devices recorded via register_app_device heartbeat (2 min, visible only); counts come from branch-guarded app_usage_summary, so managers never see other branches.
+- Production CSP lives in src/config/contentSecurityPolicy.ts and is injected as a <meta> only at build time (hosting can't set headers; dev HMR needs looser rules); add a host there whenever a feature loads a new outside service.
