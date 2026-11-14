@@ -22,7 +22,7 @@ New table `app_devices`, one row per user + install:
 
 ### 2. Heartbeat RPC `register_app_device`
 - Called on app open/resume by the web app, the Flutter member app and the Flutter team app (Flutter docs updated with the exact call).
-- Throttled: updates last_seen at most every 15 minutes, so no write storms.
+- Throttled: updates last_seen at most every 2 minutes, and only while the app is on screen, so no write storms.
 - Role and branch come from the server, never from the phone.
 
 ### 3. Summary RPC `app_usage_summary(branch, period)`
@@ -49,9 +49,13 @@ No location, IP, IMEI or advertising IDs. Device rows are removed when a person 
 - Migration: table, RLS, grants, two RPCs with `rpc_guard_applies()` and branch checks, plus a cleanup job for rows inactive for over a year (cron gated on pending work).
 - Client: `src/lib/appUsage/platform.ts` (detects iOS/Android/PWA/browser; tested), `useAppHeartbeat` mounted once in the app shell, `useAppUsageSummary`, `AppPlatformIcon` component.
 - Backfill: seed rows from existing `web_push_subscriptions` (fcm = phone app, platform unknown until the first heartbeat).
-- Tests: platform detection, the 15-minute throttle rule, and the activity window (an icon greys out after 30 days).
+- Tests: platform detection, the 2-minute throttle, the 5-minute online window, and the activity window (an icon greys out after 30 days).
 - Out of scope: per-screen analytics and app store download counts (those come from App Store Connect and Play Console).
 
-## Open questions
-- Should "active" mean opened in the last 30 days, or a different window?
-- Should managers see app usage for their own branch only (planned), or should only owner/admin see it?
+## Decisions
+- Access: managers see their own branches; owner/admin see all branches.
+- "Active" covers both the phone app and the web version, with three levels that update on their own:
+  - **Online now:** green dot, the app was used in the last 5 minutes (heartbeat every 2 minutes while the app is open and on screen).
+  - **Active:** used in the last 30 days.
+  - **Inactive:** greyed out after 30 days.
+- Auto-refresh: the Members icons and the App Usage card update live without a page reload (a live update with a 60-second refresh as backup), and they pause while the browser tab is hidden.
