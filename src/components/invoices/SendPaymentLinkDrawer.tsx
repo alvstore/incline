@@ -12,6 +12,7 @@ import { IndianRupee, MessageSquare, Link2, Copy, CheckCircle, Loader2, External
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { dispatchCommunication, buildDedupeKey } from '@/lib/comms/dispatch';
+import { sendPaymentLinkWhatsApp } from '@/lib/comms/paymentLinkMessage';
 
 interface SendPaymentLinkDrawerProps {
   open: boolean;
@@ -89,16 +90,14 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
       // (routed through the canonical dispatcher — dedupe + preferences applied).
       if (invoice.member_phone && invoice.branch_id) {
         try {
-          await dispatchCommunication({
-            branch_id: invoice.branch_id,
-            channel: 'whatsapp',
-            category: 'payment_alert',
-            recipient: invoice.member_phone,
-            payload: {
-              body: `Hi ${invoice.member_name || 'Member'}, your invoice ${invoice.invoice_number} has a balance of ₹${paymentAmount.toLocaleString()}. Pay securely here: ${data.short_url}`,
-            },
-            dedupe_key: buildDedupeKey(['paylink', invoice.id, paymentAmount, 'wa']),
-            force: true,
+          await sendPaymentLinkWhatsApp({
+            branchId: invoice.branch_id,
+            phone: invoice.member_phone,
+            memberName: invoice.member_name,
+            amount: paymentAmount,
+            reference: invoice.invoice_number,
+            link: data.short_url,
+            dedupeParts: [invoice.id, paymentAmount, data.plink_id ?? ''],
           });
         } catch (e) { console.warn('WhatsApp dispatch skipped:', e); }
       }

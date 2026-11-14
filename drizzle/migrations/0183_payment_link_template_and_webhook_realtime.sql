@@ -1,0 +1,2 @@
+ALTER PUBLICATION supabase_realtime ADD TABLE public.payment_transactions;
+UPDATE public.templates SET variables = '["member_name","amount","payment_purpose","invoice_number","payment_link"]'::jsonb WHERE meta_template_name = 'payment_link_v1';

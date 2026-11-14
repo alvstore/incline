@@ -1,4 +1,4 @@
-// v2.10.0 — Accepts x-internal-token (verified) as the system worker.
+// v2.11.0 — Accepts x-internal-token (verified) as the system worker.
 // v2.9.0 — Adds `delete_meta` (removes a template from the Meta catalog by name).
 // v2.8.0 — System-worker auth and idempotent approved-template event reconciliation.
 // v2.7.0 — Paginated full-catalog reconciliation; imported Meta rows carry live
@@ -611,7 +611,7 @@ serve(async (req) => {
       const exampleMap: Record<string, string> = {
         member_name: "Rahul", name: "Rahul", trainer_name: "Coach Arjun",
         plan_name: "Annual Premium", end_date: "31-Dec-2026", start_date: "01-Jan-2026",
-        member_code: "INC-00123", amount: "5000", invoice_number: "INV-INC-2604-0001",
+        member_code: "INC-00123", amount: "5000", payment_link: "https://rzp.io/rzp/AbC123", payment_purpose: "Annual membership", invoice_number: "INV-INC-2604-0001",
         date: "11-Apr-2026", due_date: "18-Apr-2026", time: "10:00 AM",
         class_name: "Power Yoga", facility_name: "Sauna Room",
         start_time: "10:00 AM", end_time: "10:30 AM",

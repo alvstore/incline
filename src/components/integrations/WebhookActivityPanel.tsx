@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import gsap from 'gsap';
+import { CountUp, useRowsEntrance, prefersReducedMotion } from '@/components/motion/pageMotion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -173,17 +175,44 @@ export function WebhookActivityPanel() {
     staleTime: 60_000,
   });
 
-  // Realtime subscription for live updates
+  // Realtime: debounced cache refresh + highlight rows that arrive live.
+  const [live, setLive] = useState(false);
+  const freshIds = useRef<Set<string>>(new Set());
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const ch = supabase
       .channel(`webhook-activity-rt-${Math.random().toString(36).slice(2)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_transactions' }, () => {
-        qc.invalidateQueries({ queryKey: ['webhook-activity'] });
-        qc.invalidateQueries({ queryKey: ['gateway-last-received'] });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_transactions' }, (payload) => {
+        const id = (payload.new as { id?: string } | null)?.id;
+        if (id) freshIds.current.add(id);
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          qc.invalidateQueries({ queryKey: ['webhook-activity'] });
+          qc.invalidateQueries({ queryKey: ['gateway-last-received'] });
+          qc.invalidateQueries({ queryKey: ['webhook-last-delivery'] });
+        }, 400);
       })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+      .subscribe((status) => {
+        setLive(status === 'SUBSCRIBED');
+        if (status === 'SUBSCRIBED') qc.invalidateQueries({ queryKey: ['webhook-activity'] });
+      });
+    return () => { clearTimeout(timer); supabase.removeChannel(ch); };
   }, [qc]);
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  useRowsEntrance(tableRef, `${gatewayFilter}|${statusFilter}|${sigFilter}|${dateFrom}|${dateTo}|${page}|${isLoading}`);
+  // Flash rows that arrived via realtime once they render.
+  useEffect(() => {
+    if (!tableRef.current || freshIds.current.size === 0) return;
+    const els = Array.from(freshIds.current)
+      .map(id => tableRef.current!.querySelector<HTMLElement>(`[data-row-id="${id}"]`))
+      .filter((el): el is HTMLElement => !!el);
+    if (els.length === 0) return;
+    freshIds.current.clear();
+    if (prefersReducedMotion()) return;
+    gsap.fromTo(els, { backgroundColor: 'hsl(var(--primary) / 0.14)', x: -8 },
+      { backgroundColor: 'hsl(var(--primary) / 0)', x: 0, duration: 1.6, ease: 'expo.out', clearProps: 'backgroundColor,transform' });
+  }, [pageData]);
 
   // Server-side filters cover gateway/status/signature/dates; search remains client-side
   // since it spans multiple text columns.
@@ -290,28 +319,37 @@ export function WebhookActivityPanel() {
               </div>
             )}
           </div>
+          <div className="flex items-center gap-2">
+          <span role="status" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${live ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+            <span className="relative flex h-2 w-2">
+              {live && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60 motion-reduce:hidden" />}
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${live ? 'bg-success' : 'bg-muted-foreground'}`} />
+            </span>
+            {live ? 'Live' : 'Connecting…'}
+          </span>
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />Refresh
           </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-border/60 p-3 bg-muted/40">
+          <div data-anim="card" className="rounded-xl border border-border/60 p-3 bg-muted/40">
             <p className="text-xs text-muted-foreground">Total (last 100)</p>
-            <p className="text-2xl font-bold">{stats.total}</p>
+            <p className="text-2xl font-bold"><CountUp value={stats.total} /></p>
           </div>
-          <div className="rounded-xl border border-success/20 p-3 bg-success/5">
+          <div data-anim="card" className="rounded-xl border border-success/20 p-3 bg-success/5">
             <p className="text-xs text-success dark:text-success">Captured</p>
-            <p className="text-2xl font-bold text-success dark:text-success">{stats.captured}</p>
+            <p className="text-2xl font-bold text-success dark:text-success"><CountUp value={stats.captured} /></p>
           </div>
-          <div className="rounded-xl border border-destructive/20 p-3 bg-destructive/5">
+          <div data-anim="card" className="rounded-xl border border-destructive/20 p-3 bg-destructive/5">
             <p className="text-xs text-destructive">Failed / Rejected</p>
-            <p className="text-2xl font-bold text-destructive">{stats.failed}</p>
+            <p className="text-2xl font-bold text-destructive"><CountUp value={stats.failed} /></p>
           </div>
-          <div className="rounded-xl border border-warning/20 p-3 bg-warning/5">
+          <div data-anim="card" className="rounded-xl border border-warning/20 p-3 bg-warning/5">
             <p className="text-xs text-warning dark:text-warning">Bad signatures</p>
-            <p className="text-2xl font-bold text-warning dark:text-warning">{stats.sigInvalid}</p>
+            <p className="text-2xl font-bold text-warning dark:text-warning"><CountUp value={stats.sigInvalid} /></p>
           </div>
         </div>
 
@@ -361,7 +399,7 @@ export function WebhookActivityPanel() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border/60 overflow-hidden">
+        <div ref={tableRef} className="rounded-xl border border-border/60 overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -403,7 +441,7 @@ export function WebhookActivityPanel() {
                 return (
                   <Collapsible key={r.id} open={expandedId === r.id} onOpenChange={(o) => setExpandedId(o ? r.id : null)} asChild>
                     <>
-                      <TableRow tabIndex={0} onKeyDown={clickOnActivateKey}
+                      <TableRow data-anim="row" data-row-id={r.id} tabIndex={0} onKeyDown={clickOnActivateKey}
                         className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-muted/30 ${r.invoice_id || r.invoice?.member_id || r.member_id ? 'cursor-pointer' : ''}`}
                         onClick={() => {
                           const memberId = r.invoice?.member_id || r.member_id;

@@ -2,12 +2,16 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useRef } from 'react';
+import { SplitTitle, usePageEntrance } from '@/components/motion/pageMotion';
 import { WebhookActivityPanel } from '@/components/integrations/WebhookActivityPanel';
 
 export default function IntegrationWebhooks() {
+  const scope = useRef<HTMLDivElement>(null);
+  usePageEntrance(scope);
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div ref={scope} className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-3">
             <Button asChild variant="outline" size="icon" className="rounded-xl mt-1">
@@ -16,10 +20,10 @@ export default function IntegrationWebhooks() {
               </Link>
             </Button>
             <div>
-              <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-                <Activity className="h-7 w-7 text-primary" />
-                Webhook Activity
-              </h1>
+              <div className="flex items-center gap-2">
+                <Activity className="h-7 w-7 text-primary" aria-hidden="true" />
+                <SplitTitle text="Webhook Activity" className="text-3xl font-bold tracking-tight" />
+              </div>
               <p className="text-muted-foreground mt-1">
                 Every payment webhook delivery, signature verification, and HTTP outcome.
               </p>
@@ -27,7 +31,7 @@ export default function IntegrationWebhooks() {
           </div>
         </div>
 
-        <WebhookActivityPanel />
+        <div data-anim="card"><WebhookActivityPanel /></div>
       </div>
     </AppLayout>
   );

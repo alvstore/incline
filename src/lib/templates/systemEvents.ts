@@ -43,6 +43,7 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
 
   // ── Billing & Documents ──────────────────────────────────────
   { event: 'payment_received', label: 'Payment Received', category: 'billing', description: 'A payment has been recorded', channels: ALL },
+  { event: 'payment_link_sent', label: 'Payment Link', category: 'billing', description: 'Secure online payment link for any invoice. Vars: {{member_name}} {{amount}} {{payment_purpose}} {{invoice_number}} {{payment_link}}.', channels: ALL },
   { event: 'payment_due', label: 'Payment Due Reminder', category: 'billing', description: 'Pending dues reminder', channels: ALL },
   { event: 'invoice_generated', label: 'Invoice (PDF)', category: 'document', description: 'New invoice issued — sends PDF', channels: ALL, headerHint: 'document' },
   { event: 'receipt_generated', label: 'Payment Receipt (PDF)', category: 'document', description: 'Receipt for received payment — PDF', channels: ALL, headerHint: 'document' },
