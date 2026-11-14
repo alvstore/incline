@@ -18,3 +18,4 @@
 - Member chat (WhatsApp menu, member AI, website chat) decides offers from `member_chat_status` + `_shared/memberChatPolicy.ts` (flag member_chat_status_v2), never from members.status alone; renew/resume/freeze/rejoin become front-desk tasks, so expired/frozen/on-hold members can't book or be quoted lead prices.
 - AI providers are configured only through the Providers drawer (ai_provider_configs + providerCatalog.ts); a backup is chosen per row via fallback_provider_id and used by ai-dispatcher only for busy/down/credit failures, so no provider or model is hard-coded in functions.
 - Call greeting is owned by the Sarvam agent script; `sarvam-voice` sends no `initial_bot_message`, so script edits in Sarvam take effect without code changes.
+- Payment-link amounts are derived server-side from the invoice balance (`_shared/paymentLinkAmount.ts`); only staff part-payments with an audited reason may charge less, so callers cannot set their own price.

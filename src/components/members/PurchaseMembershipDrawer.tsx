@@ -316,7 +316,7 @@ export function PurchaseMembershipDrawer({
       // Generate Razorpay payment link (the RPC left the invoice unpaid for us).
       if (isPaymentLink && invoiceId) {
         const { data: linkData, error: linkError } = await supabase.functions.invoke('create-razorpay-link', {
-          body: { invoiceId, amount: totalAmount, branchId },
+          body: { invoiceId, branchId, mode: 'due' },
         });
         if (linkError) throw new Error(linkError.message || 'Failed to generate payment link');
         if (linkData?.error) throw new Error(linkData.error);

@@ -1,8 +1,10 @@
+// v2.3.0 — Amount is server-derived (invoice balance); staff part-payment links need a reason and are audited.
 // v2.2.0 — Reuses an existing active link for the invoice; unique reference_id per attempt.
 // v2.0.0 — Convenience fee is quoted and charged at the gateway only; the invoice is never mutated.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireCaller, canActOnBranch } from "../_shared/requireCaller.ts";
+import { resolvePaymentLinkAmount } from "../_shared/paymentLinkAmount.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,22 +35,17 @@ serve(async (req: Request) => {
 
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { invoiceId, amount, branchId } = await req.json();
-
-    if (!invoiceId || !amount || !branchId) {
+    const body = await req.json().catch(() => ({}));
+    const { invoiceId, branchId } = body ?? {};
+    const uuidRe = /^[0-9a-f-]{36}$/i;
+    if (typeof invoiceId !== "string" || !uuidRe.test(invoiceId) || typeof branchId !== "string" || !uuidRe.test(branchId)) {
       return new Response(
-        JSON.stringify({ error: "invoiceId, amount, and branchId are required", code: "MISSING_PARAMS" }),
+        JSON.stringify({ error: "invoiceId and branchId are required", code: "MISSING_PARAMS" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-
-    // Amount floor: Razorpay minimum is ₹1
-    if (typeof amount !== "number" || amount < 1) {
-      return new Response(
-        JSON.stringify({ error: "Amount must be at least ₹1", code: "AMOUNT_TOO_LOW" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    let amount = 0;
+    let partialReason: string | null = null;
 
     // Fetch Razorpay credentials — try branch-specific first, then global (null branch)
     let integration: any = null;
@@ -146,13 +143,32 @@ serve(async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       const due = Math.round((Number(invoice.total_amount ?? 0) - Number(invoice.amount_paid ?? 0)) * 100) / 100;
-      if (memberSelfPay && Math.abs(amount - due) > 0.01) {
-        return new Response(JSON.stringify({ error: "Online payment must cover the full outstanding balance", code: "FULL_AMOUNT_REQUIRED" }),
+      const resolved = resolvePaymentLinkAmount({
+        due,
+        isStaff: caller.ok && !memberSelfPay && !caller.internal,
+        // Internal callers (reminders, WhatsApp menu, AI) always charge the balance.
+        mode: caller.ok && caller.internal ? undefined : body.mode,
+        partialAmount: body.partialAmount,
+        partialReason: body.partialReason,
+        legacyAmount: caller.ok && caller.internal ? undefined : body.amount,
+      });
+      if (!resolved.ok) {
+        return new Response(JSON.stringify({ error: resolved.error, code: resolved.code }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      if (amount > due + 0.01) {
-        return new Response(JSON.stringify({ error: "Amount exceeds the outstanding balance", code: "AMOUNT_EXCEEDS_DUE" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      amount = resolved.amount;
+      partialReason = resolved.reason;
+      if (resolved.partial && caller.ok) {
+        await supabase.from("audit_logs").insert({
+          user_id: caller.userId,
+          action: "payment_link_partial",
+          table_name: "invoices",
+          record_id: invoiceId,
+          branch_id: invoice.branch_id,
+          action_description: `Part-payment link ₹${amount} of ₹${due} due: ${partialReason}`,
+          target_name: invoice.invoice_number ?? invoiceId,
+          new_data: { amount, due, reason: partialReason },
+        });
       }
     }
 
@@ -200,7 +216,8 @@ serve(async (req: Request) => {
       .limit(5);
 
     const reusable = (existingTxn ?? []).find(
-      (t: any) => Number(t.amount) === chargeAmount && t.webhook_data?.short_url,
+      (t: any) => Number(t.amount) === chargeAmount && t.webhook_data?.short_url &&
+        (t.webhook_data?.partial_reason ?? null) === partialReason,
     );
     if (reusable) {
       console.log("Reusing existing Razorpay link for invoice:", invoiceId);
@@ -232,6 +249,7 @@ serve(async (req: Request) => {
         invoice_id: invoiceId,
         base_amount: String(amount),
         convenience_fee: String(surcharge),
+        ...(partialReason ? { partial_reason: partialReason.slice(0, 250) } : {}),
       },
       customer: {
         name: customerName,
@@ -282,6 +300,7 @@ serve(async (req: Request) => {
         plink_id: rzpResult.id,
         base_amount: amount,
         convenience_fee: surcharge,
+        partial_reason: partialReason,
       },
     });
 
