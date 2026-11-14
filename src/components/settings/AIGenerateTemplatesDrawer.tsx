@@ -442,9 +442,9 @@ export function AIGenerateTemplatesDrawer({
                   key={`${p.name}-${i}`}
                   className={`p-4 rounded-2xl border space-y-3 transition-colors ${
                     p.state === 'failed'
-                      ? 'border-destructive/30 bg-destructive/50'
+                      ? 'border-destructive/30 bg-destructive/10'
                       : p.state === 'done'
-                      ? 'border-success/30 bg-success/40'
+                      ? 'border-success/30 bg-success/10'
                       : 'border-border bg-muted/50'
                   }`}
                 >
