@@ -308,7 +308,7 @@ export default function POSPage() {
         setPaymentLinkLoading(true);
         try {
           const { data: linkData, error: linkError } = await supabase.functions.invoke('create-razorpay-link', {
-            body: { invoiceId: sale.invoice_id, amount: cartTotal, branchId },
+            body: { invoiceId: sale.invoice_id, branchId, mode: 'due' },
           });
           if (linkError) throw new Error(linkError.message || 'Failed to generate payment link');
           if (linkData?.error) throw new Error(linkData.error);

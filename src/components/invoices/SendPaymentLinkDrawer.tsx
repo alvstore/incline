@@ -1,3 +1,4 @@
+import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -28,8 +29,9 @@ interface SendPaymentLinkDrawerProps {
 }
 
 export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPaymentLinkDrawerProps) {
-  const [paymentType, setPaymentType] = useState<'full' | 'partial' | 'due'>('due');
+  const [paymentType, setPaymentType] = useState<'partial' | 'due'>('due');
   const [customAmount, setCustomAmount] = useState('');
+  const [partialReason, setPartialReason] = useState('');
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
@@ -40,7 +42,6 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
 
   const getPaymentAmount = () => {
     switch (paymentType) {
-      case 'full': return invoice.total_amount;
       case 'due': return dueAmount;
       case 'partial': return parseFloat(customAmount) || 0;
     }
@@ -50,6 +51,15 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
 
   const handleGenerateRazorpayLink = async () => {
     if (paymentAmount <= 0) return;
+    const isPartial = paymentType === 'partial' && paymentAmount < dueAmount;
+    if (paymentType === 'partial' && paymentAmount > dueAmount) {
+      toast.error(`Part payment can't be more than the ₹${dueAmount.toLocaleString()} due.`);
+      return;
+    }
+    if (isPartial && partialReason.trim().length < 5) {
+      toast.error('Add a reason for the part payment (at least 5 characters).');
+      return;
+    }
     if (!invoice.id || !invoice.branch_id) {
       toast.error('Invoice ID and branch are required to generate a payment link.');
       return;
@@ -61,8 +71,10 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
       const { data, error } = await supabase.functions.invoke('create-razorpay-link', {
         body: {
           invoiceId: invoice.id,
-          amount: paymentAmount,
           branchId: invoice.branch_id,
+          ...(isPartial
+            ? { mode: 'partial', partialAmount: paymentAmount, partialReason: partialReason.trim() }
+            : { mode: 'due' }),
         },
       });
 
@@ -175,38 +187,48 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
           <div className="space-y-3">
             <Label className="text-sm font-medium">Payment Amount</Label>
             <RadioGroup value={paymentType} onValueChange={(v) => { setPaymentType(v as any); setGeneratedLink(null); }} className="space-y-2">
-              {dueAmount > 0 && dueAmount < invoice.total_amount && (
-                <div className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                  <RadioGroupItem value="due" id="due" />
-                  <Label htmlFor="due" className="flex-1 cursor-pointer flex justify-between">
-                    <span>Due Amount</span>
-                    <Badge variant="outline">₹{dueAmount.toLocaleString()}</Badge>
-                  </Label>
-                </div>
-              )}
               <div className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                <RadioGroupItem value="full" id="full" />
-                <Label htmlFor="full" className="flex-1 cursor-pointer flex justify-between">
-                  <span>Full Amount</span>
-                  <Badge variant="outline">₹{invoice.total_amount.toLocaleString()}</Badge>
+                <RadioGroupItem value="due" id="due" />
+                <Label htmlFor="due" className="flex-1 cursor-pointer flex justify-between">
+                  <span>Balance due</span>
+                  <Badge variant="outline">₹{dueAmount.toLocaleString()}</Badge>
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
                 <RadioGroupItem value="partial" id="partial" />
-                <Label htmlFor="partial" className="cursor-pointer">Custom Amount</Label>
+                <Label htmlFor="partial" className="cursor-pointer">Part payment</Label>
               </div>
             </RadioGroup>
             {paymentType === 'partial' && (
-              <div className="flex items-center gap-2">
-                <IndianRupee className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={customAmount}
-                  onChange={(e) => { setCustomAmount(e.target.value); setGeneratedLink(null); }}
-                  min="1"
-                  max={dueAmount > 0 ? dueAmount : invoice.total_amount}
-                />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <IndianRupee className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    type="number"
+                    aria-label="Part payment amount"
+                    placeholder="Enter amount"
+                    value={customAmount}
+                    onChange={(e) => { setCustomAmount(e.target.value); setGeneratedLink(null); }}
+                    min="1"
+                    max={dueAmount}
+                  />
+                </div>
+                {paymentAmount > 0 && paymentAmount < dueAmount && (
+                  <p className="text-xs text-muted-foreground">
+                    ₹{(dueAmount - paymentAmount).toLocaleString()} will still be due after this payment.
+                  </p>
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="partial-reason">Reason (required)</Label>
+                  <Textarea
+                    id="partial-reason"
+                    placeholder="e.g. Paying ₹5,000 now, rest on 30 Nov"
+                    value={partialReason}
+                    maxLength={300}
+                    onChange={(e) => { setPartialReason(e.target.value); setGeneratedLink(null); }}
+                  />
+                  <p className="text-xs text-muted-foreground">Saved in the audit log with your name.</p>
+                </div>
               </div>
             )}
           </div>
