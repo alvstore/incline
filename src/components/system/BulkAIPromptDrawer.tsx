@@ -4,63 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Copy, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildGroupPrompt, type PromptErrorRow } from '@/lib/system/aiFixPrompt';
 
-export interface ErrorRow {
-  id: string;
-  error_message: string;
-  stack_trace?: string | null;
-  function_name?: string | null;
-  route?: string | null;
-  source?: string | null;
-  severity?: string | null;
-  fingerprint?: string | null;
-  occurrence_count?: number | null;
-  last_seen?: string | null;
-  context?: any;
-}
+export type ErrorRow = PromptErrorRow;
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   errors: ErrorRow[];
   groupedBy?: 'fingerprint' | 'selection';
-}
-
-function buildGroupPrompt(errors: ErrorRow[], groupedBy: 'fingerprint' | 'selection') {
-  const total = errors.reduce((s, e) => s + (e.occurrence_count ?? 1), 0);
-  const groups = new Map<string, ErrorRow[]>();
-  for (const e of errors) {
-    const key = e.fingerprint || `${e.source}|${e.function_name || e.route || ''}|${(e.error_message || '').slice(0, 80)}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(e);
-  }
-
-  const header = groupedBy === 'fingerprint'
-    ? `I have ${groups.size} distinct error cluster(s) (${total} total occurrences) in my Incline gym SaaS. Please audit each one, identify root causes, and provide a single consolidated fix plan. Group by file and prioritize by severity + occurrence count.`
-    : `I have ${errors.length} related errors (${total} total occurrences) selected from System Health. Please audit them together — they may share a root cause — and provide one fix plan.`;
-
-  const blocks: string[] = [];
-  let i = 0;
-  for (const [key, rows] of groups) {
-    i += 1;
-    const head = rows[0];
-    const occ = rows.reduce((s, e) => s + (e.occurrence_count ?? 1), 0);
-    blocks.push(
-      [
-        `--- Cluster ${i} (${occ} occurrences) ---`,
-        `Source: ${head.source || 'frontend'}`,
-        `Severity: ${head.severity || 'error'}`,
-        `Function/Route: ${head.function_name || head.route || '—'}`,
-        `Fingerprint: ${head.fingerprint || key.slice(0, 16)}`,
-        `Last seen: ${head.last_seen || 'n/a'}`,
-        `Message: ${head.error_message}`,
-        head.stack_trace ? `Top stack frame: ${(head.stack_trace.split('\n')[0] || '').slice(0, 240)}` : '',
-        head.context ? `Context: ${JSON.stringify(head.context).slice(0, 400)}` : '',
-      ].filter(Boolean).join('\n'),
-    );
-  }
-
-  return `${header}\n\n${blocks.join('\n\n')}\n\nFor each cluster, list: (1) most likely root cause, (2) exact file(s) to edit, (3) the minimal code fix. If two clusters share a cause, say so and give one fix.`;
 }
 
 export function BulkAIPromptDrawer({ open, onOpenChange, errors, groupedBy = 'selection' }: Props) {
