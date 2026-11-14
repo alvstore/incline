@@ -425,6 +425,7 @@ export default function ApprovalQueuePage() {
         action: { label: 'Undo', onClick: () => {
           const tm = timers.current.get(request.id);
           if (tm) { window.clearTimeout(tm); timers.current.delete(request.id); }
+          pendingDecisions.current.delete(request.id);
           setHidden((h) => { const n = new Set(h); n.delete(request.id); return n; });
           setSelectedId(request.id);
         } },
