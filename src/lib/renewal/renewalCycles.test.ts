@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @ts-expect-error -- bun's built-in test runner has no types in the app build
+import { describe, expect, it } from 'bun:test';
 import { cycleLabel, isSuperseded, periodSince, urgencyBucket } from './renewalCycles';
 
 describe('renewal cycles', () => {
