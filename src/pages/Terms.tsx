@@ -1,3 +1,4 @@
+import { BUSINESS_ADDRESS, BUSINESS_IDENTITY } from '@/config/businessIdentity';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Dumbbell } from 'lucide-react';
@@ -191,10 +192,10 @@ export default function TermsPage() {
 
         <Section title="11. Contact">
           <ul className="list-disc pl-5 space-y-2">
-            <li>Entity: {theme.gymName}</li>
-            <li>Email: {theme.contactEmail}</li>
-            <li>Phone: {theme.contactPhone}</li>
-            <li>Address: {theme.address}</li>
+            <li>Entity: {BUSINESS_IDENTITY.legalName}</li>
+            <li>Email: {BUSINESS_IDENTITY.email}</li>
+            <li>Phone: {BUSINESS_IDENTITY.phone}</li>
+            <li>Address: {BUSINESS_ADDRESS}</li>
           </ul>
         </Section>
       </main>

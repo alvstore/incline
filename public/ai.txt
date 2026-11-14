@@ -13,7 +13,7 @@ Sitemap: https://theincline.in/sitemap.xml
 # Canonical Identity
 Name: The Incline Life
 Founder: Yogita Lekhari
-Location: Sector 14, Udaipur, Rajasthan, 313001, India
+Location: Plot 44-55, near Kheda Circle, Sector 14, Hiran Magri, Udaipur, Rajasthan 313002, India
 Hours: 24/7 Luxury Fitness & Recovery
 Status: Open now (opened 26 July 2026)
 Website: https://theincline.in/
