@@ -19630,6 +19630,7 @@ export type Database = {
         Returns: Json
       }
       purge_expired_otp_verifications: { Args: never; Returns: undefined }
+      purge_stale_app_devices: { Args: never; Returns: number }
       quote_convenience_fee: {
         Args: { p_invoice_id: string; p_method?: string }
         Returns: Json
