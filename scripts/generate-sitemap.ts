@@ -18,7 +18,7 @@ interface SitemapEntry {
 
 // lastmod = date the page's content last changed materially. Update by hand when
 // you change a page; never use the build date.
-export const entries: SitemapEntry[] = [
+const entries: SitemapEntry[] = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/register", changefreq: "monthly", priority: "0.9" },
   { path: "/privacy-policy", lastmod: "2026-11-14", changefreq: "yearly", priority: "0.3" },
@@ -49,5 +49,5 @@ function generateSitemap(entries: SitemapEntry[]) {
   ].join("\n");
 }
 
-if (import.meta.main ?? true) writeFileSync(resolve("public/sitemap.xml"), generateSitemap(entries));
+writeFileSync(resolve("public/sitemap.xml"), generateSitemap(entries));
 console.log(`sitemap.xml written (${entries.length} entries)`);
