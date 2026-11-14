@@ -258,7 +258,7 @@ serve(async (req: Request) => {
             webhook_data: { ...(tx.webhook_data || {}), reconcile: { at: new Date().toISOString(), outcome: settled.reason, detail: settled } },
           }).eq("id", tx.id);
           await supabase.rpc("log_error_event", {
-            p_source: "reconcile-razorpay-links", p_severity: "error",
+            p_severity: "error", p_source: "edge_function", p_function_name: "reconcile-razorpay-links",
             p_message: `Razorpay payment captured but not recorded: ${settled.reason}`,
             p_context: { tx_id: tx.id, invoice_id: tx.invoice_id, ...settled },
           }).then(() => {}, () => {});
