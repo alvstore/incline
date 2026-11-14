@@ -1,3 +1,4 @@
+// v2.3.1 — order/payment path credits only the invoice balance (fee split).
 // v2.3.0 — Chat sales links (notes.kind=sales_lead) marked paid idempotently with a desk task.
 // v2.2.1 — STRICT FAIL-CLOSED: Refuses to process any payment webhook without a valid provider signature.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -577,7 +578,7 @@ serve(async (req: Request) => {
             p_branch_id: invoice.branch_id,
             p_invoice_id: existingTxn.invoice_id,
             p_member_id: invoice.member_id,
-            p_amount: transactionData.amount,
+            p_amount: baseAmount,
             p_payment_method: gateway === 'razorpay'
               ? (paymentEntity?.method === 'upi' ? 'upi' : paymentEntity?.method === 'netbanking' ? 'bank_transfer' : 'card')
               : 'other',
