@@ -18,6 +18,8 @@ import { TrainerProfileDrawer } from '@/components/trainers/TrainerProfileDrawer
 import { EditTrainerDrawer } from '@/components/trainers/EditTrainerDrawer';
 
 import { clickOnActivateKey } from '@/lib/a11y/clickable';
+import { AppPlatformIcon } from '@/components/appUsage/AppPlatformIcon';
+import { useAppDevices, useAppUsageEnabled } from '@/hooks/useAppDevices';
 export default function TrainersPage() {
   const { effectiveBranchId, branchFilter } = useBranchContext();
   // When branchFilter is empty (All Branches), pass '' to fetch all trainers
@@ -29,6 +31,8 @@ export default function TrainersPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingTrainer, setEditingTrainer] = useState<any>(null);
   const { data: trainers, isLoading } = useTrainers(branchId, !showInactive);
+  const appUsageOn = useAppUsageEnabled();
+  const appDevices = useAppDevices(((trainers as any[]) || []).map((t) => t.user_id), appUsageOn);
   const [offboardOpen, setOffboardOpen] = useState(false);
   const [offboardPerson, setOffboardPerson] = useState<UnifiedStaffPerson | null>(null);
 
@@ -203,7 +207,7 @@ export default function TrainersPage() {
                     <div className="flex items-center gap-4">
                       <Avatar className="h-14 w-14 ring-2 ring-primary/10 ring-offset-2"><AvatarImage src={trainer.profile_avatar || undefined} /><AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-bold">{(trainer.profile_name || "T").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-foreground truncate">{trainer.profile_name || "Unknown"}</h3>
+                        <h3 className="flex min-w-0 items-center gap-1.5 text-base font-bold text-foreground"><span className="truncate">{trainer.profile_name || "Unknown"}</span>{appUsageOn && <AppPlatformIcon devices={appDevices.get(trainer.user_id)} />}</h3>
                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1"><Mail className="h-3 w-3 flex-shrink-0" />{trainer.profile_email}</p>
                       </div>
                       <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity rounded-xl" onClick={(e) => openEditTrainer(trainer, e)}><Edit className="h-4 w-4" /></Button>

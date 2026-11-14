@@ -49,6 +49,8 @@ import { useBrandContext } from '@/lib/brand/useBrandContext';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 import { contractDeliveryInput, contractDeliveryError } from '@/lib/hrm/contractDelivery';
 import { dispatchCommunication } from '@/lib/comms/dispatch';
+import { AppPlatformIcon } from '@/components/appUsage/AppPlatformIcon';
+import { useAppDevices, useAppUsageEnabled } from '@/hooks/useAppDevices';
 
 const MONTH_VALUE_RE = /^\d{4}-\d{2}$/;
 
@@ -1049,7 +1051,7 @@ export default function HRMPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <div className="font-medium">{person.name || 'N/A'}</div>
+                                <div className="flex items-center gap-1.5 font-medium">{person.name || 'N/A'}{appUsageOn && <AppPlatformIcon devices={appDevices.get(person.user_id)} />}</div>
                                 <div className="text-sm text-muted-foreground">{person.email || '—'}</div>
                               </div>
                             </div>
