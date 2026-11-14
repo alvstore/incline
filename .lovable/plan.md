@@ -10,18 +10,28 @@
 - Unknown member/service-style paths (e.g. /member/random, /service/random) land on the same screen.
 - Limitation: on current hosting, every address returns the app with a "success" status, so a true 404 status code is not possible without server rendering. The noindex step is what Google accepts for apps like this. A true 404 would need the upgrade to Lovable's latest template ([what it gives you](https://lovable.dev/blog/building-apps-using-tanstack-start)) — not part of this plan.
 
-## 3. Sitemap and service pages
-- New public pages with real content from the club's facts (no invented prices or dates): Personal Training, Pilates, Yoga, Group Classes (incl. Zumba), Recovery (sauna, ice bath, steam, lounge), 3D Body Scan, and a "Gym in Udaipur" location page with address, hours (24/7), map and contact.
-- Each page: unique title/description, one heading, canonical, breadcrumb + service structured data, links from the homepage and footer.
-- Sitemap: canonical indexable pages only. Remove the duplicate terms address (keep one, the other points to it as canonical). Keep the feedback page only if it is meant to be public.
-- Add lastmod per page from a manually set "content changed" date in the page list, not the build date.
-- Submit the sitemap through the connected Google Search Console after publish. Bing Webmaster Tools needs connecting first (one card for you to approve).
+## 3. Sitemap (no new pages)
+- No new service or location pages, so no new addresses that could break or dilute links.
+- Sitemap keeps only real, indexable pages. The two terms addresses: keep one in the sitemap, the other points to it as the main copy. Feedback stays only if meant to be public.
+- Service and Udaipur wording is strengthened inside the existing homepage sections (Personal Training, Pilates, Yoga, Group Classes incl. Zumba, Recovery, 3D Body Scan, location with address, 24/7 hours, map, contact) — same page, no new links.
+- lastmod per page from a manually set "content changed" date, never the build date.
+- Submit the sitemap to the connected Google Search Console after publish; Bing Webmaster Tools needs one connect card for you to approve.
 
-## 4. Checks
+## 4. Google reviews
+- Show verified Google reviews on the homepage only if pulled from Google with its required attribution (needs a Google Places key you approve). Until then, keep the current "review us on Google" request flow; no copied or invented reviews.
+
+## 5. Tracking
+- Count on the website: phone taps, WhatsApp taps, registration started, registration completed — visible as a small card in Analytics.
+- Organic impressions, branded searches and Core Web Vitals come from Search Console (weekly read once there is enough traffic). Local-pack visibility needs Google Business Profile data, which is not connected — listed as open.
+
+## 6. Re-audit
+- After publish: rerun the SEO review and check robots, missing-page handling, address details and sitemap live. Server rendering is not in this plan, so true 404 status stays an open item.
+
+## 7. Checks
 - Small test: every named crawler group blocks /admin, /dashboard, /member/, /api/, /auth, /pos.
 - Browser check of /does-not-exist, /member/random, /service/random showing the not-found screen with noindex.
 - Sitemap test: every listed address is a real page.
 
 ## Technical details
-- Edit `public/robots.txt`, `src/pages/NotFound.tsx` (runtime robots/canonical meta), new pages under `src/pages/services/`, routes in `src/App.tsx`, entries + lastmod in `scripts/generate-sitemap.ts`.
+- Edit `public/robots.txt`, `src/pages/NotFound.tsx` (runtime robots/canonical meta), homepage section copy, click/registration events via the existing analytics events, entries + lastmod in `scripts/generate-sitemap.ts`.
 - Tests use `bun:test`.
