@@ -22,7 +22,6 @@ import {
   useRenewalAction,
   useRenewalCaseVoiceCalls,
   useRenewalEngineConfig,
-  useRenewalFunnel,
   useRenewalMemberHistory,
   useRenewalQueue,
   useRenewalQueueCounts,
@@ -40,7 +39,6 @@ import {
   Clock3,
   Flame,
   History,
-  Headphones,
   Loader2,
   PhoneCall,
   RefreshCw,
@@ -176,7 +174,6 @@ export default function RenewalCenter() {
   const isMemberView = hasAnyRole(['member']) && !hasAnyRole(['owner', 'admin', 'manager', 'staff']);
 
   const cases = useRenewalQueue(branchFilter, queue, search, since);
-  const funnel = useRenewalFunnel(branchFilter);
   const counts = useRenewalQueueCounts(branchFilter, since);
   const history = useRenewalMemberHistory(historyFor?.member_id);
   const action = useRenewalAction();
@@ -186,8 +183,8 @@ export default function RenewalCenter() {
   const engineConfig = useRenewalEngineConfig(branchFilter);
   const engineSave = useSetRenewalEngineConfig();
 
-  const stats = useMemo(() => funnel.data ?? {}, [funnel.data]);
-  const rows = cases.data ?? [];
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const rows = (cases.data ?? []).filter((r) => !hidden.has(r.case_id));
   const total = rows[0]?.total_count ?? 0;
   const tabCounts = counts.data ?? {};
   const engineOff = engineConfig.data ? engineConfig.data.enabled !== true : true;
@@ -209,7 +206,6 @@ export default function RenewalCenter() {
   const voiceLive = integration?.is_active === true && Boolean(integration?.agent_phone_number);
   const callingWindow = integration ? `${integration.window_start ?? '10:00'}–${integration.window_end ?? '19:00'} IST` : null;
 
-  void stats;
   const isOutcomes = queue === 'won' || queue === 'lost';
   const periodLabel = PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? 'this month';
   const wonN = Number(tabCounts.won ?? 0);
@@ -235,7 +231,37 @@ export default function RenewalCenter() {
     { label: `Renewed ${periodLabel}`, value: wonN, icon: CheckCircle2, tint: 'bg-success/10 text-success' },
     { label: `Renewal rate ${periodLabel}`, value: conversion, suffix: '%', icon: UserCheck, tint: 'bg-info/10 text-info' },
   ];
-  void Headphones;
+
+  /** Closing outcomes slide the row out and wait 5 s so staff can Undo before it is saved. */
+  function closeWithUndo(input: Parameters<typeof action.mutateAsync>[0], row: RenewalCaseRow, message: string) {
+    setSelected(null);
+    setNote(''); setReason(''); setFollowUp('');
+    const commit = window.setTimeout(async () => {
+      try {
+        await action.mutateAsync(input);
+        track('renewal_case_outcome_recorded', { outcome: input.outcome ?? null });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not update renewal case');
+      } finally {
+        setHidden((h) => { const n = new Set(h); n.delete(row.case_id); return n; });
+      }
+    }, 5500);
+    const hide = () => setHidden((h) => new Set(h).add(row.case_id));
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-case="${row.case_id}"]`);
+    if (el && !prefersReducedMotion()) {
+      gsap.to(el, { opacity: 0, x: 40, height: 0, marginTop: 0, paddingTop: 0, paddingBottom: 0, duration: 0.45, ease: 'power2.in', onComplete: hide });
+    } else hide();
+    toast.success(message, {
+      duration: 5500,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          window.clearTimeout(commit);
+          setHidden((h) => { const n = new Set(h); n.delete(row.case_id); return n; });
+        },
+      },
+    });
+  }
 
   async function run(input: Parameters<typeof action.mutateAsync>[0], message: string) {
     try {
@@ -306,7 +332,7 @@ export default function RenewalCenter() {
                 variant="secondary"
                 size="sm"
                 className="cursor-pointer gap-2 rounded-full bg-white/15 text-white hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/70"
-                onClick={() => { cases.refetch(); counts.refetch(); funnel.refetch(); }}
+                onClick={() => { cases.refetch(); counts.refetch(); }}
                 aria-label="Refresh renewal queue"
               >
                 <RefreshCw className={`h-4 w-4 ${cases.isFetching ? 'animate-spin' : ''}`} />Refresh
@@ -487,6 +513,7 @@ export default function RenewalCenter() {
                 <Card
                   key={row.case_id}
                   data-anim="row"
+                  data-case={row.case_id}
                   className="relative overflow-hidden rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
                 >
                   <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${row.closed_at ? 'bg-muted' : expiry.bar}`} />
@@ -726,14 +753,22 @@ export default function RenewalCenter() {
             <Button
               className="cursor-pointer rounded-xl"
               disabled={action.isPending || (outcome === 'callback' && !followUp)}
-              onClick={() => selected && run({
-                caseId: selected.case_id,
-                action: 'outcome',
-                outcome,
-                churnReason: reason || null,
-                snoozedUntil: followUp ? new Date(followUp).toISOString() : null,
-                note,
-              }, 'Renewal outcome saved')}
+              onClick={() => {
+                if (!selected) return;
+                const input = {
+                  caseId: selected.case_id,
+                  action: 'outcome' as const,
+                  outcome,
+                  churnReason: reason || null,
+                  snoozedUntil: followUp ? new Date(followUp).toISOString() : null,
+                  note,
+                };
+                if (['win_back', 'not_interested', 'cancelled', 'churned'].includes(outcome)) {
+                  closeWithUndo(input, selected, `${selected.member_name} moved to Outcomes`);
+                } else {
+                  run(input, 'Renewal outcome saved');
+                }
+              }}
             >
               {action.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}Save outcome
             </Button>

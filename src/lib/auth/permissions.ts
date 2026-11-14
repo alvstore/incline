@@ -54,7 +54,7 @@ const MATRIX: Record<Capability, AppRole[]> = {
   rcs_wallet_view:     ['owner', 'admin'],
   // Class types + recurring schedule rules (mirrors RLS on class_types / class_templates)
   manage_class_schedule: ['owner', 'admin', 'manager'],
-  // Mirrors role_capabilities.manage_renewals (renewal_center_queue / renewal_funnel)
+  // Mirrors role_capabilities.manage_renewals (renewal_center_queue / renewal_queue_counts)
   manage_renewals: ['owner', 'admin', 'manager', 'staff'],
   // Disaster-recovery standby copy (mirrors role_capabilities.manage_standby_copy)
   manage_standby_copy: ['owner'],
