@@ -338,7 +338,7 @@ export function AIGenerateTemplatesDrawer({
               )}
 
               {brokenTemplates.length > 0 && (
-                <div className="rounded-2xl border border-warning/30 bg-warning/60 px-4 py-3 space-y-2">
+                <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-warning" />
                     <span className="text-sm font-bold text-warning">
@@ -442,9 +442,9 @@ export function AIGenerateTemplatesDrawer({
                   key={`${p.name}-${i}`}
                   className={`p-4 rounded-2xl border space-y-3 transition-colors ${
                     p.state === 'failed'
-                      ? 'border-destructive/30 bg-destructive/50'
+                      ? 'border-destructive/30 bg-destructive/10'
                       : p.state === 'done'
-                      ? 'border-success/30 bg-success/40'
+                      ? 'border-success/30 bg-success/10'
                       : 'border-border bg-muted/50'
                   }`}
                 >

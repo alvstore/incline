@@ -118,7 +118,7 @@ export function BlockedEntryAttempts({
 
   return (
     <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 bg-card overflow-hidden">
-      <CardHeader className="bg-destructive/40 border-b border-destructive/60">
+      <CardHeader className="bg-destructive/10 border-b border-destructive/20">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-destructive/10 text-destructive">
             <ShieldAlert className="h-5 w-5" />
