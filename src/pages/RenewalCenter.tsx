@@ -1,4 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { CountUp, SplitTitle, prefersReducedMotion, usePageEntrance, useRowsEntrance } from '@/components/motion/pageMotion';
+import { track } from '@/lib/analytics';
+import { cycleLabel, periodSince, urgencyBucket, type RenewalPeriod } from '@/lib/renewal/renewalCycles';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MemberRenewalConcierge } from '@/components/renewal/MemberRenewalConcierge';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +23,7 @@ import {
   useRenewalCaseVoiceCalls,
   useRenewalEngineConfig,
   useRenewalFunnel,
+  useRenewalMemberHistory,
   useRenewalQueue,
   useRenewalQueueCounts,
   useRenewalVoiceCall,
@@ -34,6 +39,7 @@ import {
   CheckCircle2,
   Clock3,
   Flame,
+  History,
   Headphones,
   Loader2,
   PhoneCall,
@@ -52,7 +58,7 @@ import { toast } from 'sonner';
 import { renewalVoiceBlockReason } from '@/lib/renewal/voiceEligibility';
 
 const queues: Array<{ value: RenewalQueue; label: string }> = [
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'Active pipeline' },
   { value: 'today', label: 'Expires today' },
   { value: 'due_soon', label: 'Due soon' },
   { value: 'lapsed', label: 'Lapsed' },
@@ -125,11 +131,28 @@ function sinceVisit(value: string | null | undefined) {
 
 /** Expiry urgency drives the colour of the card's headline pill. */
 function expiryLook(days: number) {
-  if (days < 0) return { label: `${Math.abs(days)} days lapsed`, className: 'bg-destructive/10 text-destructive' };
-  if (days === 0) return { label: 'Expires today', className: 'bg-destructive/10 text-destructive' };
-  if (days <= 7) return { label: `${days} days left`, className: 'bg-warning/10 text-warning' };
-  return { label: `${days} days left`, className: 'bg-success/10 text-success' };
+  const bucket = urgencyBucket(days);
+  if (bucket === 'lapsed') return { label: `${Math.abs(days)} days lapsed`, className: 'bg-destructive/10 text-destructive', bar: 'bg-destructive' };
+  if (days === 0) return { label: 'Expires today', className: 'bg-warning/10 text-warning', bar: 'bg-warning' };
+  if (bucket === 'soon') return { label: `${days} days left`, className: 'bg-warning/10 text-warning', bar: 'bg-warning' };
+  return { label: `${days} days left`, className: 'bg-success/10 text-success', bar: 'bg-success' };
 }
+
+const PERIODS: Array<{ value: RenewalPeriod; label: string }> = [
+  { value: 'month', label: 'This month' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: '90d', label: 'Last 90 days' },
+];
+
+const PIPELINE: Array<{ value: RenewalQueue; label: string; bar: string }> = [
+  { value: 'due_soon', label: 'Due soon', bar: 'bg-success' },
+  { value: 'today', label: 'Today', bar: 'bg-warning' },
+  { value: 'lapsed', label: 'Lapsed', bar: 'bg-destructive' },
+  { value: 'voice', label: 'AI calls', bar: 'bg-primary' },
+  { value: 'callback', label: 'Callbacks', bar: 'bg-info' },
+  { value: 'won', label: 'Renewed', bar: 'bg-success' },
+  { value: 'lost', label: 'Lost', bar: 'bg-muted-foreground' },
+];
 
 export default function RenewalCenter() {
   const { branchFilter } = useBranchContext();
@@ -137,6 +160,13 @@ export default function RenewalCenter() {
   const [queue, setQueue] = useState<RenewalQueue>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<RenewalCaseRow | null>(null);
+  const [historyFor, setHistoryFor] = useState<RenewalCaseRow | null>(null);
+  const [period, setPeriod] = useState<RenewalPeriod>('month');
+  const since = useMemo(() => periodSince(period), [period]);
+  const scope = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const pipeRef = useRef<HTMLDivElement>(null);
+  usePageEntrance(scope);
   const [outcome, setOutcome] = useState('callback');
   const [followUp, setFollowUp] = useState('');
   const [reason, setReason] = useState('');
@@ -145,9 +175,10 @@ export default function RenewalCenter() {
   // Members see their own concierge; staff and management see the retention queue.
   const isMemberView = hasAnyRole(['member']) && !hasAnyRole(['owner', 'admin', 'manager', 'staff']);
 
-  const cases = useRenewalQueue(branchFilter, queue, search);
+  const cases = useRenewalQueue(branchFilter, queue, search, since);
   const funnel = useRenewalFunnel(branchFilter);
-  const counts = useRenewalQueueCounts(branchFilter);
+  const counts = useRenewalQueueCounts(branchFilter, since);
+  const history = useRenewalMemberHistory(historyFor?.member_id);
   const action = useRenewalAction();
   const voiceCall = useRenewalVoiceCall();
   const voiceOps = useVoiceOpsSummary(branchFilter);
@@ -178,25 +209,39 @@ export default function RenewalCenter() {
   const voiceLive = integration?.is_active === true && Boolean(integration?.agent_phone_number);
   const callingWindow = integration ? `${integration.window_start ?? '10:00'}–${integration.window_end ?? '19:00'} IST` : null;
 
-  const conversion = useMemo(() => {
-    const base = Number(stats.total ?? 0);
-    return base ? Math.round((Number(stats.renewed ?? 0) / base) * 100) : 0;
-  }, [stats]);
+  void stats;
+  const isOutcomes = queue === 'won' || queue === 'lost';
+  const periodLabel = PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? 'this month';
+  const wonN = Number(tabCounts.won ?? 0);
+  const lostN = Number(tabCounts.lost ?? 0);
+  const conversion = wonN + lostN ? Math.round((wonN / (wonN + lostN)) * 100) : 0;
+  const pipeMax = Math.max(1, ...PIPELINE.map((p) => Number(tabCounts[p.value] ?? 0)));
+  useRowsEntrance(listRef, `${queue}|${period}|${cases.dataUpdatedAt ? 'ok' : 'wait'}`);
+  useLayoutEffect(() => {
+    if (!pipeRef.current || !counts.isSuccess || prefersReducedMotion()) return;
+    const ctx = gsap.context(() => {
+      gsap.from('[data-anim="bar"]', { scaleX: 0, transformOrigin: 'left center', duration: 1, ease: 'expo.out', delay: 0.15, stagger: 0.04, clearProps: 'transform' });
+    }, pipeRef);
+    return () => ctx.revert();
+  }, [counts.isSuccess, since]);
 
   const urgentToday = Number(tabCounts.today ?? 0);
   const lapsed = Number(tabCounts.lapsed ?? 0);
 
-  const statCards: Array<{ label: string; value: string | number; icon: LucideIcon; tint: string }> = [
-    { label: 'Open cases', value: Number(stats.open ?? 0), icon: Users, tint: 'bg-primary/10 text-primary' },
-    { label: 'Contacted', value: Number(stats.contacted ?? 0), icon: Headphones, tint: 'bg-info/10 text-info' },
-    { label: 'Renewed', value: Number(stats.renewed ?? 0), icon: CheckCircle2, tint: 'bg-success/10 text-success' },
-    { label: 'AI call queue', value: Number(stats.voice ?? 0), icon: PhoneCall, tint: 'bg-primary/10 text-primary' },
-    { label: 'Conversion', value: `${conversion}%`, icon: UserCheck, tint: 'bg-warning/10 text-warning' },
+  const statCards: Array<{ label: string; value: number; suffix?: string; icon: LucideIcon; tint: string }> = [
+    { label: 'Active pipeline', value: Number(tabCounts.all ?? 0), icon: Users, tint: 'bg-primary/10 text-primary' },
+    { label: 'Expiring today', value: urgentToday, icon: Clock3, tint: 'bg-warning/10 text-warning' },
+    { label: 'Lapsed now', value: lapsed, icon: Flame, tint: 'bg-destructive/10 text-destructive' },
+    { label: `Renewed ${periodLabel}`, value: wonN, icon: CheckCircle2, tint: 'bg-success/10 text-success' },
+    { label: `Renewal rate ${periodLabel}`, value: conversion, suffix: '%', icon: UserCheck, tint: 'bg-info/10 text-info' },
   ];
+  void Headphones;
 
   async function run(input: Parameters<typeof action.mutateAsync>[0], message: string) {
     try {
       await action.mutateAsync(input);
+      if (input.action === 'claim') track('renewal_case_claimed');
+      if (input.action === 'outcome') track('renewal_case_outcome_recorded', { outcome: input.outcome ?? null });
       toast.success(message);
       setSelected(null);
       setNote(''); setReason(''); setFollowUp('');
@@ -226,7 +271,7 @@ export default function RenewalCenter() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div ref={scope} className="space-y-6">
         {/* Hero — what needs attention right now, in one glance. */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary p-6 text-white shadow-lg shadow-primary/20">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
@@ -235,7 +280,7 @@ export default function RenewalCenter() {
               <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground">
                 <ShieldCheck className="h-4 w-4" />Retention operations
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight">Renewal Center</h1>
+              <SplitTitle text="Renewal Center" className="mt-2 text-3xl font-bold tracking-tight" />
               <p className="mt-1 max-w-xl text-sm leading-relaxed text-primary-foreground">
                 {urgentToday > 0
                   ? `${urgentToday} membership${urgentToday === 1 ? '' : 's'} expire today. Start there.`
@@ -325,21 +370,57 @@ export default function RenewalCenter() {
           {statCards.map((card) => (
             <Card
               key={card.label}
+              data-anim="card"
               className="rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
             >
               <CardContent className="flex items-center gap-3 p-4">
                 <div className={`rounded-full p-2 ${card.tint}`}><card.icon className="h-5 w-5" /></div>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{card.label}</p>
-                  <p className="text-2xl font-bold text-foreground">{card.value}</p>
+                  <p className="text-2xl font-bold tabular-nums text-foreground"><CountUp value={card.value} />{card.suffix}</p>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
+        <Card data-anim="card" className="rounded-2xl border-0 shadow-lg shadow-muted/30">
+          <CardContent className="p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pipeline · one live case per member</p>
+              <Select value={period} onValueChange={(v) => setPeriod(v as RenewalPeriod)}>
+                <SelectTrigger aria-label="Outcomes period" className="h-8 w-40 rounded-full text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{PERIODS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div ref={pipeRef} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+              {PIPELINE.map((p) => {
+                const n = Number(tabCounts[p.value] ?? 0);
+                const active = queue === p.value;
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => { setQueue(p.value); track('renewal_tab_viewed', { tab: p.value }); }}
+                    className={`rounded-xl p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${active ? 'bg-primary/10' : 'bg-muted/40 hover:bg-muted'}`}
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">{p.label}{p.value === 'won' || p.value === 'lost' ? ` · ${periodLabel}` : ''}</span>
+                      <span className="text-lg font-bold tabular-nums text-foreground">{n}</span>
+                    </span>
+                    <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-muted">
+                      <span data-anim="bar" className={`block h-full rounded-full ${p.bar}`} style={{ width: `${Math.max(n ? 6 : 0, (n / pipeMax) * 100)}%` }} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <Tabs value={queue} onValueChange={(value) => setQueue(value as RenewalQueue)} className="overflow-x-auto">
+          <Tabs value={queue} onValueChange={(value) => { setQueue(value as RenewalQueue); track('renewal_tab_viewed', { tab: value }); }} className="overflow-x-auto">
             <TabsList className="rounded-xl">
               {queues.map((item) => {
                 const count = Number(tabCounts[item.value] ?? 0);
@@ -385,15 +466,19 @@ export default function RenewalCenter() {
           <Card className="rounded-2xl border-0 shadow-lg shadow-muted/30">
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <div className="rounded-full bg-success/10 p-3 text-success"><CheckCircle2 className="h-6 w-6" /></div>
-              <p className="font-semibold text-foreground">This queue is clear</p>
-              <p className="max-w-sm text-sm text-muted-foreground">No renewal cases match these filters right now.</p>
+              <p className="font-semibold text-foreground">
+                {search.trim() ? 'No member matches that search' : isOutcomes ? `No ${queue === 'won' ? 'renewals' : 'lost cases'} ${periodLabel}` : 'Nothing to chase right now'}
+              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {search.trim() ? 'Try a different name or member code.' : isOutcomes ? 'Pick a longer period above to see older outcomes.' : 'Renewed and closed members move to Outcomes automatically, so this list only holds live work.'}
+              </p>
               {queue !== 'all' && (
                 <Button variant="outline" className="cursor-pointer rounded-xl" onClick={() => setQueue('all')}>View all cases</Button>
               )}
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div ref={listRef} className="space-y-3">
             {rows.map((row) => {
               const expiry = expiryLook(row.days_to_expiry);
               const stage = stageLook(row.stage);
@@ -401,8 +486,10 @@ export default function RenewalCenter() {
               return (
                 <Card
                   key={row.case_id}
-                  className="rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                  data-anim="row"
+                  className="relative overflow-hidden rounded-2xl border-0 shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
                 >
+                  <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${row.closed_at ? 'bg-muted' : expiry.bar}`} />
                   <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] lg:items-center">
                     <div className="flex min-w-0 gap-3">
                       <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex">
@@ -413,6 +500,9 @@ export default function RenewalCenter() {
                           <p className="truncate text-base font-bold text-foreground">{row.member_name}</p>
                           <Badge variant="secondary" className="rounded-full text-xs">{row.member_code}</Badge>
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${stage.className}`}>{stage.label}</span>
+                          {cycleLabel(row.cycle_number, row.prior_renewals) && (
+                            <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{cycleLabel(row.cycle_number, row.prior_renewals)}</span>
+                          )}
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">{row.plan_name ?? 'Membership'} · {row.masked_phone ?? 'No phone'}</p>
                         <p className={`mt-1 text-xs font-medium ${visit.tone}`}>{visit.text}</p>
@@ -420,8 +510,12 @@ export default function RenewalCenter() {
                     </div>
 
                     <div className="space-y-1 text-sm">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${expiry.className}`}>{expiry.label}</span>
-                      <p className="text-muted-foreground">Next action: {dateTime(row.next_action_at)}</p>
+                      {row.closed_at ? (
+                        <span className="inline-block rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Closed {dateTime(row.closed_at)}</span>
+                      ) : (
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${expiry.className}`}>{expiry.label}</span>
+                      )}
+                      <p className="text-muted-foreground">{row.closed_at ? `Expired ${row.expiry_date}` : `Next action: ${dateTime(row.next_action_at)}`}</p>
                       <p className="text-xs text-muted-foreground">
                         {row.claimed_name ? `Owned by ${row.claimed_name}` : 'Unassigned'} · {row.attempts_count} contact{row.attempts_count === 1 ? '' : 's'}
                       </p>
@@ -450,11 +544,22 @@ export default function RenewalCenter() {
                         </Link>
                       </Button>
                       <Button
-                        className="cursor-pointer rounded-xl focus:ring-2 focus:ring-primary"
-                        onClick={() => setSelected(row)}
+                        variant="ghost"
+                        size="icon"
+                        className="cursor-pointer rounded-xl"
+                        aria-label={`Renewal history for ${row.member_name}`}
+                        onClick={() => setHistoryFor(row)}
                       >
-                        Manage
+                        <History className="h-4 w-4" />
                       </Button>
+                      {!row.closed_at && (
+                        <Button
+                          className="cursor-pointer rounded-xl focus:ring-2 focus:ring-primary"
+                          onClick={() => setSelected(row)}
+                        >
+                          Manage
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -633,6 +738,45 @@ export default function RenewalCenter() {
               {action.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}Save outcome
             </Button>
           </SheetFooter>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={Boolean(historyFor)} onOpenChange={(open) => !open && setHistoryFor(null)}>
+        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-md">
+          <SheetHeader className="border-b bg-card p-6">
+            <SheetTitle className="text-xl font-bold text-foreground">{historyFor?.member_name}</SheetTitle>
+            <SheetDescription>Every membership cycle, newest first</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-6">
+            {history.isLoading ? (
+              <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+            ) : history.isError ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <p className="text-sm text-muted-foreground">Could not load this member's history.</p>
+                <Button variant="outline" className="rounded-xl" onClick={() => history.refetch()}>Retry</Button>
+              </div>
+            ) : (history.data ?? []).length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">No earlier cycles for this member.</p>
+            ) : (
+              <ol className="relative space-y-4 border-l border-border pl-5">
+                {(history.data ?? []).map((h) => {
+                  const look = h.outcome === 'superseded' ? { label: 'Replaced by newer cycle', className: 'bg-muted text-muted-foreground' } : stageLook(h.stage);
+                  return (
+                    <li key={h.case_id} className="relative">
+                      <span aria-hidden="true" className={`absolute -left-[27px] top-1.5 h-3 w-3 rounded-full ring-4 ring-background ${h.closed_at ? 'bg-muted-foreground' : 'bg-primary'}`} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{h.plan_name ?? 'Membership'} · expires {h.expiry_date}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${look.className}`}>{look.label}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Opened {dateTime(h.created_at)} · {h.attempts_count} contact{h.attempts_count === 1 ? '' : 's'} · {h.voice_attempts_count} AI call{h.voice_attempts_count === 1 ? '' : 's'}
+                        {h.closed_at ? ` · closed ${dateTime(h.closed_at)}` : ' · open now'}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
         </SheetContent>
       </Sheet>
     </AppLayout>

@@ -13,6 +13,9 @@
  * | notification_recipient_toggled | Lead recipient channel saved (channel, enabled) |
  * | ai_insights_refreshed | Dashboard AI insights returned (manual, reused) |
  * | ai_insights_viewed  | Fresh saved insights shown (has_forecast) |
+ * | renewal_tab_viewed  | Renewal Center tab/stage chosen (tab) |
+ * | renewal_case_claimed | Staff claimed a renewal case |
+ * | renewal_case_outcome_recorded | Renewal outcome saved (outcome) |
  */
 type Props = Record<string, string | number | boolean | null>;
 export function track(event: string, properties?: Props) {

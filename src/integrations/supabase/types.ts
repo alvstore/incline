@@ -19818,6 +19818,7 @@ export type Database = {
           _offset?: number
           _queue?: string
           _search?: string
+          _since?: string
         }
         Returns: {
           attempts_count: number
@@ -19826,6 +19827,8 @@ export type Database = {
           churn_reason: string
           claimed_by: string
           claimed_name: string
+          closed_at: string
+          cycle_number: number
           days_to_expiry: number
           expiry_date: string
           last_contact_at: string
@@ -19841,6 +19844,7 @@ export type Database = {
           outcome: string
           paused_reason: string
           plan_name: string
+          prior_renewals: number
           renewal_evidence: string
           snoozed_until: string
           stage: Database["public"]["Enums"]["renewal_stage"]
@@ -19901,11 +19905,28 @@ export type Database = {
         }
         Returns: Json
       }
+      renewal_member_history: {
+        Args: { _member_id: string }
+        Returns: {
+          attempts_count: number
+          case_id: string
+          closed_at: string
+          created_at: string
+          expiry_date: string
+          outcome: string
+          plan_name: string
+          stage: Database["public"]["Enums"]["renewal_stage"]
+          voice_attempts_count: number
+        }[]
+      }
       renewal_payment_evidence: {
         Args: { _membership_id: string }
         Returns: string
       }
-      renewal_queue_counts: { Args: { _branch_id?: string }; Returns: Json }
+      renewal_queue_counts: {
+        Args: { _branch_id?: string; _since?: string }
+        Returns: Json
+      }
       renewal_voice_due_cases: {
         Args: { _limit?: number }
         Returns: {
