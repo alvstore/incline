@@ -19886,10 +19886,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      renewal_funnel: {
-        Args: { _branch_id?: string; _days?: number }
-        Returns: Json
-      }
       renewal_link_voice_call: {
         Args: { _attempt_id: string; _case_id: string }
         Returns: Json

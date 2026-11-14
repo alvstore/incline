@@ -66,19 +66,6 @@ export function useRenewalQueue(branchId: string | undefined, queue: RenewalQueu
   });
 }
 
-export function useRenewalFunnel(branchId: string | undefined) {
-  const { roles } = useAuth();
-  return useQuery({
-    enabled: can.manageRenewals(roles),
-    queryKey: ['renewal-funnel', branchId ?? 'all'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('renewal_funnel', { _branch_id: branchId ?? undefined, _days: 90 });
-      if (error) throw error;
-      return (data ?? {}) as Record<string, number>;
-    },
-  });
-}
-
 export function useRenewalAction() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -97,7 +84,6 @@ export function useRenewalAction() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['renewal-center'] }),
-        queryClient.invalidateQueries({ queryKey: ['renewal-funnel'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-queue-counts'] }),
       ]);
     },
@@ -180,7 +166,6 @@ export function useRenewalVoiceCall() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['renewal-center'] }),
-        queryClient.invalidateQueries({ queryKey: ['renewal-funnel'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-case-voice-calls'] }),
         queryClient.invalidateQueries({ queryKey: ['voice-calls'] }),
         queryClient.invalidateQueries({ queryKey: ['renewal-queue-counts'] }),
