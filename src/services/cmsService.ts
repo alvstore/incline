@@ -1,3 +1,4 @@
+import { BUSINESS_ADDRESS, BUSINESS_IDENTITY } from '@/config/businessIdentity';
 // CMS Service for managing website content and theme
 // Migrated from localStorage to database (organization_settings.website_theme)
 
@@ -56,8 +57,8 @@ const DEFAULT_THEME: ThemeSettings = {
   gymName: 'Incline Fitness',
   gymTagline: 'Elevate Your Potential',
   contactEmail: 'info@theinclinelife.com',
-  contactPhone: '+91 98765 43210',
-  address: '123 Fitness Street, Mumbai, India',
+  contactPhone: BUSINESS_IDENTITY.phone,
+  address: BUSINESS_ADDRESS,
   socialLinks: {
     instagram: 'https://instagram.com/inclineudaipur',
     facebook: 'https://facebook.com/inclinefitness',

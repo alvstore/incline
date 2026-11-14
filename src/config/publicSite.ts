@@ -1,3 +1,4 @@
+import { BUSINESS_ADDRESS, BUSINESS_IDENTITY } from './businessIdentity';
 /**
  * Static configuration for the public marketing site.
  * The public site MUST NOT read from the backend — all branch / service
@@ -23,8 +24,8 @@ export const PUBLIC_BRANCHES: PublicBranch[] = [
     slug: 'udaipur-flagship',
     name: 'The Incline — Udaipur Flagship',
     city: 'Udaipur',
-    address: 'Sector 14, Hiran Magri, Udaipur, Rajasthan 313002, India',
-    hours: '05:00 – 23:00, all days',
+    address: BUSINESS_ADDRESS,
+    hours: BUSINESS_IDENTITY.hours,
     facilities: [
       'Panatta Strength Floor',
       'Functional Training Zone',
