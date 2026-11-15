@@ -99,7 +99,7 @@ export function UnassignedStats({ rows, trainers, onSelectReady }: { rows: Row[]
           <div className="h-[92px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={load} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} interval={0} />
+                <XAxis dataKey="name" hide />
                 <YAxis hide domain={[0, 100]} />
                 <Tooltip {...tip} formatter={(v: number) => [`${v}%`, 'Load']} />
                 <Bar dataKey="used" radius={[4, 4, 0, 0]} isAnimationActive={anim} animationDuration={900}>
