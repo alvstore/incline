@@ -237,6 +237,8 @@ export default function TrainersPage() {
             })}
           </div>
         )}
+        </TabsContent>
+        </Tabs>
 
         <AddTrainerDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={effectiveBranchId || ''} />
         <TrainerProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} trainer={selectedTrainer} onDeactivate={handleDeactivate} />
