@@ -15,6 +15,7 @@ import { AssignTrainerDrawer } from '@/components/members/AssignTrainerDrawer';
 import { notifyTrainerAssignment } from '@/lib/comms/trainerAssignmentNotify';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { usePageEntrance, useRowsEntrance } from '@/components/motion/pageMotion';
+import { PersonAvatar, UnassignedStats } from './UnassignedWidgets';
 import { describeWindow, fmtMin, rankTrainers, usualWindow, type MatchMemberRow, type MatchTrainerRow, type TrainerFit } from '@/lib/trainers/trainerMatch';
 
 const CONF_LABEL = { strong: 'Strong', some: 'Some', none: 'Not enough' } as const;
@@ -107,6 +108,8 @@ export function UnassignedMembersPanel({ branchId }: { branchId: string }) {
 
   return (
     <div ref={scope} className="space-y-4">
+      {!isLoading && <UnassignedStats rows={rows} trainers={data?.trainers ?? []}
+        onSelectReady={() => setSelected(new Set(rows.filter(({ fits }) => fits[0] && !fits[0].atCapacity && fits[0].overlap >= 0.4).map((r) => r.m.member_id)))} />}
       {/* Trainer load strip */}
       <div data-anim="card" className="flex gap-3 overflow-x-auto pb-1">
         {(data?.trainers ?? []).map((t) => {
@@ -115,10 +118,12 @@ export function UnassignedMembersPanel({ branchId }: { branchId: string }) {
           const hrs = s && !s.off ? [s.ms && `${s.ms.slice(0, 5)}–${s.me?.slice(0, 5)}`, s.es && `${s.es.slice(0, 5)}–${s.ee?.slice(0, 5)}`].filter(Boolean).join(', ') : 'Off today';
           const u = Math.min(100, Math.round((t.clients / Math.max(1, t.max_clients)) * 100));
           return (
-            <Card key={t.trainer_id} className="min-w-[190px] rounded-2xl shadow-sm">
+            <Card key={t.trainer_id} className="min-w-[210px] rounded-2xl shadow-sm transition-transform duration-300 hover:-translate-y-1">
               <CardContent className="p-4 space-y-2">
-                <p className="font-semibold text-sm truncate">{t.name}</p>
-                <p className="text-xs text-muted-foreground">{hrs}</p>
+                <div className="flex items-center gap-2.5">
+                  <PersonAvatar name={t.name} src={t.avatar_url} className="h-10 w-10 ring-2 ring-primary/15" />
+                  <div className="min-w-0"><p className="font-semibold text-sm truncate">{t.name}</p><p className="text-xs text-muted-foreground truncate">{hrs}</p></div>
+                </div>
                 <Progress value={u} className="h-1.5" />
                 <p className="text-xs text-muted-foreground">{t.clients}/{t.max_clients} clients</p>
               </CardContent>
@@ -169,13 +174,13 @@ export function UnassignedMembersPanel({ branchId }: { branchId: string }) {
                 {filtered.map(({ m, w, fits }) => {
                   const best = fits[0], second = fits[1];
                   return (
-                    <tr key={m.member_id} data-anim="row" className="border-b border-border/50 hover:bg-muted/40">
+                    <tr key={m.member_id} data-anim="row" className={`border-b border-border/50 transition-colors hover:bg-muted/40 ${selected.has(m.member_id) ? 'bg-primary/5' : ''}`}>
                       <td className="p-2"><Checkbox aria-label={`Select ${m.name}`} checked={selected.has(m.member_id)} onCheckedChange={(v) => setSelected((s) => { const n = new Set(s); v ? n.add(m.member_id) : n.delete(m.member_id); return n; })} /></td>
-                      <td className="p-2"><p className="font-medium">{m.name ?? 'Member'}</p><p className="text-xs text-muted-foreground">{m.member_code} · {m.plan_name ?? 'Plan'}</p></td>
+                      <td className="p-2"><div className="flex items-center gap-2.5"><PersonAvatar name={m.name} src={m.avatar_url} /><div className="min-w-0"><p className="font-medium">{m.name ?? 'Member'}</p><p className="text-xs text-muted-foreground">{m.member_code} · {m.plan_name ?? 'Plan'}</p></div></div></td>
                       <td className="p-2"><p>{describeWindow(w)}</p><p className="text-xs text-muted-foreground">{w.part}</p></td>
                       <td className="p-2"><p className="tabular-nums">{m.visits}</p><Badge variant="outline" className="text-[10px]">{CONF_LABEL[w.confidence]}</Badge></td>
-                      <td className="p-2">{best ? <><p className="font-medium">{best.trainer.name}</p><span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${FIT_VARIANT[best.label]}`}>{best.label} · {Math.round(best.overlap * 100)}%</span></> : '—'}</td>
-                      <td className="p-2 text-muted-foreground">{second ? `${second.trainer.name} · ${Math.round(second.overlap * 100)}%` : '—'}</td>
+                      <td className="p-2">{best ? <div className="flex items-center gap-2"><PersonAvatar name={best.trainer.name} src={best.trainer.avatar_url} className="h-8 w-8" /><div><p className="font-medium">{best.trainer.name}</p><span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${FIT_VARIANT[best.label]}`}>{best.label} · {Math.round(best.overlap * 100)}%</span></div></div> : '—'}</td>
+                      <td className="p-2 text-muted-foreground">{second ? <div className="flex items-center gap-2"><PersonAvatar name={second.trainer.name} src={second.trainer.avatar_url} className="h-7 w-7 opacity-80" /><span>{second.trainer.name} · {Math.round(second.overlap * 100)}%</span></div> : '—'}</td>
                       <td className="p-2 text-right whitespace-nowrap">
                         <Button size="sm" className="rounded-xl gap-1" disabled={!best || best.atCapacity || best.overlap === 0 || assign.isPending}
                           onClick={() => assign.mutate([{ member_id: m.member_id, trainer_id: best.trainer.trainer_id }])}><UserCheck className="h-3.5 w-3.5" />Assign</Button>
