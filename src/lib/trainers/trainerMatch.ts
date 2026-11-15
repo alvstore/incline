@@ -1,7 +1,7 @@
 // Pure scoring for "usual visit time" ↔ trainer shift fit. Server returns raw data; ranking happens here.
 export interface MatchMemberRow {
   member_id: string; member_code: string | null; name: string | null; phone: string | null;
-  plan_name: string | null; visits: number; minutes: number[]; dows: number[]; last_visit: string | null;
+  plan_name: string | null; avatar_url?: string | null; visits: number; minutes: number[]; dows: number[]; last_visit: string | null;
 }
 export interface ShiftRow { weekday: number; off: boolean; ms: string | null; me: string | null; es: string | null; ee: string | null; st: string | null; et: string | null }
 export interface MatchTrainerRow {
@@ -36,7 +36,7 @@ export function usualWindow(m: Pick<MatchMemberRow, 'minutes' | 'dows' | 'visits
   return { start, end, days, confidence, part };
 }
 
-function shiftBlocks(t: MatchTrainerRow, day: number): [number, number][] {
+export function shiftBlocks(t: MatchTrainerRow, day: number): [number, number][] {
   if (t.weekly_off && t.weekly_off.toLowerCase() === DAY_NAMES[day]) return [];
   const row = t.shifts.find((s) => s.weekday === day);
   if (!row || row.off) return [];
