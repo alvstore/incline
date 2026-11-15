@@ -20,6 +20,8 @@ import { EditTrainerDrawer } from '@/components/trainers/EditTrainerDrawer';
 import { clickOnActivateKey } from '@/lib/a11y/clickable';
 import { AppPlatformIcon } from '@/components/appUsage/AppPlatformIcon';
 import { useAppDevices, useAppUsageEnabled } from '@/hooks/useAppDevices';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { UnassignedMembersPanel, useTrainerMatchEnabled } from '@/components/trainers/UnassignedMembersPanel';
 export default function TrainersPage() {
   const { effectiveBranchId, branchFilter } = useBranchContext();
   // When branchFilter is empty (All Branches), pass '' to fetch all trainers
@@ -32,6 +34,8 @@ export default function TrainersPage() {
   const [editingTrainer, setEditingTrainer] = useState<any>(null);
   const { data: trainers, isLoading } = useTrainers(branchId, !showInactive);
   const appUsageOn = useAppUsageEnabled();
+  const matchOn = useTrainerMatchEnabled();
+  const [tab, setTab] = useState('trainers');
   const appDevices = useAppDevices(((trainers as any[]) || []).map((t) => t.user_id), appUsageOn);
   const [offboardOpen, setOffboardOpen] = useState(false);
   const [offboardPerson, setOffboardPerson] = useState<UnifiedStaffPerson | null>(null);
@@ -181,6 +185,10 @@ export default function TrainersPage() {
           <Card className="bg-card border border-border/50 shadow-lg shadow-md rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-info/10 dark:bg-info/100/10"><TrendingUp className="h-4 w-4 text-info" /></div></div><div className="text-2xl font-bold text-foreground">{activeTrainers > 0 ? Math.round(((totalPTClients + totalGeneralClients) / activeTrainers)) : 0}</div><p className="text-sm text-muted-foreground mt-0.5">Avg Clients/Trainer</p></CardContent></Card>
         </div>
 
+        <Tabs value={matchOn ? tab : 'trainers'} onValueChange={setTab}>
+        {matchOn && (<TabsList className="rounded-xl mb-4"><TabsTrigger value="trainers">Trainers</TabsTrigger><TabsTrigger value="unassigned">Members without a trainer</TabsTrigger></TabsList>)}
+        {matchOn && <TabsContent value="unassigned"><UnassignedMembersPanel branchId={branchId || effectiveBranchId || ''} /></TabsContent>}
+        <TabsContent value="trainers">
         {/* Trainer Cards */}
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">Loading trainers...</div>
@@ -229,6 +237,8 @@ export default function TrainersPage() {
             })}
           </div>
         )}
+        </TabsContent>
+        </Tabs>
 
         <AddTrainerDrawer open={isCreateOpen} onOpenChange={setIsCreateOpen} branchId={effectiveBranchId || ''} />
         <TrainerProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} trainer={selectedTrainer} onDeactivate={handleDeactivate} />

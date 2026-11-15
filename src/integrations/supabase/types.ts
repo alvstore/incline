@@ -17466,6 +17466,7 @@ export type Database = {
         Args: { _branch: string; _role: string }
         Returns: Json
       }
+      bulk_assign_trainers: { Args: { p_assignments: Json }; Returns: Json }
       bump_dynamic_memory_hit: {
         Args: { _rule_id: string }
         Returns: undefined
@@ -20536,6 +20537,10 @@ export type Database = {
       }
       trainer_earnings_summary: {
         Args: { p_month: string; p_trainer_id: string }
+        Returns: Json
+      }
+      trainer_match_data: {
+        Args: { p_branch_id: string; p_days?: number }
         Returns: Json
       }
       trainers_directory_rows: {
