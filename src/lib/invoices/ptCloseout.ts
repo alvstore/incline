@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ptCloseoutFormSchema = z.object({
   reason: z.string().trim().min(6, 'Enter a reason of at least 6 characters.').max(2000),
-  externalCommission: z.coerce.number().finite().min(0, 'Amount cannot be negative.'),
+  externalCommission: z.coerce.number<number>().finite().min(0, 'Amount cannot be negative.'),
 });
 
 export const ptCloseoutPreviewSchema = z.object({

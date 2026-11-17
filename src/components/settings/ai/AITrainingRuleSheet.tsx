@@ -31,7 +31,7 @@ const schema = z.object({
   intent_category: z.enum(['location', 'pricing', 'timeline', 'handoff', 'decline', 'name_block', 'custom']),
   correction_instruction: z.string().trim().min(5, 'At least 5 chars').max(800),
   match_type: z.enum(['exact', 'contains', 'regex']),
-  priority: z.coerce.number().int().min(0).max(1000),
+  priority: z.coerce.number<number>().int().min(0).max(1000),
   is_active: z.boolean(),
 });
 export type RuleFormValues = z.infer<typeof schema>;

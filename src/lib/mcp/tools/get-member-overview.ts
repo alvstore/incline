@@ -23,7 +23,7 @@ export default defineTool({
     });
     if (searchError) return { content: [{ type: "text", text: searchError.message }], isError: true };
 
-    const rows = (found ?? []) as Array<Record<string, unknown>>;
+    const rows = z.array(z.record(z.string(), z.json())).parse(found ?? []);
     const member =
       rows.find((r) => String(r.member_code ?? "").toLowerCase() === member_code.toLowerCase()) ?? rows[0];
     if (!member) {
