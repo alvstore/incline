@@ -1,3 +1,4 @@
+// dispatch-communication v1.46.0 — preserve fitness assignment category and member destination.
 // dispatch-communication v1.45.0 — suppress all channels for recipients whose access is revoked.
 // dispatch-communication v1.44.0 — default {{brand_name}} = Incline for DLT SMS templates.
 // dispatch-communication v1.43.0 — prefer templates whose VIDEO/IMAGE header matches the attachment; never paste video/image links as "PDF".
@@ -161,6 +162,7 @@
 //   3. quiet hours (deferred to communication_retry_queue)
 //   4. provider routing (whatsapp / sms / email / in_app)
 import { assertPublicUrl } from "../_shared/safeFetch.ts";
+import { fitnessNotificationFields } from "../_shared/fitnessNotification.ts";
 import { requireCaller } from "../_shared/requireCaller.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import {
@@ -2086,6 +2088,7 @@ Deno.serve(async (req) => {
             category: input.category,
             dispatch_dedupe_key: input.dedupe_key,
             metadata: { source: 'dispatch-communication', channel: 'in_app', category: input.category },
+            ...fitnessNotificationFields(input.payload.variables),
           }).select('id').single();
           if (r.error && r.error.code !== '23505') throw new Error(r.error.message);
           providerMessageId = r.data?.id;
