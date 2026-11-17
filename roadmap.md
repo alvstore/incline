@@ -1,6 +1,6 @@
 # Dependency security updates (17 Nov 2026)
-- [ ] Update the affected direct dependencies and refresh transitive resolutions without overrides.
-- [ ] Verify every requested minimum in the text lockfile, re-scan dependencies, and check app compatibility and automatic build.
+- [x] Updated @lovable.dev/mcp-js to 3.5.0, isomorphic-dompurify to 4.7.0 and zod to 4.6.7; refreshed transitive resolutions without overrides. Updated form resolver and development jsdom for compatibility/security.
+- [x] Every requested minimum verified in bun.lock (including all undici copies at 8.12.4); dependency scan reports no known vulnerabilities across 66 production dependencies. Eleven tests pass, login/recovery validation browser checks have no page errors, automatic build OK. MCP manifest regenerates with all nine tools; republish required for hosted changes. No services enabled.
 
 # Uploaded System Health groups (17 Nov 2026)
 - [x] Connect Google Search Console fresh in the current workspace; new connection's verified website list returns owner access.
