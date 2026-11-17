@@ -1317,6 +1317,13 @@
       "when": 1794752947673,
       "tag": "0187_trainer_match_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1794891473337,
+      "tag": "0188_restore_owner_admin_class_updates",
+      "breakpoints": true
     }
   ]
 }

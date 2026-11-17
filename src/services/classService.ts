@@ -110,9 +110,10 @@ export async function updateClass(
     .update(updates)
     .eq("id", classId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) throw new Error("This class is no longer available or you do not have permission to edit it. Refresh the class list.");
   return data;
 }
 
