@@ -42,7 +42,7 @@ const todayStr = () => {
 
 const formSchema = z.object({
   benefit_type: z.string().min(1, 'Please select a benefit'),
-  usage_count: z.coerce.number().min(1, 'Minimum 1').max(10, 'Maximum 10'),
+  usage_count: z.coerce.number<number>().min(1, 'Minimum 1').max(10, 'Maximum 10'),
   usage_date: z
     .string()
     .min(1, 'Please select a date')

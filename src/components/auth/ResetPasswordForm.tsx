@@ -82,7 +82,7 @@ export function ResetPasswordForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordValidation.success) {
-      toast.error(passwordValidation.error.errors[0].message);
+      toast.error(passwordValidation.error.issues[0]?.message ?? 'Enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
