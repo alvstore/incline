@@ -11,7 +11,7 @@ export default defineTool({
     full_name: z.string().trim().min(1).describe("Lead's full name."),
     phone: z.string().trim().min(6).describe("Contact number, ideally in +91XXXXXXXXXX form."),
     email: z.string().trim().email().optional().describe("Email address."),
-    branch_id: z.string().uuid().optional().describe("Branch the lead belongs to."),
+    branch_id: z.guid().optional().describe("Branch the lead belongs to."),
     source: z.string().trim().optional().describe("Where the lead came from, e.g. walk_in, instagram, referral."),
     notes: z.string().trim().optional().describe("Free-text context about the enquiry."),
   },

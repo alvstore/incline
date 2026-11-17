@@ -58,7 +58,7 @@ const detailsSchema = z.object({
   email: z.string().email("Valid email required"),
   date_of_birth: z.string().min(1, "DOB required"),
   gender: z.enum(["male", "female", "other"]),
-  branch_id: z.string().uuid("Select a branch"),
+  branch_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Select a branch"),
   city: z.string().trim().min(2, "City required").max(80),
   state: z.string().optional(),
   postal_code: z.string().trim().regex(/^\d{6}$/, "Enter a valid 6-digit pincode"),
@@ -173,6 +173,16 @@ function RegistrationWizard() {
       ...(initialDraft?.values ?? {}),
     } as Partial<DetailsForm> as DetailsForm,
   });
+
+  // Keep the branch in form state (no hidden input: its stale DOM value made
+  // validation report "Select a branch" even when one looked selected).
+  useEffect(() => {
+    if (!branches?.length) return;
+    const current = form.getValues("branch_id");
+    if (!branches.some((b) => b.id === current) && branches.length === 1) {
+      form.setValue("branch_id", branches[0].id, { shouldValidate: form.formState.isSubmitted });
+    }
+  }, [branches, form]);
 
   const selectedGoal = form.watch("fitness_goals");
   const watchedValues = form.watch();
@@ -480,7 +490,6 @@ function RegistrationWizard() {
               </div>
 
               <Field label="Choose your home branch" error={form.formState.errors.branch_id?.message}>
-                <input type="hidden" {...form.register("branch_id")} />
                 {!branches ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div className="h-[62px] rounded-xl bg-card/5 animate-pulse" />

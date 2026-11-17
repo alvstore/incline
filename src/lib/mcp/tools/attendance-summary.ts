@@ -24,7 +24,7 @@ export default defineTool({
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional()
       .describe("Day in YYYY-MM-DD (IST). Defaults to today."),
-    branch_id: z.string().uuid().optional().describe("Restrict to one branch."),
+    branch_id: z.guid().optional().describe("Restrict to one branch."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ date, branch_id }, ctx) => {

@@ -8,7 +8,7 @@ export default defineTool({
   description:
     "List membership plans with duration, price, discounted price and GST settings for a branch.",
   inputSchema: {
-    branch_id: z.string().uuid().optional().describe("Restrict to one branch."),
+    branch_id: z.guid().optional().describe("Restrict to one branch."),
     active_only: z.boolean().optional().describe("Only active plans (default true)."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },

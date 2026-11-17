@@ -9,7 +9,7 @@ export default defineTool({
     "List CRM leads, newest first, optionally filtered by status or branch. Returns name, contact, source, status and next action.",
   inputSchema: {
     status: z.string().trim().optional().describe("Lead status filter, e.g. new, contacted, won, lost."),
-    branch_id: z.string().uuid().optional().describe("Restrict to one branch."),
+    branch_id: z.guid().optional().describe("Restrict to one branch."),
     limit: z.number().int().min(1).max(100).optional().describe("Max leads (default 25)."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },

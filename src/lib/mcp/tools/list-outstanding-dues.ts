@@ -9,7 +9,7 @@ export default defineTool({
     "List invoices with money still to collect (unpaid, partially paid or overdue), newest first, with the pending amount per invoice.",
   inputSchema: {
     limit: z.number().int().min(1).max(100).optional().describe("Max invoices (default 25)."),
-    branch_id: z.string().uuid().optional().describe("Restrict to one branch."),
+    branch_id: z.guid().optional().describe("Restrict to one branch."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ limit, branch_id }, ctx) => {

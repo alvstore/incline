@@ -9,7 +9,7 @@ export default defineTool({
     "List operational staff tasks with title, priority, status, due date and assignee. Optionally filter by status or branch.",
   inputSchema: {
     status: z.string().trim().optional().describe("Task status filter, e.g. pending, in_progress, completed."),
-    branch_id: z.string().uuid().optional().describe("Restrict to one branch."),
+    branch_id: z.guid().optional().describe("Restrict to one branch."),
     limit: z.number().int().min(1).max(100).optional().describe("Max tasks (default 25)."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
