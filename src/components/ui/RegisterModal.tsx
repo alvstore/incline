@@ -36,8 +36,7 @@ const leadSchema = z.object({
 
 type LeadFormData = z.infer<typeof leadSchema>;
 
-const WEBHOOK_URL =
-  "https://iyqqpbvnszyrrgerniog.supabase.co/functions/v1/webhook-lead-capture?slug=545d8df4-4ea0-4bed-a060-0d6ef7beaffc";
+const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-lead-capture?slug=545d8df4-4ea0-4bed-a060-0d6ef7beaffc`;
 
 const getSource = (): string => {
   const ft = getFirstTouch() || captureFirstTouch();
