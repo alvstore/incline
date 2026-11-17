@@ -44,7 +44,7 @@ const createLockerSchema = z.object({
 
 
 
-type CreateLockerData = z.infer<typeof createLockerSchema>;
+type CreateLockerData = z.input<typeof createLockerSchema>;
 
 export default function LockersPage() {
   const { effectiveBranchId: branchId, isLoading: branchLoading } = useBranchContext();
@@ -108,7 +108,7 @@ export default function LockersPage() {
   });
 
   const form = useForm<CreateLockerData>({
-    resolver: zodResolver(createLockerSchema),
+    resolver: zodResolver(createLockerSchema, undefined, { raw: true }),
     defaultValues: { locker_number: '', size: 'medium', area: '', gender_zone: 'common', notes: '' },
   });
 
