@@ -1,7 +1,8 @@
 # Uploaded System Health groups (17 Nov 2026)
-- [ ] Connect Google Search Console fresh in the current workspace; ignore previous workspace connection references.
-- [ ] Audit class single-result and fitness notification permission errors against live policies and code.
-- [ ] Apply minimal fixes, run focused checks, and resolve only verified fingerprints.
+- [x] Connect Google Search Console fresh in the current workspace; new connection's verified website list returns owner access.
+- [x] Audit both errors: owner/admin UPDATE policy wrongly required individual branch assignment; trainer fitness alert bypassed dispatcher. Minimal fixes applied; seven tests and automatic build pass.
+- [x] Signed-in unchanged class save returns its row; resolved only the class fingerprint. Live owner-only test notification reads back with fitness category/workout destination. Details: docs/system-health-audit-2026-11-17.md.
+- [ ] Trainer-session assignment/member notification readback remains unverified; trainer fingerprint stays open. Blocker: current session is owner, not the reporting trainer; no real member assignment was created.
 
 # Browser notification text (13 Nov 2026)
 - [x] Audit live team alert categories; replace generic browser messages with privacy-safe event headings/descriptions and retain full details after sign-in.
