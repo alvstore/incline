@@ -1,4 +1,5 @@
 # Uploaded System Health groups (17 Nov 2026)
+- [ ] Connect Google Search Console fresh in the current workspace; ignore previous workspace connection references.
 - [ ] Audit class single-result and fitness notification permission errors against live policies and code.
 - [ ] Apply minimal fixes, run focused checks, and resolve only verified fingerprints.
 
