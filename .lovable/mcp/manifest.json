@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdk_version": "0.28.0",
+  "sdk_version": "3.5.0",
   "path": "/mcp",
   "auth": {
     "type": "oauth",
@@ -26,6 +26,7 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "query": {
@@ -34,17 +35,16 @@
               "description": "Name, member code, phone or email fragment."
             },
             "limit": {
+              "description": "Max results (default 20).",
               "type": "integer",
               "minimum": 1,
-              "maximum": 50,
-              "description": "Max results (default 20)."
+              "maximum": 50
             }
           },
           "required": [
             "query"
           ],
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -58,6 +58,7 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "member_code": {
@@ -69,8 +70,7 @@
           "required": [
             "member_code"
           ],
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -84,22 +84,23 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "limit": {
+              "description": "Max invoices (default 25).",
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
-              "description": "Max invoices (default 25)."
+              "maximum": 100
             },
             "branch_id": {
+              "description": "Restrict to one branch.",
               "type": "string",
               "format": "uuid",
-              "description": "Restrict to one branch."
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             }
           },
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -113,21 +114,22 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "date": {
+              "description": "Day in YYYY-MM-DD (IST). Defaults to today.",
               "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "description": "Day in YYYY-MM-DD (IST). Defaults to today."
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "branch_id": {
+              "description": "Restrict to one branch.",
               "type": "string",
               "format": "uuid",
-              "description": "Restrict to one branch."
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             }
           },
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -141,26 +143,27 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "status": {
-              "type": "string",
-              "description": "Lead status filter, e.g. new, contacted, won, lost."
+              "description": "Lead status filter, e.g. new, contacted, won, lost.",
+              "type": "string"
             },
             "branch_id": {
+              "description": "Restrict to one branch.",
               "type": "string",
               "format": "uuid",
-              "description": "Restrict to one branch."
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "limit": {
+              "description": "Max leads (default 25).",
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
-              "description": "Max leads (default 25)."
+              "maximum": 100
             }
           },
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -175,6 +178,7 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "full_name": {
@@ -188,30 +192,31 @@
               "description": "Contact number, ideally in +91XXXXXXXXXX form."
             },
             "email": {
+              "description": "Email address.",
               "type": "string",
               "format": "email",
-              "description": "Email address."
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
             },
             "branch_id": {
+              "description": "Branch the lead belongs to.",
               "type": "string",
               "format": "uuid",
-              "description": "Branch the lead belongs to."
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "source": {
-              "type": "string",
-              "description": "Where the lead came from, e.g. walk_in, instagram, referral."
+              "description": "Where the lead came from, e.g. walk_in, instagram, referral.",
+              "type": "string"
             },
             "notes": {
-              "type": "string",
-              "description": "Free-text context about the enquiry."
+              "description": "Free-text context about the enquiry.",
+              "type": "string"
             }
           },
           "required": [
             "full_name",
             "phone"
           ],
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -225,26 +230,27 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "status": {
-              "type": "string",
-              "description": "Task status filter, e.g. pending, in_progress, completed."
+              "description": "Task status filter, e.g. pending, in_progress, completed.",
+              "type": "string"
             },
             "branch_id": {
+              "description": "Restrict to one branch.",
               "type": "string",
               "format": "uuid",
-              "description": "Restrict to one branch."
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "limit": {
+              "description": "Max tasks (default 25).",
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
-              "description": "Max tasks (default 25)."
+              "maximum": 100
             }
           },
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -258,15 +264,15 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "active_only": {
-              "type": "boolean",
-              "description": "Only active branches (default true)."
+              "description": "Only active branches (default true).",
+              "type": "boolean"
             }
           },
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -280,20 +286,21 @@
           "openWorldHint": false
         },
         "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "branch_id": {
+              "description": "Restrict to one branch.",
               "type": "string",
               "format": "uuid",
-              "description": "Restrict to one branch."
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "active_only": {
-              "type": "boolean",
-              "description": "Only active plans (default true)."
+              "description": "Only active plans (default true).",
+              "type": "boolean"
             }
           },
-          "additionalProperties": false,
-          "$schema": "http://json-schema.org/draft-07/schema#"
+          "additionalProperties": false
         },
         "outputSchema": null
       }
