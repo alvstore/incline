@@ -130,7 +130,7 @@ export function EditClassDrawer({ open, onOpenChange, lockedTrainerId, classData
       toast.success('Class updated successfully');
       onOpenChange(false);
     } catch (error) {
-      toast.error('Failed to update class');
+      toast.error(error instanceof Error ? error.message : 'Failed to update class');
     }
   };
 

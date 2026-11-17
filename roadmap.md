@@ -1,3 +1,7 @@
+# Uploaded System Health groups (17 Nov 2026)
+- [ ] Audit class single-result and fitness notification permission errors against live policies and code.
+- [ ] Apply minimal fixes, run focused checks, and resolve only verified fingerprints.
+
 # Browser notification text (13 Nov 2026)
 - [x] Audit live team alert categories; replace generic browser messages with privacy-safe event headings/descriptions and retain full details after sign-in.
 - [x] Five delivery-payload/worker regression tests pass; deployed web-push; Chrome notification API reads back the late-check-in heading, description and attendance destination. Build OK. Physical OS display remains an admin-device check; published worker changes require Publish → Update.

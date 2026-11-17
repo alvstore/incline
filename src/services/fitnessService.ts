@@ -477,7 +477,7 @@ export async function loadMemberContacts(memberIds: string[]): Promise<Map<strin
 async function sendOneNotification(
   channel: NotificationChannel,
   contact: MemberContact,
-  params: { plan_name: string; plan_type: 'workout' | 'diet'; branch_id?: string },
+  params: { plan_name: string; plan_type: 'workout' | 'diet'; branch_id?: string; plan_id?: string },
 ): Promise<{ sent: boolean; error?: string }> {
   const subject = `New ${params.plan_type} plan assigned`;
   const body = `Hi ${contact.full_name}, your trainer has assigned a new ${params.plan_type} plan: "${params.plan_name}". Open the gym app to view it.`;
@@ -518,16 +518,25 @@ async function sendOneNotification(
     }
     if (channel === 'in_app') {
       if (!contact.user_id) return { sent: false, error: 'Member has no app account' };
-      const { error } = await supabase.from('notifications').insert({
+      if (!params.branch_id) return { sent: false, error: 'No branch context' };
+      const { dispatchCommunication, buildDedupeKey } = await import('@/lib/comms/dispatch');
+      const result = await dispatchCommunication({
+        branch_id: params.branch_id,
+        channel: 'in_app',
+        category: 'transactional',
+        recipient: contact.user_id,
+        member_id: contact.id,
         user_id: contact.user_id,
-        branch_id: params.branch_id || null,
-        title: subject,
-        message: body,
-        type: 'info',
-        category: 'fitness_plan',
-        action_url: params.plan_type === 'workout' ? '/my-workout' : '/my-diet',
+        payload: {
+          subject,
+          body,
+          variables: { event_key: 'fitness_plan_assigned', plan_type: params.plan_type },
+        },
+        dedupe_key: buildDedupeKey(['fitness-plan', params.plan_type, contact.id, params.plan_id, channel]),
       });
-      if (error) throw error;
+      if (result.status === 'failed' || result.status === 'suppressed') {
+        return { sent: false, error: result.reason || result.status };
+      }
       return { sent: true };
     }
     return { sent: false, error: 'Unknown channel' };
@@ -613,6 +622,7 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
             plan_name: params.plan_name,
             plan_type: params.plan_type,
             branch_id: branchFor(member_id) || undefined,
+            plan_id: planIdByMember.get(member_id),
           })
         : { sent: false, error: 'Member contact not found' };
     }
