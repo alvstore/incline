@@ -622,6 +622,7 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
             plan_name: params.plan_name,
             plan_type: params.plan_type,
             branch_id: branchFor(member_id) || undefined,
+            plan_id: planIdByMember.get(member_id),
           })
         : { sent: false, error: 'Member contact not found' };
     }
