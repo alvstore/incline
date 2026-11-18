@@ -514,3 +514,10 @@
     background-image: linear-gradient(to right, var(--theme-grad-from, #7c3aed), var(--theme-grad-to, #4f46e5));
   }
 }
+
+/* Notification panel: springy scale-from-trigger open, quick fade close */
+.notif-panel[data-state="open"] { animation: notif-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important; transform-origin: var(--radix-popover-content-transform-origin); }
+.notif-panel[data-state="closed"] { animation: notif-out 0.15s ease-in forwards !important; transform-origin: var(--radix-popover-content-transform-origin); }
+@keyframes notif-in { from { opacity: 0; transform: translateY(-6px) scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes notif-out { to { opacity: 0; transform: scale(0.96); } }
+@media (prefers-reduced-motion: reduce) { .notif-panel[data-state] { animation: none !important; } }
