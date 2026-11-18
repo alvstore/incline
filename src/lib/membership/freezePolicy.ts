@@ -19,8 +19,9 @@ export function freezeValidation(input: {
   minDays: number; maxDays: number; exceptionsEnabled: boolean; fee: number; openEnded?: boolean;
 }): string | null {
   if (input.openEnded) {
-    if (input.mode !== 'override') return 'Freeze until return requires a management exception.';
+    if (input.mode === 'plan') return 'Plan days need a set duration; choose Paid or Exception to freeze until return.';
     if (!input.exceptionsEnabled) return 'Freeze exceptions are disabled for this branch.';
+    if (input.mode === 'paid' && !(input.fee > 0)) return 'Enter a freeze fee above ₹0.';
     return input.reason.trim().length < 6 ? 'Enter a reason of at least 6 characters.' : null;
   }
   if (!Number.isInteger(input.days) || input.days < 1 || input.days > 365) return 'Enter 1–365 whole days.';

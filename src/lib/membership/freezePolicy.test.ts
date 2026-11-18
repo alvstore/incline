@@ -8,8 +8,9 @@ describe('membership freeze policy', () => {
     expect(freezeValidation({ ...base, mode: 'override', openEnded: true, days: NaN, remaining: 0 })).toBeNull();
   });
   it('open-ended freezes cannot consume plan days or create a paid freeze', () => {
-    expect(freezeValidation({ ...base, openEnded: true })).toBe('Freeze until return requires a management exception.');
-    expect(freezeValidation({ ...base, mode: 'paid', openEnded: true })).toBe('Freeze until return requires a management exception.');
+    expect(freezeValidation({ ...base, openEnded: true })).toBe('Plan days need a set duration; choose Paid or Exception to freeze until return.');
+    expect(freezeValidation({ ...base, mode: 'paid', openEnded: true, days: NaN })).toBeNull();
+    expect(freezeValidation({ ...base, mode: 'paid', openEnded: true, fee: 0 })).toBe('Enter a freeze fee above ₹0.');
   });
   it('open-ended exceptions require a reason and an enabled branch policy', () => {
     expect(freezeValidation({ ...base, mode: 'override', openEnded: true, reason: '' })).toBe('Enter a reason of at least 6 characters.');
