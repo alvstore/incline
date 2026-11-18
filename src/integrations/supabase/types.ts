@@ -9615,6 +9615,7 @@ export type Database = {
           days_frozen: number | null
           end_date: string | null
           fee_charged: number | null
+          fee_gst_rate: number
           id: string
           invoice_id: string | null
           is_open_ended: boolean
@@ -9636,6 +9637,7 @@ export type Database = {
           days_frozen?: number | null
           end_date?: string | null
           fee_charged?: number | null
+          fee_gst_rate?: number
           id?: string
           invoice_id?: string | null
           is_open_ended?: boolean
@@ -9657,6 +9659,7 @@ export type Database = {
           days_frozen?: number | null
           end_date?: string | null
           fee_charged?: number | null
+          fee_gst_rate?: number
           id?: string
           invoice_id?: string | null
           is_open_ended?: boolean
@@ -20051,16 +20054,29 @@ export type Database = {
         }
         Returns: Json
       }
-      request_or_freeze_membership: {
-        Args: {
-          p_freeze_days: number
-          p_membership_id: string
-          p_mode?: string
-          p_reason: string
-          p_start_date?: string
-        }
-        Returns: Json
-      }
+      request_or_freeze_membership:
+        | {
+            Args: {
+              p_freeze_days: number
+              p_membership_id: string
+              p_mode?: string
+              p_reason: string
+              p_start_date?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_fee: number
+              p_freeze_days: number
+              p_gst: boolean
+              p_membership_id: string
+              p_mode: string
+              p_reason: string
+              p_start_date: string
+            }
+            Returns: Json
+          }
       request_referral_reward_claim: {
         Args: { p_reward_id: string }
         Returns: Json

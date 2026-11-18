@@ -1,6 +1,7 @@
 // @ts-expect-error bun test runtime
 import { describe, expect, it } from 'bun:test';
-import { actualFreezeDays, freezeNeedsApproval, freezeValidation, shiftFreezeDate } from './freezePolicy';
+import { actualFreezeDays, freezeNeedsApproval, freezeValidation, shiftFreezeDate } from './freezePolicy'
+import { freezeFeeQuote } from './freezePolicy';
 const base = { mode: 'plan' as const, days: 7, reason: 'Medical leave', remaining: 30, minDays: 7, maxDays: 30, exceptionsEnabled: true, fee: 500 };
 describe('membership freeze policy', () => {
   it('open-ended exceptions need no duration and bypass the 30-day allowance', () => {
@@ -50,7 +51,12 @@ describe('membership freeze policy', () => {
     expect(shiftFreezeDate('2027-09-01', 30)).toBe('2027-10-01');
   });
   it('paid freezes require a saved fee and branch duration limits', () => {
-    expect(freezeValidation({ ...base, mode: 'paid', fee: 0 })).toBe('No paid freeze fee is configured.');
+    expect(freezeValidation({ ...base, mode: 'paid', fee: 0 })).toBe('Enter a freeze fee above ₹0.');
     expect(freezeValidation({ ...base, days: 31 })).toBe('Choose 7–30 days for this branch.');
   });
+});
+describe('paid freeze fee', () => {
+  it('₹3,500 with GST is ₹4,130 on an INV bill', () => { expect(freezeFeeQuote(3500, true)).toEqual({ base: 3500, tax: 630, total: 4130, series: 'INV' }); });
+  it('₹3,500 without GST stays ₹3,500 on a BOS bill', () => { expect(freezeFeeQuote(3500, false)).toEqual({ base: 3500, tax: 0, total: 3500, series: 'BOS' }); });
+  it('blocks a paid freeze with no fee', () => { expect(freezeValidation({ mode: 'paid', days: 10, reason: 'Travel abroad', remaining: 0, minDays: 7, maxDays: 30, exceptionsEnabled: true, fee: 0 })).toMatch(/fee/); });
 });

@@ -27,11 +27,17 @@ export function freezeValidation(input: {
   if (input.mode !== 'plan' && !input.exceptionsEnabled) return 'Freeze exceptions are disabled for this branch.';
   if (input.mode !== 'override' && (input.days < input.minDays || input.days > input.maxDays)) return `Choose ${input.minDays}–${input.maxDays} days for this branch.`;
   if (input.mode === 'plan' && input.days > input.remaining) return 'Duration exceeds the remaining plan allowance.';
-  if (input.mode === 'paid' && input.fee <= 0) return 'No paid freeze fee is configured.';
+  if (input.mode === 'paid' && !(input.fee > 0)) return 'Enter a freeze fee above ₹0.';
   if (input.reason.trim().length < 6) return 'Enter a reason of at least 6 characters.';
   return null;
 }
 
 export function freezeNeedsApproval(mode: FreezeMode, canOverride: boolean, isStaff = true): boolean {
   return !isStaff || (mode !== 'plan' && !canOverride);
+}
+/** Paid freeze bill: GST on → 18% tax invoice (INV series); off → bill of supply (BOS series). */
+export function freezeFeeQuote(fee: number, gst: boolean) {
+  const base = Number.isFinite(fee) && fee > 0 ? Math.round(fee * 100) / 100 : 0;
+  const tax = gst ? Math.round(base * 18) / 100 : 0;
+  return { base, tax, total: Math.round((base + tax) * 100) / 100, series: gst ? 'INV' as const : 'BOS' as const };
 }

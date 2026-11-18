@@ -1359,6 +1359,13 @@
       "when": 1794996991144,
       "tag": "0193_open_ended_membership_freezes",
       "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1794998739115,
+      "tag": "0194_paid_freeze_custom_fee_gst",
+      "breakpoints": true
     }
   ]
 }

@@ -43,6 +43,10 @@ export interface FreezeMembershipInput {
   reason: string;
   mode?: 'plan' | 'paid' | 'override';
   startDate?: string;
+  /** Paid freeze base fee (before GST). */
+  fee?: number | null;
+  /** true = 18% GST tax invoice (INV series); false = bill of supply (BOS). */
+  gst?: boolean;
 }
 
 export async function freezeMembership(input: FreezeMembershipInput) {
@@ -52,9 +56,11 @@ export async function freezeMembership(input: FreezeMembershipInput) {
     p_reason: input.reason,
     p_mode: input.mode ?? 'plan',
     p_start_date: input.startDate ?? null,
-  });
+    p_fee: input.mode === 'paid' ? input.fee ?? null : null,
+    p_gst: input.mode === 'paid' ? !!input.gst : false,
+  } as never);
   if (error) throw error;
-  const result = data as { success?: boolean; status?: string; error?: string; freeze_id?: string; approval_id?: string };
+  const result = data as { success?: boolean; status?: string; error?: string; freeze_id?: string; approval_id?: string; invoice_id?: string | null };
   if (!result?.success) throw new Error(result?.error || 'Could not freeze membership');
   return result;
 }
