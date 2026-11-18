@@ -19,3 +19,4 @@
 - AI providers are configured only through the Providers drawer (ai_provider_configs + providerCatalog.ts); a backup is chosen per row via fallback_provider_id and used by ai-dispatcher only for busy/down/credit failures, so no provider or model is hard-coded in functions.
 - Call greeting is owned by the Sarvam agent script; `sarvam-voice` sends no `initial_bot_message`, so script edits in Sarvam take effect without code changes.
 - Payment-link amounts are derived server-side from the invoice balance (`_shared/paymentLinkAmount.ts`); only staff part-payments with an audited reason may charge less, so callers cannot set their own price.
+- HOWBODY: one QR bind covers BMI then posture; posture pushes lacking a known uid are attributed only when exactly one member bound that scanner in the last 30 min (_shared/postureMatch.ts), otherwise they stay unmatched for audited linking, so a scan is never guessed onto the wrong member.

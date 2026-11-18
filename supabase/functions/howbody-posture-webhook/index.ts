@@ -3,6 +3,7 @@
 // cloud sends no key at all (observed in production), fall back to the device
 // allowlist so genuine reports from a registered scanner are never dropped.
 import { corsHeaders, json, admin, logWebhook, getExpectedWebhookAppKey } from "../_shared/howbody.ts";
+import { pickPostureMember, POSTURE_MATCH_WINDOW_MIN } from "../_shared/postureMatch.ts";
 
 const ENVELOPE_OK = { code: 200, message: "Push successful", data: null };
 const ENVELOPE_FAIL = { code: 500, message: "Push failed", data: null };
@@ -93,6 +94,18 @@ Deno.serve(async (req) => {
           if (ms && ms.length === 1) member = ms[0];
         }
       }
+    }
+    // v2.4.0 — single bind covers BMI + posture: the posture push carries a device-made
+    // uid and no scanId, so attribute it to the sole member who bound this scanner recently.
+    let matchedBy = "uid";
+    if (!member && payload.equipmentNo) {
+      const since = new Date(Date.now() - POSTURE_MATCH_WINDOW_MIN * 60_000).toISOString();
+      const { data: recent } = await sb.from("howbody_scan_sessions")
+        .select("member_id, equipment_no, created_at, status, kinds")
+        .eq("equipment_no", String(payload.equipmentNo))
+        .gte("created_at", since);
+      const mid = pickPostureMember(recent || [], String(payload.equipmentNo));
+      if (mid) { member = { id: mid }; matchedBy = "scanner_session"; }
     }
     if (!member) {
       await logWebhook("posture", thirdUid, dataKey, 404, "member not found", payload);
@@ -191,7 +204,7 @@ Deno.serve(async (req) => {
       await delivery;
     }
 
-    await logWebhook("posture", thirdUid, dataKey, 200, isDuplicate ? "ok (duplicate)" : "ok", null);
+    await logWebhook("posture", thirdUid, dataKey, 200, (isDuplicate ? "ok (duplicate)" : "ok") + (matchedBy === "uid" ? "" : " via scanner session"), null);
     return json(ENVELOPE_OK, 200);
   } catch (e) {
     console.error("howbody-posture-webhook error:", e);

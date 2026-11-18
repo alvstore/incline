@@ -6451,6 +6451,7 @@ export type Database = {
           equipment_no: string
           id: string
           kind: string
+          kinds: string[] | null
           member_id: string | null
           scan_id: string
           status: string
@@ -6462,6 +6463,7 @@ export type Database = {
           equipment_no: string
           id?: string
           kind?: string
+          kinds?: string[] | null
           member_id?: string | null
           scan_id: string
           status?: string
@@ -6473,6 +6475,7 @@ export type Database = {
           equipment_no?: string
           id?: string
           kind?: string
+          kinds?: string[] | null
           member_id?: string | null
           scan_id?: string
           status?: string

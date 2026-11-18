@@ -36,10 +36,15 @@ export default function HowbodyLogin() {
   const kindParam = (params.get("kind") || params.get("scanType") || "").toLowerCase();
 
   const [status, setStatus] = useState<Status>("idle");
+  const [boundMember, setBoundMember] = useState<string | null>(null);
+  const [boundAt, setBoundAt] = useState<string | null>(null);
+  const [bodyDone, setBodyDone] = useState(false);
+  const [postureDone, setPostureDone] = useState(false);
+  const [postureLate, setPostureLate] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
-  const [kind, setKind] = useState<ScanKind>(kindParam === "posture" ? "posture" : "body");
+  const kind: ScanKind = kindParam === "posture" ? "posture" : "body";
   // Height is mandatory — the scanner cannot calculate BMI or body fat without it.
   const [height, setHeight] = useState("");
   const [heightPrefilled, setHeightPrefilled] = useState(false);
@@ -104,10 +109,7 @@ export default function HowbodyLogin() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "howbody_scan_sessions", filter: `scan_id=eq.${scanId}` },
         (payload: any) => {
-          if (payload?.new?.status === "completed") {
-            toast({ title: "Scan complete!", description: "Your report is ready." });
-            navigate("/my-progress");
-          }
+          if (payload?.new?.status === "completed") setBodyDone(true);
         },
       )
       .subscribe();
@@ -176,8 +178,37 @@ export default function HowbodyLogin() {
       setStatus("error");
       return;
     }
+    setBoundMember(targetMemberId);
+    setBoundAt(new Date(Date.now() - 60_000).toISOString());
     setStatus("bound");
   }
+
+  // Live progress: poll for the BMI then posture report from the same single link.
+  useEffect(() => {
+    if (status !== "bound" || !boundMember || !boundAt) return;
+    let stop = false;
+    const started = Date.now();
+    const tick = async () => {
+      const [b, p] = await Promise.all([
+        supabase.from("howbody_body_reports").select("id").eq("member_id", boundMember).gte("created_at", boundAt).limit(1),
+        supabase.from("howbody_posture_reports").select("id").eq("member_id", boundMember).gte("created_at", boundAt).limit(1),
+      ]);
+      if (stop) return;
+      if (b.data?.length) setBodyDone(true);
+      if (p.data?.length) setPostureDone(true);
+      if (Date.now() - started > 15 * 60_000) setPostureLate(true);
+    };
+    void tick();
+    const id = window.setInterval(tick, 5000);
+    return () => { stop = true; window.clearInterval(id); };
+  }, [status, boundMember, boundAt]);
+
+  useEffect(() => {
+    if (!(bodyDone && postureDone)) return;
+    toast({ title: "Scan complete!", description: "BMI and posture reports are ready." });
+    const t = window.setTimeout(() => navigate(isStaff ? "/my-scan-report" : "/my-progress"), 1800);
+    return () => window.clearTimeout(t);
+  }, [bodyDone, postureDone, navigate, toast, isStaff]);
 
   // ---------- UI ----------
 
@@ -230,14 +261,7 @@ export default function HowbodyLogin() {
   if (status === "bound") {
     return (
       <Shell>
-        <Card className="rounded-2xl border-0 bg-gradient-to-br from-success to-success p-10 text-center text-primary-foreground shadow-2xl shadow-success/20">
-          <CheckCircle2 className="mx-auto h-16 w-16" />
-          <h2 className="mt-4 text-2xl font-bold">You're linked!</h2>
-          <p className="mt-2 text-success">Step on the scanner now and follow the on-screen instructions.</p>
-          <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-card/15 px-4 py-2 text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" /> Waiting for your report…
-          </div>
-        </Card>
+        <ScanProgress bodyDone={bodyDone} postureDone={postureDone} postureLate={postureLate} />
       </Shell>
     );
   }
@@ -275,27 +299,9 @@ export default function HowbodyLogin() {
           </Badge>
         </div>
 
-        <div className="mt-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scan type</p>
-          <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Scan type">
-            {(["body", "posture"] as ScanKind[]).map((k) => (
-              <Button
-                key={k}
-                variant="outline"
-                type="button"
-                aria-pressed={kind === k}
-                onClick={() => setKind(k)}
-                disabled={status === "binding"}
-                className={`h-auto min-h-11 cursor-pointer whitespace-normal rounded-xl border px-2 py-3 text-sm font-medium capitalize transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success disabled:opacity-50 ${
-                  kind === k
-                    ? "border-success/40 bg-success/10 text-success"
-                    : "border-border text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {k === "body" ? "Body composition" : "Posture"}
-              </Button>
-            ))}
-          </div>
+        <div className="mt-5 flex items-center gap-3 rounded-xl bg-success/10 p-3 text-sm text-success">
+          <ShieldCheck className="h-4 w-4 shrink-0" />
+          <span><span className="font-semibold">BMI + Posture</span> in one link. The scanner continues to posture automatically, so you won't need to link again.</span>
         </div>
 
         <div className="mt-5">
@@ -382,7 +388,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
           <p className="text-xs uppercase tracking-[0.2em] text-success">Incline · Body Scan</p>
-          <h1 className="mt-1 text-lg font-bold text-foreground">Body Composition Scanner</h1>
+          <h1 className="mt-1 text-lg font-bold text-foreground">BMI + Posture Scan</h1>
         </div>
         {children}
         <p className="mt-6 text-center text-xs text-muted-foreground">
@@ -390,5 +396,55 @@ function Shell({ children }: { children: React.ReactNode }) {
         </p>
       </div>
     </div>
+  );
+}
+
+function ScanProgress({ bodyDone, postureDone, postureLate }: { bodyDone: boolean; postureDone: boolean; postureLate: boolean }) {
+  const steps = [
+    { label: "Linked to scanner", done: true },
+    { label: "BMI & body composition", done: bodyDone },
+    { label: "Posture & 3D photos", done: postureDone },
+    { label: "Report ready", done: bodyDone && postureDone },
+  ];
+  const active = steps.findIndex((s) => !s.done);
+  const hint = !bodyDone
+    ? "Step on the scanner, hold the handles and follow the screen."
+    : !postureDone
+      ? "BMI saved. Stay on the scanner. It moves to posture by itself, so you don't need to link again."
+      : "All done. Opening your report…";
+  return (
+    <Card className="overflow-hidden rounded-2xl p-6 shadow-lg shadow-success/20" aria-live="polite">
+      <div className="flex flex-col items-center text-center">
+        <div className="relative flex h-24 w-24 items-center justify-center">
+          {active !== -1 && <span className="absolute inset-0 rounded-full bg-success/20 motion-safe:animate-ping" aria-hidden="true" />}
+          <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-success/10 text-success">
+            {active === -1 ? <CheckCircle2 className="h-10 w-10 motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:duration-500" /> : <ScanLine className="h-10 w-10" />}
+          </span>
+        </div>
+        <h2 className="mt-4 text-xl font-bold">{active === -1 ? "Scan complete" : "Scanning in progress"}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+      </div>
+      <ol className="mt-6 space-y-3">
+        {steps.map((s, i) => (
+          <li
+            key={s.label}
+            style={{ animationDelay: `${i * 80}ms` }}
+            className={`flex items-center gap-3 rounded-xl p-3 text-sm transition-colors duration-500 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both ${
+              s.done ? "bg-success/10 text-success" : i === active ? "bg-muted text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-card">
+              {s.done ? <CheckCircle2 className="h-4 w-4 motion-safe:animate-in motion-safe:zoom-in-50" /> : i === active ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" /> : <span className="text-xs font-semibold">{i + 1}</span>}
+            </span>
+            <span className="font-medium">{s.label}</span>
+          </li>
+        ))}
+      </ol>
+      {postureLate && bodyDone && !postureDone && (
+        <p className="mt-4 rounded-xl bg-warning/10 p-3 text-xs text-warning">
+          Posture is still processing. Your BMI is saved. Posture will appear in your progress as soon as the scanner sends it.
+        </p>
+      )}
+    </Card>
   );
 }

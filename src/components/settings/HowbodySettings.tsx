@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { HowbodyDevicesCard } from "./HowbodyDevicesCard";
+import { HowbodyUnmatchedPostureCard } from "./HowbodyUnmatchedPostureCard";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
 
@@ -312,7 +313,8 @@ export function HowbodySettings() {
       </TabsContent>
 
       {/* === Tab 3: Devices === */}
-      <TabsContent value="devices" className="mt-6">
+      <TabsContent value="devices" className="mt-6 space-y-6">
+        <HowbodyUnmatchedPostureCard />
         <HowbodyDevicesCard />
       </TabsContent>
     </Tabs>

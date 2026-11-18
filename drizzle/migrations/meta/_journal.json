@@ -1380,6 +1380,13 @@
       "when": 1795014434868,
       "tag": "0196_grant_public_scan_report_link",
       "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1795014698709,
+      "tag": "0197_howbody_session_kinds",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,2 @@
+ALTER TABLE public.howbody_scan_sessions ADD COLUMN IF NOT EXISTS kinds text[] DEFAULT ARRAY['body','posture']::text[];
+CREATE INDEX IF NOT EXISTS howbody_scan_sessions_equipment_created_idx ON public.howbody_scan_sessions (equipment_no, created_at DESC);

@@ -111,6 +111,9 @@ Deno.serve(async (req) => {
     // Entitlement — strictly for the requested scan kind (no cross-substitution).
     const { data: quota } = await sb.rpc("howbody_scan_quota", { _member_id: memberId, _kind: kind });
     const allowed = (quota as Record<string, unknown> | null)?.allowed === true;
+    // One bind covers BMI then posture on the S580; record posture only if entitled.
+    const { data: pq } = await sb.rpc("howbody_scan_quota", { _member_id: memberId, _kind: "posture" });
+    const kinds = (pq as Record<string, unknown> | null)?.allowed === true ? ["body", "posture"] : [kind];
     if (!allowed) {
       // Expected business outcome (no entitlement), NOT a system error.
       // Returned as 200 so observability does not record it as an edge-function failure;
@@ -214,11 +217,12 @@ Deno.serve(async (req) => {
       equipment_no: equipmentNo,
       member_id: memberId,
       kind,
+      kinds: Array.from(new Set([kind, ...kinds])),
       status: "bound",
       bound_at: new Date().toISOString(),
     }, { onConflict: "scan_id" });
 
-    return json({ ok: true, kind });
+    return json({ ok: true, kind, kinds });
   } catch (e) {
     console.error("howbody-bind-user error:", e);
     return json({ ok: false, error: e instanceof Error ? e.message : "Unknown error" }, 500);
