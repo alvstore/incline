@@ -1,3 +1,4 @@
+import { freezeMembership, getMembershipFreezeContext } from '@/services/membershipActionsService';
 import { friendlyError } from '@/lib/bookings/coverage';
 import { useEffect, useMemo, useState } from 'react';
 import { useLockerPricing } from '@/hooks/useLockerPricing';
@@ -61,7 +62,7 @@ const COPY: Record<RequestKind, { title: string; description: string; fieldLabel
     description: 'Pause your membership while you are away.',
     fieldLabel: 'Reason for freeze',
     placeholder: 'e.g., Traveling for work, medical reasons…',
-    note: 'Management reviews freeze requests. You will be notified once approved and your end date extended.',
+    note: 'Management reviews your request. Only actual paused days are credited when you resume.',
     requireText: true,
   },
   unfreeze: {
@@ -119,6 +120,8 @@ export function RequestComposerDrawer({
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<RequestKind | null>(initialKind);
   const [note, setNote] = useState('');
+  const [freezeDays, setFreezeDays] = useState(7);
+  const freezeContext = useQuery({ queryKey: ['freeze-context', activeMembership?.id], enabled: open && kind === 'freeze' && !!activeMembership?.id, queryFn: () => getMembershipFreezeContext(activeMembership?.id || '') });
   const [lockerSize, setLockerSize] = useState<LockerSize>('Medium');
   const [reasonCode, setReasonCode] = useState<TrainerChangeReason | null>(null);
   const [goal, setGoal] = useState<string | null>(null);
@@ -164,6 +167,7 @@ export function RequestComposerDrawer({
     if (open) {
       setKind(initialKind);
       setNote('');
+      setFreezeDays(7);
       setLockerSize('Medium');
       setReasonCode(null);
       setGoal(null);
@@ -258,8 +262,13 @@ export function RequestComposerDrawer({
         );
       };
 
-      if (kind === 'freeze' || kind === 'unfreeze') {
-        const reference: MemberRequestReference = kind === 'unfreeze' ? 'membership_unfreeze' : 'member';
+      if (kind === 'freeze') {
+        await freezeMembership({ membershipId: activeMembership?.id, freezeDays, reason: note, mode: 'plan' });
+        return;
+      }
+
+      if (kind === 'unfreeze') {
+        const reference: MemberRequestReference = 'membership_unfreeze';
         const { error } = await supabase.from('approval_requests').insert({
           ...base,
           approval_type: 'membership_freeze' as const,
@@ -359,7 +368,8 @@ export function RequestComposerDrawer({
       ? { ...baseCopy, title: 'Change trainer', description: 'Tell us what isn’t working so the manager can help.', note: 'The branch manager reviews your request and follows up.' }
       : { ...baseCopy, title: 'Request a trainer', description: 'Get matched with a coach for your goals.', note: 'The front desk will match you with a suitable trainer.' }
     : baseCopy;
-  const canSubmit = !!kind && (kind !== 'locker' || !!lockerCfg) && (kind === 'trainer' ? !trainerError : (!copy?.requireText || note.trim().length > 0));
+  const freezeValid = kind !== 'freeze' || (!!freezeContext.data && !freezeContext.isFetching && Number.isInteger(freezeDays) && freezeDays >= freezeContext.data.min_days && freezeDays <= Math.min(freezeContext.data.max_days, freezeContext.data.remaining) && note.trim().length >= 6);
+  const canSubmit = freezeValid && !!kind && (kind !== 'locker' || !!lockerCfg) && (kind === 'trainer' ? !trainerError : (!copy?.requireText || note.trim().length > 0));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -540,6 +550,7 @@ export function RequestComposerDrawer({
                 </div>
               )}
 
+              {kind === 'freeze' && <div className="space-y-2"><Label htmlFor="portal-freeze-days">Freeze duration (days)</Label><Input id="portal-freeze-days" type="number" min={freezeContext.data?.min_days ?? 1} max={Math.min(freezeContext.data?.max_days ?? 30, freezeContext.data?.remaining ?? 0)} value={Number.isNaN(freezeDays) ? '' : freezeDays} onChange={e => setFreezeDays(e.target.valueAsNumber)} aria-describedby="portal-freeze-policy" /><p id="portal-freeze-policy" role="status" className="text-sm text-muted-foreground">{freezeContext.isError ? 'Unable to load freeze allowance. Please try again.' : freezeContext.data ? `${freezeContext.data.remaining} days available · ${freezeContext.data.min_days}–${Math.min(freezeContext.data.max_days, freezeContext.data.remaining)} days per request` : 'Loading plan allowance…'}</p></div>}
               <div className="space-y-2">
                 <Label htmlFor="request-note">
                   {kind === 'trainer' && reasonFlagOn

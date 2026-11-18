@@ -9,6 +9,7 @@ import { PurchaseMembershipDrawer } from '@/components/members/PurchaseMembershi
 import { PurchasePTPackageDrawer } from '@/components/pt/PurchasePTPackageDrawer';
 import { MemberProfileDrawer } from '@/components/members/MemberProfileDrawer';
 import { QuickFreezeDrawer } from '@/components/members/QuickFreezeDrawer';
+import { UnfreezeMembershipDrawer } from '@/components/members/UnfreezeMembershipDrawer';
 import { GroupPurchaseDrawer } from '@/components/members/GroupPurchaseDrawer';
 import { CancelMembershipDrawer } from '@/components/members/CancelMembershipDrawer';
 import { SuspendMemberDrawer } from '@/components/members/SuspendMemberDrawer';
@@ -163,6 +164,7 @@ export default function MembersPage() {
   const { roles: authRoles } = useAuth();
   const canCancel = can.cancelMembership(authRoles as any);
   const [quickFreezeOpen, setQuickFreezeOpen] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
   const [groupPurchaseOpen, setGroupPurchaseOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [selectedMembershipForFreeze, setSelectedMembershipForFreeze] = useState<any>(null);
@@ -572,7 +574,7 @@ export default function MembersPage() {
                 disabled={!member.activeMembership || member.status === 'frozen'}
               >
                 <Snowflake className="h-4 w-4 mr-2" />
-                Quick Freeze
+                Freeze Membership
               </DropdownMenuItem>
             </>
           )}
@@ -582,7 +584,7 @@ export default function MembersPage() {
               <DropdownMenuItem onClick={() => {
                 setSelectedMember(member);
                 setSelectedMembershipForFreeze(member.activeMembership);
-                setQuickFreezeOpen(true);
+                setResumeOpen(true);
               }}>
                 <Snowflake className="h-4 w-4 mr-2 text-info" />
                 Unfreeze Membership
@@ -963,6 +965,7 @@ export default function MembersPage() {
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ['members'] })}
               />
             )}
+            <UnfreezeMembershipDrawer open={resumeOpen} onOpenChange={setResumeOpen} membership={selectedMembershipForFreeze} memberName={selectedMember?.profiles?.full_name || 'Member'} />
           </>
         )}
         {effectiveBranchId && (

@@ -10,6 +10,7 @@
 - [Browser notifications](browser-notifications.md): web push and privacy boundaries.
 - [Production readiness](production-readiness.md): operational checks and known dependencies.
 - [Deprecated table audit](deprecated-table-audit.md): evidence for retained or retired database objects.
+- [Membership freeze audit](membership-freeze-audit-2026-11-18.md): allowance, exception switch, approvals, actual-day resume and Raahul's preserved medical freeze.
 
 ## Historical reference
 

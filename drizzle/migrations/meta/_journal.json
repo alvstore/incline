@@ -1324,6 +1324,34 @@
       "when": 1794891473337,
       "tag": "0188_restore_owner_admin_class_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1794996103050,
+      "tag": "0189_membership_freeze_atomic_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1794996165228,
+      "tag": "0190_freeze_exception_switch_and_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1794996382492,
+      "tag": "0191_freeze_activation_and_snapshot_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1794996425371,
+      "tag": "0192_freeze_due_check_ist_midnight",
+      "breakpoints": true
     }
   ]
 }

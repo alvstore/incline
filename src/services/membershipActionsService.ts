@@ -41,16 +41,44 @@ export interface FreezeMembershipInput {
   membershipId: string;
   freezeDays: number;
   reason: string;
+  mode?: 'plan' | 'paid' | 'override';
+  startDate?: string;
 }
 
 export async function freezeMembership(input: FreezeMembershipInput) {
-  const { data, error } = await supabase.rpc('freeze_membership', {
+  const { data, error } = await supabase.rpc('request_or_freeze_membership', {
     p_membership_id: input.membershipId,
     p_freeze_days: input.freezeDays,
     p_reason: input.reason,
+    p_mode: input.mode ?? 'plan',
+    p_start_date: input.startDate ?? null,
   });
   if (error) throw error;
-  return data;
+  const result = data as { success?: boolean; status?: string; error?: string; freeze_id?: string; approval_id?: string };
+  if (!result?.success) throw new Error(result?.error || 'Could not freeze membership');
+  return result;
+}
+
+export async function resumeMembershipFreeze(membershipId: string) {
+  const { data, error } = await supabase.rpc('resume_membership_freeze', { p_membership_id: membershipId });
+  if (error) throw error;
+  const result = data as { success?: boolean; new_end_date: string; actual_days: number; error?: string };
+  if (!result?.success) throw new Error(result?.error || 'Could not resume membership');
+  return result;
+}
+
+export interface FreezeContext {
+  membership: { id: string; member_id: string; branch_id: string; status: string; end_date: string };
+  plan_name: string; allowance: number; used: number; remaining: number;
+  min_days: number; max_days: number; fee: number; exceptions_enabled: boolean; can_override: boolean;
+  today: string; actual_days: number; resume_end_date: string;
+  current_freeze: { id: string; mode: string; start_date: string; end_date: string; days_frozen: number; reason: string; status: string; applied_at: string | null; resumed_at: string | null; baseline_end_date: string | null } | null;
+}
+
+export async function getMembershipFreezeContext(membershipId: string): Promise<FreezeContext> {
+  const { data, error } = await supabase.rpc('membership_freeze_context', { p_membership_id: membershipId });
+  if (error) throw error;
+  return data as unknown as FreezeContext;
 }
 
 /**

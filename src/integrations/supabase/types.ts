@@ -2099,6 +2099,7 @@ export type Database = {
           checkout_after_hours: number | null
           created_at: string
           currency: string | null
+          freeze_exceptions_enabled: boolean
           freeze_fee: number | null
           freeze_max_days: number | null
           freeze_min_days: number | null
@@ -2119,6 +2120,7 @@ export type Database = {
           checkout_after_hours?: number | null
           created_at?: string
           currency?: string | null
+          freeze_exceptions_enabled?: boolean
           freeze_fee?: number | null
           freeze_max_days?: number | null
           freeze_min_days?: number | null
@@ -2139,6 +2141,7 @@ export type Database = {
           checkout_after_hours?: number | null
           created_at?: string
           currency?: string | null
+          freeze_exceptions_enabled?: boolean
           freeze_fee?: number | null
           freeze_max_days?: number | null
           freeze_min_days?: number | null
@@ -9603,44 +9606,62 @@ export type Database = {
       }
       membership_freeze_history: {
         Row: {
+          actual_days_frozen: number | null
+          applied_at: string | null
           approved_at: string | null
           approved_by: string | null
+          baseline_end_date: string | null
           created_at: string
           days_frozen: number
           end_date: string
           fee_charged: number | null
           id: string
+          invoice_id: string | null
           membership_id: string
+          mode: string
           reason: string | null
           requested_by: string | null
+          resumed_at: string | null
           start_date: string
           status: Database["public"]["Enums"]["approval_status"]
         }
         Insert: {
+          actual_days_frozen?: number | null
+          applied_at?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          baseline_end_date?: string | null
           created_at?: string
           days_frozen: number
           end_date: string
           fee_charged?: number | null
           id?: string
+          invoice_id?: string | null
           membership_id: string
+          mode?: string
           reason?: string | null
           requested_by?: string | null
+          resumed_at?: string | null
           start_date: string
           status?: Database["public"]["Enums"]["approval_status"]
         }
         Update: {
+          actual_days_frozen?: number | null
+          applied_at?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          baseline_end_date?: string | null
           created_at?: string
           days_frozen?: number
           end_date?: string
           fee_charged?: number | null
           id?: string
+          invoice_id?: string | null
           membership_id?: string
+          mode?: string
           reason?: string | null
           requested_by?: string | null
+          resumed_at?: string | null
           start_date?: string
           status?: Database["public"]["Enums"]["approval_status"]
         }
@@ -9747,6 +9768,7 @@ export type Database = {
           member_id: string
           notes: string | null
           original_end_date: string
+          plan_freeze_days_used: number | null
           plan_id: string
           price_paid: number
           refund_amount: number | null
@@ -9772,6 +9794,7 @@ export type Database = {
           member_id: string
           notes?: string | null
           original_end_date: string
+          plan_freeze_days_used?: number | null
           plan_id: string
           price_paid: number
           refund_amount?: number | null
@@ -9797,6 +9820,7 @@ export type Database = {
           member_id?: string
           notes?: string | null
           original_end_date?: string
+          plan_freeze_days_used?: number | null
           plan_id?: string
           price_paid?: number
           refund_amount?: number | null
@@ -17092,6 +17116,10 @@ export type Database = {
       }
     }
     Functions: {
+      _apply_membership_freeze: {
+        Args: { p_freeze_id: string }
+        Returns: undefined
+      }
       _audit_person_name: {
         Args: {
           p_employee?: string
@@ -19065,6 +19093,10 @@ export type Database = {
         Args: { p_duration_days: number; p_start: string }
         Returns: string
       }
+      membership_freeze_context: {
+        Args: { p_membership_id: string }
+        Returns: Json
+      }
       mips_claim_dispatch_slot: {
         Args: {
           p_branch_id?: string
@@ -19377,6 +19409,7 @@ export type Database = {
         }
         Returns: Json
       }
+      process_due_membership_freezes: { Args: never; Returns: undefined }
       promote_announcement_to_campaign: {
         Args: { p_announcement_id: string }
         Returns: Json
@@ -20015,6 +20048,16 @@ export type Database = {
         }
         Returns: Json
       }
+      request_or_freeze_membership: {
+        Args: {
+          p_freeze_days: number
+          p_membership_id: string
+          p_mode?: string
+          p_reason: string
+          p_start_date?: string
+        }
+        Returns: Json
+      }
       request_referral_reward_claim: {
         Args: { p_reward_id: string }
         Returns: Json
@@ -20100,6 +20143,10 @@ export type Database = {
       restore_pos_sale_stock: {
         Args: { p_pos_sale_id: string }
         Returns: number
+      }
+      resume_membership_freeze: {
+        Args: { p_membership_id: string }
+        Returns: Json
       }
       retry_ig_comment_run: { Args: { p_id: string }; Returns: undefined }
       reverse_payment: {
@@ -20310,6 +20357,10 @@ export type Database = {
       set_member_exercise_demos: {
         Args: { p_branch_id: string; p_enabled: boolean }
         Returns: boolean
+      }
+      set_membership_freeze_exceptions: {
+        Args: { p_branch_id: string; p_enabled: boolean }
+        Returns: undefined
       }
       set_registration_geofence: {
         Args: { p_disabled_until?: string; p_enabled: boolean }

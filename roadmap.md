@@ -1,3 +1,9 @@
+# Membership freeze repair (18 Nov 2026)
+- [x] Unify freeze/resume drawers, server-side allowance, exception approvals, fee policy and actual-day accounting.
+- [x] Preserve Raahul Mehtta’s approved medical exception with verified expiry snapshot; remains frozen and access revoked.
+- [x] Fourteen tests and signed-in desktop/phone drawer checks pass; default-off exception switch enforced server-side. Details: docs/membership-freeze-audit-2026-11-18.md.
+- [ ] Successful new freeze/paid approval/resume and physical terminal confirmation: awaits an actual authorized member operation; no real member was changed just for testing.
+
 # Dependency security updates (17 Nov 2026)
 - [x] Updated @lovable.dev/mcp-js to 3.5.0, isomorphic-dompurify to 4.7.0 and zod to 4.6.7; refreshed transitive resolutions without overrides. Updated form resolver and development jsdom for compatibility/security.
 - [x] Every requested minimum verified in bun.lock (including all undici copies at 8.12.4); dependency scan reports no known vulnerabilities across 66 production dependencies. Eleven tests pass, login/recovery validation browser checks have no page errors, automatic build OK. MCP manifest regenerates with all nine tools; republish required for hosted changes. No services enabled.

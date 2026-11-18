@@ -1,3 +1,4 @@
+import { freezeMembership, resumeMembershipFreeze } from './membershipActionsService';
 import { supabase } from '@/integrations/supabase/client';
 import { getISTToday, getISTNow } from '@/lib/utils/datetime';
 import type { 
@@ -147,147 +148,22 @@ export async function activateMembership(membershipId: string) {
 
 export async function requestFreeze(request: FreezeRequest) {
   const { membershipId, startDate, endDate, reason, isPaid } = request;
-
-  const start = parseISO(startDate);
-  const end = parseISO(endDate);
-  const daysFrozen = differenceInDays(end, start) + 1;
-
-  // Get branch settings for freeze fee
-  const { data: membership } = await supabase
-    .from('memberships')
-    .select('branch_id')
-    .eq('id', membershipId)
-    .single();
-
-  let feeCharged = 0;
-  if (isPaid && membership) {
-    const { data: settings } = await supabase
-      .from('branch_settings')
-      .select('freeze_fee')
-      .eq('branch_id', membership.branch_id)
-      .single();
-    
-    feeCharged = settings?.freeze_fee || 0;
-  }
-
-  const { data, error } = await supabase
-    .from('membership_freeze_history')
-    .insert({
-      membership_id: membershipId,
-      start_date: startDate,
-      end_date: endDate,
-      days_frozen: daysFrozen,
-      reason,
-      fee_charged: feeCharged,
-      status: 'pending',
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  // Create approval request
-  if (membership?.branch_id) {
-    const { error: approvalError } = await supabase
-      .from('approval_requests')
-      .insert({
-        branch_id: membership.branch_id,
-        approval_type: 'membership_freeze' as const,
-        reference_type: 'membership_freeze',
-        reference_id: data.id,
-        request_data: { membershipId, startDate, endDate, daysFrozen, reason, feeCharged },
-      });
-
-    if (approvalError) throw approvalError;
-  }
-
-  return data;
+  const days = differenceInDays(parseISO(endDate), parseISO(startDate)) + 1;
+  return freezeMembership({ membershipId, startDate, freezeDays: days, reason: reason || '', mode: isPaid ? 'paid' : 'plan' });
 }
 
-export async function approveFreeze(freezeId: string, approvedBy: string) {
-  // Get freeze details
-  const { data: freeze, error: freezeError } = await supabase
-    .from('membership_freeze_history')
-    .select('*, memberships(*)')
-    .eq('id', freezeId)
-    .single();
-
-  if (freezeError) throw freezeError;
-
-  // Update freeze status
-  const { error: updateError } = await supabase
-    .from('membership_freeze_history')
-    .update({
-      status: 'approved',
-      approved_by: approvedBy,
-      approved_at: getISTNow().toISOString(),
-    })
-    .eq('id', freezeId);
-
-  if (updateError) throw updateError;
-
-  // Update membership status to frozen if freeze starts today or earlier
-  const today = getISTNow();
-  const freezeStart = parseISO(freeze.start_date);
-  
-  if (!isAfter(freezeStart, today)) {
-    await supabase
-      .from('memberships')
-      .update({ status: 'frozen' })
-      .eq('id', freeze.membership_id);
-
-    // Revoke hardware access when freeze activates
-    if (freeze.memberships?.member_id) {
-      revokeHardwareAccess(freeze.memberships.member_id, `Membership frozen: ${freeze.reason || 'Freeze approved'}`, freeze.memberships?.branch_id);
-    }
-  }
-
-  return freeze;
+export async function approveFreeze(freezeId: string, _approvedBy: string) {
+  const { data: request, error } = await supabase.from('approval_requests').select('id').eq('reference_id', freezeId).eq('status', 'pending').single();
+  if (error) throw error;
+  const { data, error: approvalError } = await supabase.rpc('process_approval_request', { p_request_id: request.id, p_decision: 'approve', p_review_notes: null });
+  if (approvalError) throw approvalError;
+  const result = data as { success?: boolean; error?: string };
+  if (!result?.success) throw new Error(result?.error || 'Freeze approval failed');
+  return result;
 }
 
 export async function resumeFromFreeze(membershipId: string) {
-  // Get the membership and its freeze history
-  const { data: membership, error: membershipError } = await supabase
-    .from('memberships')
-    .select('*, membership_freeze_history(*)')
-    .eq('id', membershipId)
-    .single();
-
-  if (membershipError) throw membershipError;
-
-  // Calculate new end date based on frozen days
-  const approvedFreezes = membership.membership_freeze_history?.filter(
-    (f: any) => f.status === 'approved'
-  ) || [];
-  
-  const totalFrozenDays = approvedFreezes.reduce(
-    (sum: number, f: any) => sum + f.days_frozen,
-    0
-  );
-
-  const originalEnd = parseISO(membership.original_end_date);
-  const newEndDate = format(addDays(originalEnd, totalFrozenDays), 'yyyy-MM-dd');
-
-  // Update membership
-  const { data, error } = await supabase
-    .from('memberships')
-    .update({
-      status: 'active',
-      end_date: newEndDate,
-      total_freeze_days_used: totalFrozenDays,
-    })
-    .eq('id', membershipId)
-    .select('*, members:member_id(id, branch_id)')
-    .single();
-
-  if (error) throw error;
-
-  // Restore hardware access
-  if ((data as any)?.members?.id) {
-    restoreHardwareAccess((data as any).members.id, 'Membership unfrozen', (data as any).members.branch_id);
-  }
-
-  return data;
+  return resumeMembershipFreeze(membershipId);
 }
 
 export async function addFreeDays(membershipId: string, days: number, reason: string, addedBy: string) {

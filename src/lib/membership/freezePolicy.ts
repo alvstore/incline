@@ -1,0 +1,31 @@
+export type FreezeMode = 'plan' | 'paid' | 'override';
+
+/** Calendar dates, never browser-local elapsed hours. Freeze end is inclusive. */
+export function shiftFreezeDate(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
+}
+
+export function actualFreezeDays(start: string, end: string, today: string): number {
+  const elapsed = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000;
+  const planned = (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000 + 1;
+  return Number.isFinite(elapsed + planned) ? Math.max(0, Math.min(elapsed, planned)) : 0;
+}
+
+export function freezeValidation(input: {
+  mode: FreezeMode; days: number; reason: string; remaining: number;
+  minDays: number; maxDays: number; exceptionsEnabled: boolean; fee: number;
+}): string | null {
+  if (!Number.isInteger(input.days) || input.days < 1 || input.days > 365) return 'Enter 1–365 whole days.';
+  if (input.mode !== 'plan' && !input.exceptionsEnabled) return 'Freeze exceptions are disabled for this branch.';
+  if (input.mode !== 'override' && (input.days < input.minDays || input.days > input.maxDays)) return `Choose ${input.minDays}–${input.maxDays} days for this branch.`;
+  if (input.mode === 'plan' && input.days > input.remaining) return 'Duration exceeds the remaining plan allowance.';
+  if (input.mode === 'paid' && input.fee <= 0) return 'No paid freeze fee is configured.';
+  if (input.reason.trim().length < 6) return 'Enter a reason of at least 6 characters.';
+  return null;
+}
+
+export function freezeNeedsApproval(mode: FreezeMode, canOverride: boolean, isStaff = true): boolean {
+  return !isStaff || (mode !== 'plan' && !canOverride);
+}
