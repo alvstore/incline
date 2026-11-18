@@ -41,7 +41,7 @@ const DEFAULT: Draft = {
     audiences: {
       member: { enabled: true, channels: ['notification'] },
       trainer: { enabled: true, channels: ['notification'] },
-      manager: { enabled: false, channels: ['notification'] },
+      manager: { enabled: true, channels: ['notification'] },
     },
   },
 };

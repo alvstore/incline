@@ -19,7 +19,7 @@ export const DEFAULT_PT_SETTINGS: PtExpirySettings = {
   audiences: {
     member: { enabled: true, channels: ["notification"] },
     trainer: { enabled: true, channels: ["notification"] },
-    manager: { enabled: false, channels: ["notification"] },
+    manager: { enabled: true, channels: ["notification"] },
   },
 };
 
@@ -45,8 +45,10 @@ export interface PtPkg {
 
 /** "d7" / "d0" for expiry cadence, "low" for low sessions, or null. */
 export function ptReminderMark(pkg: PtPkg, today: string, daysBefore: number[], lowSessions: number): string | null {
-  if (pkg.status !== "active") return null;
   const days = Math.round((Date.parse(pkg.expiry_date) - Date.parse(today)) / 86_400_000);
+  // Day after the package ended: one "expired" notice (covers the nightly sweep flipping status).
+  if ((pkg.status === "expired" || pkg.status === "active") && days === -1) return "expired";
+  if (pkg.status !== "active") return null;
   if (daysBefore.includes(days)) return `d${days}`;
   const total = Number(pkg.sessions_total || 0);
   if (total > 0 && lowSessions > 0 && Number(pkg.sessions_remaining ?? 0) <= lowSessions && Number(pkg.sessions_remaining ?? 0) > 0) return "low";

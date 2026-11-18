@@ -1542,18 +1542,30 @@ export function MemberProfileDrawer({
                         : ''}
                     </p>
                   </div>
-                  <Badge
-                    variant="secondary"
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      ptState === 'active'
-                        ? 'bg-success/10 text-success'
-                        : ptState === 'pending'
-                        ? 'bg-warning/10 text-warning'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {ptState === 'active' ? 'Active' : ptState === 'pending' ? 'Awaiting payment' : 'Ended'}
-                  </Badge>
+                  {(() => {
+                    const daysLeft = ptPackage.expiry_date
+                      ? Math.ceil((new Date(ptPackage.expiry_date + 'T23:59:59').getTime() - Date.now()) / 86400000)
+                      : null;
+                    const expired = ptState === 'lapsed' || (daysLeft !== null && daysLeft < 0);
+                    const soon = !expired && ptState === 'active' && daysLeft !== null && daysLeft <= 7;
+                    const tone = expired
+                      ? 'bg-destructive/10 text-destructive'
+                      : soon || ptState === 'pending'
+                      ? 'bg-warning/10 text-warning'
+                      : 'bg-success/10 text-success';
+                    const label = expired
+                      ? `Expired${ptPackage.expiry_date ? ` ${format(new Date(ptPackage.expiry_date), 'dd MMM')}` : ''}`
+                      : ptState === 'pending'
+                      ? 'Awaiting payment'
+                      : soon
+                      ? daysLeft === 0 ? 'Ends today' : `Ends in ${daysLeft}d`
+                      : 'Active';
+                    return (
+                      <Badge variant="secondary" role="status" className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${tone}`}>
+                        {label}
+                      </Badge>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>

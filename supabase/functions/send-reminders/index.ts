@@ -1,7 +1,8 @@
 // v2.8.1 — Route trainer PT reminders to their authorized My Clients workspace.
 // v2.8.0 — PT package expiry / low-session reminders for member, trainer and manager (utility).
 // v2.7.0 — in-app "membership expired" (end date) and grace-period alerts; overdue title.
-// send-reminders v2.6.0 — membership expiry reminders use the shared dispatcher and approved UTILITY templates; skips branches handed over to the Renewal Engine.
+// send-reminders v2.7.0 — PT "ended" notice day after expiry; manager digest on by default.
+// (prev) send-reminders v2.6.0 — membership expiry reminders use the shared dispatcher and approved UTILITY templates; skips branches handed over to the Renewal Engine.
 import { DEFAULT_PT_SETTINGS, PT_REMINDER_ACTION_URLS, hasSuccessor, normalizePtSettings, ptDedupeKey, ptReminderMark, type PtAudience, type PtChannel, type PtPkg } from "./ptExpiry.ts";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
@@ -803,7 +804,7 @@ Deno.serve(async (req) => {
       const { data: ptPkgs } = await adminClient
         .from("member_pt_packages")
         .select("id, member_id, branch_id, trainer_id, status, expiry_date, sessions_total, sessions_remaining, pt_packages:package_id (name), members:member_id (user_id, member_code, profiles:user_id (full_name, phone, email))")
-        .in("status", ["active", "pending_payment"]);
+        .or(`status.in.(active,pending_payment),and(status.eq.expired,expiry_date.gte.${new Date(Date.parse(todayIst) - 86_400_000).toISOString().slice(0, 10)})`);
       const all = (ptPkgs || []) as any[];
       const trainerIds = [...new Set(all.map((p) => p.trainer_id).filter(Boolean))];
       const { data: trainerRows } = trainerIds.length
@@ -844,21 +845,21 @@ Deno.serve(async (req) => {
         const left = Number(pkg.sessions_total || 0) > 0 ? `${pkg.sessions_remaining ?? 0} sessions left` : "";
         const tail = left ? ` (${left})` : "";
         const vars = { member_name: memberName, package_name: packageName, trainer_name: trainerName, expiry_date: dateLabel, sessions_left: String(pkg.sessions_remaining ?? ""), event_key: mark === "low" ? "pt_package_low_sessions" : "pt_package_expiring" };
-        const when = mark === "low" ? `is almost finished${tail}` : mark === "d0" ? `ends today${tail}` : `ends on ${dateLabel}${tail}`;
+        const when = mark === "expired" ? `ended on ${dateLabel}` : mark === "low" ? `is almost finished${tail}` : mark === "d0" ? `ends today${tail}` : `ends on ${dateLabel}${tail}`;
 
         const aud = settings.audiences;
         if (aud.member.enabled && member?.user_id) {
           for (const ch of aud.member.channels) await sendPt(ch, { branchId: pkg.branch_id, memberId: pkg.member_id, userId: member.user_id, phone: member.profiles?.phone, email: member.profiles?.email,
-            title: "Your PT package is ending", body: `Hi ${memberName}, your PT package ${packageName} with ${trainerName} ${when}. Speak to ${trainerName} or the front desk to continue.`,
+            title: mark === "expired" ? "Your PT package has ended" : "Your PT package is ending", body: `Hi ${memberName}, your PT package ${packageName} with ${trainerName} ${when}. Speak to ${trainerName} or the front desk to continue.`,
             actionUrl: PT_REMINDER_ACTION_URLS.member, key: ptDedupeKey(pkg.id, "member", mark, ch), vars });
         }
         if (aud.trainer.enabled && trainer?.user_id) {
           for (const ch of aud.trainer.channels) await sendPt(ch, { branchId: pkg.branch_id, userId: trainer.user_id, phone: trainer.profiles?.phone, email: trainer.profiles?.email,
-            title: "Client PT package ending", body: `${memberName}'s PT package ${packageName} ${when}. Please follow up.`,
+            title: mark === "expired" ? "Client PT package ended" : "Client PT package ending", body: `${memberName}'s PT package ${packageName} ${when}. Please follow up.`,
             actionUrl: PT_REMINDER_ACTION_URLS.trainer, key: ptDedupeKey(pkg.id, "trainer", mark, ch), vars });
         }
         if (aud.manager.enabled) {
-          const list = managerSummary.get(pkg.branch_id) ?? []; list.push(`${memberName} (${mark === "low" ? left : dateLabel})`); managerSummary.set(pkg.branch_id, list);
+          const list = managerSummary.get(pkg.branch_id) ?? []; list.push(`${memberName} (${mark === "low" ? left : mark === "expired" ? `ended ${dateLabel}` : dateLabel})`); managerSummary.set(pkg.branch_id, list);
         }
         results.pt_expiry = (results.pt_expiry || 0) + 1;
       }

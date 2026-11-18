@@ -30,5 +30,9 @@ Deno.test("successor suppresses reminder", () => {
 Deno.test("settings default safely", () => {
   const s = normalizePtSettings(null);
   assertEquals(s.audiences.member.channels, ["notification"]);
-  assertEquals(s.audiences.manager.enabled, false);
+  assertEquals(s.audiences.manager.enabled, true);
+});
+Deno.test("day after expiry sends one ended notice", () => {
+  assertEquals(ptReminderMark(pkg({ status: "expired" }), "2026-11-17", [7, 3, 1], 2), "expired");
+  assertEquals(ptReminderMark(pkg({ status: "expired" }), "2026-11-18", [7, 3, 1], 2), null);
 });
