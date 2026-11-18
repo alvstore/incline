@@ -1352,6 +1352,13 @@
       "when": 1794996425371,
       "tag": "0192_freeze_due_check_ist_midnight",
       "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1794996991144,
+      "tag": "0193_open_ended_membership_freezes",
+      "breakpoints": true
     }
   ]
 }

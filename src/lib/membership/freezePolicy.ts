@@ -7,16 +7,22 @@ export function shiftFreezeDate(date: string, days: number): string {
   return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
 }
 
-export function actualFreezeDays(start: string, end: string, today: string): number {
+export function actualFreezeDays(start: string, end: string | null, today: string): number {
   const elapsed = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000;
+  if (end === null) return Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
   const planned = (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000 + 1;
   return Number.isFinite(elapsed + planned) ? Math.max(0, Math.min(elapsed, planned)) : 0;
 }
 
 export function freezeValidation(input: {
   mode: FreezeMode; days: number; reason: string; remaining: number;
-  minDays: number; maxDays: number; exceptionsEnabled: boolean; fee: number;
+  minDays: number; maxDays: number; exceptionsEnabled: boolean; fee: number; openEnded?: boolean;
 }): string | null {
+  if (input.openEnded) {
+    if (input.mode !== 'override') return 'Freeze until return requires a management exception.';
+    if (!input.exceptionsEnabled) return 'Freeze exceptions are disabled for this branch.';
+    return input.reason.trim().length < 6 ? 'Enter a reason of at least 6 characters.' : null;
+  }
   if (!Number.isInteger(input.days) || input.days < 1 || input.days > 365) return 'Enter 1–365 whole days.';
   if (input.mode !== 'plan' && !input.exceptionsEnabled) return 'Freeze exceptions are disabled for this branch.';
   if (input.mode !== 'override' && (input.days < input.minDays || input.days > input.maxDays)) return `Choose ${input.minDays}–${input.maxDays} days for this branch.`;

@@ -3,6 +3,22 @@ import { describe, expect, it } from 'bun:test';
 import { actualFreezeDays, freezeNeedsApproval, freezeValidation, shiftFreezeDate } from './freezePolicy';
 const base = { mode: 'plan' as const, days: 7, reason: 'Medical leave', remaining: 30, minDays: 7, maxDays: 30, exceptionsEnabled: true, fee: 500 };
 describe('membership freeze policy', () => {
+  it('open-ended exceptions need no duration and bypass the 30-day allowance', () => {
+    expect(freezeValidation({ ...base, mode: 'override', openEnded: true, days: NaN, remaining: 0 })).toBeNull();
+  });
+  it('open-ended freezes cannot consume plan days or create a paid freeze', () => {
+    expect(freezeValidation({ ...base, openEnded: true })).toBe('Freeze until return requires a management exception.');
+    expect(freezeValidation({ ...base, mode: 'paid', openEnded: true })).toBe('Freeze until return requires a management exception.');
+  });
+  it('open-ended exceptions require a reason and an enabled branch policy', () => {
+    expect(freezeValidation({ ...base, mode: 'override', openEnded: true, reason: '' })).toBe('Enter a reason of at least 6 characters.');
+    expect(freezeValidation({ ...base, mode: 'override', openEnded: true, exceptionsEnabled: false })).toBe('Freeze exceptions are disabled for this branch.');
+  });
+  it('open-ended resume credits 112 actual days with no thirty-day cap', () => {
+    expect(actualFreezeDays('2026-11-18', null, '2027-03-10')).toBe(112);
+    expect(shiftFreezeDate('2027-09-01', 112)).toBe('2027-12-22');
+    expect(actualFreezeDays('2026-11-18', null, '2026-11-18')).toBe(0);
+  });
   it('no assigned plan allowance means zero, not a default 30 days', () => {
     expect(freezeValidation({ ...base, remaining: 0 })).toBe('Duration exceeds the remaining plan allowance.');
   });

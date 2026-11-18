@@ -223,8 +223,8 @@ export default function ApprovalQueuePage() {
           <p><span className="text-muted-foreground">Member:</span> {data.memberName}</p>
           {data.mode && <p><span className="text-muted-foreground">Type:</span> {data.mode === 'override' ? 'Management exception (quota / fee waiver)' : data.mode === 'paid' ? 'Paid freeze' : 'Plan allowance'}</p>}
           {data.feeCharged > 0 && <p><span className="text-muted-foreground">Fee on activation:</span> ₹{Number(data.feeCharged).toLocaleString('en-IN')}</p>}
-          <p><span className="text-muted-foreground">Duration:</span> {data.daysFrozen} days</p>
-          <p><span className="text-muted-foreground">Period:</span> {safeFormatDate(data.startDate, 'dd MMM', 'Pending')} - {safeFormatDate(data.endDate, 'dd MMM yyyy', 'Pending')}</p>
+          <p><span className="text-muted-foreground">Duration:</span> {data.isOpenEnded ? 'Until member returns · manual resume' : `${data.daysFrozen} days`}</p>
+          <p><span className="text-muted-foreground">Period:</span> {data.isOpenEnded ? 'Starts on approval · no automatic end date' : `${safeFormatDate(data.startDate, 'dd MMM', 'Pending')} - ${safeFormatDate(data.endDate, 'dd MMM yyyy', 'Pending')}`}</p>
           {data.reason && <p><span className="text-muted-foreground">Reason:</span> {data.reason}</p>}
         </div>
       );

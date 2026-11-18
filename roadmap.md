@@ -1,5 +1,5 @@
 # Membership freeze repair (18 Nov 2026)
-- [ ] Add open-ended management exceptions, staff approvals, manual-only resume and actual-day accounting; verify drawers and server safeguards.
+- [x] Add open-ended management exceptions, staff approvals, manual-only resume and actual-day accounting; 12 policy tests and signed-in desktop/phone controls checked. Branch exceptions stay disabled; successful live approval/resume awaits an authorized operation.
 - [x] Unify freeze/resume drawers, server-side allowance, exception approvals, fee policy and actual-day accounting.
 - [x] Preserve Raahul Mehtta’s approved medical exception with verified expiry snapshot; remains frozen and access revoked.
 - [x] Fourteen tests and signed-in desktop/phone drawer checks pass; default-off exception switch enforced server-side. Details: docs/membership-freeze-audit-2026-11-18.md.

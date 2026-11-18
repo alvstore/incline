@@ -9612,11 +9612,12 @@ export type Database = {
           approved_by: string | null
           baseline_end_date: string | null
           created_at: string
-          days_frozen: number
-          end_date: string
+          days_frozen: number | null
+          end_date: string | null
           fee_charged: number | null
           id: string
           invoice_id: string | null
+          is_open_ended: boolean
           membership_id: string
           mode: string
           reason: string | null
@@ -9632,11 +9633,12 @@ export type Database = {
           approved_by?: string | null
           baseline_end_date?: string | null
           created_at?: string
-          days_frozen: number
-          end_date: string
+          days_frozen?: number | null
+          end_date?: string | null
           fee_charged?: number | null
           id?: string
           invoice_id?: string | null
+          is_open_ended?: boolean
           membership_id: string
           mode?: string
           reason?: string | null
@@ -9652,11 +9654,12 @@ export type Database = {
           approved_by?: string | null
           baseline_end_date?: string | null
           created_at?: string
-          days_frozen?: number
-          end_date?: string
+          days_frozen?: number | null
+          end_date?: string | null
           fee_charged?: number | null
           id?: string
           invoice_id?: string | null
+          is_open_ended?: boolean
           membership_id?: string
           mode?: string
           reason?: string | null

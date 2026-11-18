@@ -90,6 +90,7 @@ export default function MemberDashboard() {
         .select('*')
         .eq('membership_id', activeMembership!.id)
         .in('status', ['approved', 'pending'])
+        .is('resumed_at', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -255,8 +256,8 @@ export default function MemberDashboard() {
                   <div className="h-2 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-valuenow={Math.round(planUsedPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Membership time used">
                     <div className="h-full rounded-full bg-card" style={{ width: `${planUsedPct}%` }} />
                   </div>
-                  {isFrozen && freezeDetails?.end_date && (
-                    <p className="text-xs text-white/80">Freeze ends {format(new Date(freezeDetails.end_date), 'dd MMM yyyy')}</p>
+                  {isFrozen && freezeDetails && (
+                    <p className="text-xs opacity-80">{freezeDetails.is_open_ended ? 'Frozen until return · request resume when ready' : freezeDetails.end_date ? `Freeze ends ${format(new Date(freezeDetails.end_date), 'dd MMM yyyy')}` : 'Frozen'}</p>
                   )}
                 </div>
               ) : isScheduled ? (

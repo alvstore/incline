@@ -1,0 +1,37 @@
+ALTER TABLE public.membership_freeze_history ADD COLUMN IF NOT EXISTS is_open_ended boolean NOT NULL DEFAULT false;
+ALTER TABLE public.membership_freeze_history ALTER COLUMN end_date DROP NOT NULL, ALTER COLUMN days_frozen DROP NOT NULL;
+ALTER TABLE public.membership_freeze_history ADD CONSTRAINT freeze_duration_shape CHECK ((is_open_ended AND mode='override' AND end_date IS NULL AND days_frozen IS NULL AND COALESCE(fee_charged,0)=0) OR (NOT is_open_ended AND end_date IS NOT NULL AND days_frozen BETWEEN 1 AND 365));
+COMMENT ON COLUMN public.membership_freeze_history.is_open_ended IS 'Management exception until manual resume; no automatic expiry, no plan allowance deduction. Gated by branch freeze_exceptions_enabled.';
+DO $migration$
+DECLARE f text;
+BEGIN
+ SELECT pg_get_functiondef('public.request_or_freeze_membership(uuid,integer,text,text,date)'::regprocedure) INTO f;
+ IF strpos(f,'IF p_freeze_days IS NULL OR p_freeze_days<1 OR p_freeze_days>365')=0 THEN RAISE EXCEPTION 'Request duration validation changed'; END IF;
+ f:=replace(f,'IF p_freeze_days IS NULL OR p_freeze_days<1 OR p_freeze_days>365','IF (p_freeze_days IS NULL AND p_mode<>''override'') OR p_freeze_days<1 OR p_freeze_days>365');
+ f:=replace(f,'starts:=COALESCE(p_start_date,today);','IF p_freeze_days IS NULL AND p_start_date IS NOT NULL AND p_start_date<>today THEN RAISE EXCEPTION ''Open-ended freezes start today; no scheduled date is allowed''; END IF; starts:=COALESCE(p_start_date,today);');
+ f:=replace(f,'reason,fee_charged,mode,status,requested_by','reason,fee_charged,mode,is_open_ended,status,requested_by');
+ f:=replace(f,'btrim(p_reason),fee,p_mode,CASE','btrim(p_reason),fee,p_mode,p_freeze_days IS NULL,CASE');
+ f:=replace(f,'''daysFrozen'',p_freeze_days,','''daysFrozen'',p_freeze_days,''isOpenEnded'',p_freeze_days IS NULL,');
+ EXECUTE f;
+ SELECT pg_get_functiondef('public._apply_membership_freeze(uuid)'::regprocedure) INTO f;
+ IF strpos(f,'IF h.days_frozen IS NULL OR h.days_frozen<1 OR h.days_frozen>365')=0 THEN RAISE EXCEPTION 'Activation duration validation changed'; END IF;
+ f:=replace(f,'IF h.days_frozen IS NULL OR h.days_frozen<1 OR h.days_frozen>365','IF NOT h.is_open_ended AND (h.days_frozen IS NULL OR h.days_frozen<1 OR h.days_frozen>365)');
+ f:=replace(f,'IF h.mode NOT IN (''plan'',''paid'',''override'')','IF h.is_open_ended AND (h.mode<>''override'' OR h.days_frozen IS NOT NULL OR h.end_date IS NOT NULL OR COALESCE(h.fee_charged,0)<>0) THEN RAISE EXCEPTION ''Open-ended freezes require a fee-free management exception''; END IF; IF h.mode NOT IN (''plan'',''paid'',''override'')');
+ EXECUTE f;
+ SELECT pg_get_functiondef('public.membership_freeze_context(uuid)'::regprocedure) INTO f;
+ IF strpos(f,'LEAST(today,h.end_date+1)')=0 THEN RAISE EXCEPTION 'Context day calculation changed'; END IF;
+ f:=replace(f,'LEAST(today,h.end_date+1)','CASE WHEN h.is_open_ended THEN today ELSE LEAST(today,h.end_date+1) END');
+ EXECUTE f;
+ SELECT pg_get_functiondef('public.resume_membership_freeze(uuid)'::regprocedure) INTO f;
+ IF strpos(f,'LEAST(today,h.end_date+1)')=0 THEN RAISE EXCEPTION 'Resume day calculation changed'; END IF;
+ f:=replace(f,'LEAST(today,h.end_date+1)','CASE WHEN h.is_open_ended THEN today ELSE LEAST(today,h.end_date+1) END');
+ EXECUTE f;
+ SELECT pg_get_functiondef('public.process_due_membership_freezes()'::regprocedure) INTO f;
+ IF strpos(f,'h.applied_at IS NOT NULL AND h.end_date<today')=0 THEN RAISE EXCEPTION 'Due selection changed'; END IF;
+ f:=replace(f,'h.applied_at IS NOT NULL AND h.end_date<today','h.applied_at IS NOT NULL AND NOT h.is_open_ended AND h.end_date<today');
+ EXECUTE f;
+END $migration$;
+REVOKE ALL ON FUNCTION public._apply_membership_freeze(uuid), public.process_due_membership_freezes() FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public._apply_membership_freeze(uuid), public.process_due_membership_freezes() TO service_role;
+REVOKE ALL ON FUNCTION public.request_or_freeze_membership(uuid,integer,text,text,date), public.membership_freeze_context(uuid), public.resume_membership_freeze(uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.request_or_freeze_membership(uuid,integer,text,text,date), public.membership_freeze_context(uuid), public.resume_membership_freeze(uuid) TO authenticated,service_role;

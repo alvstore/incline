@@ -39,7 +39,7 @@ export async function cancelMembership(
 
 export interface FreezeMembershipInput {
   membershipId: string;
-  freezeDays: number;
+  freezeDays: number | null;
   reason: string;
   mode?: 'plan' | 'paid' | 'override';
   startDate?: string;
@@ -72,7 +72,7 @@ export interface FreezeContext {
   plan_name: string; allowance: number; used: number; remaining: number;
   min_days: number; max_days: number; fee: number; exceptions_enabled: boolean; can_override: boolean;
   today: string; actual_days: number; resume_end_date: string;
-  current_freeze: { id: string; mode: string; start_date: string; end_date: string; days_frozen: number; reason: string; status: string; applied_at: string | null; resumed_at: string | null; baseline_end_date: string | null } | null;
+  current_freeze: { id: string; mode: string; is_open_ended: boolean; start_date: string; end_date: string | null; days_frozen: number | null; reason: string; status: string; applied_at: string | null; resumed_at: string | null; baseline_end_date: string | null } | null;
 }
 
 export async function getMembershipFreezeContext(membershipId: string): Promise<FreezeContext> {

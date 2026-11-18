@@ -1,5 +1,23 @@
 # Membership freeze repair
 
+## Open-ended exceptions
+
+- Exception → Freeze until member returns hides both start date and duration; immediate confirmation/approval starts the pause.
+- Required reason, branch exception switch and owner/admin/manager capability are enforced by the existing atomic request/activation functions. Staff requests remain pending until management approval.
+- History stores `is_open_ended=true` with null duration/end date, never a fabricated distant deadline. Only fee-free override records can have this shape.
+- Due processing excludes open-ended active freezes. Manual resume adds actual IST calendar days without the 365-day fixed-duration cap; plan allowance stays unchanged.
+- No additional reminder interval was imposed: review reminders do not automatically resume memberships.
+- Existing freezes, including Raahul's 30-day medical exception, are unchanged.
+- Verification: 12 policy tests (25 assertions) pass; deployed null-plan-duration and already-frozen guards reject safely. Internal activation/due functions remain service-only; preview build passes.
+- Signed-in owner checks: live disabled policy blocks Exception; temporary response-only policy preview checks until-return, hidden date/duration, required reason, enabled confirm action, 390/360px layout, Escape and reduced motion with no page errors. The saved switch was never changed and no member operation was submitted.
+- Successful open-ended freeze → staff approval → manual resume and physical gate acknowledgement remain unverified until an authorized operation; Raahul still has the existing fixed end of 17 December 2026.
+
+| Issue | Location | Fix | Severity |
+|---|---|---|---|
+| Required return date for medical exceptions | Freeze drawer | Labelled keyboard-accessible until-return switch; hide irrelevant date/duration controls | serious |
+| Null period displayed as pending/missing | Approval and resume sheets | Explicit manual-resume wording, preserved live paused-day preview | serious |
+| Duration validation not announced | Duration input | Linked live error and invalid state | minor |
+
 ## Findings and resolution
 
 | Issue | Location | Fix | Severity |
