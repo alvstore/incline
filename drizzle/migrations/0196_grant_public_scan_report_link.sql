@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.get_howbody_public_report(text, text) TO anon, authenticated;

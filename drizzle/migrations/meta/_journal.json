@@ -1373,6 +1373,13 @@
       "when": 1794999971280,
       "tag": "0195_paid_open_ended_freezes",
       "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1795014434868,
+      "tag": "0196_grant_public_scan_report_link",
+      "breakpoints": true
     }
   ]
 }
