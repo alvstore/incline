@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import QRCode from 'qrcode';
 
 interface EditBranchDrawerProps {
   open: boolean;
@@ -20,6 +21,7 @@ export function EditBranchDrawer({ open, onOpenChange, branch }: EditBranchDrawe
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [managerChanged, setManagerChanged] = useState(false);
+  const [reviewQr, setReviewQr] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -56,6 +58,15 @@ export function EditBranchDrawer({ open, onOpenChange, branch }: EditBranchDrawe
     },
     enabled: open && !!branch?.id,
   });
+
+  // Review QR is generated locally so the link never goes to an outside QR service.
+  useEffect(() => {
+    const link = formData.google_review_link;
+    if (!link) { setReviewQr(''); return; }
+    let live = true;
+    QRCode.toDataURL(link, { width: 240, margin: 1 }).then((u) => { if (live) setReviewQr(u); }, () => { if (live) setReviewQr(''); });
+    return () => { live = false; };
+  }, [formData.google_review_link]);
 
   useEffect(() => {
     if (branch) {
@@ -419,10 +430,10 @@ export function EditBranchDrawer({ open, onOpenChange, branch }: EditBranchDrawe
               />
               <p className="text-xs text-muted-foreground">Needed only to fetch existing Google reviews via API.</p>
             </div>
-            {formData.google_review_link && (
+            {formData.google_review_link && reviewQr && (
               <div className="flex items-center gap-3 pt-1">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(formData.google_review_link)}`}
+                  src={reviewQr}
                   alt="Google review QR"
                   className="h-24 w-24 rounded-md border bg-card p-1"
                 />

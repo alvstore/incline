@@ -7,6 +7,11 @@ describe('CSP allowlist', () => {
     expect(isAllowedOrigin('https://checkout.razorpay.com', 'https://theincline.in')).toBe(true);
     expect(isAllowedOrigin('https://www.theincline.in', 'https://theincline.in')).toBe(true);
   });
+  it('allows body-scanner photo and API hosts', () => {
+    expect(isAllowedOrigin('https://howbody-haidiobj.s3.eu-central-1.amazonaws.com', 'https://theincline.in')).toBe(true);
+    expect(isAllowedOrigin('https://prodapi.howbodyfit.com', 'https://theincline.in')).toBe(true);
+    expect(isAllowedOrigin('https://api.qrserver.com', 'https://theincline.in')).toBe(false);
+  });
   it('flags unknown origins', () => {
     expect(isAllowedOrigin('https://evil.example.com', 'https://theincline.in')).toBe(false);
   });
